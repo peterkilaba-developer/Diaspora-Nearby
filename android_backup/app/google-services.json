@@ -1,0 +1,28 @@
+package_name": "com.diasporanearby.diasporanearby"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgWq-6gdzy6TxODM3WuUUmQ0zu7-6aVlc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

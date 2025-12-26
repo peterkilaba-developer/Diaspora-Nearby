@@ -1,0 +1,33 @@
+{
+    "firestore": {
+        "rules": "firestore.rules",
+        "indexes": "firestore.indexes.json"
+    },
+    "storage": {
+        "rules": "storage.rules"
+    },
+    "database": {
+        "rules": "database.rules.json"
+    },
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "diaspora-nearby-a3dac",
+                    "appId": "1:512074182214:android:3a55dd7ec6825f2db92447",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "diaspora-nearby-a3dac",
+                    "configurations": {
+                        "android": "1:512074182214:android:3a55dd7ec6825f2db92447",
+                        "ios": "1:512074182214:ios:60cf4efcfcb7d872b92447",
+                        "web": "1:512074182214:web:351bd07f62180977b92447"
+                    }
+                }
+            }
+        }
+    }
+}
