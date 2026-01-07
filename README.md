@@ -1,4 +1,4 @@
-# diaspora_flutter
+# Diaspora Nearby
 
 A new Flutter project.
 
