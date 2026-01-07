@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -13,6 +14,7 @@ import 'package:diaspora_nearby/services/local_cache_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:diaspora_nearby/services/push_notification_service.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/services/background_location_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -58,14 +60,21 @@ void main() async {
     }
     
     // Web App Check
-    await FirebaseAppCheck.instance.activate(
-      webProvider: ReCaptchaV3Provider('6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G'),
-      androidProvider: AndroidProvider.debug,
-      appleProvider: AppleProvider.deviceCheck,
-    );
+    try {
+      await FirebaseAppCheck.instance.activate(
+        webProvider: ReCaptchaV3Provider('6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G'),
+        androidProvider: kReleaseMode ? AndroidProvider.playIntegrity : AndroidProvider.debug,
+        appleProvider: AppleProvider.deviceCheck,
+      );
+    } catch (e) {
+      debugPrint('Firebase App Check Init Error: $e');
+    }
 
-    // Initialize Push Notifications via Provider
-    await container.read(pushNotificationServiceProvider).initialize();
+    // Initialize Push Notifications via Provider (Don't await to prevent blocking)
+    container.read(pushNotificationServiceProvider).initialize().catchError((e) {
+      debugPrint('Push Notification Init Failed: $e');
+    });
+
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   } catch (e) {
     debugPrint('Firebase Init Error: $e');

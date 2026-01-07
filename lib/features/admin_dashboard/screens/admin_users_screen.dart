@@ -85,7 +85,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                 }
 
                 return ListView.separated(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
                   itemCount: users.length,
                   separatorBuilder: (c, i) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {

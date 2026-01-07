@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/screens/chat_screen.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 /// Screen that handles starting a direct chat with a user
 /// First checks if chat already exists, if so navigates to it
@@ -33,6 +34,15 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
   Future<void> _loadChatOrUser() async {
     try {
       final chatRepo = ref.read(chatRepositoryProvider);
+
+      final currentUser = ref.read(authRepositoryProvider).currentUser;
+      if (currentUser != null && currentUser.uid == widget.otherUserId) {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You cannot chat with yourself")));
+           context.pop();
+        }
+        return;
+      }
 
       // First check if a chat already exists with this user
       final existingChat = await chatRepo.getExistingDirectChat(widget.otherUserId);

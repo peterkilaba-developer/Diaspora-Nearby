@@ -86,7 +86,7 @@ class _AdminCommunitiesScreenState extends ConsumerState<AdminCommunitiesScreen>
                 }
 
                 return GridView.builder(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 16,

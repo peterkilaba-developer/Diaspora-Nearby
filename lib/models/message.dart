@@ -127,6 +127,7 @@ class Message {
   final String? senderHostCountryCode;
   final String? senderHomeCountryCode;
   final String content;
+  final String? richContent; // [NEW] Stores @{uid:name} format if content is stripped
   final String type; // 'text' | 'image' | 'video' | 'audio' | 'location' | 'document' | 'system' | 'money-transfer'
   final int timestamp;
   final String? status; // 'sent' | 'delivered' | 'read'
@@ -206,6 +207,7 @@ class Message {
     this.pinned,
     this.adminId,
     this.adminImage,
+    this.richContent, // [NEW] Optional field for rich text content (with mention codes)
   });
 
   factory Message.fromJson(Map<String, dynamic> json) =>
@@ -223,15 +225,58 @@ class Message {
       return null;
     }
 
-    // Parse reactions from RTDB format
+    // Parse reactions from RTDB format (handles both uid->emoji and emoji->[uids] formats)
     List<MessageReaction>? reactions;
     if (data['reactions'] != null) {
-      final reactionsData = data['reactions'] as Map<String, dynamic>;
-      reactions = reactionsData.entries.map((e) {
-        final userIds = e.value is List
-            ? (e.value as List).map((u) => u.toString()).toList()
-            : <String>[];
-        return MessageReaction(emoji: e.key, userIds: userIds);
+      final reactionsData = Map<dynamic, dynamic>.from(data['reactions'] as Map);
+      final groupedReactions = <String, List<String>>{};
+      
+      reactionsData.forEach((key, value) {
+        final keyStr = key.toString();
+        
+        if (value is List) {
+          // Format: emoji -> [uids]
+          final emoji = keyStr;
+          final uids = value.map((u) => u.toString()).toList();
+          if (!groupedReactions.containsKey(emoji)) {
+            groupedReactions[emoji] = [];
+          }
+          groupedReactions[emoji]!.addAll(uids);
+        } else {
+          // Format: uid -> emoji (value is string) OR possibly legacy emoji -> uid
+          final valStr = value.toString();
+          
+          String emoji;
+          String userId;
+
+          // Heuristic: UIDs (28 chars) are much longer than emojis (usually 1-4 chars)
+          if (keyStr.length > 10) { // key is UID, val is Emoji
+            emoji = valStr;
+            userId = keyStr;
+          } else { // key is Emoji, val is UID
+            emoji = keyStr;
+            userId = valStr;
+          }
+
+          // Final sanity check: if we somehow got a long string as an emoji, swap it.
+          // This handles cases where the heuristic might fail due to unexpected data.
+          if (emoji.length > 10 && userId.length < 10) {
+            final temp = emoji;
+            emoji = userId;
+            userId = temp;
+          }
+
+          if (emoji.isNotEmpty && emoji.length <= 10) {
+            if (!groupedReactions.containsKey(emoji)) {
+              groupedReactions[emoji] = [];
+            }
+            groupedReactions[emoji]!.add(userId);
+          }
+        }
+      });
+
+      reactions = groupedReactions.entries.map((e) {
+        return MessageReaction(emoji: e.key, userIds: e.value);
       }).toList();
     }
 
@@ -258,7 +303,7 @@ class Message {
           .toList(),
       imageUrl: data['imageUrl'] as String?,
       location: data['location'] != null
-          ? MessageLocation.fromRTDB(data['location'] as Map<String, dynamic>)
+          ? MessageLocation.fromRTDB(Map<String, dynamic>.from(data['location'] as Map))
           : null,
       documentUrl: data['documentUrl'] as String?,
       documentName: data['documentName'] as String?,
@@ -283,6 +328,7 @@ class Message {
           ?.map((k, v) => MapEntry(k, v as bool)),
       adminId: data['adminId'] as String?,
       adminImage: data['adminImage'] as String?,
+      richContent: data['richContent'] as String?, // [NEW] Parse from RTDB
     );
   }
 
@@ -299,7 +345,10 @@ class Message {
   bool get isVideo => type == 'video';
   
   /// Check if message is audio type
-  bool get isAudio => type == 'audio';
+  bool get isAudio => type == 'audio' || type == 'audio_file';
+  
+  /// Check if message is audio file type
+  bool get isAudioFile => type == 'audio_file';
   
   /// Check if message is location type
   bool get isLocation => type == 'location';
@@ -314,7 +363,7 @@ class Message {
   bool get isMoneyTransfer => type == 'money-transfer';
 
   /// Check if message is deleted for everyone
-  bool get isDeletedForEveryone => deletedForEveryone == true;
+  bool get isDeletedForEveryone => deletedForEveryone == true || type == 'deleted';
 
   /// Check if message is deleted for a specific user
   bool isDeletedFor(String userId) => deletedFor?.contains(userId) ?? false;
@@ -363,6 +412,7 @@ class Message {
     Map<String, bool>? pinned,
     String? adminId,
     String? adminImage,
+    String? richContent,
   }) {
     return Message(
       id: id ?? this.id,
@@ -402,6 +452,7 @@ class Message {
       pinned: pinned ?? this.pinned,
       adminId: adminId ?? this.adminId,
       adminImage: adminImage ?? this.adminImage,
+      richContent: richContent ?? this.richContent,
     );
   }
 }

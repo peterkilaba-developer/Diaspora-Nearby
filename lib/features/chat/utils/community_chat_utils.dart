@@ -84,7 +84,7 @@ class CommunityChatUtils {
       // Apply Home vs Host Logic
       // Host: noun form (e.g., "Africa Community")
       // Home: adjective form (e.g., "African Community")
-      if (locationType == 'host') {
+      if (locationType == 'host' || locationType == 'past') {
         const Map<String, String> _reverseAdjectiveMap = {
           'african': 'Africa',
           'asian': 'Asia',
@@ -165,6 +165,8 @@ class CommunityChatUtils {
     if (effectiveLocationType == null) {
       if (effectiveId.contains('_host_')) {
         effectiveLocationType = 'host';
+      } else if (effectiveId.contains('_past_')) {
+        effectiveLocationType = 'past';
       } else if (effectiveId.contains('_home_')) {
         effectiveLocationType = 'home';
       } else if (effectiveId.contains('global')) {
@@ -176,16 +178,17 @@ class CommunityChatUtils {
 
     var effectiveType = type;
     if (effectiveType == null) {
-      if (effectiveId.contains('global')) {
+      final parts = effectiveId.split('_');
+      if (parts.contains('global')) {
         effectiveType = 'global';
-      } else if (effectiveId.contains('continent')) {
+      } else if (parts.contains('continent')) {
         effectiveType = 'continent';
-      } else if (effectiveId.contains('country')) {
+      } else if (parts.contains('country')) {
         effectiveType = 'country';
-      } else if (effectiveId.contains('state')) {
-        effectiveType = 'state';
-      } else if (effectiveId.contains('city')) {
+      } else if (parts.contains('city')) { // Prioritize city check (most specific)
         effectiveType = 'city';
+      } else if (parts.contains('state')) {
+        effectiveType = 'state';
       } else {
         effectiveType = 'unknown';
       }
@@ -198,7 +201,18 @@ class CommunityChatUtils {
 
     // 3. Country Flag logic
     if (effectiveType == 'country') {
-      final countryCode = hostCountryCode ?? homeCountryCode ?? chat?.hostCountryCode ?? chat?.homeCountryCode;
+      final countryCode = () {
+        // [FIX] For host/past communities, extract the TARGET country from ID if possible
+        // ID format: host_country_[target]_[home]
+        if ((effectiveLocationType == 'host' || effectiveLocationType == 'past') && effectiveId.contains('_country_')) {
+           final parts = effectiveId.split('_');
+           final countryIndex = parts.indexOf('country');
+           if (countryIndex != -1 && countryIndex + 1 < parts.length) {
+              return parts[countryIndex + 1].toUpperCase();
+           }
+        }
+        return hostCountryCode ?? homeCountryCode ?? chat?.hostCountryCode ?? chat?.homeCountryCode;
+      }();
       final displayFlag = flag ?? chat?.flag ?? (countryCode != null ? getCountryByCode(countryCode)?.flag : null);
 
       if (displayFlag != null) {
@@ -206,13 +220,11 @@ class CommunityChatUtils {
         final overlayIcon = isHome ? LucideIcons.home : LucideIcons.mapPin;
         final iconColor = isHome ? Colors.orange.shade700 : Colors.cyan.shade700;
 
+        final theme = Theme.of(context);
         return Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.grey.shade100,
-          ),
+            color: Colors.transparent,
           child: Stack(
             children: [
               Center(
@@ -226,8 +238,8 @@ class CommunityChatUtils {
                 right: 2,
                 child: Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withOpacity(0.8), // Themed background for small overlay
                     shape: BoxShape.circle,
                   ),
                   child: Icon(overlayIcon, size: size * 0.25, color: iconColor),
@@ -276,6 +288,7 @@ class CommunityChatUtils {
           end: Alignment.bottomRight,
         );
       case 'host_continent':
+      case 'past_continent':
         return const LinearGradient(
           colors: [Color(0xFF06B6D4), Color(0xFF0284C7)],
           begin: Alignment.topLeft,
@@ -288,6 +301,7 @@ class CommunityChatUtils {
           end: Alignment.bottomRight,
         );
       case 'host_state':
+      case 'past_state':
         return const LinearGradient(
           colors: [Color(0xFF8B5CF6), Color(0xFF9333EA)],
           begin: Alignment.topLeft,
@@ -300,6 +314,7 @@ class CommunityChatUtils {
           end: Alignment.bottomRight,
         );
       case 'host_city':
+      case 'past_city':
         return const LinearGradient(
           colors: [Color(0xFF6B9B7A), Color(0xFF557A63)], // Sage Green (App Accent)
           begin: Alignment.topLeft,

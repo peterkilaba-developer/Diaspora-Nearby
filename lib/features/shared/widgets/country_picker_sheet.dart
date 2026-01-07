@@ -104,7 +104,6 @@ class _CountryPickerSheetState extends State<CountryPickerSheet>
                   padding: EdgeInsets.zero,
                   child: TextField(
                     controller: _searchController,
-                    autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Search country...',
                       prefixIcon: const Icon(Icons.search),

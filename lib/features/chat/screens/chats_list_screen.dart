@@ -29,10 +29,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
   @override
   void initState() {
     super.initState();
-    // Sync communities on startup
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncCommunities();
-    });
+    // Sync communities on startup - REMOVED to prevent refresh loop
+    // _syncCommunities() writes to DB -> triggers stream -> rebuilds UI -> loop/flash
   }
 
   Future<void> _syncCommunities() async {
@@ -67,9 +65,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
 
     // GLOBAL SEARCH MODE
     if (chatsMode == ViewMode.global) {
-      if (searchQuery.isEmpty) {
-        return _buildEmptyState(theme, false, isGlobal: true);
-      }
+      // Show all or filtered based on query
       
       return FutureBuilder<List<Chat>>(
         future: ref.read(chatRepositoryProvider).searchDiscoverableChats(searchQuery),
@@ -83,7 +79,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
           
           final results = snapshot.data ?? [];
           if (results.isEmpty) {
-             return _buildEmptyState(theme, false, isGlobal: true, hasQuery: true);
+             return _buildEmptyState(theme, false, isGlobal: true, hasQuery: searchQuery.isNotEmpty);
           }
           
           return ListView.builder(
@@ -97,9 +93,15 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
                  onTap: () {
                     // Navigate to entity details instead of chat screen
                     if (chat.type == 'event') {
-                       context.push('/events/${chat.id}');
-                    } else if (chat.type == 'community' || chat.type == 'organization') {
-                       context.push('/communities/${chat.id}'); // Assuming this route handles details
+                       // Ensure we pass eventId if available, otherwise we might have issues if chat.eventId is null
+                       if (chat.eventId != null) {
+                          context.push('/events/${chat.eventId}');
+                       }
+                    } else if (chat.type == 'organization') {
+                       // We used communityId to store orgId in searchDiscoverableChats
+                       context.push('/organization/${chat.communityId}'); 
+                    } else if (chat.type == 'community') {
+                       context.push('/communities/${chat.communityId}');
                     }
                  },
               );
@@ -132,7 +134,12 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
         
         final filteredChats = searchQuery.isEmpty
             ? chats
-            : chats.where((chat) => chat.name.toLowerCase().contains(searchQuery.toLowerCase())).toList();
+            : chats.where((chat) {
+                final query = searchQuery.toLowerCase();
+                final nameMatch = chat.name.toLowerCase().contains(query);
+                final messageMatch = chat.lastMessage?.content.toLowerCase().contains(query) ?? false;
+                return nameMatch || messageMatch;
+              }).toList();
 
         if (filteredChats.isEmpty) {
           return _buildEmptyState(theme, chats.isEmpty);

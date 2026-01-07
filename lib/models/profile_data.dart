@@ -74,6 +74,9 @@ class ProfileData {
   final String? fcmToken;
   final List<String>? fcmTopics;
   
+  // Privacy
+  final bool? showCurrentLocationName;
+  
   // Transient/Calculated
   final double? distance;
 
@@ -124,6 +127,7 @@ class ProfileData {
     this.isAdmin,
     this.blockedUsers,
     this.createdAt,
+    this.showCurrentLocationName,
   });
 
   factory ProfileData.fromJson(Map<String, dynamic> json) {
@@ -184,9 +188,9 @@ class ProfileData {
     List<String>? fcmTopics,
     double? distance,
     
-    // For convenience in updating city/country alongside hostLocation if needed manually
     String? city,
     String? country,
+    bool? showCurrentLocationName,
   }) {
     return ProfileData(
       uid: uid ?? this.uid,
@@ -237,6 +241,7 @@ class ProfileData {
       fcmToken: fcmToken ?? this.fcmToken,
       fcmTopics: fcmTopics ?? this.fcmTopics,
       distance: distance ?? this.distance,
+      showCurrentLocationName: showCurrentLocationName ?? this.showCurrentLocationName,
     );
   }
 }

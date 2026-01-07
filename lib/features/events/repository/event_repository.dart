@@ -52,6 +52,11 @@ class EventRepository {
       // Filter by organizer's home country code (Legacy/Optimization)
       query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
     }
+
+    // Filter out past events (Show events starting today or in future)
+    final today = DateTime.now();
+    final todayStr = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+    query = query.where('startDate', isGreaterThanOrEqualTo: todayStr);
     
     return query
         .snapshots() 
@@ -317,7 +322,7 @@ class EventRepository {
         'type': 'event',
         'eventId': eventId,
         'name': title,
-        'profileImage': imageUrl,
+        'photoUrl': imageUrl,
         'createdAt': now,
         'updatedAt': now,
         'createdBy': creatorId,
@@ -374,7 +379,11 @@ class EventRepository {
         final title = data?['title'] ?? 'Event Chat';
         
         if (chatId != null) {
-            await _addUserToEventChat(chatId, userId, title);
+            try {
+              await _addUserToEventChat(chatId, userId, title);
+            } catch (e) {
+               print('JoinEvent Chat Error (Ignored): $e');
+            }
         }
     }
   }
@@ -394,7 +403,11 @@ class EventRepository {
         final chatId = data?['chatId'];
         
         if (chatId != null) {
-            await _removeUserFromEventChat(chatId, userId);
+            try {
+              await _removeUserFromEventChat(chatId, userId);
+            } catch (e) {
+               print('LeaveEvent Chat Error (Ignored): $e');
+            }
         }
     }
   }
@@ -530,7 +543,7 @@ class EventRepository {
          // Also update chat image in RTDB if exists
          final chatId = event.chatId;
          if (chatId != null) {
-            await _rtdb.ref('chats/$chatId/profileImage').set(imageUrl);
+            await _rtdb.ref('chats/$chatId/photoUrl').set(imageUrl);
          }
       }
 
@@ -595,6 +608,37 @@ class EventRepository {
 
     } catch (e) {
       rethrow;
+    }
+  }
+  // Search Events by Title
+  Future<List<Event>> searchEvents(String query) async {
+    try {
+      final queryLower = query.toLowerCase();
+      
+      final today = DateTime.now();
+      final todayStr = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+      final snapshot = await _firestore
+          .collection('events')
+          .where('startDate', isGreaterThanOrEqualTo: todayStr)
+          .get();
+      
+      final events = snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        try {
+          return Event.fromJson(data);
+        } catch (e) {
+          return null;
+        }
+      }).whereType<Event>().where((event) {
+        if (query.isEmpty) return true;
+        return event.title.toLowerCase().contains(queryLower);
+      }).toList();
+
+      return await _enrichEvents(events);
+    } catch (e) {
+      return [];
     }
   }
 }

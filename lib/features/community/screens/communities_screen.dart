@@ -197,49 +197,12 @@ class _HierarchyItemWidgetState extends State<HierarchyItemWidget> {
       homeCountryCode: widget.item.homeCountryCode ?? '',
       hostCountryCode: widget.item.hostCountryCode ?? '',
       location: widget.item.location ?? {},
+      profileImage: widget.item.profileImage?.value,
       flag: widget.item.flag ?? ''
     );
 
-    // open nice modal
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, // Allow full height
-      backgroundColor: Colors.transparent, // For custom rounded shape
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (_, controller) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-               // Handle
-               Center(
-                 child: Container(
-                   margin: const EdgeInsets.symmetric(vertical: 12),
-                   width: 40, 
-                   height: 4, 
-                   decoration: BoxDecoration(
-                     color: Colors.grey.shade300, 
-                     borderRadius: BorderRadius.circular(2)
-                   ),
-                 ),
-               ),
-               // Reuse existing screen, but check if it supports scrolling inside
-               Expanded(
-                 child: CommunityMembersScreen(
-                   communityId: community.id, 
-                   community: community,
-                 )
-               ),
-            ],
-          ),
-        ),
-      ),
-    );
+    // Push to full screen route instead of modal bottom sheet
+    context.push('/communities/${community.id}/members', extra: community);
   }
 
   @override

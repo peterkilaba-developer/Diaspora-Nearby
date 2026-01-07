@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 
 /// Service to update user's current location in Firestore.
 /// Uses native geocoding for reliable reverse geocoding.
@@ -80,6 +81,9 @@ class LocationUpdateService {
         // Silently continue with coordinates if geocoding fails
       }
 
+      // Create GeoFirePoint for geospatial indexing
+      final geoFirePoint = GeoFirePoint(GeoPoint(position.latitude, position.longitude));
+
       // Create currentLocation data matching React structure
       final currentLocationData = {
         'formatted_address': formattedAddress,
@@ -100,6 +104,7 @@ class LocationUpdateService {
       // Update Firestore
       await _firestore.collection('users').doc(userId).update({
         'currentLocation': currentLocationData,
+        'geo': geoFirePoint.data, // Add geohash data for queries
         'locationUpdatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

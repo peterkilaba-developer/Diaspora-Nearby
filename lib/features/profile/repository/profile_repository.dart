@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
@@ -43,7 +45,7 @@ class ProfileRepository {
 
   Future<ProfileData?> getUserProfile(String uid) async {
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
+      final doc = await _firestore.collection('users').doc(uid).get().timeout(const Duration(seconds: 10));
       if (doc.exists && doc.data() != null) {
         return ProfileData.fromJson(doc.data()!);
       }
@@ -51,6 +53,41 @@ class ProfileRepository {
     } catch (e) {
       debugPrint('Error getting user profile: $e');
       return null;
+    }
+  }
+
+  Future<List<ProfileData>> searchUsers(String query, {String? communityId}) async {
+    if (query.isEmpty) return [];
+    try {
+      // Capitalize first letter for search (assuming stored names are capitalized)
+      final searchKey = query.length > 0 ? query[0].toUpperCase() + query.substring(1) : query;
+
+      final userQuery = await _firestore.collection('users')
+          .where('firstName', isGreaterThanOrEqualTo: searchKey)
+          .where('firstName', isLessThan: searchKey + '\uf8ff')
+          .limit(20)
+          .get();
+
+      List<ProfileData> results = userQuery.docs
+          .map((d) {
+            try {
+              return ProfileData.fromJson(d.data()); 
+            } catch (e) {
+              return null;
+            }
+          })
+          .whereType<ProfileData>()
+          .toList();
+      
+      // Optional client-side filtering for community
+      if (communityId != null && communityId != 'global') {
+          results = results.where((u) => u.communityMemberships?.contains(communityId) ?? false).toList();
+      }
+
+      return results;
+    } catch (e) {
+      debugPrint('Error searching users: $e');
+      return [];
     }
   }
 
@@ -103,8 +140,15 @@ class ProfileRepository {
   }
 
   Future<bool> profileExists(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    return doc.exists;
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get().timeout(const Duration(seconds: 5));
+      return doc.exists;
+    } catch (e) {
+      debugPrint('Error checking profile existence: $e');
+      // If we can't check, assume false or handle strictly. 
+      // Returning false might trigger setup, but better than crashing.
+      return false; 
+    }
   }
 
   Future<String> submitBusinessRegistration({
@@ -122,12 +166,48 @@ class ProfileRepository {
     String? locationState,
     String? locationCountry,
     String? homeCountryCode, // Creator's home country code for filtering
+    String? creatorTitle,
   }) async {
     // 1. Create the Organization Document in Firestore
     final orgRef = _firestore.collection('organizations').doc();
     final orgId = orgRef.id;
     final chatId = 'org_$orgId';
     final now = DateTime.now().millisecondsSinceEpoch;
+
+    // 2. Initialize Chat in RTDB
+    try {
+      final rtdb = FirebaseDatabase.instance.ref();
+      await rtdb.child('chats/$chatId').set({
+        'id': chatId,
+        'type': 'organization',
+        'name': businessName,
+        'photoUrl': logoUrl,
+        'participants': [uid],
+        'admins': [uid],
+        'createdAt': now,
+        'updatedAt': now,
+        'createdBy': uid,
+        'lastMessage': {
+          'content': '⭐ Organization created',
+          'timestamp': now,
+          'type': 'system',
+          'senderId': 'system',
+          'senderName': 'System',
+        }
+      });
+
+      await rtdb.child('userChats/$uid/$chatId').set({
+        'chatId': chatId,
+        'updatedAt': now,
+        'lastMessage': {
+          'content': '⭐ Organization created',
+          'timestamp': now,
+          'type': 'system',
+        }
+      });
+    } catch (e) {
+      debugPrint('Error initializing RTDB chat: $e');
+    }
 
     final orgData = {
       'id': orgId,
@@ -143,7 +223,7 @@ class ProfileRepository {
       'pendingAdmins': <String>[],
       'chatId': chatId,
       'createdAt': cf.FieldValue.serverTimestamp(),
-      'status': 'pending',
+      'status': 'active',
       // Location data
       if (locationAddress != null) 'locationAddress': locationAddress,
       if (locationLat != null && locationLng != null) 'location': {
@@ -154,6 +234,9 @@ class ProfileRepository {
       if (locationState != null) 'state': locationState,
       if (locationCountry != null) 'country': locationCountry,
       if (homeCountryCode != null) 'homeCountryCode': homeCountryCode, // For filtering by creator's home country
+      if (creatorTitle != null) 'adminTitles': {
+        uid: creatorTitle,
+      },
     };
 
     await orgRef.set(orgData);
@@ -197,5 +280,19 @@ class ProfileRepository {
       'pastLocations': cf.FieldValue.arrayUnion([pastLocation.toJson()]),
       'updatedAt': cf.FieldValue.serverTimestamp(),
     });
+  }
+  Future<String> uploadProfileImage(String uid, File image) async {
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('profile_photos/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      
+      final uploadTask = await storageRef.putFile(image);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Error uploading profile image: $e');
+      rethrow;
+    }
   }
 }

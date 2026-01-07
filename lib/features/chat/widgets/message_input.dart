@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -10,6 +10,10 @@ import 'package:diaspora_nearby/models/message.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart' as ja; // Alias to avoid conflict with record
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart'; 
+import 'package:diaspora_nearby/models/profile_data.dart'; // [New]
 
 
 class MessageInput extends ConsumerStatefulWidget {
@@ -36,13 +40,16 @@ class MessageInput extends ConsumerStatefulWidget {
     this.replyingTo,
     required this.onCancelReply,
     this.isEnabled = true,
+    this.participantIds = const [],
   });
+
+  final List<String> participantIds;
 
   @override
   ConsumerState<MessageInput> createState() => _MessageInputState();
 }
 
-class _MessageInputState extends ConsumerState<MessageInput> {
+class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _canSend = false;
@@ -60,16 +67,24 @@ class _MessageInputState extends ConsumerState<MessageInput> {
   List<File> _pendingAttachments = [];
   String? _pendingAttachmentType; // 'image', 'video', 'audio', 'document'
   int _pendingAudioDuration = 0;
+  bool _isProcessingAttachment = false; // [NEW] Loading state for files
   
   // Playback State
   bool _isPlaying = false;
   Duration _playbackPosition = Duration.zero;
   Duration _playbackDuration = Duration.zero;
 
+  Timer? _typingTimer;
+  bool? _lastTypingStatus;
+
+
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // Add observer
     _controller.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
     
     // Listen to player state
     _audioPlayer.playerStateStream.listen((state) {
@@ -94,20 +109,50 @@ class _MessageInputState extends ConsumerState<MessageInput> {
     });
   }
 
-  void _onTextChanged() {
-    setState(() {
-      _canSend = _controller.text.trim().isNotEmpty;
-    });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _setTyping(false);
+    }
   }
 
-  @override
-  void dispose() {
-    _recordTimer?.cancel();
-    _audioRecorder.dispose();
-    _audioPlayer.dispose();
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
+  void _onFocusChanged() {
+    if (!_focusNode.hasFocus) {
+      _setTyping(false);
+    }
+  }
+
+  void _onTextChanged() {
+    final text = _controller.text;
+
+    
+    // Mention Detection Removed
+
+    // 3. Normal Typing Status Logic
+    final isNotEmpty = text.trim().isNotEmpty;
+    if (_canSend != isNotEmpty) {
+      setState(() => _canSend = isNotEmpty);
+    }
+
+    if (isNotEmpty && _focusNode.hasFocus) {
+      _setTyping(true);
+      
+      _typingTimer?.cancel();
+      _typingTimer = Timer(const Duration(seconds: 3), () {
+        _setTyping(false);
+      });
+    } else {
+      _setTyping(false);
+    }
+  }
+
+
+
+
+  void _setTyping(bool isTyping) {
+    if (_lastTypingStatus == isTyping) return;
+    _lastTypingStatus = isTyping;
+    ref.read(chatRepositoryProvider).setTypingStatus(widget.chatId, isTyping);
   }
 
   // --- Voice Recording Logic ---
@@ -172,10 +217,7 @@ class _MessageInputState extends ConsumerState<MessageInput> {
           _playbackDuration = Duration(seconds: _recordDurationSeconds);
         });
         
-        // Auto-focus triggering keyboard
-        if (mounted) {
-             _focusNode.requestFocus();
-        }
+        // Auto-focus triggering keyboard removed
       } else {
         // Failed
         setState(() => _isRecording = false);
@@ -211,16 +253,7 @@ class _MessageInputState extends ConsumerState<MessageInput> {
     });
   }
 
-  Future<void> _sendRecordedAudio() async {
-    if (_recordedFile != null && await _recordedFile!.exists()) {
-      // Use current text as caption if any
-      final caption = _controller.text.trim().isNotEmpty ? _controller.text.trim() : null;
-      widget.onSendAudio(_recordedFile!, _recordDurationSeconds, caption: caption);
-      
-      _controller.clear();
-      _cancelRecording(deleteFile: false); // Reset state but keep file for upload
-    }
-  }
+
 
   Future<void> _togglePlayback() async {
     if (_isPlaying) {
@@ -276,6 +309,9 @@ class _MessageInputState extends ConsumerState<MessageInput> {
 
     widget.onSendMessage(text, type: 'text');
     _controller.clear();
+    
+    _typingTimer?.cancel();
+    _setTyping(false);
     if (widget.replyingTo != null) {
       widget.onCancelReply();
     }
@@ -301,20 +337,45 @@ class _MessageInputState extends ConsumerState<MessageInput> {
 
   Future<void> _pickMedia(ImageSource source, String type) async {
     Navigator.pop(context); // Close modal
+    
+    setState(() => _isProcessingAttachment = true);
+    
     final picker = ImagePicker();
     List<File> files = [];
 
-    if (type == 'image') {
-      if (source == ImageSource.camera) {
-         final photo = await picker.pickImage(source: source);
-         if (photo != null) files.add(File(photo.path));
+    try {
+      if (type == 'image') {
+        if (source == ImageSource.camera) {
+           final photo = await picker.pickImage(
+             source: source,
+             imageQuality: 70,
+             maxWidth: 1920,
+           );
+           if (photo != null) files.add(File(photo.path));
+        } else {
+           final images = await picker.pickMultiImage(
+             imageQuality: 70,
+             maxWidth: 1920,
+           );
+           files.addAll(images.map((i) => File(i.path)));
+        }
       } else {
-         final images = await picker.pickMultiImage();
-         files.addAll(images.map((i) => File(i.path)));
+        final video = await picker.pickVideo(source: source);
+        if (video != null) files.add(File(video.path));
       }
-    } else {
-      final video = await picker.pickVideo(source: source);
-      if (video != null) files.add(File(video.path));
+
+      if (files.isNotEmpty && mounted) {
+        setState(() {
+          _pendingAttachments = files;
+          _pendingAttachmentType = type;
+          _isProcessingAttachment = false; // Done
+        });
+      } else {
+        if (mounted) setState(() => _isProcessingAttachment = false);
+      }
+    } catch (e) {
+      debugPrint('Error picking media: $e');
+      if (mounted) setState(() => _isProcessingAttachment = false);
     }
 
     if (files.isNotEmpty && mounted) {
@@ -322,38 +383,51 @@ class _MessageInputState extends ConsumerState<MessageInput> {
         _pendingAttachments = files;
         _pendingAttachmentType = type;
       });
-      _focusNode.requestFocus();
     }
   }
 
   Future<void> _pickDocument() async {
     Navigator.pop(context);
-    final result = await fp.FilePicker.platform.pickFiles(
-      type: fp.FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx'],
-    );
-    if (result != null && result.files.single.path != null && mounted) {
-      setState(() {
-        _pendingAttachments = [File(result.files.single.path!)];
-        _pendingAttachmentType = 'document';
-      });
-      _focusNode.requestFocus();
+    setState(() => _isProcessingAttachment = true);
+    
+    try {
+      final result = await fp.FilePicker.platform.pickFiles(
+        type: fp.FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx'],
+      );
+      if (result != null && result.files.single.path != null && mounted) {
+        setState(() {
+          _pendingAttachments = [File(result.files.single.path!)];
+          _pendingAttachmentType = 'document';
+          _isProcessingAttachment = false;
+        });
+      } else {
+        if (mounted) setState(() => _isProcessingAttachment = false);
+      }
+    } catch (e) {
+       debugPrint('Error picking document: $e');
+       if (mounted) setState(() => _isProcessingAttachment = false);
     }
   }
 
   Future<void> _pickAudio() async {
     Navigator.pop(context);
-    final result = await fp.FilePicker.platform.pickFiles(type: fp.FileType.audio);
-    if (result != null && result.files.single.path != null && mounted) {
-      setState(() {
-        _pendingAttachments = [File(result.files.single.path!)];
-        // Distinguish picked audio file from voice recording if needed, or treat same?
-        // Method signature is onSendAudioFile vs onSendAudio(voice).
-        // Let's use 'audio_file' to distinguish internally if needed, or just 'audio' and check context?
-        // To be safe, let's use 'audio_file'.
-        _pendingAttachmentType = 'audio_file';
-      });
-      _focusNode.requestFocus();
+    setState(() => _isProcessingAttachment = true);
+
+    try {
+      final result = await fp.FilePicker.platform.pickFiles(type: fp.FileType.audio);
+      if (result != null && result.files.single.path != null && mounted) {
+        setState(() {
+          _pendingAttachments = [File(result.files.single.path!)];
+          _pendingAttachmentType = 'audio_file';
+          _isProcessingAttachment = false;
+        });
+      } else {
+         if (mounted) setState(() => _isProcessingAttachment = false);
+      }
+    } catch (e) {
+       debugPrint('Error picking audio: $e');
+       if (mounted) setState(() => _isProcessingAttachment = false);
     }
   }
 
@@ -375,6 +449,7 @@ class _MessageInputState extends ConsumerState<MessageInput> {
       children: [
         if (widget.replyingTo != null) _buildReplyPreview(theme),
         if (hasAttachment) _buildAttachmentPreview(theme),
+
         
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -511,13 +586,23 @@ class _MessageInputState extends ConsumerState<MessageInput> {
             ),
           ),
           const SizedBox(width: 12),
-          IconButton(
-            onPressed: () => _cancelRecording(deleteFile: true),
-            icon: Icon(LucideIcons.x, size: 20, color: theme.colorScheme.onSurfaceVariant),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            tooltip: 'Remove attachment',
-          ),
+          if (_isProcessingAttachment)
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.colorScheme.primary,
+              ),
+            )
+          else
+            IconButton(
+              onPressed: () => _cancelRecording(deleteFile: true),
+              icon: Icon(LucideIcons.x, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Remove attachment',
+            ),
         ],
       ),
     );
@@ -662,40 +747,102 @@ class _MessageInputState extends ConsumerState<MessageInput> {
   }
 
   Widget _buildReplyPreview(ThemeData theme) {
+    final replyingTo = widget.replyingTo;
+    if (replyingTo == null) return const SizedBox.shrink();
+
+    String contentText = replyingTo.content;
+    IconData? mediaIcon;
+    String? imageUrl;
+
+    if (replyingTo.type == 'image') {
+      contentText = 'Photo';
+      mediaIcon = LucideIcons.image;
+      imageUrl = replyingTo.imageUrl;
+    } else if (replyingTo.type == 'video') {
+      contentText = 'Video';
+      mediaIcon = LucideIcons.video;
+    } else if (replyingTo.type == 'audio' || replyingTo.type == 'audio_file') {
+      contentText = 'Voice message';
+      mediaIcon = LucideIcons.mic;
+    } else if (replyingTo.type == 'location') {
+      contentText = 'Location';
+      mediaIcon = LucideIcons.mapPin;
+    } else if (replyingTo.type == 'document') {
+      contentText = replyingTo.documentName ?? 'Document';
+      mediaIcon = LucideIcons.fileText;
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
       decoration: BoxDecoration(
-        color: theme.cardColor,
+        color: theme.cardColor.withOpacity(0.8),
         border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
       ),
-      child: Row(
-        children: [
-          Icon(LucideIcons.reply, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Replying to',
-                  style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary),
-                ),
-                Text(
-                  widget.replyingTo?.content ?? 'Media',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            // Vertical accent bar
+            Container(
+              width: 3,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          IconButton(
-            onPressed: widget.onCancelReply,
-            icon: const Icon(LucideIcons.x, size: 16),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     Row(
+                       children: [
+                           Icon(LucideIcons.reply, size: 14, color: theme.colorScheme.primary),
+                           const SizedBox(width: 4),
+                           Text(
+                             'Replying to ${replyingTo.senderName}',
+                             style: theme.textTheme.labelSmall?.copyWith(
+                               color: theme.colorScheme.primary,
+                               fontWeight: FontWeight.w600,
+                             ),
+                           ),
+                       ],
+                     ),
+                     const SizedBox(height: 2),
+                     Row(
+                        children: [
+                           if (mediaIcon != null) ...[
+                              Icon(mediaIcon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                              const SizedBox(width: 4),
+                           ],
+                           Expanded(
+                             child: Text(
+                               contentText,
+                               style: theme.textTheme.bodySmall?.copyWith(
+                                 color: theme.colorScheme.onSurfaceVariant,
+                               ),
+                               maxLines: 1,
+                               overflow: TextOverflow.ellipsis,
+                             ),
+                           ),
+                        ],
+                     ),
+                  ],
+              ),
+            ),
+             if (imageUrl != null)
+                Padding(
+                   padding: const EdgeInsets.only(left: 8),
+                   child: ClipRRect(
+                     borderRadius: BorderRadius.circular(4),
+                     child: Image.network(imageUrl, width: 36, height: 36, fit: BoxFit.cover),
+                   ),
+                ),
+            IconButton(
+              icon: Icon(LucideIcons.x, size: 16, color: theme.colorScheme.onSurfaceVariant),
+              onPressed: widget.onCancelReply,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -762,19 +909,78 @@ class _AttachmentPickerModal extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.surfaceContainerHighest,
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 8),
-          Text(label, style: theme.textTheme.labelMedium),
+          Text(label, style: theme.textTheme.bodySmall),
         ],
       ),
     );
   }
 }
+
+// [NEW] Mention List Item
+class _MentionListItem extends ConsumerWidget {
+  final String userId;
+  final String query;
+  final Function(String) onTap;
+  final ProfileData? profileOverride; // [NEW]
+
+  const _MentionListItem({
+    required this.userId, 
+    required this.query, 
+    required this.onTap,
+    this.profileOverride,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (profileOverride != null) {
+       return _buildTile(profileOverride!);
+    }
+
+    final profileAsync = ref.watch(userProfileByIdProvider(userId));
+    
+    return profileAsync.when(
+       data: (profile) => _buildTile(profile),
+       error: (_,__) => const SizedBox.shrink(),
+       loading: () => const SizedBox.shrink(), 
+    );
+  }
+
+  Widget _buildTile(ProfileData? profile) {
+      final name = '${profile?.firstName ?? ''} ${profile?.lastName ?? ''}'.trim();
+      final displayName = name.isEmpty ? 'User' : name;
+      
+      // Filter here if using local ID list and no server search
+      // Assuming server search handles filtering if active
+      // But if falling back to IDs, we need to filter.
+      // However logic has moved to _filterParticipants somewhat, but previously logic relied on this check.
+      // We'll keep it for local ID mode.
+      
+      if (profileOverride == null && query.isNotEmpty && !displayName.toLowerCase().contains(query.toLowerCase())) {
+         return const SizedBox.shrink(); 
+      }
+
+      return ListTile(
+        leading: CircleAvatar(
+          radius: 16,
+          backgroundImage: (profile?.profileImage != null) ? NetworkImage(profile!.profileImage!) : null,
+          child: (profile?.profileImage == null) ? Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : '?') : null,
+        ),
+        title: Text(displayName),
+        onTap: () => onTap(displayName), // Pass name back
+      );
+  }
+}
+
+// Ensure proper imports are added if missing.
+// userProfileProvider needs to be found.

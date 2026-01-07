@@ -16,6 +16,10 @@ final userOrganizationsProvider = StreamProvider<List<Map<String, dynamic>>>((re
   return repo.watchUserOrganizations(user.uid);
 });
 
+final organizationByIdProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, id) {
+  return ref.watch(organizationRepositoryProvider).getOrganization(id);
+});
+
 class OrganizationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final DatabaseReference _rtdb = FirebaseDatabase.instance.ref();
@@ -119,7 +123,6 @@ class OrganizationRepository {
   /// Search organizations by name
   Future<List<Map<String, dynamic>>> searchOrganizations(String query) async {
     try {
-      if (query.isEmpty) return [];
       final queryLower = query.toLowerCase();
       
       final snapshot = await _firestore
@@ -134,6 +137,7 @@ class OrganizationRepository {
             return data;
           })
           .where((org) {
+            if (query.isEmpty) return true;
             final name = (org['businessName'] as String?)?.toLowerCase() ?? 
                          (org['name'] as String?)?.toLowerCase() ?? '';
             return name.contains(queryLower);
@@ -199,8 +203,11 @@ class OrganizationRepository {
         pendingAdmins.remove(userId);
         if (!admins.contains(userId)) admins.add(userId);
 
-        String status = data['status'] ?? 'pending';
-        if (admins.length >= 2) status = 'active';
+        // String status = data['status'] ?? 'pending';
+        // if (admins.length >= 2) status = 'active';
+
+        // MVP Change: Org is active immediately upon creation/acceptance
+        String status = 'active';
 
         transaction.update(orgRef, {
           'admins': admins,
@@ -278,9 +285,153 @@ class OrganizationRepository {
     await LocalCacheService.cacheOrganization(orgId, cachedData);
     await LocalCacheService.addToMyOrgsList(orgId);
 
-    // 2. Save to Firestore
-    await docRef.set(orgData);
+    // 2. Initialize Chat in RTDB
+    final chatId = 'org_$orgId';
+    final rtdbNow = DateTime.now().millisecondsSinceEpoch;
+    await _rtdb.child('chats/$chatId').set({
+      'id': chatId,
+      'type': 'organization',
+      'name': data['businessName'] ?? data['name'] ?? 'Organization',
+      'photoUrl': data['profileImage'] ?? data['logoUrl'],
+      'participants': [data['superAdminId']],
+      'admins': [data['superAdminId']],
+      'createdAt': rtdbNow,
+      'updatedAt': rtdbNow,
+      'createdBy': data['superAdminId'],
+      'lastMessage': {
+        'content': '⭐ Organization created',
+        'timestamp': rtdbNow,
+        'type': 'system',
+        'senderId': 'system',
+        'senderName': 'System',
+      }
+    });
+
+    await _rtdb.child('userChats/${data['superAdminId']}/$chatId').set({
+      'chatId': chatId,
+      'updatedAt': rtdbNow,
+      'lastMessage': {
+        'content': '⭐ Organization created',
+        'timestamp': rtdbNow,
+        'type': 'system',
+      }
+    });
+
+    // 3. Save to Firestore
+    await docRef.set({...orgData, 'chatId': chatId});
     
     return orgId;
+  }
+
+  /// Follow an organization
+  Future<void> followOrganization(String orgId, String userId) async {
+    // 1. Get Org Data to find chatId
+    final docRef = _firestore.collection('organizations').doc(orgId);
+    final docSnapshot = await docRef.get();
+    
+    if (!docSnapshot.exists) throw Exception("Organization not found");
+    final data = docSnapshot.data()!;
+    final chatId = data['chatId'] as String?;
+
+    // 2. Add to followers in Firestore
+    await docRef.update({
+      'followers': FieldValue.arrayUnion([userId])
+    });
+
+    // 3. Add to userChats in RTDB if chatId exists
+    // NOTE: This adds it to user list, but does NOT grant write permission yet.
+    if (chatId != null) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _rtdb.child('userChats/$userId/$chatId').update({
+        'chatId': chatId,
+        'updatedAt': now,
+        'following': true, 
+      });
+    }
+  }
+
+  /// Add a user to organization chat participants (Admin only)
+  Future<void> addChatMember(String orgId, String userId) async {
+    final doc = await _firestore.collection('organizations').doc(orgId).get();
+    if (!doc.exists) return;
+    
+    final chatId = doc.data()?['chatId'] as String?;
+    if (chatId == null) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    
+    // 1. Ensure userChats entry exists
+    await _rtdb.child('userChats/$userId/$chatId').update({
+      'chatId': chatId,
+      'updatedAt': now,
+      // We don't force 'following' here, but user should probably follow to see it.
+    });
+
+    // 2. Add to participants in RTDB
+    final participantsRef = _rtdb.child('chats/$chatId/participants');
+    final snapshot = await participantsRef.get();
+    List<String> participants = [];
+    if (snapshot.exists) {
+      participants = List<String>.from(snapshot.value as List);
+    }
+    if (!participants.contains(userId)) {
+      participants.add(userId);
+      await participantsRef.set(participants);
+    }
+  }
+
+  /// Remove a user from organization chat participants (Admin only)
+  Future<void> removeChatMember(String orgId, String userId) async {
+    final doc = await _firestore.collection('organizations').doc(orgId).get();
+    if (!doc.exists) return;
+    
+    final chatId = doc.data()?['chatId'] as String?;
+    if (chatId == null) return;
+
+    // Remove from participants in RTDB
+    final participantsRef = _rtdb.child('chats/$chatId/participants');
+    final snapshot = await participantsRef.get();
+    if (snapshot.exists) {
+      final participants = List<String>.from(snapshot.value as List);
+      if (participants.contains(userId)) {
+        participants.remove(userId);
+        await participantsRef.set(participants);
+      }
+    }
+    
+    // We don't necessarily remove from userChats if they are still 'following'
+    // but without participant status they might not see it or can't post.
+    // Actually, if they are not participants, the filter in ChatRepository might hide it?
+    // Let's check ChatRepository's list fetching.
+  }
+
+  /// Unfollow an organization
+  Future<void> unfollowOrganization(String orgId, String userId) async {
+    final docRef = _firestore.collection('organizations').doc(orgId);
+    final docSnapshot = await docRef.get();
+    
+    if (!docSnapshot.exists) return; // Silent fail
+    final data = docSnapshot.data()!;
+    final chatId = data['chatId'] as String?;
+
+    // 1. Remove from followers
+    await docRef.update({
+      'followers': FieldValue.arrayRemove([userId])
+    });
+
+    // 2. Remove from userChats and participants
+    if (chatId != null) {
+      await _rtdb.child('userChats/$userId/$chatId').remove();
+
+      final participantsRef = _rtdb.child('chats/$chatId/participants');
+      final snapshot = await participantsRef.get();
+      if (snapshot.exists) {
+        final participants = List<String>.from(snapshot.value as List);
+        if (participants.contains(userId)) {
+          participants.remove(userId);
+          await participantsRef.set(participants);
+        }
+      }
+    }
   }
 }

@@ -27,10 +27,27 @@ class MoreScreen extends ConsumerStatefulWidget {
 
 class _MoreScreenState extends ConsumerState<MoreScreen> {
   bool _showLogoutConfirm = false;
-  // TODO: Add other state like notifications, phone update, clearing chats
+  int _deletableChatsCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDeletableChatsCount();
+  }
+
+  Future<void> _fetchDeletableChatsCount() async {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+       if (!mounted) return;
+       final count = await ref.read(chatRepositoryProvider).getDeletableChatsCount();
+       if (mounted) {
+         setState(() => _deletableChatsCount = count);
+       }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+
     final userProfile = ref.watch(userProfileProvider).value;
     final theme = Theme.of(context);
     
@@ -257,25 +274,34 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                           _buildMenuItem(
                             icon: LucideIcons.trash2,
                             iconColor: const Color(0xFFEF4444), // Red-500
-                            title: 'Clear all chats',
-                             subtitle: 'No chats to clear',
-                             subtitleColor: theme.disabledColor,
+                            title: 'Delete all chats',
+                             subtitle: _deletableChatsCount > 0 
+                                ? '$_deletableChatsCount chats can be deleted' 
+                                : 'No chats to delete',
+                             subtitleColor: _deletableChatsCount > 0 
+                                ? theme.colorScheme.error 
+                                : theme.disabledColor,
                              onTap: () async {
+                                 if (_deletableChatsCount == 0) return;
+
                                  final confirm = await showDialog<bool>(
                                    context: context,
                                    builder: (context) => AlertDialog(
-                                     title: const Text('Clear All Chats'),
-                                     content: const Text('Are you sure you want to clear all your chats? This cannot be undone.'),
+                                     title: const Text('Delete All Chats'),
+                                     content: Text('Are you sure you want to delete these $_deletableChatsCount chats? This will remove them from your list. Community chats will remain.'),
                                      actions: [
                                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                       TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear', style: TextStyle(color: Colors.red))),
+                                       TextButton(
+                                          onPressed: () => Navigator.pop(context, true), 
+                                          child: const Text('Delete', style: TextStyle(color: Colors.red))
+                                       ),
                                      ],
                                    )
                                  );
 
                                  if (confirm == true) {
-                                   // Implement repository call
                                    await ref.read(chatRepositoryProvider).clearAllChats();
+                                   await _fetchDeletableChatsCount();
                                    if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chats cleared.')));
                                    }

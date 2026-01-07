@@ -1,13 +1,17 @@
 import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
+import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
-class UserCardView extends StatefulWidget {
+class UserCardView extends ConsumerStatefulWidget {
   final ProfileData user;
   final VoidCallback? onNameTap;
   final VoidCallback? onChatTap;
@@ -25,13 +29,18 @@ class UserCardView extends StatefulWidget {
     this.distanceKm,
     this.localImage,
     this.isStatic = false,
+    this.titleSuffix,
+    this.backgroundColor,
   });
 
+  final String? titleSuffix;
+  final Color? backgroundColor;
+
   @override
-  State<UserCardView> createState() => _UserCardViewState();
+  ConsumerState<UserCardView> createState() => _UserCardViewState();
 }
 
-class _UserCardViewState extends State<UserCardView> with SingleTickerProviderStateMixin {
+class _UserCardViewState extends ConsumerState<UserCardView> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -76,49 +85,15 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
   }
 
   Widget _buildHighlightedName(String name, String? query, ThemeData theme) {
-    if (query == null || query.isEmpty) {
-      return Text(
-        name,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    final lowerName = name.toLowerCase();
-    final lowerQuery = query.toLowerCase();
-    if (!lowerName.contains(lowerQuery)) {
-      return Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold));
-    }
-
-    final startIndex = lowerName.indexOf(lowerQuery);
-    final endIndex = startIndex + lowerQuery.length;
-
-    return RichText(
-      text: TextSpan(
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: theme.textTheme.titleMedium?.color,
-        ),
-        children: [
-          TextSpan(text: name.substring(0, startIndex)),
-          TextSpan(
-            text: name.substring(startIndex, endIndex),
-            style: TextStyle(
-              backgroundColor: theme.colorScheme.primaryContainer,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          TextSpan(text: name.substring(endIndex)),
-        ],
-      ),
+    return SearchHighlightUtils.highlightText(
+      name, 
+      query, 
+      theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+      context
     );
   }
 
   String _getProximityLevel(double distanceKm) {
-    if (widget.isStatic) return 'City';
     if (distanceKm <= 10) return 'Nearby';
     if (distanceKm <= 50) return 'Far';
     if (distanceKm <= 200) return 'Farther';
@@ -126,7 +101,6 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
   }
   
   Color _getProximityColor(String level, bool isDark, ThemeData theme) {
-    if (widget.isStatic) return isDark ? Colors.white70 : Colors.black87;
     switch (level) {
       case 'Nearby':
         return theme.colorScheme.primary;
@@ -146,8 +120,9 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
   }
   
   String _formatDistanceMetric(double km) {
-    double meters = km * 1000;
-    return km >= 1 ? '${km.toStringAsFixed(1)} km' : '${meters.round()} m';
+    // Return whole numbers for cleaner UI and to save space. Minimum 1km.
+    final value = km < 1 ? 1 : km.round();
+    return '${NumberFormat("#,###").format(value)} km';
   }
 
   Future<void> _launchMaps(double lat, double lng) async {
@@ -211,17 +186,22 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
     final homeFlag = _getCountryFlag(widget.user.homeCountryCode);
     final hostFlag = _getCountryFlag(widget.user.hostCountryCode);
     
-    // Bottom bar flag - priority: currentLocation country â hostLocation country
+    // Bottom bar flag - priority: currentLocation country -> hostLocation country
     String bottomFlag = '';
     if (widget.user.currentLocation?.countryCode != null) {
       bottomFlag = _getCountryFlag(widget.user.currentLocation!.countryCode);
     }
-    if (bottomFlag.isEmpty || bottomFlag == 'ð') {
+    if (bottomFlag.isEmpty || bottomFlag == '📍') {
       bottomFlag = hostFlag;
     }
     
+    // Local status logic
+    final isLocal = widget.user.homeCountryCode != null && 
+                    widget.user.hostCountryCode != null && 
+                    widget.user.homeCountryCode == widget.user.hostCountryCode;
+    
     // Calculate distance and proximity
-    final distance = widget.distanceKm ?? 0.0;
+    final distance = widget.distanceKm ?? widget.user.distance ?? 0.0;
     final proximityLevel = _getProximityLevel(distance);
     final proximityColor = _getProximityColor(proximityLevel, isDark, theme);
     
@@ -232,322 +212,388 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
       final state = widget.user.currentLocation?.state;
       final countryCode = widget.user.currentLocation?.countryCode;
       
-      // Check if it's a 3-level country and has state
       if (countryCode != null && 
           country_data.hasStateLevelHierarchyFromData(countryCode) &&
           state != null &&
           state.isNotEmpty) {
-        final country = country_data.getCountryByCode(countryCode);
-        currentCityDisplay = '$city, $state, ${country?.name ?? countryCode}';
+        final fullState = formatLocationName(state); 
+        currentCityDisplay = '$city, $fullState';
       } else {
-        final country = country_data.getCountryByCode(countryCode ?? '');
-        currentCityDisplay = '$city, ${country?.name ?? countryCode ?? ''}';
+        currentCityDisplay = city;
       }
     } else if (widget.user.hostLocation.formattedAddress.isNotEmpty) {
-      // Fallback to host location city
-      final parts = widget.user.hostLocation.formattedAddress.split(',');
-      currentCityDisplay = parts.isNotEmpty ? parts[0].trim() : null;
+      final loc = widget.user.hostLocation;
+      if (loc.city != null && loc.city!.isNotEmpty) {
+          final state = loc.state;
+          if (state != null && state.isNotEmpty) {
+             currentCityDisplay = '${loc.city}, ${formatLocationName(state)}';
+          } else {
+             currentCityDisplay = loc.city;
+          }
+      } else {
+          currentCityDisplay = formatFullAddress(widget.user.hostLocation.formattedAddress).split(',').first;
+      }
     }
 
     return GlassContainer(
+      color: widget.backgroundColor,
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-      padding: EdgeInsets.zero, // No padding on container - handled by inner Padding
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
-          // Main content row with padding
           Padding(
             padding: const EdgeInsets.only(left: 8, right: 8, top: 16, bottom: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left: Profile Photo (80x96, 10px radius)
-                GestureDetector(
-                onTap: () {
-                  if (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http')) {
-                    _showFullScreenImage(context);
-                  } else if (widget.onNameTap != null) {
-                    widget.onNameTap!();
-                  }
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    width: 80,
-                    height: 96,
-                    color: theme.colorScheme.surfaceVariant,
-                    child: widget.localImage != null
-                      ? Image.file(
-                          widget.localImage!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildInitials(theme),
-                        )
-                      : (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http'))
-                        ? Image.network(
-                            widget.user.profileImage,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  value: loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                      : null,
-                                ),
-                              );
-                            },
-                            errorBuilder: (_, error, ___) {
-                              return _buildInitials(theme);
-                            },
-                          )
-                        : _buildInitials(theme),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              
-              // Right: Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    // Name row with chat button
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: widget.onNameTap,
-                            child: _buildHighlightedName(
-                              '${widget.user.firstName} ${widget.user.lastName}',
-                              widget.searchQuery,
-                              theme,
-                            ),
-                          ),
+                    GestureDetector(
+                      onTap: () {
+                        if (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http')) {
+                          _showFullScreenImage(context);
+                        } else if (widget.onNameTap != null) {
+                          widget.onNameTap!();
+                        }
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 80,
+                          height: 96,
+                          color: theme.colorScheme.surfaceVariant,
+                          child: widget.localImage != null
+                            ? Image.file(
+                                widget.localImage!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildInitials(theme),
+                              )
+                            : (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http'))
+                              ? Image.network(
+                                  widget.user.profileImage,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (_, error, ___) => _buildInitials(theme),
+                                )
+                              : _buildInitials(theme),
                         ),
-                        // Chat button with online indicator
-                        GestureDetector(
-                          onTap: widget.onChatTap,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.transparent,
-                                ),
-                                child: Icon(
-                                  LucideIcons.messageCircle,
-                                  size: 20,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                              // Online status dot
-                              Positioned(
-                                top: 4,
-                                right: 4,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: theme.colorScheme.surface,
-                                      width: 1,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                      ),
+                    ),
+                    if (isLocal)
+                      Positioned(
+                        bottom: -4,
+                        right: -4,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.surface,
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              )
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    
-                    // Home location: Flag + "From" + address
-                    Row(
-                      children: [
-                        Text(homeFlag, style: const TextStyle(fontSize: 16)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'From',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontSize: 12,
+                          padding: const EdgeInsets.all(2),
+                          child: Container(
+                             width: 24, 
+                             height: 24,
+                             alignment: Alignment.center,
+                             decoration: BoxDecoration(
+                                 shape: BoxShape.circle,
+                                 color: theme.colorScheme.surfaceContainerHighest,
+                             ),
+                             child: Text(
+                               homeFlag, 
+                               style: const TextStyle(fontSize: 16),
+                               textAlign: TextAlign.center,
+                             ),
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            widget.user.homeLocation.formattedAddress,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withOpacity(0.9),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Host location: Flag + "Lives in" + address
-                    Row(
-                      children: [
-                        Text(hostFlag, style: const TextStyle(fontSize: 16)),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Lives in', // â FIXED: was "Living in"
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            () {
-                               final loc = widget.user.hostLocation;
-                               // hostLocation is required in ProfileData
-                               final countryCode = widget.user.hostCountryCode;
-                               if (countryCode != null && country_data.hasStateLevelHierarchyFromData(countryCode)) {
-                                  // We should try to extract city, state, country from formattedAddress or use components if we had them.
-                                  // For now, if it's already a full address, we might need a helper to format it.
-                                  // If the formattedAddress contains country, we are good.
-                                  return loc.formattedAddress;
-                               }
-                               return (loc.city?.isNotEmpty ?? false) ? '${loc.city}, ${loc.country}' : loc.formattedAddress;
-                            }(),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withOpacity(0.9),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          ),  // End Padding
-          // Bottom Status Bar - Full width, flush with card edges
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(8),
-                bottomRight: Radius.circular(8),
-                topLeft: Radius.zero,
-                topRight: Radius.zero,
-              ), // Top radius 0 for seamless integration
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Left side - Flag, proximity, and current location
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Country flag
-                      Text(bottomFlag, style: const TextStyle(fontSize: 18)),
-                      const SizedBox(width: 8),
-                      
-                      // Proximity and current location column
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Proximity level
-                            Text(
-                              proximityLevel,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: proximityColor,
-                              ),
-                            ),
-                            // Current location with GPS icon
-                            if (currentCityDisplay != null) ...[
-                              const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                          if (widget.user.currentLocation != null) {
-                                              final lat = widget.user.currentLocation!.geometry.location.lat;
-                                              final lng = widget.user.currentLocation!.geometry.location.lng;
-                                              _launchMaps(lat, lng);
-                                          }
-                                      },
-                                      child: Row(
-                                        children: [
-                                           widget.isStatic
-                                                ? Icon(
-                                                    LucideIcons.mapPin,
-                                                    size: 14,
-                                                    color: theme.colorScheme.primary,
-                                                  )
-                                                : ScaleTransition(
-                                                    scale: _animation,
-                                                    child: Icon(
-                                                      LucideIcons.mapPin,
-                                                      size: 14,
-                                                      color: theme.colorScheme.primary,
-                                                    ),
-                                                  ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              currentCityDisplay,
-                                              style: theme.textTheme.bodySmall?.copyWith(
-                                                fontSize: 12,
-                                                color: widget.isStatic 
-                                                    ? theme.colorScheme.onSurface 
-                                                    : theme.colorScheme.onSurfaceVariant,
-                                                // [REQUEST] Remove underline
-                                                decoration: TextDecoration.none, 
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                        ],
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: widget.onNameTap,
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: _buildHighlightedName(
+                                      '${widget.user.firstName} ${widget.user.lastName}',
+                                      widget.searchQuery,
+                                      theme,
+                                    ),
+                                  ),
+                                  if (widget.titleSuffix != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Text(
+                                         '(${widget.titleSuffix})', 
+                                         style: theme.textTheme.bodyMedium?.copyWith(
+                                            color: theme.colorScheme.primary, 
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                         ),
                                       ),
                                     ),
-                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (widget.onChatTap != null)
+                            if (widget.user.uid != ref.read(authRepositoryProvider).currentUser?.uid)
+                            GestureDetector(
+                              onTap: widget.onChatTap,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.transparent,
+                                    ),
+                                    child: Icon(
+                                      LucideIcons.messageCircle,
+                                      size: 20,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: theme.colorScheme.surface,
+                                          width: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (!isLocal) ...[
+                                 Text(homeFlag, style: const TextStyle(fontSize: 16)),
+                                 const SizedBox(width: 8),
+                              ],
+                              Text(
+                                'From',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
                                 ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: SearchHighlightUtils.highlightText(
+                                  isLocal 
+                                    ? () {
+                                        final loc = widget.user.homeLocation;
+                                        if (loc.city?.isNotEmpty ?? false) {
+                                            final state = loc.state;
+                                            if (state?.isNotEmpty ?? false) {
+                                               return '${loc.city}, ${formatLocationName(state)}';
+                                            }
+                                            return loc.city!;
+                                        }
+                                        return formatFullAddress(loc.formattedAddress);
+                                      }()
+                                    : formatFullAddress(widget.user.homeLocation.formattedAddress),
+                                  widget.searchQuery,
+                                  theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface.withOpacity(0.9),
+                                  ),
+                                  context
+                                ),
+                              ),
                             ],
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              if (!isLocal) ...[
+                                 Text(hostFlag, style: const TextStyle(fontSize: 16)),
+                                 const SizedBox(width: 8),
+                              ],
+                              Text(
+                                'Lives in',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: SearchHighlightUtils.highlightText(
+                                  () {
+                                      final loc = widget.user.hostLocation;
+                                      final countryCode = widget.user.hostCountryCode;
+                                      if (countryCode != null && country_data.hasStateLevelHierarchyFromData(countryCode)) {
+                                         return formatFullAddress(loc.formattedAddress);
+                                      }
+                                      if (loc.city?.isNotEmpty ?? false) {
+                                         final fullCountry = formatLocationName(loc.country);
+                                         return '${loc.city}, $fullCountry';
+                                      }
+                                      return formatFullAddress(loc.formattedAddress);
+                                  }(),
+                                  widget.searchQuery,
+                                  theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface.withOpacity(0.9),
+                                  ),
+                                  context
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                
-                // Right side - Distance and navigation
-                Row(
-                  children: [
-                    // Distance info column
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+                if (widget.user.currentLocation != null) {
+                    final lat = widget.user.currentLocation!.geometry.location.lat;
+                    final lng = widget.user.currentLocation!.geometry.location.lng;
+                    _launchMaps(lat, lng);
+                }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          _formatDistanceImperial(distance),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(bottomFlag, style: const TextStyle(fontSize: 18)),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                proximityLevel,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: proximityColor,
+                                ),
+                              ),
+                              if (widget.user.currentLocation != null) ...[
+                                const SizedBox(width: 8),
+                                Text('•', style: TextStyle(color: theme.hintColor.withOpacity(0.3), fontSize: 12)),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                       Image.asset(
+                                         'assets/icons/logo-original.png',
+                                         width: 14,
+                                         height: 14,
+                                       ),
+                                       if (widget.user.showCurrentLocationName != false && currentCityDisplay != null) ...[
+                                         const SizedBox(width: 4),
+                                         Flexible(
+                                           child: Text(
+                                             currentCityDisplay!,
+                                             style: theme.textTheme.bodySmall?.copyWith(
+                                               fontSize: 12,
+                                               color: widget.isStatic 
+                                                   ? theme.colorScheme.onSurface 
+                                                   : theme.colorScheme.onSurfaceVariant,
+                                               decoration: TextDecoration.none, 
+                                             ),
+                                             maxLines: 1,
+                                             overflow: TextOverflow.ellipsis,
+                                           ),
+                                         ),
+                                       ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        Text(
-                          _formatDistanceMetric(distance),
+                      ],
+                    ),
+                  ),
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: _formatDistanceMetric(distance).split(' ').first,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF74A383),
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' km',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' away',
                           style: theme.textTheme.bodySmall?.copyWith(
                             fontSize: 11,
                             color: theme.colorScheme.onSurfaceVariant,
@@ -555,44 +601,9 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
                         ),
                       ],
                     ),
-                    const SizedBox(width: 6),
-                    
-                    // "away" text
-                    Text(
-                      'away',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    
-                    // Navigation button
-                    GestureDetector(
-                      onTap: () {
-                         if (widget.user.currentLocation != null) {
-                            final lat = widget.user.currentLocation!.geometry.location.lat;
-                            final lng = widget.user.currentLocation!.geometry.location.lng;
-                            _launchMaps(lat, lng);
-                         }
-                      },
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.transparent,
-                        ),
-                        child: Icon(
-                          LucideIcons.navigation,
-                          size: 16,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -600,6 +611,3 @@ class _UserCardViewState extends State<UserCardView> with SingleTickerProviderSt
     );
   }
 }
-
-
-

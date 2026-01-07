@@ -13,6 +13,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/models/location.dart'; // [NEW] Needed for UserLocationGeometry
 import 'package:intl/intl.dart';
+import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
 /// Provider for other user's profile in direct chats (or Organization details)
 final chatUserProfileProvider = FutureProvider.family<ProfileData?, Chat>((ref, chat) async {
@@ -65,63 +66,7 @@ final chatUserProfileProvider = FutureProvider.family<ProfileData?, Chat>((ref, 
 final chatCardDisplayNameProvider = FutureProvider.family<String, Chat>((ref, chat) async {
   // [NEW] Use utility for community chats, enriched with user context
   if (chat.isCommunity) {
-     // Fetch current user profile to determine their Host Continent
-     final currentUser = ref.watch(authStateProvider).value;
-     String? hostContinentName;
-     
-     if (currentUser != null) {
-        // We use .read here to avoid rebuilding the chat card simple text just because profile updates elsewhere
-        // But for correctness, .watch might be safer if profile is cached. 
-        // Given this is a FutureProvider, .read is acceptable if we assume location rarely changes during session.
-        // Let's safe-read it from repo or cache.
-        final profileRepo = ref.read(profileRepositoryProvider);
-        try {
-           final profile = await profileRepo.getUserProfile(currentUser.uid);
-           if (profile?.currentLocation?.countryCode != null) {
-              final continent = country_data.getContinentByCountryCode(profile!.currentLocation!.countryCode!);
-              if (continent != null) {
-                 hostContinentName = country_data.continentDisplayNames[continent]; // e.g., "North America"
-              }
-           }
-        } catch (e) {
-           // Ignore errors, fallback to default naming
-        }
-     }
-
-     // Logic: If the chat name contains our Host Continent name, Force "Host" logic -> Noun.
-     // e.g. Chat Name "North American Community", Host="North America" -> Force "North America Community"
-     final generatedName = CommunityChatUtils.generateCommunityName(chat);
-     
-     if (hostContinentName != null) {
-        // Strip "American" vs "America" differences by normalized checking
-        // Actually CommunityChatUtils has internal logic if we pass locationType: 'host'
-        // Let's try to regenerate with forced host type if we detect a match
-        
-        // Simple heuristic: If generated default name (likely Adjective) contains the Adjective form of our host continent
-        // OR if the chat name itself seems related.
-        
-        // Better: Check if the chat IS a continent chat for our host continent
-        // We can check if the generated name "sounds like" our continent.
-        
-        // Reverse verification:
-        // Generate name as if it was HOST
-        final hostFormName = CommunityChatUtils.generateCommunityNameFromParts(
-            name: chat.name,
-            locationType: 'host',
-            id: chat.id
-        );
-        
-        // If the HOST form contains our Host Continent Name (e.g. "North America Community" contains "North America")
-        // AND the chat seems to actually BE that continent (not just sharing the name)...
-        // The safest way is to check if the result of generateCommunityName (default) is DIFFERENT from hostFormName
-        // AND hostFormName represents our actual location.
-        
-        if (hostFormName.contains(hostContinentName)) {
-             return hostFormName;
-        }
-     }
-     
-     return generatedName;
+     return CommunityChatUtils.generateCommunityName(chat);
   }
   
   final chatRepo = ref.watch(chatRepositoryProvider);
@@ -167,9 +112,39 @@ class ChatCard extends ConsumerWidget {
     }
   }
 
-  Widget _buildLastMessagePreview(ThemeData theme) {
+  Widget _buildLastMessagePreview(BuildContext context, ThemeData theme, WidgetRef ref, LastMessage? lastMessage) {
+    // 1. Check for typing status
+    final typingAsync = ref.watch(typingIndicatorsProvider(chat.id));
+    final typingUsers = typingAsync.value ?? [];
     
-    final lastMessage = chat.lastMessage;
+    if (typingUsers.isNotEmpty) {
+      if (typingUsers.length == 1 && !chat.isDirect) {
+          // Multiple people chat, try to show name
+          final profileAsync = ref.watch(userProfileByIdProvider(typingUsers.first));
+          return profileAsync.when(
+            data: (profile) => Text(
+              '${profile?.firstName ?? 'Someone'} is typing...',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            loading: () => Text('typing...', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontStyle: FontStyle.italic)),
+            error: (_, __) => Text('typing...', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontStyle: FontStyle.italic)),
+          );
+      }
+      
+      return Text(
+        typingUsers.length > 1 ? '${typingUsers.length} people typing...' : 'typing...',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
     if (lastMessage == null) {
       return Text(
         'No messages yet',
@@ -180,7 +155,26 @@ class ChatCard extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
       );
     }
-    
+
+    if (lastMessage.isDeleted) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.ban, size: 14, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+          const SizedBox(width: 4),
+          Text(
+            'Message deleted',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      );
+    }
+
+
+
     IconData? icon;
     String text = lastMessage.content;
     bool isMedia = true;
@@ -195,21 +189,12 @@ class ChatCard extends ConsumerWidget {
         text = 'Video';
         break;
       case 'audio':
-        // Check if it's a voice message (duration usually implies voice note in this app context, or we can check metadata)
-        // For now, if "content" is a URL and type is audio, we assume voice. 
-        // We'll use Mic for generic audio if not distinguished, but user asked for "Mic for voice, Music for audio/music".
-        // Usually, voice messages have a specific duration or different metadata. 
-        // Let's assume 'audio' type is voice message by default in this app's "voice note" feature.
-        // If there's a file upload (audio file), we might need to distinguish.
-        // Checking if we have a way to distinguish. 
-        // In this app, "audio" usually means voice note. If we add "music", it might be a document or a specific "audio_file" type?
-        // Let's us Mic for now as typical for voice notes.
         icon = LucideIcons.mic; 
         text = 'Voice message';
         break;
-      case 'audio_file': // Hypothetical type if we distinguish
+      case 'audio_file':
         icon = LucideIcons.music;
-        text = 'Audio';
+        text = 'Audio file';
         break;
       case 'location':
         icon = LucideIcons.locateFixed;
@@ -217,17 +202,12 @@ class ChatCard extends ConsumerWidget {
         break;
       case 'document':
         icon = LucideIcons.fileText;
-         // Try to show filename if content is a URL, or "Document"
         text = 'Document';
         break;
       case 'money-transfer':
-        icon = LucideIcons.banknote; // or coins
+        icon = LucideIcons.banknote;
         text = 'Money transfer';
         break;
-      case 'camera': // User mentioned camera? Usually image/video.
-         icon = LucideIcons.camera;
-         text = 'Photo';
-         break;
       default:
         isMedia = false;
         text = lastMessage.content;
@@ -241,19 +221,23 @@ class ChatCard extends ConsumerWidget {
           const SizedBox(width: 4),
         ],
         Flexible(
-          child: Text(
-            text,
-            style: theme.textTheme.bodyMedium?.copyWith(
-               color: theme.colorScheme.onSurfaceVariant,
-               fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : null,
+          child: SearchHighlightUtils.highlightText(
+            text, 
+            searchQuery, 
+            theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : null,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            context
           ),
         ),
       ],
     );
   }
+
+
+
+
 
   IconData _getChatTypeIcon() {
     switch (chat.type) {
@@ -281,7 +265,7 @@ class ChatCard extends ConsumerWidget {
           
           return CircleAvatar(
             radius: 28,
-            backgroundColor: theme.colorScheme.primaryContainer,
+            backgroundColor: Colors.transparent,
             backgroundImage: hasPhoto
                 ? CachedNetworkImageProvider(photoUrl)
                 : null,
@@ -301,7 +285,7 @@ class ChatCard extends ConsumerWidget {
         },
         loading: () => CircleAvatar(
           radius: 28,
-          backgroundColor: theme.colorScheme.primaryContainer,
+          backgroundColor: Colors.transparent,
           child: Text(
             chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
             style: TextStyle(
@@ -313,7 +297,7 @@ class ChatCard extends ConsumerWidget {
         ),
         error: (_, __) => CircleAvatar(
           radius: 28,
-          backgroundColor: theme.colorScheme.primaryContainer,
+          backgroundColor: Colors.transparent,
           child: Text(
             chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
             style: TextStyle(
@@ -335,37 +319,18 @@ class ChatCard extends ConsumerWidget {
       );
     }
 
-    // For group/org chats, show photo if available, else icon
-    if ((chat.type == 'group' || chat.isOrganization) && chat.photoUrl != null && chat.photoUrl!.isNotEmpty) {
+    // For group/event/org chats, show photo if available, else icon
+    if ((chat.isEvent || chat.isGroup || chat.isOrganization) && chat.photoUrl != null && chat.photoUrl!.isNotEmpty) {
       return CircleAvatar(
         radius: 28,
-        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        backgroundColor: Colors.transparent,
         backgroundImage: CachedNetworkImageProvider(chat.photoUrl!),
       );
     }
 
-    // For group/event chats (fallback), show icon
-    // [UPDATED] Event with profile image
-    if (chat.isEvent && chat.photoUrl != null && chat.photoUrl!.isNotEmpty) {
-       return Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-             shape: BoxShape.circle,
-             color: theme.colorScheme.surfaceContainerHighest,
-             image: DecorationImage(
-                image: CachedNetworkImageProvider(chat.photoUrl!),
-                fit: BoxFit.cover
-             ),
-          ),
-       );
-    }
-
     return CircleAvatar(
       radius: 28,
-      backgroundColor: chat.isEvent
-              ? Colors.orange.shade100
-              : Colors.green.shade100,
+      backgroundColor: Colors.transparent,
       child: Icon(
         _getChatTypeIcon(),
         size: 24,
@@ -376,59 +341,22 @@ class ChatCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildHighlightedName(String name, ThemeData theme) {
-    if (searchQuery == null || searchQuery!.isEmpty) {
-      return Text(
-        name,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    final query = searchQuery!.toLowerCase();
-    final lowerName = name.toLowerCase();
-    final matchIndex = lowerName.indexOf(query);
-
-    if (matchIndex == -1) {
-      return Text(
-        name,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    return RichText(
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-        children: [
-          TextSpan(text: name.substring(0, matchIndex)),
-          TextSpan(
-            text: name.substring(matchIndex, matchIndex + query.length),
-            style: TextStyle(
-              backgroundColor: Colors.yellow.shade200,
-              color: Colors.black,
-            ),
-          ),
-          TextSpan(text: name.substring(matchIndex + query.length)),
-        ],
+  Widget _buildHighlightedName(String name, ThemeData theme, BuildContext context) {
+    return SearchHighlightUtils.highlightText(
+      name, 
+      searchQuery, 
+      theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w600,
       ),
+      context
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final lastMessage = chat.lastMessage;
+    final lastMessageAsync = ref.watch(chatLastMessageStreamProvider(chat.id));
+    final lastMessage = lastMessageAsync.value ?? chat.lastMessage;
     final hasUnread = chat.unreadCount > 0;
     
     // Get display name (for DM chats, gets the other participant's name)
@@ -557,7 +485,7 @@ class ChatCard extends ConsumerWidget {
                                      child: Icon(LucideIcons.users, size: 16, color: Colors.green),
                                   ),
                               Flexible(
-                                child: _buildHighlightedName(displayName, theme),
+                                child: _buildHighlightedName(displayName, theme, context),
                               ),
                               if (chat.isMuted) ...[
                                 const SizedBox(width: 4),
@@ -611,7 +539,7 @@ class ChatCard extends ConsumerWidget {
                         ],
                         // Message preview
                         Expanded(
-                          child: _buildLastMessagePreview(theme),
+                          child: _buildLastMessagePreview(context, theme, ref, lastMessage),
                         ),
                         // Unread badge
                         if (hasUnread) ...[

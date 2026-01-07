@@ -103,6 +103,7 @@ ProfileData _$ProfileDataFromJson(Map<String, dynamic> json) => ProfileData(
   createdAt: json['createdAt'] == null
       ? null
       : DateTime.parse(json['createdAt'] as String),
+  showCurrentLocationName: json['showCurrentLocationName'] as bool?,
 );
 
 Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
@@ -152,6 +153,7 @@ Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
       'notificationsEnabled': instance.notificationsEnabled,
       'fcmToken': instance.fcmToken,
       'fcmTopics': instance.fcmTopics,
+      'showCurrentLocationName': instance.showCurrentLocationName,
       'distance': instance.distance,
     };
 

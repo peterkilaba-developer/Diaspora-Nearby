@@ -11,6 +11,7 @@ import 'package:diaspora_nearby/features/more/widgets/business_registration_moda
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
 class OrganizationsListScreen extends ConsumerStatefulWidget {
   const OrganizationsListScreen({super.key});
@@ -19,7 +20,7 @@ class OrganizationsListScreen extends ConsumerStatefulWidget {
   ConsumerState<OrganizationsListScreen> createState() => _OrganizationsListScreenState();
 }
 
-class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScreen> with SingleTickerProviderStateMixin {
+class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScreen> {
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _organizations = [];
   List<Map<String, dynamic>> _filteredOrgs = [];
@@ -30,8 +31,7 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
   String? _userHomeCountryCode; // Current user's home country code
   
   // Animation for logo icon
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
+
   
   // User location for distance calc
   double? _userLat;
@@ -52,14 +52,6 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
     super.initState();
     
     // Animation setup
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat(reverse: true);
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-    
     _loadUserLocation();
     _loadOrganizations();
   }
@@ -67,7 +59,6 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
   @override
   void dispose() {
     _searchController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
@@ -183,6 +174,8 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
     return '$kmStr / $miStr';
   }
 
+
+
   /// Get country flag emoji from country name
   String _getCountryFlag(String? countryName) {
     if (countryName == null || countryName.isEmpty) return 'ð';
@@ -243,12 +236,23 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
       }).toList();
     }
     
-    // Apply search query (matches org name only)
+    // Apply search query (matches name, description, location, type)
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       result = result.where((org) {
-        final name = (org['name'] as String?)?.toLowerCase() ?? '';
-        return name.contains(query);
+        final name = (org['businessName'] as String? ?? org['name'] as String? ?? '').toLowerCase();
+        final description = (org['description'] as String? ?? '').toLowerCase();
+        final city = (org['city'] as String? ?? '').toLowerCase();
+        final state = (org['state'] as String? ?? '').toLowerCase();
+        final country = (org['country'] as String? ?? '').toLowerCase();
+        final type = (org['type'] as String? ?? '').toLowerCase();
+        
+        return name.contains(query) || 
+               description.contains(query) || 
+               city.contains(query) || 
+               state.contains(query) || 
+               country.contains(query) ||
+               type.contains(query);
       }).toList();
     }
     
@@ -312,6 +316,18 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    
+    // Listen to profile updates to ensure valid homeCountryCode for filtering
+    ref.listen(userProfileProvider, (previous, next) {
+      final newProfile = next.value;
+      if (newProfile != null && newProfile.homeCountryCode != _userHomeCountryCode) {
+        setState(() {
+          _userHomeCountryCode = newProfile.homeCountryCode;
+        });
+        _applyFilters();
+      }
+    });
+
     final groupedOrgs = _groupByType(_filteredOrgs);
 
     return Scaffold(
@@ -322,133 +338,124 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
           onPressed: () => context.pop(),
         ),
       ),
-      body: Column(
-        children: [
-          // Search bar with global toggle - matching DiasporaAppBar pattern
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: GlassContainer(
-              borderRadius: BorderRadius.circular(30),
-              padding: EdgeInsets.zero,
-              child: TextField(
-                controller: _searchController,
-                onChanged: _searchOrganizations,
-                decoration: InputDecoration(
-                  hintText: 'Search for Organization',
-                  prefixIcon: const Icon(LucideIcons.search, size: 20),
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Clear button when searching
-                      if (_searchQuery.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(LucideIcons.x, size: 20),
-                          onPressed: () {
-                            _searchController.clear();
-                            _searchOrganizations('');
-                          },
-                          tooltip: 'Clear search',
-                        ),
-                      // Global toggle with animation (visible when not searching)
-                      if (_searchQuery.isEmpty)
-                        ScaleTransition(
-                          scale: _scaleAnimation,
-                          child: IconButton(
-                            icon: ColorFiltered(
-                              colorFilter: ColorFilter.mode(
-                                _isGlobalView
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface,
-                                BlendMode.srcIn,
-                              ),
-                              child: Image.asset(
-                                'assets/icons/logo-original.png',
-                                width: 24,
-                                height: 24,
-                              ),
-                            ),
-                            onPressed: _toggleGlobalView,
-                            tooltip: _isGlobalView 
-                                ? 'Switch to My Organizations' 
-                                : 'Switch to All Organizations',
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Search bar with global toggle - matching DiasporaAppBar pattern
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: GlassContainer(
+                borderRadius: BorderRadius.circular(30),
+                padding: EdgeInsets.zero,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _searchOrganizations,
+                  decoration: InputDecoration(
+                    hintText: 'Search for Organization',
+                    prefixIcon: const Icon(LucideIcons.search, size: 20),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Clear button when searching
+                        if (_searchQuery.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(LucideIcons.x, size: 20),
+                            onPressed: () {
+                              _searchController.clear();
+                              _searchOrganizations('');
+                            },
+                            tooltip: 'Clear search',
                           ),
-                        ),
-                    ],
+                        // Global toggle with animation (visible when not searching)
+                        if (_searchQuery.isEmpty)
+                           IconButton(
+                             icon: Icon(
+                               LucideIcons.globe, 
+                               size: 24, 
+                               color: _isGlobalView ? theme.colorScheme.primary : theme.colorScheme.onSurface
+                             ),
+                             onPressed: _toggleGlobalView,
+                             tooltip: _isGlobalView 
+                                 ? 'Switch to My Organizations' 
+                                 : 'Switch to All Organizations',
+                           ),
+                      ],
+                    ),
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
             ),
-          ),
-
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredOrgs.isEmpty
-                    ? _buildEmptyState(theme)
-                    : RefreshIndicator(
-                        onRefresh: _loadOrganizations,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          itemCount: groupedOrgs.length,
-                          itemBuilder: (context, index) {
-                            final type = groupedOrgs.keys.elementAt(index);
-                            final orgs = groupedOrgs[type]!;
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Group header with full type name
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        _getOrgTypeIcon(type),
-                                        size: 18,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          type, // Full type name
-                                          style: theme.textTheme.titleSmall?.copyWith(
-                                            color: theme.colorScheme.primary,
-                                            fontWeight: FontWeight.w600,
+  
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredOrgs.isEmpty
+                      ? _buildEmptyState(theme)
+                      : RefreshIndicator(
+                          onRefresh: _loadOrganizations,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            itemCount: groupedOrgs.length,
+                            itemBuilder: (context, index) {
+                              final type = groupedOrgs.keys.elementAt(index);
+                              final orgs = groupedOrgs[type]!;
+  
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Group header with full type name
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          _getOrgTypeIcon(type),
+                                          size: 18,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            type, // Full type name
+                                            style: theme.textTheme.titleSmall?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Text(
-                                          '${orgs.length}',
-                                          style: theme.textTheme.bodySmall?.copyWith(
-                                            color: theme.colorScheme.primary,
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${orgs.length}',
+                                            style: theme.textTheme.bodySmall?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-
-                                // Organization cards
-                                ...orgs.map((org) => _buildOrgCard(org, theme)),
-                              ],
-                            );
-                          },
+  
+                                  // Organization cards
+                                  ...orgs.map((org) => _buildOrgCard(org, theme)),
+                                ],
+                              );
+                            },
+                          ),
                         ),
-                      ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -493,10 +500,11 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
             const SizedBox(height: 24),
             OutlinedButton.icon(
               onPressed: () {
-                showModalBottomSheet(
+                  showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
+                  useSafeArea: true, // [FIX] Match MoreScreen
                   builder: (context) => const BusinessRegistrationModal(),
                 ).then((_) => _loadOrganizations()); // Refresh after modal close
               },
@@ -559,30 +567,17 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          name,
-                          style: theme.textTheme.titleMedium?.copyWith(
+                        child: SearchHighlightUtils.highlightText(
+                          name, 
+                          _searchQuery, 
+                          theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          context
                         ),
                       ),
                       if (status == 'pending')
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Pending',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.orange,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
+                        const SizedBox.shrink(), // Removed pending badge
                     ],
                   ),
                   
@@ -598,17 +593,17 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
                         ),
                         const SizedBox(width: 4),
                         Flexible(
-                          child: Text(
+                          child: SearchHighlightUtils.highlightText(
                             [
                               if (city != null) city,
                               if (state != null) state,
                               if (country != null) country,
                             ].join(', '),
-                            style: theme.textTheme.bodySmall?.copyWith(
+                            _searchQuery,
+                            theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            context
                           ),
                         ),
                       ],
@@ -642,12 +637,7 @@ class _OrganizationsListScreenState extends ConsumerState<OrganizationsListScree
             ),
 
             // Actions
-            IconButton(
-               icon: Icon(LucideIcons.navigation, size: 20, color: theme.colorScheme.primary),
-               onPressed: () => _openDirections(org),
-               padding: EdgeInsets.zero,
-               constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            ),
+            // Navigation icon removed as per request
           ],
         ),
       ),

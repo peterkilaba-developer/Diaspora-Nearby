@@ -71,6 +71,9 @@ class Event {
   @JsonKey(includeFromJson: false, includeToJson: false)
   String? creatorPhoto;
 
+  String? organizationId;
+  String? organizationName;
+
   Event({
     required this.id,
     required this.title,
@@ -110,6 +113,8 @@ class Event {
     this.distance,
     this.creatorName,
     this.creatorPhoto,
+    this.organizationId,
+    this.organizationName,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) => _$EventFromJson(json);
@@ -151,6 +156,8 @@ class Event {
     String? status,
     double? latitude,
     double? longitude,
+    String? organizationId,
+    String? organizationName,
   }) {
     return Event(
       id: id ?? this.id,
@@ -188,6 +195,8 @@ class Event {
       status: status ?? this.status,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      organizationId: organizationId ?? this.organizationId,
+      organizationName: organizationName ?? this.organizationName,
     );
   }
 }

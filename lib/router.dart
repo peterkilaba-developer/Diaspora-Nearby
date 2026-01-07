@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:diaspora_nearby/models/profile_data.dart';
+import 'features/shared/screens/user_permissions_screen.dart';
 import 'features/auth/screens/phone_auth_screen.dart';
 import 'features/auth/screens/otp_verification_screen.dart';
 import 'features/auth/repository/auth_repository.dart';
 import 'features/profile/repository/profile_repository.dart';
 import 'features/profile/screens/profile_setup_screen.dart';
 import 'features/profile/screens/user_profile_screen.dart';
-import 'features/home/screens/home_screen.dart';
+import 'features/discovery/screens/discovery_screen.dart';
 import 'features/chat/screens/chats_list_screen.dart';
 import 'features/chat/screens/chat_screen.dart';
 import 'features/chat/screens/group_info_screen.dart';
+import 'features/chat/screens/organization_info_screen.dart';
+
 import 'features/chat/screens/forward_chat_selection_screen.dart';
 import 'features/chat/screens/start_direct_chat_screen.dart';
 import 'features/community/screens/communities_screen.dart';
@@ -40,25 +46,42 @@ import 'package:diaspora_nearby/features/organization/screens/organizations_list
 import 'package:diaspora_nearby/features/organization/screens/organization_management_screen.dart';
 import 'package:diaspora_nearby/features/organization/screens/organization_detail_screen.dart';
 import 'package:diaspora_nearby/features/more/widgets/business_registration_modal.dart';
+import 'features/shared/screens/error_screen.dart';
+import 'features/home/screens/home_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen<AsyncValue<User?>>(authStateProvider, (_, __) => notifyListeners());
+    _ref.listen<AsyncValue<ProfileData?>>(userProfileProvider, (_, __) => notifyListeners());
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-  final userProfileAsync = ref.watch(userProfileProvider);
+  final notifier = ref.watch(routerNotifierProvider);
   
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
+    refreshListenable: notifier,
     initialLocation: '/auth/phone', 
     redirect: (context, state) async {
+      final authState = ref.read(authStateProvider);
+      final userProfileAsync = ref.read(userProfileProvider);
+      
       final isLoading = authState.isLoading || userProfileAsync.isLoading;
       final hasError = authState.hasError || userProfileAsync.hasError;
       final isAuthenticated = authState.value != null;
       
       final isAuthRoute = state.matchedLocation.startsWith('/auth');
       
-      // Explicitly handle loading state
       // Explicitly handle loading state
       // if (isLoading) return '/splash'; // MOVED logic below
       
@@ -67,12 +90,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       // i.e. we are at root/auth or we explicitly need to block.
       // Doing this prevents disrupting UX on pages like Communities that handle their own loading/error states.
       final isBootstrapping = state.matchedLocation == '/' || state.matchedLocation.startsWith('/auth') || state.matchedLocation == '/splash';
+      
+      // Allow error screen to render
+      if (state.matchedLocation.startsWith('/error')) return null;
+
+      if (hasError) {
+         final error = authState.error ?? userProfileAsync.error;
+         return '/error?message=${Uri.encodeComponent(error.toString())}';
+      }
 
       if (authState.isLoading || (isBootstrapping && userProfileAsync.isLoading)) {
          return '/splash';
       }
-      
-      if (hasError) return null; // Or error page
 
       if (!isAuthenticated && !isAuthRoute) {
         return '/auth/phone';
@@ -85,14 +114,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         // Allow OTP screen to show even when Firebase Auth detects phone number
         // User is not fully authenticated until OTP is verified
         if (isAuthRoute && state.matchedLocation != '/auth/otp') {
-           // Check profile exists
-            final uidExists = await ref.read(profileRepositoryProvider).profileExists(user.uid) || LocalCacheService.prefs.containsKey('cached_user_${user.uid}');
-    if (!uidExists) return '/profile-setup';
+            // Check profile exists
+            bool uidExists = false;
+            try {
+              uidExists = await ref.read(profileRepositoryProvider).profileExists(user.uid) || 
+                          LocalCacheService.prefs.containsKey('cached_user_${user.uid}');
+            } catch (e) {
+              debugPrint('Router Profile Check Error: $e');
+              // If check fails, we might technically treat as existing to avoid setup loop, 
+              // or let it fall through. Safest is to allow to proceed if we have a cache claim.
+            }
+            
+            if (!uidExists) return '/profile-setup';
            
            // Check returning user status
            final sessionService = ref.read(sessionServiceProvider);
            final isReturning = await sessionService.isReturningUser();
-           return isReturning ? '/chats' : '/nearby';
+           return '/chats'; // Always go to chats first for stability
         }
         
         if (state.matchedLocation == '/profile-setup' && userProfileAsync.value != null) {
@@ -104,22 +142,21 @@ final routerProvider = Provider<GoRouter>((ref) {
            
            final sessionService = ref.read(sessionServiceProvider);
            final isReturning = await sessionService.isReturningUser();
-           return isReturning ? '/chats' : '/nearby';
+           return '/chats'; // Always go to chats first for stability
         }
         
-        // --- STRICT LOCATION ENFORCEMENT ---
+        // --- PERMISSION ENFORCEMENT ---
         // If user is authenticated and setup is complete, we check permission.
-        // We skip this check if we are already going to /profile or /profile-setup
         if (!state.matchedLocation.startsWith('/auth') && 
-            state.matchedLocation != '/profile-setup') {
+            state.matchedLocation != '/profile-setup' &&
+            state.matchedLocation != '/permissions') {
             
-          final permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-             // Block navigation and force to profile if not already there
-             if (state.matchedLocation != '/profile') {
-                return '/profile?enforceLocation=true';
-             }
-          }
+           final status = await Permission.location.status;
+           // If denied or permanently denied, we need to ask.
+           // We check for granted or limited (iOS 14+).
+           if (!status.isGranted && !status.isLimited) {
+               return '/permissions';
+           }
         }
         // -----------------------------------
         
@@ -129,14 +166,26 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
         
         // Data Integrity Guard for Root/Auth redirect
-        if (state.matchedLocation == '/' || state.matchedLocation.startsWith('/auth')) {
+        if (state.matchedLocation == '/' || state.matchedLocation.startsWith('/auth') || state.matchedLocation == '/splash') {
            if (profile?.communityMemberships == null || profile!.communityMemberships!.isEmpty) {
               return '/profile-setup';
            }
            
            final sessionService = ref.read(sessionServiceProvider);
            final isReturning = await sessionService.isReturningUser();
-           return isReturning ? '/chats' : '/nearby';
+           return '/chats'; // Always go to chats first for stability
+        }
+
+        // [FIX] Global Profile Integrity Guard
+        // Ensure no access to protected routes if profile is missing (and not loading)
+        // We exclude /profile-setup itself to prevent loops.
+        // We also check !userProfileAsync.isLoading to avoid redirecting while fetching.
+        if (state.matchedLocation != '/profile-setup' && 
+            !state.matchedLocation.startsWith('/auth') &&
+            !userProfileAsync.isLoading &&
+            profile == null) {
+            debugPrint('Router: Profile missing for authenticated user. Redirecting to setup.');
+            return '/profile-setup';
         }
       }
 
@@ -146,6 +195,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
+      ),
+
+      GoRoute(
+        path: '/error',
+        builder: (context, state) {
+           final msg = state.uri.queryParameters['message'];
+           return ErrorScreen(message: msg);
+        },
+      ),
+
+      GoRoute(
+        path: '/permissions',
+        builder: (context, state) => const UserPermissionsScreen(),
       ),
       
       // Profile Setup (No Shell)
@@ -192,6 +254,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const OrganizationsListScreen(),
       ),
 
+      // Organization Management Route
+      GoRoute(
+        path: '/organization/manage',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final orgId = state.uri.queryParameters['orgId'];
+          return OrganizationManagementScreen(initialOrgId: orgId);
+        },
+      ),
+
       // Organization Detail Route
       GoRoute(
         path: '/organization/:orgId',
@@ -200,16 +272,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           final orgId = state.pathParameters['orgId']!;
           final extra = state.extra as Map<String, dynamic>?;
           return OrganizationDetailScreen(orgId: orgId, initialData: extra);
-        },
-      ),
-
-      // Organization Management Route
-      GoRoute(
-        path: '/organization/manage',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) {
-          final orgId = state.uri.queryParameters['orgId'];
-          return OrganizationManagementScreen(initialOrgId: orgId);
         },
       ),
 
@@ -245,6 +307,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                           builder: (context, state) {
                              final chatId = state.pathParameters['chatId']!;
                              final extra = state.extra as Map<String, dynamic>;
+                             final type = extra['type'] as String? ?? 'group';
+
+                             if (type == 'organization') {
+                               return OrganizationInfoScreen(
+                                  chatId: chatId,
+                                  orgName: extra['name'] ?? 'Organization',
+                                  orgImage: extra['image'],
+                                  currentUserId: ref.read(authRepositoryProvider).currentUser!.uid,
+                               );
+                             }
+
                              return GroupInfoScreen(
                                 chatId: chatId,
                                 groupName: extra['name'],
@@ -417,7 +490,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
-          return UserProfileScreen(userId: userId);
+          final extra = state.extra as Map<String, dynamic>?;
+          final double? distance = extra?['distance'] as double?;
+          return UserProfileScreen(userId: userId, initialDistance: distance);
         },
       ),
 

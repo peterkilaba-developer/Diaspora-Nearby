@@ -32,8 +32,10 @@ class LastMessage {
   final String senderId;
   final String senderName;
   final String type; // 'text' | 'image' | 'video' | 'audio' | 'location' | 'document' | 'system' | 'money-transfer'
+  final List<String>? mentions;
   final bool? forwarded;
   final String? status; // 'sent' | 'delivered' | 'read'
+  final bool? deletedForEveryone;
 
   const LastMessage({
     required this.content,
@@ -41,8 +43,10 @@ class LastMessage {
     required this.senderId,
     required this.senderName,
     required this.type,
+    this.mentions,
     this.forwarded,
     this.status,
+    this.deletedForEveryone,
   });
 
   factory LastMessage.fromJson(Map<String, dynamic> json) =>
@@ -66,10 +70,18 @@ class LastMessage {
       senderId: data['senderId'] as String? ?? '',
       senderName: data['senderName'] as String? ?? 'Unknown',
       type: data['type'] as String? ?? 'text',
+      mentions: (data['mentions'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .toList(),
       forwarded: data['forwarded'] as bool?,
       status: data['status'] as String?,
+      deletedForEveryone: data['deletedForEveryone'] as bool?,
     );
   }
+
+  bool isOwnMessage(String userId) => senderId == userId;
+
+  bool get isDeleted => deletedForEveryone == true || type == 'deleted';
 }
 
 /// Chat conversation model
@@ -184,7 +196,7 @@ class Chat {
       locationType: data['locationType'] as String?,
       type: data['type'] as String? ?? 'direct',
       name: data['name'] as String? ?? 'Chat',
-      photoUrl: data['photoUrl'] as String?,
+      photoUrl: data['photoUrl'] as String? ?? (data['profileImage'] is String ? data['profileImage'] as String : (data['image'] as String?)),
       profileImage: (data['profileImage'] is Map)
           ? ChatProfileImage.fromJson(Map<String, dynamic>.from(data['profileImage']))
           : null,

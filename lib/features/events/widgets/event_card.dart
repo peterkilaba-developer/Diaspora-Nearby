@@ -5,25 +5,33 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/models/event_data.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
+import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 import 'package:geolocator/geolocator.dart';
-
-// Helper for status text is not needed anymore as per new design
-
 
 class EventCard extends StatelessWidget {
   final Event event;
+  final VoidCallback? onTap;
+  final Widget? extraContent;
   final bool isAttending;
   final Position? userLocation;
-  final Widget? extraContent;
-  final VoidCallback? onTap;
+  final bool isInterested;
+  final VoidCallback? onInterestToggle;
+  final bool isCreator; 
+  final VoidCallback? onEditTap;
+  final String? searchQuery; // [NEW] for highlighting
 
   const EventCard({
     super.key,
     required this.event,
     this.isAttending = false,
+    this.isInterested = false,
     this.userLocation,
-    this.extraContent,
     this.onTap,
+    this.extraContent,
+    this.onInterestToggle,
+    this.isCreator = false,
+    this.onEditTap,
+    this.searchQuery,
   });
 
   @override
@@ -53,151 +61,224 @@ class EventCard extends StatelessWidget {
     final endDateStr = endDate != null ? DateFormat('EEE, MMM d, y').format(endDate) : dateStr;
     final endTimeStr = event.endTime ?? timeStr;
 
-    return GestureDetector(
-      onTap: onTap ?? () => context.push('/events/${event.id}', extra: event),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
+    // Time Formatting Helper
+    String formatToAmPm(String time) {
+      try {
+        final parts = time.split(':');
+        if (parts.length >= 2) {
+          final hour = int.parse(parts[0]);
+          final minute = int.parse(parts[1]);
+          final dt = DateTime(2000, 1, 1, hour, minute);
+          return DateFormat('h:mm a').format(dt);
+        }
+      } catch (_) {}
+      return time;
+    }
+
+    final displayStartTime = formatToAmPm(timeStr);
+    final displayEndTime = formatToAmPm(endTimeStr);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap ?? () => context.push('/events/${event.id}', extra: event),
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image Section
-            Stack(
-              children: [
-                Hero(
-                  tag: 'event_image_${event.id}',
-                  child: Container(
-                    height: 200,
-                    width: double.infinity,
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    child: event.imageUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: event.imageUrl!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Center(
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Center(
-                              child: Icon(LucideIcons.image, size: 50, color: theme.colorScheme.outline),
-                            ),
-                          )
-                        : Center(child: Icon(LucideIcons.image, size: 50, color: theme.colorScheme.outline)),
-                  ),
-                ),
-
-                // Date Badge Overlay (Calendar Sheet Style)
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  child: GlassContainer(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          monthStr,
-                          style: TextStyle(
-                            color: theme.colorScheme.primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        Text(
-                          dayStr,
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            height: 1.1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Price/Status Badge
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: GlassContainer(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    borderRadius: BorderRadius.circular(30),
-                    child: Text(
-                      event.status == 'draft' 
-                        ? 'DRAFT' 
-                        : (event.isPaid == true ? '\$${event.ticketPrice?.toStringAsFixed(0)}' : 'FREE'),
-                      style: TextStyle(
-                        color: event.status == 'draft' ? theme.colorScheme.error : theme.colorScheme.primary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
-
-            // Content Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Category & Split Time
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Image Section
+                Stack(
+                  children: [
+                    Hero(
+                      tag: 'event_image_${event.id}',
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        child: Container(
+                          height: 200,
+                          width: double.infinity,
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: event.imageUrl != null
+                              ? CachedNetworkImage(
+                                  imageUrl: event.imageUrl!,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) => Center(
+                                    child: Icon(LucideIcons.image, size: 50, color: theme.colorScheme.outline),
+                                  ),
+                                )
+                              : Center(child: Icon(LucideIcons.image, size: 50, color: theme.colorScheme.outline)),
                         ),
+                      ),
+                    ),
+
+                    // Date Badge Overlay (Calendar Sheet Style)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: GlassContainer(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              monthStr,
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            Text(
+                              dayStr,
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Price Badge
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GlassContainer(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        borderRadius: BorderRadius.circular(30),
                         child: Text(
-                          event.category.toUpperCase(),
+                          event.isPaid == true ? '\$${event.ticketPrice?.toStringAsFixed(0)}' : 'FREE',
                           style: TextStyle(
                             color: theme.colorScheme.primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
+                    ),
+                  ],
+                ),
+
+                // Content Section
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Category & Status Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              event.category.toUpperCase(),
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          _buildStatusBadge(context),
+                        ],
+                      ),
                       const SizedBox(height: 12),
+
+                      // Title
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: SearchHighlightUtils.highlightText(
+                          event.title, 
+                          searchQuery, 
+                          theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
+                          context
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Stats (Going • Interested)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.users, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${event.attendeeCount ?? event.attendees?.length ?? 0} going • ${event.interested?.length ?? 0} interested',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Split Time
                       Row(
                         children: [
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Start', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10)),
-                                  const SizedBox(height: 4),
                                   Text(dateStr, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  Text(timeStr, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Row(
+                                    children: [
+                                      Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          displayStartTime, 
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6), 
+                                            fontWeight: FontWeight.w600
+                                          ), 
+                                          maxLines: 1, 
+                                          overflow: TextOverflow.ellipsis
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
@@ -205,142 +286,291 @@ class EventCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('End', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10)),
-                                  const SizedBox(height: 4),
                                   Text(endDateStr, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  Text(endTimeStr, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Row(
+                                    children: [
+                                      Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          displayEndTime, 
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6), 
+                                            fontWeight: FontWeight.w600
+                                          ), 
+                                          maxLines: 1, 
+                                          overflow: TextOverflow.ellipsis
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      // Location Display (Synced with Detail Page Style)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 40, width: 0), // Minimum height for circle match
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(LucideIcons.mapPin, color: Colors.orange, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (event.venueName != null && event.venueName!.isNotEmpty)
+                                    SearchHighlightUtils.highlightText(
+                                      event.venueName!,
+                                      searchQuery,
+                                      theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+                                      context
+                                    ),
+                                  if (event.venueAddress != null && event.venueAddress!.isNotEmpty)
+                                    Text(
+                                      event.venueAddress!.split(',').first,
+                                      style: TextStyle(
+                                        fontSize: 12, 
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                        height: 1.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  else if (event.location.isNotEmpty)
+                                    Text(
+                                      event.location.split(',').first,
+                                      style: TextStyle(
+                                        fontSize: 12, 
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                        height: 1.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  
+                                  // City, State, Country Row
+                                  SearchHighlightUtils.highlightText(
+                                    [
+                                      event.venueCity,
+                                      event.venueState,
+                                      event.venueCountry
+                                    ].where((e) => e != null && e.isNotEmpty).join(', '),
+                                    searchQuery,
+                                    theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                      fontSize: 10,
+                                    ),
+                                    context
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (event.distance != null)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(LucideIcons.navigation, size: 16, color: Colors.orange),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${event.distance!.toStringAsFixed(1)}km',
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                               const Icon(LucideIcons.chevronRight, size: 16, color: Colors.grey),
+                          ],
+                        ),
+                      ),
+                      
+                      // Creator Actions (Edit) vs Interested
+                      if (isCreator && onEditTap != null) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: onEditTap,
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: theme.colorScheme.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            icon: Icon(LucideIcons.edit3, size: 16, color: theme.colorScheme.primary),
+                            label: Text(
+                              'Edit Event',
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else if (onInterestToggle != null) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: isAttending ? null : onInterestToggle,
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: isAttending 
+                                  ? Colors.green.withValues(alpha: 0.1) 
+                                  : (isInterested ? theme.colorScheme.primary.withValues(alpha: 0.1) : null),
+                              side: BorderSide(
+                                color: isAttending 
+                                  ? Colors.green 
+                                  : (isInterested ? theme.colorScheme.primary : theme.colorScheme.outline.withValues(alpha: 0.3))
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            icon: Icon(
+                              isAttending 
+                                  ? LucideIcons.checkCircle2 
+                                  : (isInterested ? LucideIcons.star : LucideIcons.star), 
+                              size: 16, 
+                              color: isAttending 
+                                  ? Colors.green 
+                                  : (isInterested ? theme.colorScheme.primary : theme.colorScheme.onSurface)
+                            ),
+                            label: Text(
+                              isAttending 
+                                  ? 'Going' 
+                                  : (isInterested ? 'Interested' : 'Interested?'),
+                              style: TextStyle(
+                                color: isAttending 
+                                    ? Colors.green 
+                                    : (isInterested ? theme.colorScheme.primary : theme.colorScheme.onSurface),
+                                fontWeight: (isAttending || isInterested) ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      // Extra Content
+                      if (extraContent != null) ...[
+                        const SizedBox(height: 20),
+                        extraContent!,
+                      ]
                     ],
                   ),
-                  const SizedBox(height: 12),
-
-                  // Title
-                  Text(
-                    event.title,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Location Display (Premium 3-row layout)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(LucideIcons.mapPin, size: 16, color: theme.colorScheme.primary),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (event.venueName != null && event.venueName!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 2),
-                                  child: Text(
-                                    event.venueName!,
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              if (event.venueAddress != null && event.venueAddress!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 2),
-                                  child: Text(
-                                    event.venueAddress!,
-                                    style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                )
-                              else if (event.location.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 2),
-                                  child: Text(
-                                    event.location,
-                                    style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              Text(
-                                [
-                                  event.venueCity,
-                                  event.venueState,
-                                  event.venueCountry
-                                ].where((e) => e != null && e.isNotEmpty).join(', '),
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.outline.withValues(alpha: 0.8),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (event.distance != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Column(
-                              children: [
-                                Icon(LucideIcons.navigation, size: 16, color: theme.colorScheme.primary),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${event.distance!.toStringAsFixed(1)} km',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                           Icon(LucideIcons.chevronRight, size: 16, color: theme.colorScheme.outline),
-                      ],
-                    ),
-                  ),
-
-                  // Extra Content (e.g. Action Buttons)
-                  if (extraContent != null) ...[
-                    const SizedBox(height: 20),
-                    extraContent!,
-                  ]
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(BuildContext context) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+
+    // Reconstruct start and end date objects
+    DateTime? start;
+    try {
+      start = DateTime.parse('${event.startDate} ${event.startTime}');
+    } catch (_) {
+      try {
+        start = DateTime.parse(event.startDate);
+      } catch (_) {}
+    }
+
+    if (start == null) return const SizedBox.shrink();
+
+    DateTime? end;
+    if (event.endDate != null && event.endTime != null) {
+      try {
+        end = DateTime.parse('${event.endDate!} ${event.endTime!}');
+      } catch (_) {
+        try {
+          end = DateTime.parse(event.endDate!);
+        } catch (_) {}
+      }
+    }
+
+    // Default end if missing: 3 hours after start
+    end ??= start.add(const Duration(hours: 3));
+
+    String? statusText;
+    Color badgeColor = theme.colorScheme.secondary;
+
+    final diffToStart = start.difference(now);
+    final diffToEnd = end.difference(now);
+
+    if (now.isAfter(start) && now.isBefore(end)) {
+      statusText = 'Happening Now';
+      badgeColor = Colors.green;
+      if (diffToEnd.inHours < 4 && diffToEnd.inHours >= 1) {
+        statusText = 'Ending in ${diffToEnd.inHours}h';
+      } else if (diffToEnd.inHours < 1 && diffToEnd.inMinutes > 0) {
+        statusText = 'Ending in ${diffToEnd.inMinutes}m';
+      }
+    } else if (diffToStart.isNegative == false) {
+      if (diffToStart.inHours < 24 && start.day == now.day) {
+        if (diffToStart.inHours >= 1) {
+          statusText = 'Starts in ${diffToStart.inHours}h';
+        } else {
+          statusText = 'Starts in ${diffToStart.inMinutes}m';
+        }
+      } else {
+         final tomorrow = DateTime(now.year, now.month, now.day + 1);
+         if (start.year == tomorrow.year && start.month == tomorrow.month && start.day == tomorrow.day) {
+           statusText = 'Tomorrow';
+         }
+      }
+    }
+
+    if (statusText == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        statusText.toUpperCase(),
+        style: TextStyle(
+          color: badgeColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
         ),
       ),
     );

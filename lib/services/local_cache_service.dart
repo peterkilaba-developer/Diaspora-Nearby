@@ -43,7 +43,13 @@ class LocalCacheService {
         'data': data,
         'cachedAt': DateTime.now().millisecondsSinceEpoch,
       };
-      await prefs.setString('$_orgPrefix$orgId', jsonEncode(cacheData));
+      final jsonStr = jsonEncode(cacheData);
+      final base64Str = base64.encode(utf8.encode(jsonStr));
+      await prefs.setString('$_orgPrefix$orgId', base64Str);
+      
+      // Also add to list
+      await addToMyOrgsList(orgId);
+      
       debugPrint('✅ Cached organization: $orgId');
     } catch (e) {
       debugPrint('Error caching org: $e');
@@ -53,8 +59,15 @@ class LocalCacheService {
   /// Get cached organization
   static Map<String, dynamic>? getCachedOrganization(String orgId) {
     try {
-      final jsonStr = prefs.getString('$_orgPrefix$orgId');
-      if (jsonStr == null) return null;
+      final base64Str = prefs.getString('$_orgPrefix$orgId');
+      if (base64Str == null) return null;
+      
+      String jsonStr;
+      try {
+        jsonStr = utf8.decode(base64.decode(base64Str));
+      } catch (e) {
+        jsonStr = base64Str; // Backward compatibility
+      }
       
       final cacheData = jsonDecode(jsonStr);
       final cachedAt = cacheData['cachedAt'] as int? ?? 0;
@@ -111,7 +124,9 @@ class LocalCacheService {
         'data': data,
         'cachedAt': DateTime.now().millisecondsSinceEpoch,
       };
-      await prefs.setString('$_eventPrefix$eventId', jsonEncode(cacheData));
+      final jsonStr = jsonEncode(cacheData);
+      final base64Str = base64.encode(utf8.encode(jsonStr));
+      await prefs.setString('$_eventPrefix$eventId', base64Str);
       
       // Also add to list
       await addToMyEventsList(eventId);
@@ -124,8 +139,15 @@ class LocalCacheService {
 
   static Map<String, dynamic>? getCachedEvent(String eventId) {
     try {
-      final jsonStr = prefs.getString('$_eventPrefix$eventId');
-      if (jsonStr == null) return null;
+      final base64Str = prefs.getString('$_eventPrefix$eventId');
+      if (base64Str == null) return null;
+      
+      String jsonStr;
+      try {
+        jsonStr = utf8.decode(base64.decode(base64Str));
+      } catch (e) {
+        jsonStr = base64Str; // Backward compatibility
+      }
       
       final cacheData = jsonDecode(jsonStr);
       final cachedAt = cacheData['cachedAt'] as int? ?? 0;
@@ -177,7 +199,9 @@ class LocalCacheService {
         'data': data,
         'cachedAt': DateTime.now().millisecondsSinceEpoch,
       };
-      await prefs.setString('$_chatPrefix$chatId', jsonEncode(cacheData));
+      final jsonStr = jsonEncode(cacheData);
+      final base64Str = base64.encode(utf8.encode(jsonStr));
+      await prefs.setString('$_chatPrefix$chatId', base64Str);
       
       // Add to list
       await addToMyChatsList(chatId);
@@ -190,8 +214,15 @@ class LocalCacheService {
 
   static Map<String, dynamic>? getCachedChat(String chatId) {
     try {
-      final jsonStr = prefs.getString('$_chatPrefix$chatId');
-      if (jsonStr == null) return null;
+      final base64Str = prefs.getString('$_chatPrefix$chatId');
+      if (base64Str == null) return null;
+      
+      String jsonStr;
+      try {
+        jsonStr = utf8.decode(base64.decode(base64Str));
+      } catch (e) {
+        jsonStr = base64Str; // Backward compatibility
+      }
       
       final cacheData = jsonDecode(jsonStr);
       // Chats update frequently, maybe shorter expiration? 
@@ -235,6 +266,25 @@ class LocalCacheService {
     return results;
   }
 
+  /// Remove chat from cache
+  static Future<void> removeChat(String chatId) async {
+    try {
+      // Remove data
+      await prefs.remove('$_chatPrefix$chatId');
+      await prefs.remove('$_messagesPrefix$chatId');
+      
+      // Remove from list
+      final List<String> current = prefs.getStringList(_myChatsKey) ?? [];
+      if (current.contains(chatId)) {
+        current.remove(chatId);
+        await prefs.setStringList(_myChatsKey, current);
+      }
+      debugPrint('✅ Removed chat from cache: $chatId');
+    } catch (e) {
+      debugPrint('Error removing chat from cache: $e');
+    }
+  }
+
   // ==================== MESSAGES ====================
 
   static const String _messagesPrefix = 'cached_msgs_';
@@ -247,8 +297,12 @@ class LocalCacheService {
           ? messages.sublist(messages.length - 100) 
           : messages;
           
+      // Encode as JSON first
       final jsonStr = jsonEncode(msgsToCache);
-      await prefs.setString('$_messagesPrefix$chatId', jsonStr);
+      
+      // Then encode as Base64 to preserve UTF-8 encoding (fixes emoji corruption on Windows)
+      final base64Str = base64.encode(utf8.encode(jsonStr));
+      await prefs.setString('$_messagesPrefix$chatId', base64Str);
     } catch (e) {
       debugPrint('Error caching messages: $e');
     }
@@ -257,8 +311,18 @@ class LocalCacheService {
   /// Get cached messages for a chat
   static List<Map<String, dynamic>> getCachedMessages(String chatId) {
     try {
-      final jsonStr = prefs.getString('$_messagesPrefix$chatId');
-      if (jsonStr == null) return [];
+      final base64Str = prefs.getString('$_messagesPrefix$chatId');
+      if (base64Str == null) return [];
+
+      // Decode from Base64 to preserve UTF-8 encoding (fixes emoji corruption on Windows)
+      String jsonStr;
+      try {
+        jsonStr = utf8.decode(base64.decode(base64Str));
+      } catch (e) {
+        // If Base64 decode fails, try direct decode for backward compatibility
+        debugPrint('Base64 decode failed, trying direct decode: $e');
+        jsonStr = base64Str;
+      }
 
       final List<dynamic> list = jsonDecode(jsonStr);
       return list.cast<Map<String, dynamic>>();

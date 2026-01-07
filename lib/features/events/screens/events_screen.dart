@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
@@ -134,11 +135,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             
             // 1. View Mode Strict Filtering
             if (isGlobalViewMode) {
-               // Global View: "unfiltered upcoming events from organizers from all other countries"
-               // So we EXCLUDE events from same country
-               if (userHomeCountryCode != null && event.homeCountryCode == userHomeCountryCode) {
-                 return false; 
-               }
+               // Global View: Show all events (unfiltered)
+               // Previously we excluded local events, but user wants unfiltered.
             } else {
                // Home View: is already filtered by Repo to only match homeCountryCode.
                // Double check just in case repo returns stray data?
@@ -151,17 +149,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             final query = searchQuery.toLowerCase();
             if (query.isEmpty) return true;
 
-            // Check for country match
-            bool matchesCountry = false;
-            // Basic Country Name check in event details
-            final homeC = event.homeCountry?.toLowerCase() ?? '';
-            final hostC = event.hostCountry?.toLowerCase() ?? '';
-            matchesCountry = homeC.contains(query) || hostC.contains(query);
-
             return event.title.toLowerCase().contains(query) ||
                 event.description.toLowerCase().contains(query) ||
-                event.location.toLowerCase().contains(query) ||
-                matchesCountry;
+                event.location.toLowerCase().contains(query);
           }).toList();
 
           if (filteredEvents.isEmpty) {
@@ -190,16 +180,34 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               setState(() {});
             },
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               itemCount: filteredEvents.length,
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final event = filteredEvents[index];
                 final isAttending = event.attendees?.contains(user.uid) ?? false;
+                final isInterested = event.interested?.contains(user.uid) ?? false;
+                final isCreator = event.creatorId == user.uid;
+                
                 return EventCard(
                   event: event,
                   isAttending: isAttending,
+                  isInterested: isInterested,
+                  isCreator: isCreator,
                   userLocation: _currentPosition,
+                  searchQuery: searchQuery, // Pass the search query
+                  onEditTap: () {
+                     context.push('/events/edit/${event.id}', extra: event);
+                  },
+                  onInterestToggle: () async {
+                    try {
+                      final shouldAdd = !isInterested;
+                      await eventRepo.toggleInterest(event.id, user.uid, shouldAdd);
+                      setState(() {});
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
                 );
               },
             ),

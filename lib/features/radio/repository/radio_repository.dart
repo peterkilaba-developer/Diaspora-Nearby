@@ -50,8 +50,8 @@ class RadioRepository {
   Future<List<RadioStation>> getStationsByCountry(String countryCode) async {
     await _updateUnreliableCache();
     try {
-      // Use a known Radio Browser mirror. In production, we should probably resolve DNS or try multiple.
-      final url = Uri.parse('https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/${countryCode.toUpperCase()}');
+      // Use the main load-balanced Radio Browser endpoint
+      final url = Uri.parse('https://all.api.radio-browser.info/json/stations/bycountrycodeexact/${countryCode.toUpperCase()}');
       
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
@@ -71,7 +71,7 @@ class RadioRepository {
   Future<List<RadioStation>> getTopStations({int limit = 100}) async {
     await _updateUnreliableCache();
     try {
-      final url = Uri.parse('https://de1.api.radio-browser.info/json/stations/topclick/$limit');
+      final url = Uri.parse('https://all.api.radio-browser.info/json/stations/topclick/$limit');
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {

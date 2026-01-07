@@ -9,6 +9,8 @@ import 'package:diaspora_nearby/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/services/sharing_service.dart';
+import 'package:diaspora_nearby/services/location_update_service.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -22,7 +24,34 @@ class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   ConsumerState<ScaffoldWithNavBar> createState() => _ScaffoldWithNavBarState();
 }
 
-class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
+class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with WidgetsBindingObserver {
+  
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _updateLocation();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _updateLocation();
+    }
+  }
+
+  Future<void> _updateLocation() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      await LocationUpdateService().updateCurrentLocation(user.uid);
+    }
+  }
 
   void _goBranch(int index) {
     // Clear search when switching tabs
@@ -121,7 +150,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> {
         searchQuery: searchQuery,
         onSearchChange: _handleSearchChange,
         onSearchClear: _handleSearchClear,
-        homeCountry: homeCountry,
+        homeCountryCode: homeCountryCode,
         isGlobalView: isGlobalView,
         onToggleView: onToggleView,
         showSearchField: true,

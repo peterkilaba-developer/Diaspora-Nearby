@@ -196,7 +196,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
+            color: Colors.transparent,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
@@ -235,7 +235,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
         height: 36,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: theme.colorScheme.surfaceContainerHighest,
+          color: Colors.transparent,
         ),
         clipBehavior: Clip.antiAlias,
         child: CachedNetworkImage(
@@ -257,7 +257,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
       height: 36,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: Colors.transparent,
       ),
       alignment: Alignment.center,
       child: material.Text(

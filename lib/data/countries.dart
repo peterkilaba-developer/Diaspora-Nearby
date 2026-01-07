@@ -169,7 +169,7 @@ const List<Country> countries = [
   Country(code: "IL", name: "Israel", dialCode: "+972", flag: "🇮🇱", continent: Continent.asia, hasStateLevel: false),
   Country(code: "IT", name: "Italy", dialCode: "+39", flag: "🇮🇹", continent: Continent.europe, hasStateLevel: true, stateTerminology: "Region"),
   Country(code: "JM", name: "Jamaica", dialCode: "+1876", flag: "🇯🇲", continent: Continent.caribbean, hasStateLevel: false),
-  Country(code: "JP", name: "Japan", dialCode: "+81", flag: "🇯🇵", continent: Continent.asia, hasStateLevel: true, stateTerminology: "Prefecture"),
+  Country(code: "JP", name: "Japan", dialCode: "+81", flag: "🇯🇵", continent: Continent.asia, hasStateLevel: false, stateTerminology: "Prefecture"),
   Country(code: "JO", name: "Jordan", dialCode: "+962", flag: "🇯🇴", continent: Continent.asia, hasStateLevel: false),
   Country(code: "KZ", name: "Kazakhstan", dialCode: "+7", flag: "🇰🇿", continent: Continent.asia, hasStateLevel: false),
   Country(code: "KE", name: "Kenya", dialCode: "+254", flag: "🇰🇪", continent: Continent.africa, hasStateLevel: false),

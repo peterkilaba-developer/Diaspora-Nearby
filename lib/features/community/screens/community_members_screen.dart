@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/data/countries.dart'; // [NEW] For getCountryByCode
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/shared/widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/models/community_data.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/features/profile/screens/user_profile_screen.dart';
-import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-
+import 'package:diaspora_nearby/utils/location_utils.dart';
 class CommunityMembersScreen extends ConsumerStatefulWidget {
   final String communityId;
   final Community community;
@@ -32,6 +34,11 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(LucideIcons.x, size: 22),
+          onPressed: () => context.pop(),
+        ),
+        titleSpacing: 0,
         title: Row(
           children: [
             CommunityChatUtils.getCommunityAvatar(
@@ -44,18 +51,19 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
               profileImage: widget.community.profileImage,
               size: 32,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 widget.community.name,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
       ),
-      body: FutureBuilder<List<ProfileData>>(
+      body: SafeArea(
+        child: FutureBuilder<List<ProfileData>>(
         // Fetch members from Firestore
         future: _fetchMembers(),
         builder: (context, snapshot) {
@@ -69,16 +77,44 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
           final members = snapshot.data ?? [];
           final currentUser = ref.watch(authRepositoryProvider).currentUser;
 
-          if (members.isEmpty) {
-            return const Center(child: Text('No members found.'));
-          }
+          // Consolidate "Empty" and "Single self member" into First Member state
+          // In this context, if the list is empty or only contains the current user,
+          // they are effectively the "first member".
+          final isFirstMember = members.isEmpty || (members.length == 1 && members.first.uid == currentUser?.uid);
 
-          // Check if single member is self
-          final isSingleMember = members.length == 1 && members.first.uid == currentUser?.uid;
+          if (isFirstMember) {
+             // Derive contextual names
+             final homeCountryName = getCountryByCode(widget.community.homeCountryCode ?? '')?.name ?? 'Home';
+             
+             String locationName = widget.community.name; // Fallback
+             
+             // Try to extract location name (e.g. "London") from community name
+             // Logic: Strip " Community" suffix to get the location name
+             String cleanName = widget.community.name;
+             if (cleanName.toLowerCase().endsWith(' community')) {
+                cleanName = cleanName.substring(0, cleanName.length - 10).trim();
+             }
+             locationName = cleanName;
 
-          if (isSingleMember) {
+             // Special case: If it's a home country community, the name might be "Kenya Community"
+             // But if locationType is 'home', we just use the country name.
+             
+             String message = 'You are the first member of this community!';
+             
+             if (widget.community.locationType == 'home') {
+                message = 'You are the first member of the $homeCountryName community!';
+             } else if (widget.community.locationType == 'host' || widget.community.locationType == 'past') {
+                // If the cleaned name is already the country name (e.g. Country Level community for Host), 
+                // simplify the message to avoid "Tanzania community for Tanzania"
+                if (locationName.toLowerCase() == homeCountryName.toLowerCase()) {
+                   message = 'You are the first member of the $homeCountryName community!';
+                } else {
+                   message = 'You are the first member of the $homeCountryName community for $locationName';
+                }
+             }
+
              return Center(
-               child: Padding(
+               child: SingleChildScrollView(
                  padding: const EdgeInsets.all(32.0),
                  child: Column(
                    mainAxisAlignment: MainAxisAlignment.center,
@@ -92,16 +128,32 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
                        child: const Icon(LucideIcons.partyPopper, size: 48, color: Colors.amber),
                      ),
                      const SizedBox(height: 24),
-                     const Text(
+                     Text(
                        'Congratulations!',
-                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                     ),
-                     const SizedBox(height: 12),
-                     const Text(
-                       'You are the first member of this community!\nInvite others to join the conversation.',
+                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                        textAlign: TextAlign.center,
-                       style: TextStyle(fontSize: 16, color: Colors.grey),
+                       ),
+                     const SizedBox(height: 12),
+                     Text(
+                       '$message\n\nKnow someone who lives here? Invite them to join!',
+                       textAlign: TextAlign.center,
+                       style: const TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
                      ),
+                     const SizedBox(height: 32),
+                     SizedBox(
+                       width: double.infinity,
+                       child: FilledButton.icon(
+                          onPressed: () {
+                             Share.share('Join me in the ${widget.community.name} on DiasporaNearby!');
+                          },
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          ),
+                          icon: const Icon(LucideIcons.share2),
+                          label: const Text('Invite Friends'),
+                        ),
+                     ),
+                     const SizedBox(height: 40), // Extra space to push it slightly up from true center
                    ],
                  ),
                ),
@@ -109,20 +161,26 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+            ),
             itemCount: members.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final member = members[index];
               return UserCardView(
                 user: member,
-                isStatic: true, // List view style
-                onNameTap: () => context.push('/profile/${member.uid}'),
-                onChatTap: () => context.push('/chat/direct/${member.uid}'),
+                distanceKm: member.distance,
+                onNameTap: () => context.push('/profile/${member.uid}', extra: {'distance': member.distance}),
+                onChatTap: (member.uid == currentUser?.uid) ? null : () => context.push('/chat/direct/${member.uid}'),
               );
             },
           );
         },
+      ),
       ),
     );
   }
@@ -135,12 +193,36 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
           .limit(50)
           .get();
           
-      final members = snapshot.docs.map((doc) {
+      final currentUserProfile = ref.read(userProfileProvider).value;
+      final currentLat = currentUserProfile?.currentLocation?.geometry.location.lat;
+      final currentLng = currentUserProfile?.currentLocation?.geometry.location.lng;
+
+      List<ProfileData> members = snapshot.docs.map((doc) {
         final data = doc.data();
         final profile = ProfileData.fromJson(data);
         profile.uid = doc.id;
-        return profile;
+        
+        // Calculate distance
+        double? dist;
+        if (currentLat != null && currentLng != null) {
+          // Priority: 1. member.currentLocation, 2. member.hostLocation
+          final targetLat = profile.currentLocation?.geometry.location.lat ?? profile.hostLocation.geometry?.location.lat;
+          final targetLng = profile.currentLocation?.geometry.location.lng ?? profile.hostLocation.geometry?.location.lng;
+          
+          if (targetLat != null && targetLng != null) {
+            dist = calculateDistance(currentLat, currentLng, targetLat, targetLng);
+          }
+        }
+        
+        return profile.copyWith(distance: dist);
       }).toList();
+
+      // Sort by distance (closest first)
+      members.sort((a, b) {
+        final dA = a.distance ?? double.infinity;
+        final dB = b.distance ?? double.infinity;
+        return dA.compareTo(dB);
+      });
 
       // [FIX] Self-Correction for "First Member" scenario involving index lag.
       if (members.isEmpty) {

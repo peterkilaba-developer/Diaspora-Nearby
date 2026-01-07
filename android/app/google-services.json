@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "512074182214",
+    "firebase_url": "https://diaspora-nearby-a3dac-default-rtdb.firebaseio.com",
     "project_id": "diaspora-nearby-a3dac",
     "storage_bucket": "diaspora-nearby-a3dac.firebasestorage.app"
   },

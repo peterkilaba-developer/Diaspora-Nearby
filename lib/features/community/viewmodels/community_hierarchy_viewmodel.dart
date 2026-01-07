@@ -43,7 +43,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       print('CommunityHierarchyViewModel: User home code: $userHomeCountryCode');
 
       // Search Interception     
-      if (searchQuery.isNotEmpty && searchQuery.length >= 3) {
+      if (searchQuery.isNotEmpty && searchQuery.length >= 2) {
         return _performSearch(searchQuery, userHomeCountryCode, mode == ViewMode.global);
       }
 
@@ -86,11 +86,25 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       communities = snapshot.docs.map((d) => Community.fromJson({...d.data(), 'id': d.id})).toList();
     }
 
-    // Filter by name match     
+    // Filter by broad match (name, type, location fields)
     final matchedCommunities = communities.where((c) {
       final name = c.name.toLowerCase();
-      // "Match community name that match at least three characters" AND not empty       
-      return name.contains(normalizedQuery) && (c.totalMembers ?? c.memberCount) > 0;
+      final type = (c.type ?? '').toLowerCase();
+      final locType = (c.locationType ?? '').toLowerCase();
+      
+      final city = (c.location?['city'] as String? ?? '').toLowerCase();
+      final state = (c.location?['state'] as String? ?? '').toLowerCase();
+      final country = (c.location?['country'] as String? ?? '').toLowerCase();
+      final countryCode = (c.location?['countryCode'] as String? ?? '').toLowerCase();
+      
+      return (name.contains(normalizedQuery) || 
+              type.contains(normalizedQuery) || 
+              locType.contains(normalizedQuery) || 
+              city.contains(normalizedQuery) || 
+              state.contains(normalizedQuery) || 
+              country.contains(normalizedQuery) || 
+              countryCode.contains(normalizedQuery)) && 
+             (c.totalMembers ?? c.memberCount) > 0;
     }).toList();
 
     // Sort Results     
@@ -146,10 +160,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         .where('type', isEqualTo: 'global')
         .get();
 
-    final continentsSnapshot = await firestore.collection('communities')
-        .where('type', isEqualTo: 'continent')
-        .where('locationType', isEqualTo: 'home')
-        .get();
+
 
     // 2. Merge & In-Memory Filter
     // We want: 
@@ -164,7 +175,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
        final data = doc.data();
        final locType = data['locationType'] as String? ?? 'host'; 
        
-       if (locType == 'host') {
+       if (locType == 'host' || locType == 'past') {
           final community = _safeParseCommunity(doc.id, data);
           if (community != null) relevantCommunities.add(community);
        }
@@ -177,12 +188,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         if (community != null) relevantCommunities.add(community);
       }
     }
-    for (var doc in continentsSnapshot.docs) {
-      if (!relevantCommunities.any((c) => c.id == doc.id)) {
-        final community = _safeParseCommunity(doc.id, doc.data());
-        if (community != null) relevantCommunities.add(community);
-      }
-    }
+
     
     print('CommunityHierarchyViewModel: Filtered to ${relevantCommunities.length} relevant items');
 
@@ -210,11 +216,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     // However, we need ALL continents to group Host Countries correctly (e.g. need North America to group USA)       
     final continents = relevantCommunities.where((c) => c.type == 'continent').toList();
 
-    final countries = relevantCommunities.where((c) => c.type == 'country' && c.locationType == 'host').toList();
+    final countries = relevantCommunities.where((c) => c.type == 'country' && (c.locationType == 'host' || c.locationType == 'past')).toList();
 
-    final states = relevantCommunities.where((c) => c.type == 'state' && c.locationType == 'host').toList();
+    final states = relevantCommunities.where((c) => c.type == 'state' && (c.locationType == 'host' || c.locationType == 'past')).toList();
 
-    final cities = relevantCommunities.where((c) => c.type == 'city' && c.locationType == 'host').toList();
+    final cities = relevantCommunities.where((c) => c.type == 'city' && (c.locationType == 'host' || c.locationType == 'past')).toList();
 
     // (B) Build Continent → Country → State → City Hierarchy       
     // Sort lists       
@@ -234,7 +240,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       // Ensure Noun using ChatUtils logic            
       final continentName = CommunityChatUtils.generateCommunityNameFromParts(
           name: continent.name,
-          locationType: 'host',
+          locationType: continent.locationType ?? 'host', // Dynamic
           // Force Host Noun form for My Diaspora view              
           id: continent.id
       );
@@ -271,7 +277,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
             id: continent.id,
             name: continentName,
             type: 'continent',
-            locationType: 'host',
+            locationType: continent.locationType ?? 'host', // Dynamic
             homeCountryCode: continent.homeCountryCode,
             location: continent.location,
             profileImage: continent.profileImage != null ? ChatProfileImage(type: 'icon', value: 'users') : null,
@@ -342,7 +348,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       // or trust hierarchy sum. For Members, trusting sum is best for consistency.                      
       // Recalculate distinct counts from raw lists for stats           
       for (var c in relevantCommunities) {
-        if (c.locationType == 'host' && c.homeCountryCode == userHomeCode) {
+        if ((c.locationType == 'host' || c.locationType == 'past') && c.homeCountryCode == userHomeCode) {
           if (c.location != null && c.location!['countryCode'] != null) {
             hostCountries.add(c.location!['countryCode']);
           }
@@ -388,17 +394,24 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     final items = <HierarchyItem>[];
     for (var country in countries) {
       final countryCode = country.location?['countryCode'];
+      final countryLocationType = country.locationType ?? 'host';
 
-      // Filter states/cities for THIS country           
-      final myStates = states.where((s) => s.location?['countryCode'] == countryCode).toList();
+      // Filter states/cities for THIS country AND THIS location type (Host vs Past)
+      final myStates = states.where((s) => 
+          s.location?['countryCode'] == countryCode && 
+          (s.locationType ?? 'host') == countryLocationType
+      ).toList();
 
-      final myCities = cities.where((c) => c.location?['countryCode'] == countryCode).toList();
+      final myCities = cities.where((c) => 
+          c.location?['countryCode'] == countryCode &&
+          (c.locationType ?? 'host') == countryLocationType
+      ).toList();
 
       // Sort states and cities           
       myStates.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       myCities.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-      final children = <HierarchyItem>[];
+      final itemChildren = <HierarchyItem>[];
       int countryTotalMembers = country.totalMembers ?? country.memberCount;
 
       // Start with base count                      
@@ -406,7 +419,12 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       for (var state in myStates) {
         final stateName = state.location?['state'];
 
-        final stateCities = myCities.where((c) => c.location?['state'] == stateName).toList();
+        // Filter cities for this state AND location type
+        final stateCities = myCities.where((c) => 
+            c.location?['state'] == stateName &&
+            (c.locationType ?? 'host') == countryLocationType
+        ).toList();
+        
         stateCities.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         int stateTotalMembers = state.totalMembers ?? state.memberCount;
 
@@ -415,15 +433,15 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           stateTotalMembers = stateCities.fold(0, (sum, c) => sum + (c.totalMembers ?? c.memberCount));
         }
         
-        children.add(HierarchyItem(
+        itemChildren.add(HierarchyItem(
             id: state.id,
             name: CommunityChatUtils.generateCommunityNameFromParts(
                 name: state.name,
-                locationType: 'host',
+                locationType: state.locationType ?? 'host', // Dynamic
                 id: state.id
             ),
             type: 'state',
-            locationType: 'host',
+            locationType: state.locationType ?? 'host', // Dynamic
             homeCountryCode: state.homeCountryCode,
             hostCountryCode: state.location?['countryCode'],
             location: state.location,
@@ -433,11 +451,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
                 id: city.id,
                 name: CommunityChatUtils.generateCommunityNameFromParts(
                     name: city.name,
-                    locationType: 'host',
+                    locationType: city.locationType ?? 'host', // Dynamic
                     id: city.id
                 ),
                 type: 'city',
-                locationType: 'host',
+                locationType: city.locationType ?? 'host', // Dynamic
                 homeCountryCode: city.homeCountryCode,
                 hostCountryCode: city.location?['countryCode'],
                 totalMembers: city.totalMembers ?? city.memberCount,
@@ -451,15 +469,15 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
 
         final belongsToState = cityState != null && myStates.any((s) => s.location?['state'] == cityState);
         if (!belongsToState) {
-          children.add(HierarchyItem(
+          itemChildren.add(HierarchyItem(
               id: city.id,
               name: CommunityChatUtils.generateCommunityNameFromParts(
                   name: city.name,
-                  locationType: 'host',
+                  locationType: city.locationType ?? 'host', // Dynamic
                   id: city.id
               ),
               type: 'city',
-              locationType: 'host',
+              locationType: city.locationType ?? 'host', // Dynamic
               homeCountryCode: city.homeCountryCode,
               hostCountryCode: city.location?['countryCode'],
               totalMembers: city.totalMembers ?? city.memberCount,
@@ -468,28 +486,28 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       }
 
       // Sort children (States + Cities)           
-      children.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      itemChildren.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
       // Aggregate Country count (States + Direct Cities + Base)           
       if (countryTotalMembers == 0) {
-        countryTotalMembers = children.fold(0, (sum, child) => sum + child.totalMembers);
+        countryTotalMembers = itemChildren.fold(0, (sum, child) => sum + child.totalMembers);
       }
       items.add(HierarchyItem(
           id: country.id,
           name: CommunityChatUtils.generateCommunityNameFromParts(
               name: country.name,
-              locationType: 'host',
+              locationType: country.locationType ?? 'host', // Dynamic
               id: country.id
           ),
           type: 'country',
-          locationType: 'host',
+          locationType: country.locationType ?? 'host', // Dynamic
           homeCountryCode: country.homeCountryCode,
           hostCountryCode: countryCode,
           flag: country.flag,
           location: country.location,
           totalMembers: countryTotalMembers,
           isExpandable: true,
-          children: children
+          children: itemChildren
       ));
     }
 

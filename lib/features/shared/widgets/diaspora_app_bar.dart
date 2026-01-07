@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:diaspora_nearby/data/countries.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:go_router/go_router.dart';
@@ -11,10 +12,11 @@ class DiasporaAppBar extends ConsumerStatefulWidget implements PreferredSizeWidg
   final String searchQuery;
   final ValueChanged<String> onSearchChange;
   final VoidCallback onSearchClear;
-  final String? homeCountry;
+  final String? homeCountryCode;
   final bool isGlobalView;
   final VoidCallback? onToggleView;
   final bool showSearchField;
+  final Widget? title;
 
   const DiasporaAppBar({
     super.key,
@@ -22,16 +24,14 @@ class DiasporaAppBar extends ConsumerStatefulWidget implements PreferredSizeWidg
     this.searchQuery = '',
     this.onSearchChange = _defaultOnSearchChange,
     this.onSearchClear = _defaultOnSearchClear,
-    this.homeCountry,
+    this.homeCountryCode,
     this.isGlobalView = false,
     this.onToggleView,
     this.showSearchField = true,
-    this.title, // Backward compatibility
+    this.title,
   });
 
-  final Widget? title;
-
-  // Default handlers to allow usage without search params (e.g. initial simple usage)
+  // Default handlers
   static void _defaultOnSearchChange(String value) {}
   static void _defaultOnSearchClear() {}
 
@@ -42,29 +42,7 @@ class DiasporaAppBar extends ConsumerStatefulWidget implements PreferredSizeWidg
   ConsumerState<DiasporaAppBar> createState() => _DiasporaAppBarState();
 }
 
-class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.5).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
+class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
   @override
   Widget build(BuildContext context) {
     
@@ -95,19 +73,16 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> with SingleTick
                 children: [
                   // Logo (Interactive Toggle if Search Hidden)
                   if (!widget.showSearchField && showGlobalToggle)
-                    ScaleTransition(
-                      scale: _scaleAnimation,
-                      child: IconButton(
-                        icon: Image.asset(
-                          'assets/icons/logo-original.png',
-                          width: 36,
-                          height: 36,
-                        ),
-                        onPressed: widget.onToggleView,
-                        tooltip: isGlobalView ? 'Switch to Home View' : 'Switch to Global View',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                    IconButton(
+                      icon: Icon(
+                        LucideIcons.globe, 
+                        size: 30,
+                        color: isGlobalView ? activeColor : inactiveColor,
                       ),
+                      onPressed: widget.onToggleView,
+                      tooltip: isGlobalView ? 'Switch to Home View' : 'Switch to Global View',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     )
                   else
                     Image.asset(
@@ -178,27 +153,19 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> with SingleTick
                           
                         // Global toggle - hidden when searching to focus on search results
                         if (showGlobalToggle && widget.searchQuery.isEmpty)
-                          ScaleTransition(
-                            scale: _scaleAnimation,
-                            child: IconButton(
-                              icon: ColorFiltered(
-                                colorFilter: ColorFilter.mode(
-                                  isGlobalView
-                                      ? activeColor  // Sage green when global
-                                      : inactiveColor, // Off-white/off-black when home
-                                  BlendMode.srcIn,
-                                ),
-                                child: Image.asset(
-                                  'assets/icons/logo-original.png',
-                                  width: 24,
-                                  height: 24,
-                                ),
-                              ),
-                              // Call the callback provided by parent
-                              onPressed: widget.onToggleView,
-                              tooltip: isGlobalView ? 'Switch to Home View' : 'Switch to Global View',
-                            ),
-                          ),
+                           IconButton(
+                             icon: Icon(
+                               LucideIcons.globe, 
+                               size: 24, 
+                               color: isGlobalView ? activeColor : inactiveColor
+                             ),
+                             onPressed: () {
+                               if (widget.onToggleView != null) {
+                                  widget.onToggleView!();
+                               }
+                             },
+                             tooltip: isGlobalView ? 'Switch to Home View' : 'Switch to Global View',
+                           ),
                       ],
                     ),
                     filled: false,
@@ -219,19 +186,26 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> with SingleTick
     );
   }
 
+
+
   String _getPlaceholder(bool isGlobal) {
     // Special case for Nearby screen
     if (widget.currentScreen == 'nearby') {
       return 'Search people from any country...';
     }
     
+    // Resolve home country name for placeholder
+    final homeCountryName = widget.homeCountryCode != null 
+        ? getCountryByCode(widget.homeCountryCode!)?.name 
+        : null;
+    
     // Special case for Events screen
     if (widget.currentScreen == 'events') {
        if (isGlobal) {
          return 'Search global community events...';
        } else {
-         return widget.homeCountry != null
-             ? 'Search ${widget.homeCountry} community events...'
+         return homeCountryName != null
+             ? 'Search $homeCountryName community events...'
              : 'Search local community events...';
        }
     }
@@ -245,12 +219,13 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> with SingleTick
        if (isGlobal) {
          return 'Search for global communities';
        } else {
-         return widget.homeCountry != null
-             ? 'Search for ${widget.homeCountry} communities...'
+         return homeCountryName != null
+             ? 'Search for $homeCountryName communities...'
              : 'Search for local communities...';
        }
     }
-
+    
+    // Rest remain same logic...
     if (widget.currentScreen == 'chats') {
        return isGlobal ? 'Search for all chats' : 'Search my chats';
     }

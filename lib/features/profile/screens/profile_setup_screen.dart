@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:diaspora_nearby/services/google_places_service.dart';
 import 'package:diaspora_nearby/utils/location_utils.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
@@ -21,23 +22,14 @@ import 'package:diaspora_nearby/services/session_service.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
+import '../widgets/profile_setup_home_step.dart';
+import '../widgets/profile_setup_host_step.dart';
+import '../widgets/profile_setup_details_step.dart';
+
 /// Setup step enum matching React's SetupStep type
 enum SetupStep { home, host, profile }
 
-/// Auto-capitalize first letter formatter
-class CapitalizeFirstLetterFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    if (newValue.text.isEmpty) return newValue;
-    return TextEditingValue(
-      text: newValue.text[0].toUpperCase() + newValue.text.substring(1),
-      selection: newValue.selection,
-    );
-  }
-}
+
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -66,6 +58,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   // UI State
   bool _isSubmitting = false;
   bool _isRequestingLocation = false;
+  bool _showCurrentLocationName = true;
   
   // Places Search
   List<AutocompletePrediction> _predictions = [];
@@ -416,6 +409,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         advertReportCount: 0,
 
         yearsInHostCountry: null,
+        showCurrentLocationName: _showCurrentLocationName,
       );
 
       // 4. Save to Firestore
@@ -424,13 +418,18 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       // 5. Create Communities & Chats (Critical Step)
       // We do this BEFORE invalidating/navigating to ensure it succeeds
       List<String> createdCommunityIds = [];
+      final Set<String> newCommunityNames = {};
+      void onFirstMember(String name) => newCommunityNames.add(name);
+
       try {
-        createdCommunityIds = await CommunityService().createCommunitiesAndChats(profile);
+        createdCommunityIds = await CommunityService().createCommunitiesAndChats(
+           profile,
+           onFirstMember: onFirstMember,
+        );
       } catch (e) {
         // If this fails, we must NOT proceed.
         // We report error and let user retry (submit button will re-enable).
         throw Exception('Failed to join communities: $e. Please try again.');
-        return;
       }
 
       // 6. Invalidate profile provider and navigate
@@ -454,6 +453,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         isBanned: profile.isBanned,
         advertReportCount: profile.advertReportCount,
         yearsInHostCountry: profile.yearsInHostCountry,
+        showCurrentLocationName: profile.showCurrentLocationName,
       );
 
       // 6. Update profile provider
@@ -466,6 +466,58 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       await ref.read(sessionServiceProvider).setReturningUser(true);
       
       if (mounted) {
+        if (newCommunityNames.isNotEmpty) {
+           await showDialog(
+              context: context,
+              builder: (ctx) => Dialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(LucideIcons.partyPopper, size: 40, color: Colors.amber),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Congratulations!',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'You are the first member of ${newCommunityNames.join(", ")}!\n\nKnow someone who lives here? Invite them to join!',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.grey, height: 1.4),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            Share.share('Join me in ${newCommunityNames.first} on DiasporaNearby!');
+                          },
+                          icon: const Icon(LucideIcons.share2),
+                          label: const Text('Invite Friends'),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Maybe Later'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+           );
+        }
         context.go('/nearby'); // First time users land on Nearby to explore
       }
       
@@ -546,471 +598,127 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Widget _buildCurrentStep(ThemeData theme) {
     switch (_currentStep) {
       case SetupStep.home:
-        return _buildHomeStep(theme);
-      case SetupStep.host:
-        return _buildHostStep(theme);
-      case SetupStep.profile:
-        return _buildProfileStep(theme);
-    }
-  }
-
-  Widget _buildHomeStep(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Always show icon and description
-        const Icon(LucideIcons.home, size: 64, color: Colors.orange),
-        const SizedBox(height: 16),
-        Text(
-          'Where are you from?',
-          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'This helps us connect you with others from your home country',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        
-        TextFormField(
-          controller: _homeSearchController,
+        return ProfileSetupHomeStep(
+          searchController: _homeSearchController,
           focusNode: _homeFocusNode,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            hintText: 'Search your hometown',
-            prefixIcon: const Icon(LucideIcons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-          ),
-          onChanged: (v) => _onSearchChanged(v, true),
-        ),
-        
-        if (_predictions.isNotEmpty)
-          _buildSuggestionsList(true),
-        
-        // Inline selection button (only show when input has text and location selected)
-        if (_homeLocation != null && _predictions.isEmpty && _homeSearchController.text.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: _goToNextStep,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.green,
-              side: const BorderSide(color: Colors.green, width: 2),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(LucideIcons.check, size: 20),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    _homeLocation!.formattedAddress,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(LucideIcons.arrowRight, size: 20),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildHostStep(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Always show icon and description
-        const Icon(LucideIcons.mapPin, size: 64, color: Colors.blue),
-        const SizedBox(height: 16),
-        Text(
-          'Where do you live now?',
-          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'This helps you find nearby people from your home country',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        
-        TextFormField(
-          controller: _hostSearchController,
+          predictions: _predictions,
+          selectedLocation: _homeLocation,
+          onSearchChanged: (v) => _onSearchChanged(v, true),
+          onSelectPlace: (id) => _selectPlace(id, true),
+          onNext: _goToNextStep,
+        );
+      case SetupStep.host:
+        return ProfileSetupHostStep(
+          searchController: _hostSearchController,
           focusNode: _hostFocusNode,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            hintText: 'Search your current city',
-            prefixIcon: const Icon(LucideIcons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-          ),
-          onChanged: (v) => _onSearchChanged(v, false),
-        ),
-        
-        if (_predictions.isNotEmpty)
-          _buildSuggestionsList(false),
-        
-        // Inline selection button (only show when input has text and location selected)
-        if (_hostLocation != null && _predictions.isEmpty && _hostSearchController.text.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: () => setState(() => _currentStep = SetupStep.profile),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.green,
-              side: const BorderSide(color: Colors.green, width: 2),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(LucideIcons.check, size: 20),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    _hostLocation!.formattedAddress,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(LucideIcons.arrowRight, size: 20),
-              ],
-            ),
-          ),
-        ],
-        
-        // Back button
-        const SizedBox(height: 16),
-        TextButton.icon(
-          onPressed: () => setState(() => _currentStep = SetupStep.home),
-          icon: const Icon(LucideIcons.arrowLeft, size: 18),
-          label: const Text('Back to Home Location'),
-          style: TextButton.styleFrom(
-            foregroundColor: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProfileStep(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Profile Photo
-        Center(
-          child: GestureDetector(
-            onTap: _pickImage,
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 60,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
-                  child: _profileImage == null
-                    ? Icon(LucideIcons.user, size: 48, color: theme.colorScheme.onSurfaceVariant)
-                    : null,
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(LucideIcons.camera, size: 20, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Tap to add photo',
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        
-        // Name Fields with auto-capitalize
-        TextFormField(
-          controller: _firstNameController,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            labelText: 'First Name',
-            prefixIcon: const Icon(LucideIcons.user),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-          ),
-          inputFormatters: [CapitalizeFirstLetterFormatter()],
-          validator: (v) => v?.isEmpty == true ? 'Required' : null,
-        ),
-        const SizedBox(height: 16),
-        
-        TextFormField(
-          controller: _lastNameController,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            labelText: 'Last Name',
-            prefixIcon: const Icon(LucideIcons.user),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-          ),
-          inputFormatters: [CapitalizeFirstLetterFormatter()],
-          validator: (v) => v?.isEmpty == true ? 'Required' : null,
-        ),
-        
-        const SizedBox(height: 16),
-
-
-        
-        const SizedBox(height: 24),
-        
-        // Location summary
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const Icon(LucideIcons.home, size: 20, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _homeLocation?.formattedAddress ?? 'Home not set',
-                        style: theme.textTheme.bodySmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.mapPin, size: 20, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _hostLocation?.formattedAddress ?? 'Current location not set',
-                        style: theme.textTheme.bodySmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        
-        // Inline Complete button - only shows when names and photo are filled
-        if (_firstNameController.text.trim().isNotEmpty && 
-            _lastNameController.text.trim().isNotEmpty && 
-            _profileImage != null) ...[
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _isSubmitting ? null : _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.check, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Complete Setup',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-        
-        // Back button
-        const SizedBox(height: 16),
-        TextButton.icon(
-          onPressed: () => setState(() => _currentStep = SetupStep.host),
-          icon: const Icon(LucideIcons.arrowLeft, size: 18),
-          label: const Text('Back to Current Location'),
-          style: TextButton.styleFrom(
-            foregroundColor: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomButton(ThemeData theme) {
-    // Determine if we should show selected location
-    final showHomeSelection = _currentStep == SetupStep.home && _homeLocation != null;
-    final showHostSelection = _currentStep == SetupStep.host && _hostLocation != null;
-    final selectedAddress = showHomeSelection 
-        ? _homeLocation!.formattedAddress 
-        : showHostSelection 
-            ? _hostLocation!.formattedAddress 
-            : null;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 56,
-          child: ElevatedButton(
-            onPressed: _getButtonAction(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: selectedAddress != null 
-                  ? Colors.green 
-                  : theme.colorScheme.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: _isSubmitting
-                ? const CircularProgressIndicator(color: Colors.white)
-                : selectedAddress != null
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(LucideIcons.check, size: 20),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              selectedAddress,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(LucideIcons.arrowRight, size: 20),
-                        ],
-                      )
-                    : Text(_getButtonText()),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _getButtonText() {
-    switch (_currentStep) {
-      case SetupStep.home:
-        return 'Next';
-      case SetupStep.host:
-        return 'Next';
+          predictions: _predictions,
+          selectedLocation: _hostLocation,
+          onSearchChanged: (v) => _onSearchChanged(v, false),
+          onSelectPlace: (id) => _selectPlace(id, false),
+          onNext: () async {
+            if (_hostLocation != null) {
+              final verified = await _verifyHostLocation();
+              if (verified) {
+                setState(() => _currentStep = SetupStep.profile);
+              }
+            }
+          },
+          onBack: _goBack,
+        );
       case SetupStep.profile:
-        return 'Complete Setup';
+        return ProfileSetupDetailsStep(
+          firstNameController: _firstNameController,
+          lastNameController: _lastNameController,
+          profileImage: _profileImage,
+          homeLocation: _homeLocation,
+          hostLocation: _hostLocation,
+          onPickImage: _pickImage,
+          onSubmit: _submit,
+          isSubmitting: _isSubmitting,
+          showLocation: _showCurrentLocationName,
+          onLocationToggleChanged: (v) => setState(() => _showCurrentLocationName = v),
+        );
     }
   }
 
-  VoidCallback? _getButtonAction() {
-    switch (_currentStep) {
-      case SetupStep.home:
-        return _homeLocation != null ? _goToNextStep : null;
-      case SetupStep.host:
-        return _hostLocation != null ? () => setState(() => _currentStep = SetupStep.profile) : null;
-      case SetupStep.profile:
-        return _isSubmitting ? null : _submit;
+  Future<bool> _verifyHostLocation() async {
+    // 0. Preliminary check
+    if (_hostLocation == null) return false;
+    final targetCountryCode = _hostLocation!.countryCode;
+    if (targetCountryCode == null) return true; // Can't verify if no code, let pass or strict? Let pass for now.
+
+    setState(() => _isRequestingLocation = true);
+
+    try {
+      // 1. Check/Request Permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+           _showErrorDialog('Location Permission Required', 'We need your location to verify you are physically in ${_hostLocation!.country}.');
+           return false;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+         _showErrorDialog('Location Permission Required', 'Please enable location permissions in settings to verify you are physically in ${_hostLocation!.country}.');
+         return false;
+      }
+
+      // 2. Get Current Position
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+      
+      // 3. Reverse Geocode to get Country Code
+      // We accept `geocoding` package usage here or use our places service wrapper if available for consistency.
+      // Since we don't have `geocoding` imported yet, we should use the existing `_requestLocationPermission` logic 
+      // which uses `googlePlacesServiceProvider.reverseGeocode`.
+      
+      final places = ref.read(googlePlacesServiceProvider);
+      final locationData = await places.reverseGeocode(position.latitude, position.longitude);
+      
+      if (locationData == null) {
+         _showErrorDialog('Verification Failed', 'Could not determine your current location. Please try again.');
+         return false;
+      }
+
+      final currentCountryCode = locationData['countryCode'] as String?;
+      
+      // 4. Compare
+      if (currentCountryCode == null) {
+         _showErrorDialog('Verification Warning', 'Could not determine your current country code.');
+         return false; // Fail safe
+      }
+
+      final normalizedTarget = targetCountryCode.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '').substring(0, 2);
+      final normalizedCurrent = currentCountryCode.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '').substring(0, 2);
+
+      if (normalizedCurrent != normalizedTarget) {
+        _showErrorDialog(
+          'Verification Failed', 
+          'You must be physically located in ${_hostLocation!.country ?? "the target country"} to select it as your host location.\n\nDetected: $currentCountryCode, Target: $targetCountryCode'
+        );
+        return false;
+      }
+
+      return true;
+
+    } catch (e) {
+      debugPrint('Verification error: $e');
+      _showErrorDialog('Verification Error', 'An error occurred while verifying your location: $e');
+      return false;
+    } finally {
+      if (mounted) setState(() => _isRequestingLocation = false);
     }
   }
 
-  Widget _buildSuggestionsList(bool isHome) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      constraints: const BoxConstraints(maxHeight: 200),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListView.builder(
-        shrinkWrap: true,
-        itemCount: _predictions.length,
-        itemBuilder: (context, index) {
-          final p = _predictions[index];
-          return ListTile(
-            leading: const Icon(LucideIcons.mapPin),
-            title: Text(p.fullText),
-            onTap: () => _selectPlace(p.placeId, isHome),
-          );
-        },
+  void _showErrorDialog(String title, String content) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
       ),
     );
-  }
 }
-
-class ParsedLocation {
-  final String formattedAddress;
-  final String? countryCode;
-  final String? country;
-  final String? city;
-  final String? state;
-
-  ParsedLocation({
-    required this.formattedAddress,
-    this.countryCode,
-    this.country,
-    this.city,
-    this.state,
-  });
-}
-
-ParsedLocation? parseLocationComponents(String formattedAddress, List<AddressComponent> components) {
-  String? countryCode;
-  String? country;
-  String? city;
-  String? state;
-
-  for (final component in components) {
-    final types = component.types;
-    if (types.contains('country')) {
-      country = component.name;
-      countryCode = component.shortName;
-    } else if (types.contains('locality')) {
-      city = component.name;
-    } else if (types.contains('administrative_area_level_1')) {
-      state = component.name;
-    }
-  }
-
-  return ParsedLocation(
-    formattedAddress: formattedAddress,
-    countryCode: countryCode,
-    country: country,
-    city: city,
-    state: state,
-  );
 }

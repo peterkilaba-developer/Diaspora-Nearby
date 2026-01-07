@@ -1,9 +1,17 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:diaspora_nearby/providers/theme_provider.dart';
 
-final sessionServiceProvider = Provider<SessionService>((ref) => SessionService());
+final sessionServiceProvider = Provider<SessionService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return SessionService(prefs);
+});
 
 class SessionService {
+  final SharedPreferences _prefs;
+  
+  SessionService(this._prefs);
+
   // Storage keys
   static const String _keyUserId = 'session_user_id';
   static const String _keyLastLogin = 'session_last_login';
@@ -20,102 +28,89 @@ class SessionService {
     String? lastScreen,
     bool isReturningUser = true,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyUserId, userId);
-    await prefs.setString(_keyLastLogin, DateTime.now().toIso8601String());
-    await prefs.setBool(_keyHasCompletedOnboarding, hasCompletedOnboarding);
-    await prefs.setBool(_keyProfileComplete, profileComplete);
+    await _prefs.setString(_keyUserId, userId);
+    await _prefs.setString(_keyLastLogin, DateTime.now().toIso8601String());
+    await _prefs.setBool(_keyHasCompletedOnboarding, hasCompletedOnboarding);
+    await _prefs.setBool(_keyProfileComplete, profileComplete);
     if (lastScreen != null) {
-      await prefs.setString(_keyLastScreen, lastScreen);
+      await _prefs.setString(_keyLastScreen, lastScreen);
     }
     // Set returning user status
-    await prefs.setBool(_keyIsReturningUser, isReturningUser);
+    await _prefs.setBool(_keyIsReturningUser, isReturningUser);
   }
 
   /// Update returning user status
   Future<void> setReturningUser(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyIsReturningUser, value);
+    await _prefs.setBool(_keyIsReturningUser, value);
   }
 
   /// Update session when profile is completed
   Future<void> updateProfileComplete(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyProfileComplete, value);
+    await _prefs.setBool(_keyProfileComplete, value);
   }
 
   /// Update onboarding status
   Future<void> updateOnboardingComplete(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyHasCompletedOnboarding, value);
+    await _prefs.setBool(_keyHasCompletedOnboarding, value);
   }
 
   /// Update last visited screen
   Future<void> updateLastScreen(String screen) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyLastScreen, screen);
+    await _prefs.setString(_keyLastScreen, screen);
   }
 
   /// Update last login timestamp
   Future<void> updateLastVisit() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyLastLogin, DateTime.now().toIso8601String());
+    await _prefs.setString(_keyLastLogin, DateTime.now().toIso8601String());
   }
 
   /// Get current session data
   Future<Map<String, dynamic>?> getSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString(_keyUserId);
+    final userId = _prefs.getString(_keyUserId);
     
     if (userId == null) return null;
     
     return {
       'user_id': userId,
-      'last_login': prefs.getString(_keyLastLogin),
-      'has_completed_onboarding': prefs.getBool(_keyHasCompletedOnboarding) ?? false,
-      'last_screen': prefs.getString(_keyLastScreen),
-      'profile_complete': prefs.getBool(_keyProfileComplete) ?? false,
+      'last_login': _prefs.getString(_keyLastLogin),
+      'has_completed_onboarding': _prefs.getBool(_keyHasCompletedOnboarding) ?? false,
+      'last_screen': _prefs.getString(_keyLastScreen),
+      'profile_complete': _prefs.getBool(_keyProfileComplete) ?? false,
     };
   }
 
   /// Get user ID from session
   Future<String?> getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUserId);
+    return _prefs.getString(_keyUserId);
   }
 
   /// Check if user is returning (has logged in before)
   Future<bool> isReturningUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyIsReturningUser) ?? false;
+    return _prefs.getBool(_keyIsReturningUser) ?? false;
   }
 
   /// Check if profile marked as complete
   Future<bool> isProfileComplete() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_keyProfileComplete) ?? false;
+    return _prefs.getBool(_keyProfileComplete) ?? false;
   }
 
   /// Get last visited screen
   Future<String?> getLastScreen() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyLastScreen);
+    return _prefs.getString(_keyLastScreen);
   }
 
   /// Clear session on logout
   Future<void> clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyUserId);
-    await prefs.remove(_keyLastLogin);
-    await prefs.remove(_keyHasCompletedOnboarding);
-    await prefs.remove(_keyLastScreen);
-    await prefs.remove(_keyProfileComplete);
+    await _prefs.remove(_keyUserId);
+    await _prefs.remove(_keyLastLogin);
+    await _prefs.remove(_keyHasCompletedOnboarding);
+    await _prefs.remove(_keyLastScreen);
+    await _prefs.remove(_keyProfileComplete);
     // Keep _keyIsReturningUser to maintain returning user status across logins
   }
 
   /// Clear all session data including returning user flag (for testing/reset)
   Future<void> clearAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await _prefs.clear();
   }
 }

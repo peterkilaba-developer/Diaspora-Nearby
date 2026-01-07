@@ -6,6 +6,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/router.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/home/repository/home_repository.dart';
+import 'package:flutter/foundation.dart';
 
 // Provider for the service
 final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
@@ -18,10 +21,18 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  bool _isInitialized = false;
+
   PushNotificationService(this._ref);
 
   /// Initialize notifications (call once on app start)
   Future<void> initialize() async {
+    if (_isInitialized) {
+      debugPrint('PushNotificationService: Already initialized, skipping.');
+      return;
+    }
+    _isInitialized = true;
+    
     // 1. Initialize Local Notifications
     await _initializeLocalNotifications();
 
@@ -32,16 +43,40 @@ class PushNotificationService {
     _fcm.onTokenRefresh.listen((newToken) {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        debugPrint('PushNotificationService: Token refresh for ${user.uid}');
         _saveTokenToFirestore(user.uid, newToken);
       }
     });
+
+    // 5. Listen to Auth State Changes
+    _ref.read(authRepositoryProvider).authStateChanges.listen((user) {
+      if (user != null) {
+        debugPrint('PushNotificationService: User signed in (${user.uid}), registering notifications...');
+        registerForUser(user.uid);
+      } else {
+        debugPrint('PushNotificationService: User signed out.');
+      }
+    });
+    
+    // 6. Check Initial User (in case stream doesn't emit immediately or we missed it)
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+       registerForUser(currentUser.uid);
+    }
   }
   
   /// Called when user logs in
   Future<void> registerForUser(String userId) async {
+    // 1. Always attempt to register token (Android doesn't strictly require permission for token)
+    try {
+      await registerFCMToken(userId);
+    } catch (e) {
+      debugPrint('Error registering FCM token: $e');
+    }
+
+    // 2. Request Permission and Subscribe
     final granted = await requestPermission();
     if (granted) {
-      await registerFCMToken(userId);
       await subscribeToTopics(userId);
     }
   }
@@ -113,21 +148,25 @@ class PushNotificationService {
 
       // Show local notification if notification data exists
       if (notification != null && android != null) {
-        _localNotifications.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              'high_importance_channel',
-              'High Importance Notifications',
-              icon: '@mipmap/ic_launcher',
-              priority: Priority.high,
-              importance: Importance.max,
+        try {
+          _localNotifications.show(
+            notification.hashCode,
+            notification.title,
+            notification.body,
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'high_importance_channel',
+                'High Importance Notifications',
+                icon: '@mipmap/ic_launcher',
+                priority: Priority.high,
+                importance: Importance.max,
+              ),
             ),
-          ),
-          payload: _encodePayload(message.data),
-        );
+            payload: _encodePayload(message.data),
+          );
+        } catch (e) {
+          debugPrint('Error showing foreground notification: $e');
+        }
       }
     });
 
@@ -149,10 +188,13 @@ class PushNotificationService {
     try {
       final token = await _fcm.getToken();
       if (token != null) {
+        debugPrint('PushNotificationService: Obtained FCM token, saving to Firestore...');
         await _saveTokenToFirestore(userId, token);
+      } else {
+        debugPrint('PushNotificationService: FCM token was null');
       }
     } catch (e) {
-      // Failed to get token
+      debugPrint('PushNotificationService: Failed to get FCM token: $e');
     }
   }
 
@@ -236,6 +278,8 @@ class PushNotificationService {
         router.push('/notifications');
       } else if (type == 'group_mention' && data['chatId'] != null) {
          router.push('/chats/${data['chatId']}');
+      } else if (type == 'nearby_compatriot' && data['userId'] != null) {
+         router.push('/profile/${data['userId']}');
       } else {
          router.push('/notifications');
       }
@@ -246,5 +290,50 @@ class PushNotificationService {
   
   String _encodePayload(Map<String, dynamic> data) {
     return jsonEncode(data);
+  }
+
+  /// Check for nearby compatriots and notify if any
+  Future<void> checkAndNotifyNearbyCompatriots() async {
+    try {
+      final homeRepo = _ref.read(homeRepositoryProvider);
+      final nearbyCompatriots = await homeRepo.getNearbyCompatriots();
+      
+      if (nearbyCompatriots.isNotEmpty) {
+        // Filter for users strictly within 10 miles for notification
+        final closeCompatriots = nearbyCompatriots.where((u) => (u.distance ?? 999999) <= 10).toList();
+        
+        if (closeCompatriots.isNotEmpty) {
+          final compatriot = closeCompatriots.first;
+          final name = compatriot.firstName;
+          final homeCountry = compatriot.homeCountry ?? 'your home country';
+          
+          // Show local notification with safety guard
+          try {
+            await _localNotifications.show(
+              compatriot.uid.hashCode,
+              'Diaspora Nearby',
+              '$name from $homeCountry is nearby. Connect now!',
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'high_importance_channel',
+                  'High Importance Notifications',
+                  icon: '@mipmap/ic_launcher',
+                  priority: Priority.high,
+                  importance: Importance.max,
+                ),
+              ),
+              payload: _encodePayload({
+                'type': 'nearby_compatriot',
+                'userId': compatriot.uid,
+              }),
+            );
+          } catch (e) {
+            debugPrint('Error showing nearby compatriot notification: $e');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking nearby compatriots: $e');
+    }
   }
 }

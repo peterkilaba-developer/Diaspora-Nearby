@@ -117,6 +117,7 @@ Message _$MessageFromJson(Map<String, dynamic> json) => Message(
   ),
   adminId: json['adminId'] as String?,
   adminImage: json['adminImage'] as String?,
+  richContent: json['richContent'] as String?,
 );
 
 Map<String, dynamic> _$MessageToJson(Message instance) => <String, dynamic>{
@@ -128,6 +129,7 @@ Map<String, dynamic> _$MessageToJson(Message instance) => <String, dynamic>{
   'senderHostCountryCode': instance.senderHostCountryCode,
   'senderHomeCountryCode': instance.senderHomeCountryCode,
   'content': instance.content,
+  'richContent': instance.richContent,
   'type': instance.type,
   'timestamp': instance.timestamp,
   'status': instance.status,

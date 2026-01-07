@@ -1,6 +1,13 @@
 {
     "rules": {
         ".read": true,
-        ".write": true
+        ".write": true,
+        "chats": {
+            "$chatId": {
+                "messages": {
+                    ".indexOn": ["timestamp"]
+                }
+            }
+        }
     }
 }

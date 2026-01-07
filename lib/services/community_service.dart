@@ -13,7 +13,7 @@ class CommunityService {
 
   /// Main entry point: creates all communities and chats for a new user.
   /// Mirrors React's `assignUserToCommunities()` function.
-  Future<List<String>> createCommunitiesAndChats(ProfileData profile) async {
+  Future<List<String>> createCommunitiesAndChats(ProfileData profile, {Function(String)? onFirstMember}) async {
     // Validate required data
     if (profile.uid == null || profile.uid!.isEmpty) {
       return [];
@@ -33,6 +33,7 @@ class CommunityService {
       state: profile.homeLocation.state,
       country: profile.homeCountry ?? profile.homeLocation.country ?? '',
       countryCode: homeCountryCode,
+      placeId: profile.homeLocation.placeId,
     );
     
     final hostParsed = LocationParsed(
@@ -40,6 +41,7 @@ class CommunityService {
       state: profile.hostLocation.state,
       country: profile.hostCountry ?? profile.hostLocation.country ?? '',
       countryCode: hostCountryCode,
+      placeId: profile.hostLocation.placeId,
     );
 
     // Get continents
@@ -62,6 +64,7 @@ class CommunityService {
       userId: userId,
       homeCountryCode: homeCountryCode,
       hostCountryCode: null,
+      onFirstMember: onFirstMember,
     );
     communityIds.add(globalId);
     chatIds.add('chat_$globalId');
@@ -75,6 +78,7 @@ class CommunityService {
       userId: userId,
       homeCountryCode: homeCountryCode,
       hostCountryCode: null,
+      onFirstMember: onFirstMember,
     );
     communityIds.addAll(homeCommunityIds);
     chatIds.addAll(homeCommunityIds.map((id) => 'chat_$id'));
@@ -88,6 +92,7 @@ class CommunityService {
       userId: userId,
       homeCountryCode: homeCountryCode,
       hostCountryCode: hostCountryCode,
+      onFirstMember: onFirstMember,
     );
     communityIds.addAll(hostCommunityIds);
     chatIds.addAll(hostCommunityIds.map((id) => 'chat_$id'));
@@ -112,6 +117,8 @@ class CommunityService {
     required String userId,
     required String homeCountryCode,
     String? hostCountryCode,
+    bool syncToUserProfile = false, // [NEW] Option to auto-sync to profile
+    Function(String)? onFirstMember,
   }) async {
     final List<String> ids = [];
     final countryCode = locationType == 'home' ? homeCountryCode : (hostCountryCode ?? location.countryCode);
@@ -129,6 +136,7 @@ class CommunityService {
       userId: userId,
       homeCountryCode: homeCountryCode,
       hostCountryCode: hostCountryCode,
+      onFirstMember: onFirstMember,
     );
     ids.add(continentId);
 
@@ -140,11 +148,21 @@ class CommunityService {
       userId: userId,
       homeCountryCode: homeCountryCode,
       hostCountryCode: hostCountryCode,
+      onFirstMember: onFirstMember,
     );
     ids.add(countryId);
 
     // 3. State (only for 3-level countries)
-    if (location.state != null && location.state!.isNotEmpty && country_data.hasStateLevelHierarchyFromData(countryCode)) {
+    // [FIX] China Direct-Controlled Municipalities Logic: Skip State level to avoid "Shanghai, Shanghai, China"
+    bool skipState = false;
+    if (countryCode == 'CN') {
+      const directControlled = ['Beijing', 'Shanghai', 'Tianjin', 'Chongqing'];
+      if (location.city != null && directControlled.any((c) => location.city!.contains(c))) {
+        skipState = true;
+      }
+    }
+
+    if (!skipState && location.state != null && location.state!.isNotEmpty && country_data.hasStateLevelHierarchyFromData(countryCode)) {
       final stateId = await _ensureCommunity(
         type: 'state',
         locationType: locationType,
@@ -152,6 +170,7 @@ class CommunityService {
         userId: userId,
         homeCountryCode: homeCountryCode,
         hostCountryCode: hostCountryCode,
+        onFirstMember: onFirstMember,
       );
       ids.add(stateId);
     }
@@ -165,12 +184,27 @@ class CommunityService {
         userId: userId,
         homeCountryCode: homeCountryCode,
         hostCountryCode: hostCountryCode,
+        onFirstMember: onFirstMember,
       );
       ids.add(cityId);
     }
 
+    // 5. Sync to Profile if requested (Robustness)
+    if (syncToUserProfile && ids.isNotEmpty) {
+       try {
+         await _firestore.collection('users').doc(userId).update({
+           'communityMemberships': cf.FieldValue.arrayUnion(ids),
+         });
+       } catch (e) {
+         // Log but don't fail the whole flow if sync fails, though it's critical
+         print('CommunityService: Error syncing memberships to profile: $e');
+       }
+    }
+
     return ids;
   }
+
+
 
   /// Ensures a community exists, creates if not. Returns community ID.
   Future<String> _ensureCommunity({
@@ -181,14 +215,43 @@ class CommunityService {
     required String userId,
     required String homeCountryCode,
     String? hostCountryCode,
+    Function(String)? onFirstMember,
   }) async {
-    // Generate community ID (matches React's generateCommunityId)
+    // 1. [NEW] Check if community exists by Google Place ID (Priority)
+    // This allows multiple names for the same physical place to resolve to one community.
+    if (location.placeId != null && location.placeId!.isNotEmpty) {
+       try {
+         final query = await _firestore.collection('communities')
+            .where('location.placeId', isEqualTo: location.placeId)
+            .where('type', isEqualTo: type)
+            .where('locationType', isEqualTo: locationType)
+            // Ensure we only match for this specific Diaspora (Home Country)
+            .where('homeCountryCode', isEqualTo: (locationType == 'host' || locationType == 'past') ? homeCountryCode : null) 
+            .limit(1)
+            .get();
+
+         if (query.docs.isNotEmpty) {
+           print('CommunityService: Found existing community by PlaceID: ${query.docs.first.id}');
+           // Ensure user is member (idempotent)
+           await _firestore.collection('communities').doc(query.docs.first.id).update({
+              'members': cf.FieldValue.arrayUnion([userId]),
+              'memberCount': cf.FieldValue.increment(0), // Just to trigger update if needed, but arrayUnion handles logic
+              // Real member count logic usually requires reading members.length or cloud function
+           });
+           return query.docs.first.id;
+         }
+       } catch (e) {
+         print('CommunityService: Check by PlaceID failed, falling back to ID Gen: $e');
+       }
+    }
+
+    // 2. Fallback: Generate community ID (matches deterministic generation)
     final communityId = generateCommunityId(
       locationType: locationType,
       type: type,
       location: location,
       continent: continent,
-      homeCountryCode: locationType == 'host' ? homeCountryCode : null,
+      homeCountryCode: (locationType == 'host' || locationType == 'past') ? homeCountryCode : null,
     );
     
     // Generate community name
@@ -214,6 +277,7 @@ class CommunityService {
           'state': location.state,
           'country': location.country,
           'countryCode': location.countryCode,
+          'placeId': location.placeId, // [NEW] Save canonical Place ID
         },
         'homeCountryCode': homeCountryCode,
         'hostCountryCode': hostCountryCode,
@@ -236,6 +300,21 @@ class CommunityService {
         initialParticipants: [userId],
         continent: continent,
       );
+
+      // Notify caller if this is the first member
+      if (onFirstMember != null) {
+         onFirstMember(communityName);
+      }
+      
+      // [FIX] Add chat to userChats index for the creator/joiner
+      // This is crucial for 'ensureCommunitiesForLocationHierarchy' calls (e.g. Past Locations)
+      // which don't trigger the batch update.
+      final chatId = 'chat_$communityId';
+      await _rtdb.ref('userChats/$userId/$chatId').set({
+        'chatId': chatId,
+        'lastRead': rtdb.ServerValue.timestamp,
+        'addedAt': rtdb.ServerValue.timestamp,
+      });
     } else {
       // Add member to existing community
       final existingData = docSnapshot.data() as Map<String, dynamic>;

@@ -43,7 +43,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   Future<void> _loadContacts() async {
     setState(() => _isLoadingContacts = true);
     final repo = ref.read(chatRepositoryProvider);
-    final contacts = await repo.getChatContacts();
+    final contacts = await repo.getContactsWithDMs();
     
     if (mounted) {
       setState(() {
@@ -117,7 +117,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -214,45 +214,24 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                       
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            // Checkbox Left
-                            Checkbox(
-                              value: isSelected,
-                              onChanged: (val) {
-                                setState(() {
-                                  if (userId == null) return;
-                                  if (val == true) {
-                                    _selectedIds.add(userId);
-                                  } else {
-                                    _selectedIds.remove(userId);
-                                  }
-                                });
-                              },
-                              shape: const CircleBorder(),
-                            ),
-                            // User Card Expanded
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    if (userId == null) return;
-                                    if (isSelected) {
-                                      _selectedIds.remove(userId);
-                                    } else {
-                                      _selectedIds.add(userId);
-                                    }
-                                  });
-                                },
-                                child: AbsorbPointer( // Prevent inner card taps from interfering with row selection
-                                  child: UserCardView(
-                                    user: contact,
-                                    isStatic: true,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              if (userId == null) return;
+                              if (isSelected) {
+                                _selectedIds.remove(userId);
+                              } else {
+                                _selectedIds.add(userId);
+                              }
+                            });
+                          },
+                          child: UserCardView(
+                            user: contact,
+                            isStatic: true,
+                            backgroundColor: isSelected
+                                ? theme.colorScheme.primaryContainer.withOpacity(0.5)
+                                : null,
+                          ),
                         ),
                       );
                     }),
@@ -262,12 +241,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           ),
           
           // Fixed Footer
-          Container(
-             padding: const EdgeInsets.all(16),
-             decoration: BoxDecoration(
-               color: theme.scaffoldBackgroundColor,
-               border: Border(top: BorderSide(color: theme.dividerColor)),
-             ),
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.scaffoldBackgroundColor,
+                border: Border(top: BorderSide(color: theme.dividerColor)),
+              ),
              child: Row(
                children: [
                  Expanded(
@@ -293,6 +274,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                ],
              ),
           ),
+        ),
         ],
       ),
     );

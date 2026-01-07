@@ -61,6 +61,43 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
     'Non Governmental Organization (NGO)',
     'Government Organization (GO)',
   ];
+
+  void _updateTitleOptions(String orgType) {
+    setState(() {
+      _titleOptions = _orgTypeTitles[orgType] ?? ['Super Admin', 'Admin', 'Director', 'Leader'];
+      // Default to first option
+      if (_titleOptions.isNotEmpty) {
+        _selectedTitle = _titleOptions.first;
+      } else {
+        _selectedTitle = null;
+      }
+    });
+  }
+
+  final _orgTypeTitles = {
+    'Business Organization (BO)': [
+      'Chief Executive Officer (CEO)', 'Managing Director', 'President', 'Founder', 'Owner', 'General Manager', 'Director'
+    ],
+    'Diaspora Organization (DO)': [
+      'President', 'Chairman', 'Chairperson', 'Community Leader', 'Coordinator', 'Secretary', 'Director'
+    ],
+    'Political Organization (PO)': [
+      'Party Leader', 'Chairman', 'Secretary General', 'President', 'Spokesperson', 'Director'
+    ],
+    'Faith Organization (FO)': [
+      'Reverend', 'Pastor', 'Minister', 'Bishop', 'Priest', 'Sheikh', 'Imam', 'Rabbi', 'Deacon', 'Prophet', 'Apostle', 'Leader'
+    ],
+    'Non Governmental Organization (NGO)': [
+      'Executive Director', 'Country Director', 'Founder', 'Program Director', 'Coordinator', 'Director'
+    ],
+    'Government Organization (GO)': [
+      'Ambassador', 'Consular', 'High Commissioner', 'Minister', 'Director General', 'Governor', 'Mayor', 'Commissioner'
+    ],
+  };
+
+  /* Default fallback titles */
+  List<String> _titleOptions = ['Super Admin', 'Admin', 'Director', 'Manager', 'Leader'];
+  String? _selectedTitle;
   
   bool _isLoading = false;
 
@@ -187,6 +224,7 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
         // Set matched type if found
         if (matchedType != null) {
           _selectedOrgType = matchedType;
+          _updateTitleOptions(matchedType);
         }
       });
       
@@ -325,6 +363,7 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
           locationState: _locationState,
           locationCountry: _locationCountry,
           homeCountryCode: homeCountryCode,
+          creatorTitle: _selectedTitle,
         );
       } catch (e) {
          debugPrint('Registration Submit Error: $e');
@@ -337,20 +376,23 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
          return;
       }
 
-      if (mounted) {
-        // Refresh the organizations list provider
-        ref.invalidate(userOrganizationsProvider);
-        
-        setState(() => _isLoading = false);
-        context.pop();  
-        
-        // Take to Management Page
-        context.push('/organization/manage?orgId=$orgId');
+        if (mounted) {
+          // 1. Refresh the organizations list provider
+          ref.invalidate(userOrganizationsProvider);
+          
+          // 2. Capture router before popping
+          final router = GoRouter.of(context);
+          
+          // 3. Close modal
+          Navigator.pop(context);
+          
+          // 4. Navigate to Manage Page (Matched correctly now due to router.dart fix)
+          router.push('/organization/manage?orgId=$orgId');
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Organization created successfully! Invite a second admin to activate.')),
-        );
-      }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Organization created successfully! Invite a second admin to activate.')),
+          );
+        }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -595,7 +637,12 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
                            overflow: TextOverflow.ellipsis,
                          ),
                        )).toList(),
-                       onChanged: (val) => setState(() => _selectedOrgType = val),
+                       onChanged: (val) {
+                         setState(() {
+                           _selectedOrgType = val;
+                           if (val != null) _updateTitleOptions(val);
+                         });
+                       },
                        validator: (v) => v == null ? 'Required' : null,
                      ),
                     const SizedBox(height: 16),
@@ -607,6 +654,24 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
                          border: OutlineInputBorder(),
                        ),
                        keyboardType: TextInputType.url,
+                     ),
+                    const SizedBox(height: 16),
+                     DropdownButtonFormField<String>(
+                       value: _selectedTitle,
+                       isExpanded: true,
+                       decoration: const InputDecoration(
+                         labelText: 'Your Title',
+                         prefixIcon: Icon(LucideIcons.badgeCheck, size: 18),
+                         border: OutlineInputBorder(),
+                       ),
+                       items: _titleOptions.map((title) => DropdownMenuItem(
+                         value: title,
+                         child: Text(title),
+                       )).toList(),
+                       onChanged: (val) {
+                         if (val != null) setState(() => _selectedTitle = val);
+                       },
+                       validator: (v) => v == null ? 'Required' : null,
                      ),
                     const SizedBox(height: 24),
                     

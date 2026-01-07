@@ -10,6 +10,7 @@ import 'package:diaspora_nearby/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/providers/view_mode_provider.dart';
+import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
 // --- Providers ---
 final stationsByCountryProvider = FutureProvider.family<List<RadioStation>, String>((ref, countryCode) async {
@@ -273,7 +274,9 @@ class _StationList extends ConsumerWidget {
             : stations.where((station) {
                 final query = searchQuery.toLowerCase();
                 return station.name.toLowerCase().contains(query) ||
-                       station.country.toLowerCase().contains(query);
+                       station.country.toLowerCase().contains(query) ||
+                       station.tags.toLowerCase().contains(query) ||
+                       station.countrycode.toLowerCase().contains(query);
               }).toList();
 
         if (filteredStations.isEmpty) {
@@ -297,7 +300,7 @@ class _StationList extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: 100, left: 8, right: 8), // Space for MiniPlayer + Horizontal Padding
           itemBuilder: (context, index) {
             final station = filteredStations[index];
-            return RadioStationCard(station: station);
+            return RadioStationCard(station: station, searchQuery: searchQuery);
           },
         );
       },
@@ -309,11 +312,13 @@ class _StationList extends ConsumerWidget {
 
 class RadioStationCard extends ConsumerWidget {
   final RadioStation station;
+  final String? searchQuery;
 
-  const RadioStationCard({super.key, required this.station});
+  const RadioStationCard({super.key, required this.station, this.searchQuery});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final radioState = ref.watch(radioProvider);
     final isPlaying = radioState.currentStation?.stationuuid == station.stationuuid && radioState.isPlaying;
     final isLoading = radioState.currentStation?.stationuuid == station.stationuuid && radioState.isLoading;
@@ -346,9 +351,25 @@ class RadioStationCard extends ConsumerWidget {
           ),
           child: station.favicon.isEmpty ? Icon(Icons.radio, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)) : null,
         ),
-        title: Text(station.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text('$flag $standardizedCountry', maxLines: 1, overflow: TextOverflow.ellipsis, 
-          style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7))),
+        title: SearchHighlightUtils.highlightText(
+          station.name, 
+          searchQuery, 
+          theme.textTheme.bodyLarge, // Adjust style as needed based on ListTile defaults
+          context
+        ),
+        subtitle: Row(
+          children: [
+            Text(flag + ' ', style: const TextStyle(fontSize: 12)),
+            Flexible(
+              child: SearchHighlightUtils.highlightText(
+                standardizedCountry, 
+                searchQuery, 
+                theme.textTheme.bodySmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.7)),
+                context
+              ),
+            ),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

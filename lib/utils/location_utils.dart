@@ -1,19 +1,10 @@
 import 'dart:math' as math;
 import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 
 // --------------------------------------------------------------------------
 // Models
 // --------------------------------------------------------------------------
-
-// Add `AddressComponent` import if not available, or just dynamic if we can't import GPlaces SDK here without adding dep to utils (bad practice).
-// Better: Duplicate logic or move GPlaces dependency? 
-// The error was that `_UserProfileScreenState` couldn't find it. 
-// We will implement a standalone helper that takes the raw components structure.
-// But better yet, let's look at how it was implemented in `profile_setup_screen.dart` and move it here.
-
-// It seems `AddressComponent` comes from `flutter_google_places_sdk`.
-// We need to import it here.
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 
 LocationParsed? parseLocationComponents(String address, List<AddressComponent> components) {
   String? city, state, country, countryCode;
@@ -28,6 +19,11 @@ LocationParsed? parseLocationComponents(String address, List<AddressComponent> c
       country = component.name;
       countryCode = component.shortName;
     }
+  }
+
+  // [FIX] Explicitly handle New York City to avoid "New York Community" (which sounds like State)
+  if (city == 'New York' && countryCode == 'US') {
+      city = 'New York City';
   }
 
   // UK Logic
@@ -47,6 +43,11 @@ LocationParsed? parseLocationComponents(String address, List<AddressComponent> c
   }
 
   if (country == null || countryCode == null) return null;
+
+  // Verify if country supports state level
+  if (countryCode != null && !country_data.hasStateLevelHierarchyFromData(countryCode)) {
+    state = null;
+  }
   
   return LocationParsed(
     city: city, 
@@ -61,16 +62,18 @@ class LocationParsed {
   final String? state;
   final String country;
   final String countryCode;
+  final String? placeId; // [NEW] Explicit Place ID for robust matching
 
   LocationParsed({
     this.city,
     this.state,
     required this.country,
     required this.countryCode,
+    this.placeId,
   });
 
   @override
-  String toString() => 'LocationParsed(city: $city, state: $state, country: $country, code: $countryCode)';
+  String toString() => 'LocationParsed(city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId)';
 }
 
 // --------------------------------------------------------------------------
@@ -146,7 +149,7 @@ String generateCommunityId({
     parts.add(location.city!.toLowerCase().replaceAll(RegExp(r'\s+'), '-'));
   }
 
-  if (locationType == 'host' && homeCountryCode != null) {
+  if ((locationType == 'host' || locationType == 'past') && homeCountryCode != null) {
     parts.add(homeCountryCode.toLowerCase());
   }
 
@@ -159,7 +162,7 @@ String generateCommunityName({
   String? continent,
   String? locationType,
 }) {
-  final normalizedType = type.replaceAll(RegExp(r'^(home_|host_)'), '');
+  final normalizedType = type.replaceAll(RegExp(r'^(home_|host_|past_)'), '');
   
   if (normalizedType == 'global') return 'Global Community';
   
@@ -204,4 +207,65 @@ String formatDistance(double km) {
   } else {
     return '${km.round()} km';
   }
+}
+
+// --------------------------------------------------------------------------
+// Formatting Helpers
+// --------------------------------------------------------------------------
+
+const Map<String, String> usStateNames = {
+  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+  'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
+  'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
+  'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
+  'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
+  'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
+  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
+  'DC': 'District of Columbia',
+};
+
+/// Helper to ensure full names are used for locations (e.g. TX -> Texas, US -> United States)
+String formatLocationName(String? name) {
+  if (name == null || name.isEmpty) return '';
+  // Remove any numbers from the name (e.g. "78701" or "123")
+  String cleaned = name.replaceAll(RegExp(r'\d+'), '').trim();
+  if (cleaned.isEmpty) return '';
+  
+  final upper = cleaned.toUpperCase();
+  
+  // 1. Check if it's a US State abbreviation
+  if (upper.length == 2 && usStateNames.containsKey(upper)) {
+     return usStateNames[upper]!;
+  }
+  
+  // 2. Check if it's a known country code
+  if (upper.length == 2) {
+     final country = country_data.getCountryByCode(upper);
+     if (country != null) {
+       return country.name;
+     }
+  }
+  
+  // 3. Handle common abbreviations requested
+  if (upper == 'U.S.' || upper == 'USA') return 'United States';
+  if (upper == 'UK') return 'United Kingdom';
+  if (upper == 'UAE') return 'United Arab Emirates';
+  
+  return cleaned;
+}
+
+/// Helper to format a full address string by expanding abbreviations and removing numeric parts
+String formatFullAddress(String address) {
+  if (address.isEmpty) return '';
+  // Split by comma, clean each part, and filter out anything that becomes empty (like purely numeric zip codes or house numbers)
+  final parts = address.split(',').map((p) => p.trim()).toList();
+  final formattedParts = parts
+      .map((part) => formatLocationName(part))
+      .where((p) => p.isNotEmpty)
+      .toList();
+      
+  return formattedParts.join(', ');
 }

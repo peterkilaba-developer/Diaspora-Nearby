@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/shared/widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
@@ -61,9 +62,18 @@ class OrganizerEventsList extends ConsumerWidget {
             final event = myEvents[index];
             return EventCard(
               event: event, 
-              isAttending: true, 
+              isAttending: true,
+              isCreator: true, // [NEW] Enable Edit Button
               onTap: () {
                  // Navigate to detail
+                 context.push('/events/${event.id}', extra: event);
+              },
+              onEditTap: () {
+                 // User requested "edit or republish... as new event"
+                 // For now, we allow editing the EXISTING event. 
+                 // If they want to "republish as new", we might need a separate "Clone" action later.
+                 // But editing the date of an ended event effectively republishes it.
+                 context.push('/events/edit/${event.id}', extra: event);
               },
             );
           },

@@ -30,8 +30,12 @@ LastMessage _$LastMessageFromJson(Map<String, dynamic> json) => LastMessage(
   senderId: json['senderId'] as String,
   senderName: json['senderName'] as String,
   type: json['type'] as String,
+  mentions: (json['mentions'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
   forwarded: json['forwarded'] as bool?,
   status: json['status'] as String?,
+  deletedForEveryone: json['deletedForEveryone'] as bool?,
 );
 
 Map<String, dynamic> _$LastMessageToJson(LastMessage instance) =>
@@ -41,8 +45,10 @@ Map<String, dynamic> _$LastMessageToJson(LastMessage instance) =>
       'senderId': instance.senderId,
       'senderName': instance.senderName,
       'type': instance.type,
+      'mentions': instance.mentions,
       'forwarded': instance.forwarded,
       'status': instance.status,
+      'deletedForEveryone': instance.deletedForEveryone,
     };
 
 Chat _$ChatFromJson(Map<String, dynamic> json) => Chat(
