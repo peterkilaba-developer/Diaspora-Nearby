@@ -134,9 +134,27 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
 
   void _launchUrl(String? url) async {
     if (url == null || url.isEmpty) return;
-    final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+    
+    Uri uri;
+    if (url.startsWith('http') || url.startsWith('https') || url.startsWith('tel') || url.startsWith('mailto')) {
+      uri = Uri.parse(url);
+    } else {
+      // Default to https for websites without scheme
+      uri = Uri.parse('https://$url');
+    }
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        // Some devices might not report canLaunchUrl properly for tel:
+        // Try launching anyway if it's a tel link
+        if (url.startsWith('tel')) {
+           await launchUrl(uri);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
     }
   }
 

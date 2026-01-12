@@ -95,7 +95,7 @@ void main() {
       
       when(mockStorage.ref()).thenReturn(mockStorageRef);
       when(mockStorageRef.child(any)).thenReturn(mockChildRef);
-      when(mockChildRef.putFile(any)).thenAnswer((_) => fakeUploadTask);
+      when(mockChildRef.putFile(any, any)).thenAnswer((_) => fakeUploadTask);
       
       // Setup Download URL
       when(mockTaskSnapshot.ref).thenReturn(mockChildRef); // Corrected: ref is on snapshot
@@ -113,6 +113,8 @@ void main() {
       when(mockMessagesRef.push()).thenReturn(mockNewMessageRef);
       when(mockNewMessageRef.key).thenReturn('new_msg_id');
       when(mockNewMessageRef.set(any)).thenAnswer((_) async => null);
+      // Stub update for the catch-all mock used for userChats
+      when(mockMessagesRef.update(any)).thenAnswer((_) async => null);
 
       when(mockRtdb.ref('chats/$chatId/lastMessage')).thenReturn(mockLastMessageRef);
       when(mockLastMessageRef.set(any)).thenAnswer((_) async => null);
@@ -143,7 +145,7 @@ void main() {
       await Future.delayed(Duration(milliseconds: 100));
       
       // Verify interactions
-      verify(mockChildRef.putFile(any)).called(1);
+      verify(mockChildRef.putFile(any, any)).called(1);
       verify(mockChildRef.getDownloadURL()).called(1);
       verify(mockNewMessageRef.set(any)).called(1);
     });

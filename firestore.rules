@@ -1,8 +1,116 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+  
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    // Check if user is an admin of the organization (requires reading the org doc)
+    function isOrgAdmin(orgId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)).data.admins.hasAny([request.auth.uid]);
+    }
+
+    // --- Users Collection ---
+    // Profile data is public, but only editable by owner
+    match /users/{userId} {
+      allow read: if true; // [DEBUG] Allow public read for listing during reset
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+      allow delete: if true; // [DEBUG] Allow PUBLIC deletion for reset from Login Screen
+    }
+    
+    // --- Communities Collection ---
+    // Public read. Write is restricted.
+    match /communities/{communityId} {
+      allow read: if true;
+      
+      // Allow users to update members array (joining/leaving)
+      // Ideally this should be a subcollection 'members', but assuming array for now:
+      // Validation: Can only add/remove their OWN uid from 'members'
+      // For MVP, we allow authenticated write to support the current client-side logic.
+      // TODO: Migrating to subcollections or Cloud Functions is recommended for strict membership control.
+      allow update: if isAuthenticated(); 
+      allow create: if isAuthenticated(); // Allow creation of new communities
+      allow delete: if true; // [DEBUG] Allow PUBLIC deletion
+    }
+    
+    // --- Events Collection ---
+    match /events/{eventId} {
+      allow read: if true;
+      
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        (resource.data.organizationId != null && isOrgAdmin(resource.data.organizationId))
+      );
+      
+      allow delete: if true; // [DEBUG] Public delete for reset
+      
+       // Allow reading/writing subcollections (attendees, etc.)
+       match /{subcollection=**} {
+          allow read: if true;
+          allow write: if isAuthenticated();
+       }
+    }
+    
+    // --- Organizations Collection ---
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isOrgAdmin(orgId);
+      allow delete: if true; // [DEBUG]
+    }
+    
+    // --- Radio Station Health ---
+    match /radio_station_health/{id} {
+      allow read: if true;
+      allow write: if false; // System only
+      allow delete: if true; // [DEBUG] Allow radio deletion
+    }
+
+    // --- DSP Points System ---
+    
+    // --- DSP Points System ---
+    
+    // User Points: Explicitly check auth uid matches doc id
+    match /user_points/{userId} {
+      allow read: if true; // [DEBUG]
+      allow write: if request.auth != null; // [TEMPORARY] Allow transfers
+      allow delete: if true; // [DEBUG]
+    }
+
+    // Points Transactions: Check data ownership
+    match /points_transactions/{transactionId} {
+      allow read: if true; // [DEBUG]
+      // allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null; // [TEMPORARY] Allow transfers
+    }
+
+    // Referral Codes: Read all, create/update own
+    match /referral_codes/{code} {
+      allow read: if true; // [DEBUG]
+      // allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null; // Allow updating usage counts
+      allow delete: if true; // [DEBUG]
+    }
+
+    // --- Feedback ---
+    match /feedback/{feedbackId} {
+      allow create: if isAuthenticated();
+      allow read: if false; // Only admins/system needs to read
+    }
+
+    // Default deny for all other collections
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Service for caching user-generated data locally for immediate access
-/// before Firestore propagation completes.
+/// Service for caching user-generated data locally.
+/// @deprecated Use [DatabaseService] instead.
+@Deprecated('Use DatabaseService instead')
 class LocalCacheService {
   static SharedPreferences? _prefs;
   
+  // ... (keep constants for migration if needed)
+
   // Cache key prefixes
   static const String _orgPrefix = 'cached_org_';
   static const String _chatPrefix = 'cached_chat_';
@@ -23,7 +26,7 @@ class LocalCacheService {
   /// Initialize with SharedPreferences instance
   static void init(SharedPreferences prefs) {
     _prefs = prefs;
-    debugPrint('✅ LocalCacheService initialized');
+    debugPrint('⚠️ LocalCacheService initialized (Deprecated)');
   }
 
   /// Get prefs instance (throws if not initialized)

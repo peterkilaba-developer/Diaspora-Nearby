@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:diaspora_nearby/models/google_places_models.dart';
 import 'package:diaspora_nearby/models/location.dart' as loc_model;
 import 'package:diaspora_nearby/services/google_places_service.dart';
 
@@ -95,67 +95,70 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
     return Dialog(
        insetPadding: const EdgeInsets.symmetric(horizontal: 16),
        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-       child: Padding(
-         padding: const EdgeInsets.all(16),
-         child: Column(
-           mainAxisSize: MainAxisSize.min,
-           crossAxisAlignment: CrossAxisAlignment.stretch,
-           children: [
-              const Text('Add Past Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _searchController, 
-                onChanged: _onSearchChanged, 
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  labelText: 'City/Location',
-                  hintText: 'Search city...',
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  prefixIcon: const Icon(LucideIcons.search),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  suffixIcon: _isLoading ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)) : null
-                )
-              ),
-              if (_predictions.isNotEmpty) 
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 150),
-                  margin: const EdgeInsets.only(top: 8),
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: _predictions.map((p) => ListTile(
-                      title: Text(p.primaryText),
-                      subtitle: Text(p.secondaryText ?? ''),
-                      onTap: () => _selectPlace(p.placeId)
-                    )).toList()
+       child: SingleChildScrollView(
+         child: Padding(
+           padding: const EdgeInsets.all(16),
+           child: Column(
+             mainAxisSize: MainAxisSize.min,
+             crossAxisAlignment: CrossAxisAlignment.stretch,
+             children: [
+                const Text('Add Past Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _searchController, 
+                  onChanged: _onSearchChanged, 
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    labelText: 'City/Location',
+                    hintText: 'Search city...',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    prefixIcon: const Icon(LucideIcons.search),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    suffixIcon: _isLoading ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)) : null
                   )
                 ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedYear, 
-                items: widget.yearRange.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(), 
-                onChanged: (v) => setState(() => _selectedYear = v),
-                decoration: InputDecoration(
-                   labelText: 'Lived until', 
-                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))
+                if (_predictions.isNotEmpty) 
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 150),
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                    child: ListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(), // Important: Nested list
+                      children: _predictions.map((p) => ListTile(
+                        title: Text(p.primaryText),
+                        subtitle: Text(p.secondaryText ?? ''),
+                        onTap: () => _selectPlace(p.placeId)
+                      )).toList()
+                    )
+                  ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedYear, 
+                  items: widget.yearRange.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(), 
+                  onChanged: (v) => setState(() => _selectedYear = v),
+                  decoration: InputDecoration(
+                     labelText: 'Lived until', 
+                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))
+                  ),
                 ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                   const SizedBox(width: 8),
-                   ElevatedButton(
-                     onPressed: (_selectedLocation != null && _selectedYear != null) 
-                         ? () { widget.onAdd(loc_model.PastLocation(location: _selectedLocation!, until: _selectedYear!)); Navigator.pop(context); } 
-                         : null, 
-                     child: const Text('Add')
-                   ),
-                ],
-              )
-           ],
+                const SizedBox(height: 32),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                     TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                     const SizedBox(width: 8),
+                     ElevatedButton(
+                       onPressed: (_selectedLocation != null && _selectedYear != null) 
+                           ? () { widget.onAdd(loc_model.PastLocation(location: _selectedLocation!, until: _selectedYear!)); Navigator.pop(context); } 
+                           : null, 
+                       child: const Text('Add')
+                     ),
+                  ],
+                )
+             ],
+           ),
          ),
        ),
     );

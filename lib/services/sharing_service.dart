@@ -1,7 +1,9 @@
+import 'dart:io';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/models/event_data.dart';
-import 'package:diaspora_nearby/models/community_data.dart';
 
 class SharingService {
   SharingService._();
@@ -9,9 +11,22 @@ class SharingService {
 
   // Basic App Invite
   Future<void> shareApp() async {
-    const appLink = 'https://diasporanearby.com/download'; // Placeholder
-    const message = 'Discover and Connect with People from your home country nearby: $appLink';
-    await Share.share(message);
+    const appLink = 'https://diasporanearby.com/download'; 
+    const message = 'For my family and Friends at home and abroad. Join and connect with me in this platform.: $appLink';
+
+    try {
+      // Load logo from assets
+      final byteData = await rootBundle.load('assets/icons/logo-original.png');
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/logo.png');
+      await file.writeAsBytes(byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+
+      // Share image + text
+      await Share.shareXFiles([XFile(file.path)], text: message);
+    } catch (e) {
+      // Fallback to text only if image fails
+      await Share.share(message);
+    }
   }
 
   // Share Event

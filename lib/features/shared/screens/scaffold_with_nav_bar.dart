@@ -11,6 +11,15 @@ import 'package:diaspora_nearby/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/services/sharing_service.dart';
 import 'package:diaspora_nearby/services/location_update_service.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:flutter/foundation.dart'; // [NEW] kIsWeb
+import 'package:flutter_background_service/flutter_background_service.dart'; // [NEW]
+import 'package:diaspora_nearby/services/background_location_service.dart'; // [NEW]
+import 'package:diaspora_nearby/services/proximity_service.dart'; // [NEW]
+import 'package:permission_handler/permission_handler.dart'; // [NEW]
+import 'package:firebase_auth/firebase_auth.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/screens/share_invite_screen.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -31,6 +40,51 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with Wi
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _updateLocation();
+    _trackDailyPoints();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureBackgroundService();
+    });
+  }
+
+  Future<void> _ensureBackgroundService() async {
+     if (kIsWeb) return; 
+     try {
+       await Future.delayed(const Duration(seconds: 1));
+       if (!mounted) return;
+
+       final service = FlutterBackgroundService();
+       final isRunning = await service.isRunning();
+       print('Shell: Background Service status: isRunning=$isRunning'); 
+
+       if (!isRunning) {
+          if (await Permission.location.isGranted) {
+            print('Shell: Permission granted. Initializing and starting service...');
+
+            await BackgroundLocationService.initializeService();
+
+            if (await service.isRunning()) {
+              print('Shell: Service started successfully during initialization.'); 
+            } else {
+              print('Shell: Starting service manually...'); 
+              await service.startService();
+            }
+          } else {
+            print('Shell: Skipping background service start: Permission not granted yet.'); 
+          }
+       } else {
+         print('Shell: Service is already running.'); 
+       }
+       
+       // [DEBUG] Trigger Foreground Proximity Check
+       final user = ref.read(authRepositoryProvider).currentUser;
+       if (user != null) {
+         print('Shell: Triggering FOREGROUND Proximity Check...');
+         await ProximityService().checkAndNotify(user.uid);
+       }
+
+     } catch (e) {
+       print('Error starting background service from Shell: $e'); 
+     }
   }
 
   @override
@@ -43,6 +97,9 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with Wi
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _updateLocation();
+      _trackDailyPoints(); // Check again on resume (e.g. new day)
+      // Re-check background service state on resume
+      _ensureBackgroundService();
     }
   }
 
@@ -50,6 +107,37 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with Wi
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user != null) {
       await LocationUpdateService().updateCurrentLocation(user.uid);
+    }
+  }
+
+  Future<void> _trackDailyPoints() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      await ref.read(pointsServiceProvider).trackDailyOpen(user.uid);
+    }
+  }
+
+  // [NEW] Track navigation actions
+  Future<void> _trackExploration(String actionId) async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref.read(pointsServiceProvider).trackExplorationReward(user.uid, actionId);
+      if (rewarded) {
+        // Trigger Confetti
+        confettiOverlayKey.currentState?.play();
+        
+        // Show Toast/SnackBar (Use a safe context or scaffold messenger)
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(
+               content: Text('🎉 +1 DSP Earned for exploring!'),
+               backgroundColor: Colors.green,
+               duration: Duration(seconds: 2),
+               behavior: SnackBarBehavior.floating,
+             ),
+           );
+        }
+      }
     }
   }
 
@@ -69,6 +157,11 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with Wi
     if (index == 2) branchToNavigate = 4; // Events (Visual 2 -> Branch 4)
     if (index == 1) branchToNavigate = 2; // Nearby (Visual 1 -> Branch 2)
     // Chats (Visual 0 -> Branch 0) is default
+
+    // [NEW] Track Tab Actions
+    if (index == 0) _trackExploration('explore_tab_chats');
+    if (index == 1) _trackExploration('explore_tab_nearby');
+    if (index == 2) _trackExploration('explore_tab_events');
 
     widget.navigationShell.goBranch(
       branchToNavigate,
@@ -124,23 +217,38 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with Wi
     if (currentScreen == 'nearby') {
       final nearbyMode = ref.watch(nearbyViewModeProvider);
       isGlobalView = nearbyMode == ViewMode.global;
-      onToggleView = () => ref.read(nearbyViewModeProvider.notifier).toggleView();
+      onToggleView = () {
+          _trackExploration('action_toggle_view_nearby'); // [NEW]
+          ref.read(nearbyViewModeProvider.notifier).toggleView();
+      };
     } else if (currentScreen == 'events') {
       final eventsMode = ref.watch(eventsViewModeProvider);
       isGlobalView = eventsMode == ViewMode.global;
-      onToggleView = () => ref.read(eventsViewModeProvider.notifier).toggleView();
+      onToggleView = () {
+         _trackExploration('action_toggle_view_events'); // [NEW]
+         ref.read(eventsViewModeProvider.notifier).toggleView();
+      };
     } else if (currentScreen == 'communities') {
        final communitiesMode = ref.watch(communitiesViewModeProvider);
        isGlobalView = communitiesMode == ViewMode.global;
-       onToggleView = () => ref.read(communitiesViewModeProvider.notifier).toggleView();
+       onToggleView = () {
+          _trackExploration('action_toggle_view_communities'); // [NEW]
+          ref.read(communitiesViewModeProvider.notifier).toggleView();
+       };
     } else if (currentScreen == 'radio') {
        final radioMode = ref.watch(radioViewModeProvider);
        isGlobalView = radioMode == ViewMode.global;
-       onToggleView = () => ref.read(radioViewModeProvider.notifier).toggleView();
+       onToggleView = () {
+          _trackExploration('action_toggle_view_radio'); // [NEW]
+          ref.read(radioViewModeProvider.notifier).toggleView();
+       };
     } else if (currentScreen == 'chats') {
        final chatsMode = ref.watch(chatsViewModeProvider);
        isGlobalView = chatsMode == ViewMode.global;
-       onToggleView = () => ref.read(chatsViewModeProvider.notifier).toggleView();
+       onToggleView = () {
+          _trackExploration('action_toggle_view_chats'); // [NEW]
+          ref.read(chatsViewModeProvider.notifier).toggleView();
+       };
     }
 
     return Scaffold(
@@ -158,12 +266,15 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar> with Wi
       body: widget.navigationShell,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-         SharingService.instance.shareToWhatsApp("Join me on Diaspora Nearby! Check it out: https://diasporanearby.com");
-      },
-      shape: const CircleBorder(),
-      // Uses theme's floatingActionButtonTheme (accent color)
-      child: const Icon(LucideIcons.share2, color: Colors.white), 
-    ),
+          _trackExploration('action_invite_friends'); // [NEW]
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const ShareInviteScreen()),
+          );
+        },
+        shape: const CircleBorder(),
+        // Uses theme's floatingActionButtonTheme (accent color)
+        child: const Icon(LucideIcons.share2, color: Colors.white), 
+      ),
       bottomNavigationBar: Builder(
         builder: (context) {
           // Determine visual index

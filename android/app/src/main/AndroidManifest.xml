@@ -37,6 +37,7 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <meta-data android:name="flutter_deep_linking_enabled" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -48,6 +49,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="diasporanearby.com" />
                 <data android:scheme="http" android:host="diasporanearby.com" />
+                <data android:scheme="https" android:host="www.diasporanearby.com" />
+                <data android:scheme="http" android:host="www.diasporanearby.com" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
@@ -100,6 +103,14 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="whatsapp" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="fb" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="fb-messenger" />
         </intent>
     </queries>
 </manifest>

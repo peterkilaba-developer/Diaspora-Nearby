@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 
 /// Service to update user's current location in Firestore.
@@ -28,10 +29,21 @@ class LocationUpdateService {
       }
 
       // Get current position
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 10),
-      );
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (e) {
+        debugPrint('LocationUpdateService: Failed to get current position ($e). Trying last known...');
+        position = await Geolocator.getLastKnownPosition();
+      }
+
+      if (position == null) {
+        debugPrint('LocationUpdateService: No location available.');
+        return;
+      }
 
       // Reverse geocode using native geocoding package
       String formattedAddress = '${position.latitude}, ${position.longitude}';

@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,9 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart' as ja; // Alias to avoid conflict with record
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+import 'package:diaspora_nearby/features/chat/widgets/audio_message_player.dart';
+import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart'; 
 import 'package:diaspora_nearby/models/profile_data.dart'; // [New]
@@ -19,11 +23,12 @@ import 'package:diaspora_nearby/models/profile_data.dart'; // [New]
 class MessageInput extends ConsumerStatefulWidget {
   final String chatId;
   final Function(String, {String? type, Map<String, dynamic>? metadata}) onSendMessage;
-  final Function(List<File>, String type, String? caption) onSendMedia;
-  final Function(File, int duration, {String? caption}) onSendAudio;
-  final Function(File, String? caption) onSendAudioFile;
-  final Function(File, String? caption) onSendDocument;
+  final Function(List<XFile>, String type, String? caption) onSendMedia;
+  final Function(XFile, int duration, {String? caption}) onSendAudio;
+  final Function(XFile, String? caption) onSendAudioFile;
+  final Function(XFile, String? caption) onSendDocument;
   final VoidCallback onSendLocation;
+  final Function(int) onSendDSP; // [NEW]
   final Message? replyingTo;
   final VoidCallback onCancelReply;
   final bool isEnabled;
@@ -37,6 +42,7 @@ class MessageInput extends ConsumerStatefulWidget {
     required this.onSendAudioFile,
     required this.onSendDocument,
     required this.onSendLocation,
+    required this.onSendDSP,
     this.replyingTo,
     required this.onCancelReply,
     this.isEnabled = true,
@@ -50,6 +56,7 @@ class MessageInput extends ConsumerStatefulWidget {
 }
 
 class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBindingObserver {
+  // ... (Keep existing state)
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _canSend = false;
@@ -59,15 +66,17 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
   final ja.AudioPlayer _audioPlayer = ja.AudioPlayer();
   
   bool _isRecording = false;
-  File? _recordedFile; // Kept for immediate recording access
+  XFile? _recordedFile; // Kept for immediate recording access
   Timer? _recordTimer;
   int _recordDurationSeconds = 0;
   
   // Pending Attachment State (Inline Preview)
-  List<File> _pendingAttachments = [];
+  List<XFile> _pendingAttachments = [];
   String? _pendingAttachmentType; // 'image', 'video', 'audio', 'document'
   int _pendingAudioDuration = 0;
+
   bool _isProcessingAttachment = false; // [NEW] Loading state for files
+  int? _pendingDSPAmount; // [NEW] For transfer preview using attachment logic
   
   // Playback State
   bool _isPlaying = false;
@@ -75,7 +84,17 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
   Duration _playbackDuration = Duration.zero;
 
   Timer? _typingTimer;
+
   bool? _lastTypingStatus;
+
+  // Mention System
+  List<ProfileData> _cachedParticipants = [];
+  List<ProfileData> _mentionSuggestions = [];
+  bool _showMentions = false;
+  String _mentionQuery = '';
+  int _mentionTriggerIndex = -1;
+  final Map<String, String> _mentionMappings = {}; // Display Name -> UID
+
 
 
 
@@ -107,6 +126,11 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     _audioPlayer.durationStream.listen((d) {
       if (mounted && d != null) setState(() => _playbackDuration = d);
     });
+    
+    // Fetch participants initially
+    if (widget.participantIds.isNotEmpty) {
+       _fetchParticipants();
+    }
   }
 
   @override
@@ -122,11 +146,45 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     }
   }
 
+
+
+  @override
+  void didUpdateWidget(MessageInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(widget.participantIds, oldWidget.participantIds)) {
+      _fetchParticipants();
+    }
+  }
+
+  Future<void> _fetchParticipants() async {
+    if (widget.participantIds.isEmpty) return;
+    
+    try {
+      final repo = ref.read(profileRepositoryProvider);
+      // Fetch concurrently
+      final futures = widget.participantIds.map((id) => repo.getUserProfile(id));
+      final profiles = await Future.wait(futures);
+      
+      if (mounted) {
+        setState(() {
+          _cachedParticipants = profiles.whereType<ProfileData>().toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching participants for mentions: $e');
+    }
+  }
+
   void _onTextChanged() {
     final text = _controller.text;
+    final selection = _controller.selection;
 
-    
-    // Mention Detection Removed
+    // Check for mentions
+    if (selection.isValid && selection.isCollapsed) {
+       _checkMentions(text, selection.baseOffset);
+    } else {
+       setState(() => _showMentions = false);
+    }
 
     // 3. Normal Typing Status Logic
     final isNotEmpty = text.trim().isNotEmpty;
@@ -146,8 +204,94 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     }
   }
 
+  void _checkMentions(String text, int cursorPosition) {
+    // Find the word being typed
+    int start = cursorPosition - 1;
+    while (start >= 0 && text[start] != '@' && text[start] != ' ' && text[start] != '\n') {
+       start--;
+    }
+    
+    if (start >= 0 && text[start] == '@') {
+       _mentionTriggerIndex = start;
+       _mentionQuery = text.substring(start + 1, cursorPosition).toLowerCase();
+       
+       // Filter suggestions
+       final matches = _cachedParticipants.where((p) {
+          final name = '${p.firstName} ${p.lastName}'.trim().toLowerCase();
+          return name.contains(_mentionQuery);
+       }).toList();
+       
+       setState(() {
+          _showMentions = matches.isNotEmpty;
+          _mentionSuggestions = matches;
+       });
+    } else {
+       if (_showMentions) setState(() => _showMentions = false);
+    }
+  }
+
+  void _insertMention(ProfileData user) {
+     final text = _controller.text;
+     final selection = _controller.selection;
+     
+     if (_mentionTriggerIndex >= 0 && _mentionTriggerIndex < text.length) {
+        final name = '${user.firstName} ${user.lastName}'.trim();
+        final replaceEnd = selection.baseOffset;
+        
+        final newText = text.replaceRange(_mentionTriggerIndex, replaceEnd, '@$name ');
+        
+        _controller.text = newText;
+        _controller.selection = TextSelection.fromPosition(
+           TextPosition(offset: _mentionTriggerIndex + name.length + 2)
+        );
+        
+        // Store mapping for sending
+        if (user.uid != null) {
+           _mentionMappings[name] = user.uid!;
+        }
+        
+        setState(() {
+           _showMentions = false;
+        });
+     }
+  }
 
 
+
+
+  Widget _buildMentionSuggestions(ThemeData theme) {
+     return Container(
+        constraints: const BoxConstraints(maxHeight: 200),
+        decoration: BoxDecoration(
+           color: theme.colorScheme.surface,
+           border: Border(top: BorderSide(color: theme.dividerColor)),
+           boxShadow: [
+              BoxShadow(
+                 color: Colors.black.withOpacity(0.1),
+                 blurRadius: 4,
+                 offset: const Offset(0, -2),
+              ),
+           ],
+        ),
+        child: ListView.builder(
+           shrinkWrap: true,
+           itemCount: _mentionSuggestions.length,
+           itemBuilder: (context, index) {
+              final user = _mentionSuggestions[index];
+              return ListTile(
+                 leading: CircleAvatar(
+                    backgroundImage: user.profileImage != null ? NetworkImage(user.profileImage!) : null,
+                    radius: 16,
+                    child: user.profileImage == null ? Text(user.firstName.isNotEmpty ? user.firstName[0] : '?') : null,
+                 ),
+                 title: Text('${user.firstName} ${user.lastName}'),
+                 onTap: () => _insertMention(user),
+                 dense: true,
+              );
+           },
+        ),
+     );
+  }
 
   void _setTyping(bool isTyping) {
     if (_lastTypingStatus == isTyping) return;
@@ -168,8 +312,13 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
   Future<void> _startRecording() async {
     try {
       if (await _audioRecorder.hasPermission()) {
-        final directory = await getApplicationDocumentsDirectory();
-        final path = '${directory.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        String path;
+        if (kIsWeb) {
+          path = 'voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        } else {
+          final directory = await getApplicationDocumentsDirectory();
+          path = '${directory.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
         
         await _audioRecorder.start(const RecordConfig(), path: path);
         
@@ -201,7 +350,7 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
       _recordTimer?.cancel();
 
       if (path != null) {
-        final file = File(path);
+        final file = XFile(path);
         // Initialize player for review
         await _audioPlayer.setFilePath(path);
 
@@ -235,9 +384,12 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     }
     await _audioPlayer.stop();
     
-    // Delete file if exists and requested
-    if (deleteFile && _recordedFile != null && await _recordedFile!.exists()) {
-      await _recordedFile!.delete();
+    // Delete file if exists and requested (Native only)
+    if (!kIsWeb && deleteFile && _recordedFile != null) {
+      final file = File(_recordedFile!.path);
+      if (await file.exists()) {
+        await file.delete();
+      }
     }
 
     setState(() {
@@ -250,6 +402,7 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
       _pendingAttachments = [];
       _pendingAttachmentType = null;
       _pendingAudioDuration = 0;
+      _pendingDSPAmount = null; // [new]
     });
   }
 
@@ -289,6 +442,11 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
          widget.onSendAudioFile(_pendingAttachments.first, caption);
       } else if (_pendingAttachmentType == 'document') {
          widget.onSendDocument(_pendingAttachments.first, caption);
+      } else if (_pendingAttachmentType == 'dsp_transfer' && _pendingDSPAmount != null) {
+         // [NEW] Trigger DSP Send callback
+         // Note: If onSendDSP only takes amount, we can't send caption. 
+         // Assuming caption is ignored for now or we update callback later.
+         widget.onSendDSP(_pendingDSPAmount!);
       } else {
          // Image/Video
          // Ensure type is not null, default to 'image' if unclear
@@ -307,7 +465,35 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    widget.onSendMessage(text, type: 'text');
+    // Construct mention data
+    List<String>? mentionIds;
+    String? richContent;
+    
+    if (_mentionMappings.isNotEmpty) {
+      String processedText = text;
+      final Set<String> ids = {};
+      
+      _mentionMappings.forEach((name, uid) {
+          if (processedText.contains('@$name')) {
+             ids.add(uid);
+             // Format: @{uid:Name}
+             processedText = processedText.replaceAll('@$name', '@{$uid:$name}');
+          }
+      });
+      
+      if (ids.isNotEmpty) {
+         mentionIds = ids.toList();
+         richContent = processedText;
+      }
+    }
+
+    widget.onSendMessage(text, type: 'text', metadata: {
+       if (mentionIds != null) 'mentions': mentionIds,
+       if (richContent != null) 'richContent': richContent,
+    });
+    
+    _mentionMappings.clear();
+    setState(() => _showMentions = false);
     _controller.clear();
     
     _typingTimer?.cancel();
@@ -317,9 +503,12 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     }
   }
 
+
+
   void _showAttachmentModal() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // [Fix] Allow modal to resize with keyboard
       backgroundColor: Colors.transparent,
       builder: (context) => _AttachmentPickerModal(
         onPickImage: () => _pickMedia(ImageSource.gallery, 'image'),
@@ -331,6 +520,15 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
           Navigator.pop(context);
           widget.onSendLocation();
         },
+        onPickDSP: (amount) {
+           Navigator.pop(context);
+           setState(() {
+              _pendingAttachments = [XFile('')]; // Dummy file to satisfy hasAttachment logic
+              _pendingAttachmentType = 'dsp_transfer';
+              _pendingDSPAmount = amount;
+              _isProcessingAttachment = false;
+           });
+        },
       ),
     );
   }
@@ -341,27 +539,29 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     setState(() => _isProcessingAttachment = true);
     
     final picker = ImagePicker();
-    List<File> files = [];
+    List<XFile> files = [];
 
     try {
       if (type == 'image') {
         if (source == ImageSource.camera) {
            final photo = await picker.pickImage(
              source: source,
-             imageQuality: 70,
-             maxWidth: 1920,
+             imageQuality: 85,
+             maxWidth: 1024,
+             maxHeight: 1024,
            );
-           if (photo != null) files.add(File(photo.path));
+           if (photo != null) files.add(photo);
         } else {
            final images = await picker.pickMultiImage(
-             imageQuality: 70,
-             maxWidth: 1920,
+             imageQuality: 85,
+             maxWidth: 1024,
+             maxHeight: 1024,
            );
-           files.addAll(images.map((i) => File(i.path)));
+           files.addAll(images);
         }
       } else {
         final video = await picker.pickVideo(source: source);
-        if (video != null) files.add(File(video.path));
+        if (video != null) files.add(video);
       }
 
       if (files.isNotEmpty && mounted) {
@@ -397,7 +597,12 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
       );
       if (result != null && result.files.single.path != null && mounted) {
         setState(() {
-          _pendingAttachments = [File(result.files.single.path!)];
+          // Handle web (bytes) vs native (path)
+          if (kIsWeb && result.files.single.bytes != null) {
+             _pendingAttachments = [XFile.fromData(result.files.single.bytes!, name: result.files.single.name)];
+          } else {
+             _pendingAttachments = [XFile(result.files.single.path!, name: result.files.single.name)];
+          }
           _pendingAttachmentType = 'document';
           _isProcessingAttachment = false;
         });
@@ -418,7 +623,11 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
       final result = await fp.FilePicker.platform.pickFiles(type: fp.FileType.audio);
       if (result != null && result.files.single.path != null && mounted) {
         setState(() {
-          _pendingAttachments = [File(result.files.single.path!)];
+          if (kIsWeb && result.files.single.bytes != null) {
+             _pendingAttachments = [XFile.fromData(result.files.single.bytes!, name: result.files.single.name)];
+          } else {
+             _pendingAttachments = [XFile(result.files.single.path!, name: result.files.single.name)];
+          }
           _pendingAttachmentType = 'audio_file';
           _isProcessingAttachment = false;
         });
@@ -448,7 +657,9 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.replyingTo != null) _buildReplyPreview(theme),
+
         if (hasAttachment) _buildAttachmentPreview(theme),
+        if (_showMentions) _buildMentionSuggestions(theme),
 
         
         Container(
@@ -571,14 +782,18 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
             child: Builder(
               builder: (context) {
                 switch (_pendingAttachmentType) {
-                  case 'audio':
-                  case 'audio_file':
-                    return _buildInlineAudioPlayer(theme);
-                  case 'document':
-                    return _buildInlineDocumentPreview(theme);
+                case 'dsp_transfer':
+                    return _buildInlineDSPPreview(theme);
                   case 'image':
                   case 'video':
                     return _buildInlineMediaPreview(theme);
+                  case 'audio':
+                  case 'audio_file':
+                     return AudioMessagePlayer(
+                        audioUrl: _pendingAttachments.first.path,
+                        durationSeconds: _pendingAudioDuration, // Will be 0 for picked files, player handles it
+                        isOwn: true,
+                     );
                   default:
                     return const SizedBox.shrink();
                 }
@@ -603,6 +818,52 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
               constraints: const BoxConstraints(),
               tooltip: 'Remove attachment',
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineDSPPreview(ThemeData theme) {
+    if (_pendingDSPAmount == null) return const SizedBox.shrink();
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+           Container(
+             padding: const EdgeInsets.all(8),
+             decoration: BoxDecoration(
+               color: theme.colorScheme.primary,
+               shape: BoxShape.circle,
+             ),
+             child: const Icon(LucideIcons.coins, color: Colors.white, size: 16),
+           ),
+           const SizedBox(width: 12),
+           Expanded(
+             child: Column(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Text(
+                   'Sending ${_pendingDSPAmount} DSP',
+                   style: theme.textTheme.titleMedium?.copyWith(
+                     color: theme.colorScheme.primary,
+                     fontWeight: FontWeight.bold,
+                   ),
+                 ),
+                 Text(
+                   'Transfer ready',
+                   style: theme.textTheme.bodySmall?.copyWith(
+                     color: theme.colorScheme.onSurfaceVariant,
+                   ),
+                 ),
+               ],
+             ),
+           ),
         ],
       ),
     );
@@ -686,12 +947,19 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
                        child: const Icon(LucideIcons.play, size: 24, color: Colors.white),
                      )
                    else
-                     Image.file(
-                       file,
-                       width: 60,
-                       height: 60,
-                       fit: BoxFit.cover,
-                     ),
+                     kIsWeb
+                       ? Image.network(
+                           file.path,
+                           width: 60,
+                           height: 60,
+                           fit: BoxFit.cover,
+                         )
+                       : Image.file(
+                           File(file.path),
+                           width: 60,
+                           height: 60,
+                           fit: BoxFit.cover,
+                         ),
                   if (_pendingAttachmentType == 'video')
                     Container(
                       padding: const EdgeInsets.all(4),
@@ -770,6 +1038,9 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
     } else if (replyingTo.type == 'document') {
       contentText = replyingTo.documentName ?? 'Document';
       mediaIcon = LucideIcons.fileText;
+    } else if (replyingTo.type == 'dsp_transfer') {
+      contentText = 'DSP Transfer';
+      mediaIcon = LucideIcons.coins;
     }
 
     return Container(
@@ -848,13 +1119,15 @@ class _MessageInputState extends ConsumerState<MessageInput> with WidgetsBinding
   }
 }
 
-class _AttachmentPickerModal extends StatelessWidget {
+
+class _AttachmentPickerModal extends ConsumerStatefulWidget {
   final VoidCallback onPickImage;
   final VoidCallback onPickCamera;
   final VoidCallback onPickVideo;
   final VoidCallback onPickDocument;
   final VoidCallback onPickAudio;
   final VoidCallback onPickLocation;
+  final Function(int) onPickDSP; // Renamed to ensure clarity it's just picking
 
   const _AttachmentPickerModal({
     required this.onPickImage,
@@ -863,61 +1136,253 @@ class _AttachmentPickerModal extends StatelessWidget {
     required this.onPickDocument,
     required this.onPickAudio,
     required this.onPickLocation,
+    required this.onPickDSP,
   });
+
+  @override
+  ConsumerState<_AttachmentPickerModal> createState() => _AttachmentPickerModalState();
+}
+
+class _AttachmentPickerModalState extends ConsumerState<_AttachmentPickerModal> {
+  final TextEditingController _amountController = TextEditingController();
+  int _currentBalance = 0;
+  bool _isLoadingBalance = true;
+  int _inputAmount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBalance();
+    _amountController.addListener(() {
+        final val = int.tryParse(_amountController.text) ?? 0;
+        if (mounted) setState(() => _inputAmount = val);
+    });
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchBalance() async {
+    try {
+      final authUser = ref.read(authRepositoryProvider).currentUser;
+      if (authUser != null) {
+        final repo = ref.read(pointsRepositoryProvider);
+        final points = await repo.getUserPoints(authUser.uid);
+        if (mounted) {
+           setState(() {
+             _currentBalance = points?.availablePoints ?? 0;
+             _isLoadingBalance = false;
+           });
+        }
+      }
+    } catch (e) {
+       debugPrint('Error fetching balance: $e');
+       if (mounted) setState(() => _isLoadingBalance = false);
+    }
+  }
+
+  void _handlePickDSP() {
+     if (_inputAmount <= 0) return;
+     if (_inputAmount > _currentBalance) return;
+     
+     widget.onPickDSP(_inputAmount);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
+    // Projected balance calculation
+    final remaining = _currentBalance - _inputAmount;
+    final isError = _inputAmount > _currentBalance;
+    final isZero = _inputAmount <= 0;
+    
+    // [Fix] Handle keyboard
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return SafeArea(
       child: Container(
         decoration: BoxDecoration(
           color: theme.scaffoldBackgroundColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40), // Added bottom padding for extra safety
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Upload', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildButton(context, LucideIcons.camera, 'Camera', onPickCamera),
-                _buildButton(context, LucideIcons.image, 'Photo', onPickImage),
-                _buildButton(context, LucideIcons.video, 'Video', onPickVideo),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildButton(context, LucideIcons.music, 'Audio', onPickAudio),
-                _buildButton(context, LucideIcons.fileText, 'Document', onPickDocument),
-                _buildButton(context, LucideIcons.mapPin, 'Location', onPickLocation),
-              ],
-            ),
-          ],
+        // Add bottomInset to padding to push content up
+        padding: EdgeInsets.fromLTRB(8, 20, 8, 20 + bottomInset), 
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Upload & Actions', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildButton(context, LucideIcons.camera, 'Camera', widget.onPickCamera),
+                  _buildButton(context, LucideIcons.image, 'Photo', widget.onPickImage),
+                  _buildButton(context, LucideIcons.video, 'Video', widget.onPickVideo),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildButton(context, LucideIcons.music, 'Audio', widget.onPickAudio),
+                  _buildButton(context, LucideIcons.fileText, 'Document', widget.onPickDocument),
+                  _buildButton(context, LucideIcons.mapPin, 'Location', widget.onPickLocation),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+              Divider(color: theme.dividerColor, height: 1),
+              const SizedBox(height: 16),
+              
+              // [New] Bottom DSP Row - Wrapped in Light Background
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                     // Layout: 3 Columns
+                     IntrinsicHeight(
+                       child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch, // Match heights
+                          children: [
+                             // LEFT: Balance
+                             Expanded(
+                               flex: 2,
+                               child: Column(
+                                 mainAxisAlignment: MainAxisAlignment.center,
+                                 children: [
+                                    Text(
+                                      'Balance', 
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                        fontSize: 10,
+                                      )
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _isLoadingBalance ? '...' : '$remaining',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: isError ? theme.colorScheme.error : theme.colorScheme.onSurface,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 2), 
+                                    Text(
+                                       'DSP',
+                                       style: theme.textTheme.labelSmall?.copyWith(
+                                          fontSize: 8,
+                                          color: theme.colorScheme.primary
+                                       ),
+                                    ),
+                                 ],
+                               ),
+                             ),
+                             
+                             const SizedBox(width: 8),
+
+                             // CENTER: Input (Styled Box)
+                             Expanded(
+                               flex: 3,
+                               child: Container(
+                                 alignment: Alignment.center,
+                                 decoration: BoxDecoration(
+                                    color: theme.colorScheme.surface, // Input BG
+                                    borderRadius: BorderRadius.circular(12),
+                                 ),
+                                 child: TextField(
+                                   controller: _amountController,
+                                   keyboardType: TextInputType.number,
+                                   textAlign: TextAlign.center,
+                                   style: theme.textTheme.headlineSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.primary,
+                                   ),
+                                   decoration: InputDecoration(
+                                      hintText: '0',
+                                      hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3)),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 8), // Minimal padding
+                                      isDense: true,
+                                   ),
+                                 ),
+                               ),
+                             ),
+
+                             const SizedBox(width: 8),
+
+                             // RIGHT: Action
+                             Expanded(
+                                flex: 2,
+                                child: Center(
+                                   child: Material(
+                                      color: (isZero || isError || _isLoadingBalance) 
+                                         ? theme.disabledColor 
+                                         : Colors.green,
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                         onTap: (isZero || isError || _isLoadingBalance) ? null : _handlePickDSP,
+                                         customBorder: const CircleBorder(),
+                                         child: Container(
+                                            width: 48,
+                                            height: 48,
+                                            alignment: Alignment.center,
+                                            child: const Icon(LucideIcons.arrowRight, color: Colors.white),
+                                         ),
+                                      ),
+                                   ),
+                                ),
+                             ),
+                          ],
+                       ),
+                     ),
+                     
+                     const SizedBox(height: 12),
+                     // Label centered at bottom
+                     Text(
+                       'Enter Amount of DSP to Send',
+                       style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 10,
+                          color: theme.colorScheme.primary,
+                       ),
+                       textAlign: TextAlign.center,
+                     ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildButton(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+  Widget _buildButton(BuildContext context, IconData icon, String label, VoidCallback onTap, {Color? color}) {
     final theme = Theme.of(context);
+    final iconColor = color ?? theme.colorScheme.primary;
+    
     return InkWell(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
+            width: 56, 
+            height: 56,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: theme.colorScheme.primary),
+            child: Icon(icon, color: iconColor, size: 28),
           ),
           const SizedBox(height: 8),
           Text(label, style: theme.textTheme.bodySmall),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -324,10 +325,11 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                   
                   // DEBUG: Reset Database Button
                   // Only visible in debug mode or for testing convenience
-                  const SizedBox(height: 24),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () async {
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 24),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: () async {
                         // Default selections
                         final Map<String, bool> targets = {
                           'Users': true,
@@ -337,6 +339,9 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                           'Radio Health': true,
                           'Chats (RTDB)': true,
                           'Storage (Photos)': true,
+                          'Points & Referrals': true,
+                          'Feedback History': true,
+                          'Proximity Cooldown': true,
                           'Empty Communities': false, // Default false to avoid accidental deletion of legit empty ones if any (though rule says none)
                         };
 
@@ -380,6 +385,9 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                                       if (targets['Radio Health']!) result.add('radio');
                                       if (targets['Chats (RTDB)']!) result.add('chats');
                                       if (targets['Storage (Photos)']!) result.add('storage');
+                                      if (targets['Points & Referrals']!) result.add('points');
+                                      if (targets['Feedback History']!) result.add('feedback');
+                                      if (targets['Proximity Cooldown']!) result.add('proximity');
                                       if (targets['Empty Communities']!) result.add('empty_communities');
                                       
                                       Navigator.pop(context, result);
@@ -411,29 +419,57 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                             }
                             
                             if (selected.isNotEmpty) {
-                               await CommunityService().hardResetDatabase(resetTargets: selected);
+                               final result = await CommunityService().hardResetDatabase(resetTargets: selected);
+                               
+                               if (context.mounted) {
+                                  Navigator.pop(context); // Pop loading
+                                  
+                                  final succeeded = result['success'] ?? [];
+                                  final failed = result['failed'] ?? [];
+                                  
+                                  if (failed.isEmpty) {
+                                     ScaffoldMessenger.of(context).showSnackBar(
+                                       SnackBar(content: Text('Reset Complete: ${succeeded.join(", ")}'), backgroundColor: Colors.green),
+                                     );
+                                  } else {
+                                     // Partial Success
+                                     final sb = StringBuffer();
+                                     if (succeeded.isNotEmpty) sb.writeln('Deleted: ${succeeded.join(", ")}');
+                                     sb.write('Failed: ${failed.join(", ")}');
+                                     
+                                     ScaffoldMessenger.of(context).showSnackBar(
+                                       SnackBar(content: Text(sb.toString()), backgroundColor: Colors.orange),
+                                     );
+                                  }
+                               }
+                            } else {
+                               if (context.mounted) Navigator.pop(context); // Pop loading if nothing selected
                             }
-                                
-                            if (context.mounted) {
-                              Navigator.pop(context); // Pop loading
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Reset complete for: ${selected.join(", ")}')),
-                              );
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context); // Pop loading
+                            
+                            // Check for partial success message from service if thrown (though we switched to map, failsafe)
+                            String message = 'Error: $e';
+                            Color color = Colors.red;
+                            
+                            if (e.toString().contains('Partial success')) {
+                              message = 'Reset Complete (Local Data cleared).\nRemote Data skipped (Not logged in).';
+                              color = Colors.orange;
                             }
-                          } catch (e) {
-                            if (context.mounted) {
-                              Navigator.pop(context); // Pop loading
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e')),
-                              );
-                            }
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(message), backgroundColor: color),
+                            );
                           }
                         }
-                      },
+                      }
+                    },
                       icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
                       label: const Text('Reset App Data (Debug)', style: TextStyle(color: Colors.red)),
                     ),
                   ),
+                  ],
                   
                   const SizedBox(height: 24),
                 ],

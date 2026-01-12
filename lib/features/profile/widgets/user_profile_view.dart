@@ -13,8 +13,13 @@ import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/utils/location_utils.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/models/user_points.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
-class UserProfileView extends StatelessWidget {
+class UserProfileView extends ConsumerWidget {
   final ProfileData profile;
   final bool isSelf;
   final bool isEnforced;
@@ -37,7 +42,7 @@ class UserProfileView extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text(isSelf ? 'My Profile' : 'Profile'),
@@ -53,7 +58,7 @@ class UserProfileView extends StatelessWidget {
       ),
       body: _safelyBuild(
         () => SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 40, left: 8, right: 8),
+          padding: AppTheme.pagePaddingEdgeInsets.copyWith(bottom: 40),
           child: Column(
             children: [
                 // User Card (Safe)
@@ -67,6 +72,124 @@ class UserProfileView extends StatelessWidget {
                   isStatic: true, // We are in View mode
                   distanceKm: distanceKm,
                 ),
+              
+              const SizedBox(height: 16),
+
+              // Diaspora Economy Section (Only for Self)
+              // Diaspora Economy Section (Only for Self)
+              if (isSelf) ...[
+                _safelyBuild(() => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(LucideIcons.wallet, size: 20, color: Theme.of(context).primaryColor),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Diaspora Economy Ecosystem',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ), label: 'EconomyHeader'),
+                
+                _safelyBuild(() => Column(
+                    children: [
+                      // Card 1: DSP Points
+                      if (isSelf)
+                        StreamBuilder<UserPoints?>(
+                          stream: ref.watch(pointsRepositoryProvider).streamUserPoints(profile.uid!),
+                          builder: (context, snapshot) {
+                            final points = snapshot.data?.availablePoints ?? 0;
+                            final formattedPoints = NumberFormat('#,###').format(points);
+                            return _buildEconomyCard(
+                              context,
+                              icon: LucideIcons.coins,
+                              title: 'Diaspora Social Points - DSP',
+                              description: 'Earn & convert to tokens',
+                              color: AppTheme.accent,
+                              onTap: () => context.push('/dsp/points'),
+                              trailing: Text(
+                                '$formattedPoints DSP',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.accent,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      else
+                        _buildEconomyCard(
+                          context,
+                          icon: LucideIcons.coins,
+                          title: 'Diaspora Social Points - DSP',
+                          description: 'Earn & convert to tokens',
+                          color: AppTheme.accent,
+                          onTap: () => context.push('/dsp/points'),
+                        ),
+                      const SizedBox(height: 12),
+                      // Card 1.5: Diaspora Crypto Currency
+                      _buildEconomyCard(
+                        context,
+                        icon: LucideIcons.bitcoin, // Fallback icon
+                        imagePath: 'assets/icons/logo-original.png',
+                        title: 'Diaspora Crypto Currency - Diaspora \$DSP',
+                        description: 'Trade & Exchange',
+                        color: AppTheme.accent,
+                        isComingSoon: true,
+                        onTap: () => context.push('/dsp/crypto'), // Navigate to new screen
+                      ),
+                      const SizedBox(height: 12),
+                      // Card 2: Remittances
+                      _buildEconomyCard(
+                        context,
+                        icon: LucideIcons.send,
+                        title: 'International Remittances',
+                        description: 'Send money to ${profile.homeCountry ?? 'home'}',
+                        color: AppTheme.accent,
+                        isComingSoon: true,
+                        onTap: () => context.push('/dsp/remittances'),
+                      ),
+                      const SizedBox(height: 12),
+                      // Card 3: Bereavement
+                      _buildEconomyCard(
+                        context,
+                        icon: LucideIcons.heart,
+                        title: 'Bereavement Community Fund',
+                        description: 'Repatriation to ${profile.homeCountry ?? 'home'}',
+                        color: AppTheme.accent, // Standardized to Sage
+                        isComingSoon: true,
+                        onTap: () => context.push('/dsp/bereavement'),
+                      ),
+                      const SizedBox(height: 12),
+                      // Card 4: Airline Portal
+                      _buildEconomyCard(
+                        context,
+                        icon: LucideIcons.plane,
+                        title: 'International Air Flight Portal',
+                        description: 'Discounted flights',
+                        color: AppTheme.accent, // Standardized to Sage
+                        isComingSoon: true,
+                        onTap: () => context.push('/dsp/airline'),
+                      ),
+                      const SizedBox(height: 12),
+                      // Card 5: DFDI
+                      _buildEconomyCard(
+                        context,
+                        icon: LucideIcons.trendingUp,
+                        title: 'Diaspora Foreign Direct Investments - DFDI',
+                        description: 'Invest in ${profile.homeCountry ?? 'home country'}',
+                        color: AppTheme.accent, // Standardized to Sage
+                        isComingSoon: true,
+                        onTap: () => context.push('/dsp/dfdi'),
+                      ),
+                    ],
+                  ), label: 'DiasporaEconomyCards'),
+                const SizedBox(height: 16),
+              ],
               
               const SizedBox(height: 16),
 
@@ -219,32 +342,14 @@ class UserProfileView extends StatelessWidget {
       return builder();
     } catch (e, stack) {
       debugPrint('Error rendering $label: $e');
-      // Show visible error in debug/release to identify the culprit
-      return Container(
-        padding: const EdgeInsets.all(8),
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.1),
-          border: Border.all(color: Colors.red.withOpacity(0.5)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Error in $label', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 12)),
-            const SizedBox(height: 4),
-            Text(e.toString(), style: const TextStyle(color: Colors.red, fontSize: 10), maxLines: 3, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-      );
+      return const SizedBox.shrink();
     }
   }
 
   Widget _buildSectionContainer(BuildContext context, {required String title, IconData? icon, required Widget child}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.cardPadding),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
@@ -381,7 +486,6 @@ class UserProfileView extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -535,19 +639,34 @@ class UserProfileView extends StatelessWidget {
       future: future,
       builder: (context, snapshot) {
          if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
-         return _buildSectionContainer(
-           context,
-           title: title,
-           icon: icon,
-           child: Column(
-             children: snapshot.data!.map((item) => Padding(
+         return Column(
+           children: [
+             // Header
+             Padding(
+               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+               child: Row(
+                 children: [
+                   Icon(icon, size: 20, color: Theme.of(context).primaryColor),
+                   const SizedBox(width: 8),
+                   Expanded(
+                     child: Text(
+                       title,
+                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+             // Content
+             ...snapshot.data!.map((item) => Padding(
                padding: const EdgeInsets.only(bottom: 8),
                child: _safelyBuild(
                  () => _buildRichCard<T>(context, item, builder),
                  label: 'Item ${item.hashCode}'
                ),
-             )).toList(),
-           ),
+             )),
+             const SizedBox(height: 8),
+           ],
          );
       },
     );
@@ -560,7 +679,7 @@ class UserProfileView extends StatelessWidget {
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+              // Removed Border.all
             ),
             child: Row(
                children: [
@@ -606,7 +725,7 @@ class UserProfileView extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                // Removed Border.all
               ),
               child: Row(
                  children: [
@@ -646,7 +765,7 @@ class UserProfileView extends StatelessWidget {
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+              // Removed Border.all
             ),
             child: Row(
                children: [
@@ -697,16 +816,31 @@ class UserProfileView extends StatelessWidget {
 
          if (upcomingEvents.isEmpty) return const SizedBox.shrink();
 
-         return _buildSectionContainer(
-           context,
-           title: 'Upcoming Events',
-           icon: LucideIcons.calendar,
-           child: Column(
-             children: upcomingEvents.map((e) => Padding(
+         return Column(
+           children: [
+             // Header
+             Padding(
+               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+               child: Row(
+                 children: [
+                   Icon(LucideIcons.calendar, size: 20, color: Theme.of(context).primaryColor),
+                   const SizedBox(width: 8),
+                   const Expanded(
+                     child: Text(
+                       'Upcoming Events',
+                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+             // Content
+             ...upcomingEvents.map((e) => Padding(
                padding: const EdgeInsets.only(bottom: 12),
                child: _buildEventCard(context, e)
-             )).toList(),
-           ),
+             )),
+             const SizedBox(height: 8),
+           ],
          );
       },
     );
@@ -737,7 +871,6 @@ class UserProfileView extends StatelessWidget {
        decoration: BoxDecoration(
          color: Theme.of(context).cardColor,
          borderRadius: BorderRadius.circular(16),
-         border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
        ),
        child: Row(
          children: [
@@ -792,6 +925,96 @@ class UserProfileView extends StatelessWidget {
              ),
          ],
        ),
+      ),
+    );
+  }
+
+  Widget _buildEconomyCard(
+    BuildContext context, {
+    required IconData icon,
+    String? imagePath, // [NEW] Optional image
+    required String title,
+    required String description,
+    required Color color,
+    required VoidCallback onTap,
+    bool isComingSoon = false,
+    Widget? trailing,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: Theme.of(context).brightness == Brightness.dark
+                ? [color.withOpacity(0.15), color.withOpacity(0.05)]
+                : [color.withOpacity(0.1), color.withOpacity(0.05)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                  Container(
+                    padding: imagePath != null ? EdgeInsets.zero : const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: imagePath != null ? Colors.transparent : color.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: imagePath != null 
+                        ? Image.asset(imagePath, width: 45, height: 45, fit: BoxFit.contain, color: AppTheme.accent)
+                        : Icon(icon, color: color, size: 24),
+                  ),
+                if (isComingSoon)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey.shade800
+                          : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Coming Soon',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                else if (trailing != null)
+                  trailing,
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).hintColor,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

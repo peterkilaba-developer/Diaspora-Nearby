@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:diaspora_nearby/utils/pwa_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -17,6 +19,8 @@ import 'package:diaspora_nearby/services/sharing_service.dart';
 import 'package:diaspora_nearby/features/organization/screens/organization_management_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/settings/screens/privacy_settings_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/more/screens/feedback_screen.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 
 class MoreScreen extends ConsumerStatefulWidget {
   const MoreScreen({super.key});
@@ -45,6 +49,31 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
     });
   }
 
+  // [NEW] Track exploration actions
+  Future<void> _trackExploration(String actionId) async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref.read(pointsServiceProvider).trackExplorationReward(user.uid, actionId);
+      if (rewarded) {
+        // Trigger Confetti
+        confettiOverlayKey.currentState?.play();
+        
+        // Show Toast
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(
+               content: Text('🎉 +1 DSP Earned for exploring!'),
+               backgroundColor: Colors.green,
+               duration: Duration(seconds: 2),
+               behavior: SnackBarBehavior.floating,
+             ),
+           );
+        }
+      }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
 
@@ -71,66 +100,98 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     
-                    // PWA Install Button (Stub/Adapted)
-                    // React has PWA install card. In pure Flutter mobile, we don't need this usually.
-                    // But for parity, if targeting Web, we might. 
-                    // Proceeding to omit PWA install unless user asks, focusing on menu sections.
-                    
-                    // --- Quick Actions ---
-                    _buildSectionHeader('QUICK ACTIONS'),
+                    // --- Web App (PWA) ---
+                    if (kIsWeb) ...[
+                      _buildSectionHeader('WEB APP'),
+                       GlassContainer(
+                        padding: EdgeInsets.zero,
+                        child: _buildMenuItem(
+                          icon: LucideIcons.download, 
+                          iconColor: theme.colorScheme.primary, 
+                          title: 'Install as App',
+                          subtitle: 'Add Diaspora to your home screen',
+                          onTap: () async {
+                             final result = await PwaUtils.promptInstall();
+                             if (result) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Installation starting...')));
+                             } else {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Installation not supported or already installed. Try via browser settings.')));
+                             }
+                          }
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
-                     GlassContainer(
+                    // --- Quick Actions ---
+                    _buildSectionHeader('QUICK ACTIONS'), // Invite, Feedback, Profile, Events, Org
+                    GlassContainer(
                       padding: EdgeInsets.zero,
                       child: Column(
                         children: [
-                           // Moved "Invite" to top and renamed
+                           // 1. Invite
                            _buildMenuItem(
                             icon: LucideIcons.share2, 
                             iconColor: const Color(0xFF25D366), 
                             title: 'Invite family and friends',
                             subtitle: 'Share the app with others',
                             onTap: () {
+                               _trackExploration('action_more_invite_friends');
                                SharingService.instance.shareApp();
                             }
                            ),
-
-                           if (userProfile?.isAdmin == true)
-                             _buildMenuItem(
-                               icon: LucideIcons.layoutDashboard,
-                               iconColor: Colors.deepPurple,
-                               title: 'Admin Dashboard',
-                               subtitle: 'Manage app, users, and content',
-                               onTap: () {
-                                 context.push('/admin');
-                               },
-                             ),
-
+                           
+                           // 2. Feedback
                            _buildMenuItem(
-                            icon: LucideIcons.bell,
-                            iconColor: Colors.blue,
-                            title: 'Notifications',
-                            subtitle: 'View all your notifications',
-                            onTap: () {
-                               context.push('/notifications');
-                            }
+                            icon: LucideIcons.messageSquare,
+                            iconColor: Colors.indigo,
+                            title: 'Send Feedback',
+                            subtitle: 'Help us improve the app',
+                             onTap: () {
+                                _trackExploration('action_more_feedback');
+                                Navigator.of(context).push(MaterialPageRoute(
+                                 builder: (_) => const FeedbackScreen(),
+                               ));
+                             }
                            ),
 
+                           // 3. Profile
+                             _buildMenuItem(
+                               icon: LucideIcons.user,
+                               iconColor: Colors.green,
+                               title: 'My Profile',
+                               subtitle: 'Update your personal information',
+                               onTap: () {
+                               _trackExploration('action_more_my_profile');
+                                 final uid = userProfile?.uid ?? ref.read(authRepositoryProvider).currentUser?.uid;
+                                 if (uid != null) {
+                                    context.push('/profile/$uid'); 
+                                 } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile not found')));
+                                 }
+                               }
+                             ),
+
+                           // 4. Events
                            _buildMenuItem(
                             icon: LucideIcons.plus,
                             iconColor: theme.colorScheme.primary,
-                            title: 'Events', // Renamed
+                            title: 'Events',
                             subtitle: 'Organize or manage community events',
                             onTap: () async {
+                               _trackExploration('action_more_events_create');
                                context.push('/events/create');
                             }
                            ),
 
+                           // 5. Organizations
                            _buildMenuItem(
                             icon: LucideIcons.building2,
                             iconColor: Colors.blue.shade600,
                             title: 'Organizations',
                             subtitle: 'Register, browse or manage organizations',
                             onTap: () {
+                               _trackExploration('action_more_orgs_menu');
                                _showOrganizationsMenu(context, theme);
                             }
                            ),
@@ -140,27 +201,12 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                     const SizedBox(height: 16),
 
                     // --- Your Account ---
-                    _buildSectionHeader('YOUR ACCOUNT'),
+                    _buildSectionHeader('YOUR ACCOUNT'), // Notifications, Privacy, Settings
                     GlassContainer(
                        padding: EdgeInsets.zero,
                        child: Column(
                          children: [
-                             _buildMenuItem(
-                               icon: LucideIcons.user,
-                               iconColor: Colors.green,
-                               title: 'My Profile',
-                               subtitle: 'Update your personal information',
-                               onTap: () {
-                                 final uid = userProfile?.uid ?? ref.read(authRepositoryProvider).currentUser?.uid;
-                                 if (uid != null) {
-                                    context.push('/profile/$uid'); 
-                                 } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile not found')));
-                                 }
-                               }
-                             ),
-                             
-                             // Moved Push Notifications here
+                             // 1. Notifications
                              _buildMenuItem(
                                icon: LucideIcons.bell,
                                iconColor: Colors.purple,
@@ -173,8 +219,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                                }
                              ),
 
-                             // Removed redundant "Manage Organizations"
-
+                           // 2. Privacy
                            _buildMenuItem(
                              icon: LucideIcons.shield,
                              iconColor: Colors.blue.shade600,
@@ -191,12 +236,14 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                              }
                            ),
 
+                           // 3. Settings
                            _buildMenuItem(
                              icon: LucideIcons.settings,
                              iconColor: Colors.grey,
                              title: 'Settings',
                              subtitle: 'App preferences and notifications',
                              onTap: () {
+                                _trackExploration('action_more_settings');
                                 Navigator.of(context).push(MaterialPageRoute(
                                  builder: (_) => const PlaceholderScreen(
                                    title: 'Settings', 
@@ -211,40 +258,13 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // --- Support & Feedback ---
-                    _buildSectionHeader('SUPPORT & FEEDBACK'),
+                    // --- Support ---
+                    _buildSectionHeader('SUPPORT'), // Rate App, Help Center
                     GlassContainer(
                       padding: EdgeInsets.zero,
                       child: Column(
                         children: [
-                          _buildMenuItem(
-                            icon: LucideIcons.helpCircle,
-                            iconColor: Colors.cyan,
-                            title: 'Help Center',
-                            subtitle: 'Get help and find answers',
-                             onTap: () {
-                                Navigator.of(context).push(MaterialPageRoute(
-                                 builder: (_) => const PlaceholderScreen(
-                                   title: 'Help Center', 
-                                   icon: LucideIcons.helpCircle,
-                                   message: 'Find answers to common questions or contact support.\n\n(Coming Soon)',
-                                 )
-                               ));
-                             }
-                           ),
-
-                           _buildMenuItem(
-                            icon: LucideIcons.messageSquare,
-                            iconColor: Colors.indigo,
-                            title: 'Send Feedback',
-                            subtitle: 'Help us improve the app',
-                             onTap: () {
-                                Navigator.of(context).push(MaterialPageRoute(
-                                 builder: (_) => const FeedbackScreen(), // Linked FeedbackScreen
-                               ));
-                             }
-                           ),
-
+                           // 1. Rate App
                            _buildMenuItem(
                             icon: LucideIcons.star,
                             iconColor: Colors.orange, 
@@ -260,52 +280,21 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                                ));
                              }
                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // --- Chat Management ---
-                    _buildSectionHeader('CHAT MANAGEMENT'),
-                     GlassContainer(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
+
+                          // 2. Help Center
                           _buildMenuItem(
-                            icon: LucideIcons.trash2,
-                            iconColor: const Color(0xFFEF4444), // Red-500
-                            title: 'Delete all chats',
-                             subtitle: _deletableChatsCount > 0 
-                                ? '$_deletableChatsCount chats can be deleted' 
-                                : 'No chats to delete',
-                             subtitleColor: _deletableChatsCount > 0 
-                                ? theme.colorScheme.error 
-                                : theme.disabledColor,
-                             onTap: () async {
-                                 if (_deletableChatsCount == 0) return;
-
-                                 final confirm = await showDialog<bool>(
-                                   context: context,
-                                   builder: (context) => AlertDialog(
-                                     title: const Text('Delete All Chats'),
-                                     content: Text('Are you sure you want to delete these $_deletableChatsCount chats? This will remove them from your list. Community chats will remain.'),
-                                     actions: [
-                                       TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                       TextButton(
-                                          onPressed: () => Navigator.pop(context, true), 
-                                          child: const Text('Delete', style: TextStyle(color: Colors.red))
-                                       ),
-                                     ],
-                                   )
-                                 );
-
-                                 if (confirm == true) {
-                                   await ref.read(chatRepositoryProvider).clearAllChats();
-                                   await _fetchDeletableChatsCount();
-                                   if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chats cleared.')));
-                                   }
-                                 }
+                            icon: LucideIcons.helpCircle,
+                            iconColor: Colors.cyan,
+                            title: 'Help Center',
+                            subtitle: 'Get help and find answers',
+                             onTap: () {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                 builder: (_) => const PlaceholderScreen(
+                                   title: 'Help Center', 
+                                   icon: LucideIcons.helpCircle,
+                                   message: 'Find answers to common questions or contact support.\n\n(Coming Soon)',
+                                 )
+                               ));
                              }
                            ),
                         ],
@@ -313,23 +302,39 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                     ),
                     const SizedBox(height: 16),
 
+
+                    
                     // --- App Info ---
                     GlassContainer(
                       child: Column(
                          children: [
                             ColorFiltered(
                               colorFilter: ColorFilter.mode(
-                                theme.colorScheme.primary, // Sage green
+                                theme.colorScheme.primary, 
                                 BlendMode.srcIn,
                               ),
-                              child: Image.asset('assets/icons/logo-original.png', width: 80, height: 80),
+                              child: Image.asset('assets/icons/logo-original.png', width: 60, height: 60),
                             ),
                             const SizedBox(height: 12),
                             const Text('Diaspora Nearby', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
-                            const SizedBox(height: 4),
                             Text('Version 1.0.0', style: TextStyle(fontSize: 12, color: theme.textTheme.bodySmall?.color)),
-                            Text('Connecting diaspora communities worldwide', style: TextStyle(fontSize: 10, color: theme.textTheme.bodySmall?.color)),
                          ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // --- Delete Account ---
+                     GlassContainer(
+                      padding: EdgeInsets.zero,
+                      child: _buildMenuItem(
+                        icon: LucideIcons.trash2,
+                        iconColor: const Color(0xFFEF4444),
+                        title: 'Delete My Account',
+                        titleColor: const Color(0xFFEF4444),
+                        subtitle: 'Permanently delete your account and data',
+                        onTap: () {
+                           _showDeleteAccountConfirm();
+                        }
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -339,9 +344,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                       padding: EdgeInsets.zero,
                       child: _buildMenuItem(
                         icon: LucideIcons.logOut,
-                        iconColor: const Color(0xFFEF4444),
+                        iconColor: theme.disabledColor,
                         title: 'Log Out',
-                        titleColor: const Color(0xFFEF4444),
                         subtitle: 'Sign out of your account',
                         onTap: () {
                            setState(() => _showLogoutConfirm = true);
@@ -580,6 +584,64 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
       ),
     );
   }
+  void _showDeleteAccountConfirm() {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(LucideIcons.alertTriangle, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Account?', style: TextStyle(color: Colors.red)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to permanently delete your account?\n\n'
+          '• Your profile will be wiped\n'
+          '• Your points will be lost\n'
+          '• You will be removed from all communities\n'
+          '• Communities where you are the ONLY member will be deleted\n\n'
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), 
+            child: const Text('Cancel')
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              
+              // Show loading
+              showDialog(
+                context: context, 
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator())
+              );
+
+              try {
+                await ref.read(authRepositoryProvider).deleteAccount();
+                // AuthState changes will trigger redirect to Login, but we can help it
+                if (mounted) {
+                   Navigator.pop(context); // Close loading
+                   // context.go('/login'); // Handled by router stream usually
+                }
+              } catch (e) {
+                if (mounted) {
+                   Navigator.pop(context); // Close loading
+                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting account: $e')));
+                }
+              }
+            }, 
+            child: const Text('DELETE PERMANENTLY')
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showNotificationDialog(ProfileData userProfile) {
     showDialog(
       context: context,
@@ -633,79 +695,81 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
           bottom: MediaQuery.of(context).padding.bottom + 16,
           left: 16, right: 16, top: 16,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Header
-            Row(
-              children: [
-                Icon(LucideIcons.building2, color: theme.colorScheme.primary),
-                const SizedBox(width: 12),
-                Text(
-                  'Organizations',
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
+              ),
+              const SizedBox(height: 16),
+              
+              // Header
+              Row(
+                children: [
+                  Icon(LucideIcons.building2, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Organizations',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
 
-            // Browse Organizations
-            _buildOrgMenuItem(
-              context,
-              icon: LucideIcons.search,
-              title: 'Browse Organizations',
-              subtitle: 'Discover and join organizations',
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/organizations');
-              },
-            ),
-            const Divider(height: 1),
+              // Browse Organizations
+              _buildOrgMenuItem(
+                context,
+                icon: LucideIcons.search,
+                title: 'Browse Organizations',
+                subtitle: 'Discover and join organizations',
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/organizations');
+                },
+              ),
+              const Divider(height: 1),
 
-            // Register Organization
-            _buildOrgMenuItem(
-              context,
-              icon: LucideIcons.plus,
-              title: 'Register Organization',
-              subtitle: 'Create a new business or organization',
-              onTap: () {
-                Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  useSafeArea: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const BusinessRegistrationModal(),
-                );
-              },
-            ),
-            const Divider(height: 1),
+              // Register Organization
+              _buildOrgMenuItem(
+                context,
+                icon: LucideIcons.plus,
+                title: 'Register Organization',
+                subtitle: 'Create a new business or organization',
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    useSafeArea: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) => const BusinessRegistrationModal(),
+                  );
+                },
+              ),
+              const Divider(height: 1),
 
-            // Manage My Organizations
-            _buildOrgMenuItem(
-              context,
-              icon: LucideIcons.settings,
-              title: 'Manage My Organizations',
-              subtitle: 'View and manage organizations you admin',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const OrganizationManagementScreen()),
-                );
-              },
-            ),
-          ],
+              // Manage My Organizations
+              _buildOrgMenuItem(
+                context,
+                icon: LucideIcons.settings,
+                title: 'Manage My Organizations',
+                subtitle: 'View and manage organizations you admin',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const OrganizationManagementScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

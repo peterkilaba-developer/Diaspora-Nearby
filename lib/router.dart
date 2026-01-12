@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -48,6 +49,12 @@ import 'package:diaspora_nearby/features/organization/screens/organization_detai
 import 'package:diaspora_nearby/features/more/widgets/business_registration_modal.dart';
 import 'features/shared/screens/error_screen.dart';
 import 'features/home/screens/home_screen.dart';
+import 'features/dsp/screens/points_system_screen.dart';
+import 'features/dsp/screens/remittances_screen.dart';
+import 'features/dsp/screens/bereavement_screen.dart';
+import 'features/dsp/screens/airline_portal_screen.dart';
+import 'features/dsp/screens/dfdi_screen.dart';
+import 'features/dsp/screens/diaspora_crypto_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -111,6 +118,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         final user = authState.value!;
         final profile = userProfileAsync.value;
 
+        // --- PERMISSION ENFORCEMENT ---
+        // Check permissions for ALL authenticated users (except on /permissions itself)
+        // We do this BEFORE profile checks to ensure environment is ready.
+        if (!kIsWeb && state.matchedLocation != '/permissions') {
+           final status = await Permission.location.status;
+           // If denied or permanently denied, force permission screen.
+           if (!status.isGranted && !status.isLimited) {
+               return '/permissions';
+           }
+        }
+
         // Allow OTP screen to show even when Firebase Auth detects phone number
         // User is not fully authenticated until OTP is verified
         if (isAuthRoute && state.matchedLocation != '/auth/otp') {
@@ -145,20 +163,7 @@ final routerProvider = Provider<GoRouter>((ref) {
            return '/chats'; // Always go to chats first for stability
         }
         
-        // --- PERMISSION ENFORCEMENT ---
-        // If user is authenticated and setup is complete, we check permission.
-        if (!state.matchedLocation.startsWith('/auth') && 
-            state.matchedLocation != '/profile-setup' &&
-            state.matchedLocation != '/permissions') {
-            
-           final status = await Permission.location.status;
-           // If denied or permanently denied, we need to ask.
-           // We check for granted or limited (iOS 14+).
-           if (!status.isGranted && !status.isLimited) {
-               return '/permissions';
-           }
-        }
-        // -----------------------------------
+
         
         // Check for Ban
         if (profile?.isBanned == true) {
@@ -471,6 +476,38 @@ final routerProvider = Provider<GoRouter>((ref) {
           final userId = state.pathParameters['userId']!;
           return StartDirectChatScreen(otherUserId: userId);
         },
+      ),
+      
+      // DSP Feature Routes
+      GoRoute(
+        path: '/dsp/points',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PointsSystemScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/remittances',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const RemittancesScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/bereavement',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const BereavementScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/airline',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AirlinePortalScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/dfdi',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const DFDIScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/crypto',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const DiasporaCryptoScreen(),
       ),
       
       // Current User Profile (Self)

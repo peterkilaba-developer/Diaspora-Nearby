@@ -208,7 +208,11 @@ class Message {
     this.adminId,
     this.adminImage,
     this.richContent, // [NEW] Optional field for rich text content (with mention codes)
+    this.metadata, // [NEW] Generic metadata for extensibility
   });
+
+  /// Generic metadata
+  final Map<String, dynamic>? metadata;
 
   factory Message.fromJson(Map<String, dynamic> json) =>
       _$MessageFromJson(json);
@@ -222,6 +226,18 @@ class Message {
       if (value is int) return value;
       if (value is num) return value.toInt();
       if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    // Helper to safely parse List<String> from either a List or a Map (keys)
+    List<String>? _parseListOrMapKeys(dynamic value) {
+      if (value == null) return null;
+      if (value is List) {
+        return value.map((e) => e.toString()).toList();
+      }
+      if (value is Map) {
+        return value.keys.map((e) => e.toString()).toList();
+      }
       return null;
     }
 
@@ -298,9 +314,7 @@ class Message {
       edited: data['edited'] as bool?,
       editedAt: _parseInt(data['editedAt']),
       replyTo: data['replyTo'] as String?,
-      mentions: (data['mentions'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList(),
+      mentions: _parseListOrMapKeys(data['mentions']),
       imageUrl: data['imageUrl'] as String?,
       location: data['location'] != null
           ? MessageLocation.fromRTDB(Map<String, dynamic>.from(data['location'] as Map))
@@ -329,6 +343,9 @@ class Message {
       adminId: data['adminId'] as String?,
       adminImage: data['adminImage'] as String?,
       richContent: data['richContent'] as String?, // [NEW] Parse from RTDB
+      metadata: data['metadata'] != null 
+          ? Map<String, dynamic>.from(data['metadata'] as Map) 
+          : null,
     );
   }
 
@@ -413,6 +430,7 @@ class Message {
     String? adminId,
     String? adminImage,
     String? richContent,
+    Map<String, dynamic>? metadata,
   }) {
     return Message(
       id: id ?? this.id,
@@ -453,6 +471,7 @@ class Message {
       adminId: adminId ?? this.adminId,
       adminImage: adminImage ?? this.adminImage,
       richContent: richContent ?? this.richContent,
+      metadata: metadata ?? this.metadata,
     );
   }
 }

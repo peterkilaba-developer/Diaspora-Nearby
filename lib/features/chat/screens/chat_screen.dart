@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,7 @@ import 'package:diaspora_nearby/features/chat/screens/create_group_screen.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/models/profile_data.dart'; // [FIXED]
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/models/community_data.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart'; 
@@ -30,6 +32,7 @@ import 'package:diaspora_nearby/services/chat_scroll_position_service.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_identity_selector.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/providers/chat_identity_provider.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/providers/pending_message_provider.dart';
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 
 
 final communityDetailsProvider = FutureProvider.family<Community?, String>((ref, communityId) {
@@ -121,7 +124,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isNearBottom = true;
-  bool _scrollPositionRestored = false;
+  // _scrollPositionRestored removed
   
   /// The actual chatId (either from props or created after first message)
   String? _activeChatId;
@@ -161,47 +164,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Mark as read when entering (only for existing chats)
     if (_activeChatId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _markAsRead();
-        _restoreScrollPosition();
+        // [FIX] Explicitly mark chat as read to clear unread count
+        ref.read(chatRepositoryProvider).markChatAsRead(_activeChatId!);
+        
+        // [NEW] Clear mentions to dismiss sticky notifications
+        ref.read(chatRepositoryProvider).clearChatMentions(_activeChatId!);
+        
+        // [NEW] Track Reward for Community Chat
+        _checkAndRewardCommunityChat();
       });
     }
   }
-
-  /// Restore scroll position from persistence
-  void _restoreScrollPosition() {
-    if (_activeChatId == null || _scrollPositionRestored) return;
-    _scrollPositionRestored = true;
-    
-    final scrollService = ref.read(chatScrollPositionServiceProvider);
-    final savedOffset = scrollService.getPosition(_activeChatId!);
-    
-    if (savedOffset != null && _scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          final maxExtent = _scrollController.position.maxScrollExtent;
-          // Only restore if saved position is valid
-          if (savedOffset <= maxExtent) {
-            _scrollController.jumpTo(savedOffset);
-            debugPrint('📍 Restored scroll position: $savedOffset');
+  
+  Future<void> _checkAndRewardCommunityChat() async {
+     try {
+       if (_activeChatId == null) return;
+       final chat = await ref.read(chatRepositoryProvider).getChat(_activeChatId!);
+       if (chat != null && chat.type == 'community') {
+          // This is a community chat
+          final user = ref.read(authRepositoryProvider).currentUser;
+          if (user != null) {
+             final actionId = 'open_community_chat_${chat.id}'; // Unique per community chat!
+             final rewarded = await ref.read(pointsServiceProvider).trackExplorationReward(user.uid, actionId);
+             if (rewarded && mounted) {
+                confettiOverlayKey.currentState?.play();
+                ScaffoldMessenger.of(context).showSnackBar(
+                 SnackBar(
+                   content: Text('🎉 +1 DSP Earned for joining ${chat.name} chat!'),
+                   backgroundColor: Colors.green,
+                   behavior: SnackBarBehavior.floating,
+                 )
+                );
+             }
           }
-        }
-      });
-    }
+       }
+     } catch (e) {
+       debugPrint('Error tracking chat reward: $e');
+     }
   }
 
-  /// Save scroll position before leaving
-  void _saveScrollPosition() {
-    if (_activeChatId == null || !_scrollController.hasClients) return;
-    
-    final scrollService = ref.read(chatScrollPositionServiceProvider);
-    final offset = _scrollController.offset;
-    scrollService.savePosition(_activeChatId!, offset);
-    debugPrint('💾 Saved scroll position: $offset');
-  }
+  // Scroll persistence methods removed
 
   @override
   void dispose() {
-    _saveScrollPosition(); // Save before leaving
     _readReceiptDebounceTimer?.cancel(); // Cancel pending read receipt updates
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -265,51 +270,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _markAsRead() async {
-    if (_activeChatId == null) return;
-    final chatRepo = ref.read(chatRepositoryProvider);
-    await chatRepo.markChatAsRead(_activeChatId!);
-  }
-
-  /// Handle message visibility change for scroll-based read receipts
-  /// Only marks messages as read when they become visible (>50% visible)
-  void _onMessageVisibilityChanged(VisibilityInfo info, Message message, String currentUserId) {
-    // Only track messages from other users that aren't already read
-    if (message.senderId == currentUserId) return;
-    if (message.status == 'read') return;
-    
-    final isVisible = info.visibleFraction > 0.5;
-    
-    if (isVisible) {
-      // Add to visible set
-      if (_visibleUnreadMessageIds.add(message.id)) {
-        // Schedule debounced update
-        _scheduleReadReceiptUpdate();
-      }
-    }
-  }
-
-  /// Schedule a debounced update to mark visible messages as read
-  void _scheduleReadReceiptUpdate() {
-    _readReceiptDebounceTimer?.cancel();
-    _readReceiptDebounceTimer = Timer(const Duration(milliseconds: 500), () async {
-      if (_visibleUnreadMessageIds.isNotEmpty && _activeChatId != null) {
-        debugPrint('👁️ Marking ${_visibleUnreadMessageIds.length} visible messages as read');
-        
-        final chatRepo = ref.read(chatRepositoryProvider);
-        final idsToMark = List<String>.from(_visibleUnreadMessageIds);
-        _visibleUnreadMessageIds.clear();
-
-        // 1. Mark overall chat as read
-        _markAsRead();
-
-        // 2. Mark individual messages as read in database
-        for (final messageId in idsToMark) {
-          await chatRepo.markMessageAsRead(_activeChatId!, messageId);
-        }
-      }
-    });
-  }
+  // Duplicates removed
 
   /// Set message to reply to
   void _setReplyTo(Message message) {
@@ -418,8 +379,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               senderIdOverride: senderIdOverride,
               senderNameOverride: senderNameOverride,
               senderImageOverride: senderImageOverride,
-              participants: participants, 
+              participants: participants,
+              mentions: (metadata?['mentions'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+              richContent: metadata?['richContent'] as String?,
+              replyToSenderId: _replyingTo?.senderId,
             );
+
+            // Track points for message sent
+            ref.read(pointsServiceProvider).trackMessageSent(currentUserId);
          } catch (e) {
             debugPrint('Error sending message: $e');
             // Optionally mark as failed instead of removing?
@@ -437,7 +404,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           senderIdOverride: senderIdOverride,
           senderNameOverride: senderNameOverride,
           senderImageOverride: senderImageOverride,
-          participants: participants, 
+          participants: participants,
+          mentions: (metadata?['mentions'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+          richContent: metadata?['richContent'] as String?,
         );
       }
     }
@@ -498,7 +467,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendMedia(List<File> files, String type, String? caption) async {
+  Future<void> _sendMedia(List<XFile> files, String type, String? caption) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -542,31 +511,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
          if (type == 'video') {
           await chatRepo.sendVideoMessage(
             chatId,
-            file.path,
+            file,
             caption: caption, // No caption support in multi-upload yet
             replyToMessageId: replyToId,
             senderIdOverride: identity?['id'],
             senderNameOverride: identity?['name'],
             senderImageOverride: identity?['profileImage'],
-            participants: participants, // [NEW]
+
+            participants: participants,
+            replyToSenderId: _replyingTo?.senderId,
           );
         } else {
           await chatRepo.sendImageMessage(
             chatId,
-            file.path,
+            file,
             caption: caption,
             replyToMessageId: replyToId,
             senderIdOverride: identity?['id'],
             senderNameOverride: identity?['name'],
             senderImageOverride: identity?['profileImage'],
-            participants: participants, // [NEW]
+            participants: participants,
+            replyToSenderId: _replyingTo?.senderId,
           );
         }
       } catch (e) {
          debugPrint('Error sending media: $e');
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Failed to send media: ${e.toString()}')),
+           );
+         }
       } finally {
          if (currentUserId != null) {
-            ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+            // Delay removal to allow stream to catch up and prevent flicker
+            Future.delayed(const Duration(seconds: 1), () {
+               if (mounted) {
+                   ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+               }
+            });
          }
       }
     }
@@ -613,10 +595,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [
-                 const CircularProgressIndicator(),
-                 const SizedBox(height: 16),
-                 const Text('Getting accurate location...'),
+              children: const [
+                 CircularProgressIndicator(),
+                 SizedBox(height: 16),
+                 Text('Getting accurate location...'),
               ],
             ),
           ),
@@ -715,13 +697,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           senderIdOverride: identity?['id'],
           senderNameOverride: identity?['name'],
           senderImageOverride: identity?['profileImage'],
-          participants: participants, // [NEW]
+
+          participants: participants,
+          replyToSenderId: _replyingTo?.senderId,
         );
       } catch (e) {
          debugPrint('Error sending location: $e');
       } finally {
          if (currentUserId != null) {
-           ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+            Future.delayed(const Duration(seconds: 1), () {
+               if (mounted) {
+                  ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+               }
+            });
          }
       }
 
@@ -746,7 +734,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendAudioFile(File file, String? caption) async {
+  Future<void> _sendAudioFile(XFile file, String? caption) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -786,19 +774,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       await chatRepo.sendAudioFileMessage(
         chatId,
-        file.path,
+        file,
         caption: caption,
         replyToMessageId: replyToId,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
-        participants: participants, // [NEW]
+
+        participants: participants, 
+        replyToSenderId: _replyingTo?.senderId,
       );
     } catch (e) {
        debugPrint('Error sending audio file: $e');
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Failed to send audio file: ${e.toString()}')),
+           );
+         }
     } finally {
        if (currentUserId != null) {
-          ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+          // Delay removal to allow stream to catch up
+          Future.delayed(const Duration(seconds: 1), () {
+              if (mounted) {
+                 ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+              }
+          });
        }
     }
 
@@ -807,7 +807,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     Future.delayed(const Duration(milliseconds: 600), () => _scrollToBottom());
   }
 
-  Future<void> _sendAudio(File file, int duration, {String? caption}) async {
+  Future<void> _sendAudio(XFile file, int duration, {String? caption}) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -848,20 +848,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       await chatRepo.sendAudioMessage(
         chatId,
-        file.path,
+        file,
         durationSeconds: duration,
         caption: caption,
         replyToMessageId: replyToId,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
-        participants: participants, // [NEW]
+
+        participants: participants,
+        replyToSenderId: _replyingTo?.senderId,
       );
     } catch (e) {
        debugPrint('Error sending audio: $e');
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Failed to send voice message: ${e.toString()}')),
+           );
+         }
     } finally {
        if (currentUserId != null) {
-         ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+          // Delay removal to allow stream to catch up
+          Future.delayed(const Duration(seconds: 1), () {
+             if (mounted) {
+               ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+             }
+          });
        }
     }
 
@@ -870,7 +882,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     Future.delayed(const Duration(milliseconds: 600), () => _scrollToBottom());
   }
 
-  Future<void> _sendDocument(File file, String? caption) async {
+  Future<void> _sendDocument(XFile file, String? caption) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -911,19 +923,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       await chatRepo.sendDocumentMessage(
         chatId,
-        file.path,
+        file,
         caption: caption,
         replyToMessageId: replyToId,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
-        participants: participants, // [NEW]
+        participants: participants,
+        replyToSenderId: _replyingTo?.senderId,
       );
     } catch (e) {
        debugPrint('Error sending document: $e');
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Failed to send document: ${e.toString()}')),
+           );
+         }
     } finally {
        if (currentUserId != null) {
-          ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+          // Delay removal to allow stream to catch up
+          Future.delayed(const Duration(seconds: 1), () {
+             if (mounted) {
+                ref.read(pendingMessagesProvider.notifier).removeMessage(chatId, tempId);
+             }
+          });
        }
     }
 
@@ -1016,6 +1039,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               onSendAudioFile: _sendAudioFile,
               onSendDocument: _sendDocument,
               onSendLocation: _sendLocation,
+              onSendDSP: _sendDSP, // [fix]
               replyingTo: _replyingTo,
               onCancelReply: _clearReply,
             ),
@@ -1121,25 +1145,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                    event = eventAsync.value;
                    
                    if (event != null) {
-                     // Calculate Status
-                     final now = DateTime.now();
-                     final start = DateTime.tryParse(event.startDate) ?? DateTime.now();
-                     final diff = start.difference(now);
-                     
-                     if (diff.isNegative) {
-                        // Already started
-                        if (diff.inHours.abs() < 24) {
-                           eventStatus = 'Happening now'; // simplified
-                        } else {
-                           eventStatus = 'Ended';
-                        }
-                     } else {
-                        // Future
-                        if (diff.inHours < 24) {
-                           eventStatus = 'in ${diff.inHours} hours';
-                        } else {
-                           eventStatus = 'in ${diff.inDays} days';
-                        }
+                     // Calculate Status using Shared Logic
+                     final statusInfo = event.getStatusBadgeInfo();
+                     if (statusInfo['text'] != null) {
+                        eventStatus = statusInfo['text'];
                      }
                    }
                 }
@@ -1491,6 +1500,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   onSendAudioFile: _sendAudioFile,
                   onSendDocument: _sendDocument,
                   onSendLocation: _sendLocation,
+                  onSendDSP: _sendDSP, // [NEW]
                   replyingTo: _replyingTo,
                   onCancelReply: _clearReply,
                 ),
@@ -1547,7 +1557,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         if (isSelected) {
                           chatRepo.removeReaction(message.chatId, message.id, emoji);
                         } else {
-                          chatRepo.addReaction(message.chatId, message.id, emoji);
+                          chatRepo.addReaction(message.chatId, message.id, emoji, message.senderId);
                         }
                       },
                       child: Container(
@@ -1835,6 +1845,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  /// Handle message visibility changes
+  void _onMessageVisibilityChanged(VisibilityInfo info, Message message, String currentUserId) {
+    // Only mark as read if:
+    // 1. It's visible (visibleFraction > 0.5)
+    // 2. It's NOT our own message
+    // 3. It's not already read
+    // 4. We haven't already queued it
+    if (info.visibleFraction > 0.5 && 
+        message.senderId != currentUserId && 
+        message.status != 'read' && 
+        !_visibleUnreadMessageIds.contains(message.id)) {
+      
+      _visibleUnreadMessageIds.add(message.id);
+      
+      // Debounce the update
+      if (_readReceiptDebounceTimer?.isActive ?? false) _readReceiptDebounceTimer!.cancel();
+      _readReceiptDebounceTimer = Timer(const Duration(milliseconds: 1000), _processVisibleMessages);
+    }
+  }
+
+  Future<void> _processVisibleMessages() async {
+     if (_visibleUnreadMessageIds.isEmpty || _activeChatId == null) return;
+     
+     final ids = _visibleUnreadMessageIds.toList();
+     _visibleUnreadMessageIds.clear(); // Clear immediately to prevent double processing
+     
+     debugPrint('👀 Marking ${ids.length} messages as read');
+     await ref.read(chatRepositoryProvider).markMessagesAsRead(_activeChatId!, ids);
+  }
+
+  // Legacy full read (kept if needed for "Mark all read" button)
+  void _markAsRead() {
+    if (_activeChatId != null) {
+      ref.read(chatRepositoryProvider).markChatAsRead(_activeChatId!);
+    }
+  }
+
   Future<void> _showMoreMenu(BuildContext context, Chat chat, WidgetRef ref) async {
     final theme = Theme.of(context);
     final repo = ref.read(chatRepositoryProvider);
@@ -2025,6 +2072,96 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         );
       },
     );
+  }
+
+  // [NEW] DSP Transfer Logic
+  Future<void> _sendDSP(int amount) async {
+    final chatId = await _ensureChatCreated();
+    if (chatId == null) return;
+    
+    // We need the recipient ID. In DM, it's the other user.
+    // In Group, we might need to ask "Who to send to?" or if 1-on-1 is assumed.
+    // The requirement implies 1-on-1 or "user from DM".
+    // Let's assume DM for now strictly or handle single recipient.
+    
+    final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
+    if (currentUserId == null) return;
+
+    String? toUserId;
+    if (_isPendingDM) {
+       toUserId = widget.pendingUserId;
+    } else {
+       final chat = await ref.read(chatRepositoryProvider).getChat(chatId);
+       if (chat == null) return;
+       // Find other user: Assuming DM logic for now as per feature spec context
+       if (chat.participants.length >= 2) {
+          toUserId = chat.participants.firstWhere((id) => id != currentUserId, orElse: () => '');
+          if (toUserId!.isEmpty) toUserId = null;
+       } 
+    }
+    
+    if (toUserId == null) {
+       // It's a group or invalid. 
+       if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('DSP transfer currently only supported in Direct Messages.')),
+          );
+       }
+       return;
+    }
+
+    try {
+      // Show loading
+      if (mounted) {
+         showDialog(
+           context: context,
+           barrierDismissible: false,
+           builder: (context) => const Center(child: CircularProgressIndicator()),
+         );
+      }
+
+      // Execute Transfer
+      await ref.read(pointsServiceProvider).transferPoints(
+        fromUserId: currentUserId,
+        toUserId: toUserId,
+        amount: amount,
+      );
+      
+      if (mounted && Navigator.canPop(context)) Navigator.pop(context); // Close loader
+
+      // Send a system message or a special "transfer" message type?
+      // Requirement: "Beautiful little card in bubble"
+      // So we send a message of type 'dsp_transfer' with amount metadata.
+      
+      final identity = ref.read(chatIdentityProvider);
+      final participants = await _getParticipants();
+      
+      await ref.read(chatRepositoryProvider).sendTextMessage(
+         chatId, 
+         'Sent $amount DSP', // Fallback text
+         type: 'dsp_transfer',
+         senderIdOverride: identity?['id'],
+         senderNameOverride: identity?['name'],
+         senderImageOverride: identity?['profileImage'],
+         metadata: {
+            'amount': amount,
+            'currency': 'DSP',
+         },
+         participants: participants,
+         // We should also set push notification payload if needed here via metadata or server function?
+         // Cloud function triggers on message create usually handles push. 
+         // We will ensure push_notification_service handles this type locally or via FCM.
+      );
+      
+    } catch (e) {
+       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+       debugPrint('DSP_TRANSFER: Error transferring DSP: $e');
+       if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Transfer failed: ${e.toString()}')),
+          );
+       }
+    }
   }
 
   void _showClearConfirmation(BuildContext context, ChatRepository repo, String chatId, String name) {

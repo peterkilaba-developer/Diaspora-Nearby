@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/services/google_places_service.dart';
 import 'package:diaspora_nearby/features/chat/providers/chat_identity_provider.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:diaspora_nearby/models/google_places_models.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
@@ -29,7 +30,7 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
   final _websiteController = TextEditingController();
   final _locationController = TextEditingController();
   
-  File? _logoImage;
+  XFile? _logoImage;
   final ImagePicker _picker = ImagePicker();
 
   // Location state
@@ -44,11 +45,12 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
   // Name predictions
   List<AutocompletePrediction> _namePredictions = [];
   bool _showNamePredictions = false;
+  Map<String, dynamic>? _selectedRichData;
 
   Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    final picked = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
     if (picked != null) {
-      setState(() => _logoImage = File(picked.path));
+      setState(() => _logoImage = picked);
     }
   }
   
@@ -159,7 +161,16 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
     });
   }
 
+  // Verification Lock Flags
+  bool _isVerifiedBusiness = false; // If true, a business was selected from API
+  bool _isNameLocked = false;
+  bool _isLocationLocked = false;
+  bool _isPhoneLocked = false;
+  bool _isWebsiteLocked = false;
+
   void _onNameChanged(String input) async {
+    if (_isVerifiedBusiness) return; // Prevent search if locked
+
     if (input.isEmpty) {
       setState(() {
         _namePredictions = [];
@@ -169,14 +180,33 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
     }
 
     final places = ref.read(googlePlacesServiceProvider);
-    // Use establishment type for business matching
-    final results = await places.autocomplete(input, filter: PlaceTypeFilter.ESTABLISHMENT);
+    // Use VENUES filter to strictly exclude cities/regions
+    final results = await places.autocomplete(input, filter: PlaceTypeFilter.VENUES);
     if (mounted) {
       setState(() {
         _namePredictions = results;
         _showNamePredictions = results.isNotEmpty;
       });
     }
+  }
+
+  void _resetSelection() {
+    setState(() {
+      _isVerifiedBusiness = false;
+      _isNameLocked = false;
+      _isLocationLocked = false;
+      _isPhoneLocked = false;
+      _isWebsiteLocked = false;
+      _selectedRichData = null;
+      
+      _nameController.clear();
+      _phoneController.clear();
+      _websiteController.clear();
+      _locationController.clear();
+      _selectedOrgType = null;
+      _locationLat = null;
+      _locationLng = null;
+    });
   }
 
   Future<void> _selectBusiness(AutocompletePrediction prediction) async {
@@ -207,18 +237,24 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
       }
 
       setState(() {
+        _isVerifiedBusiness = true;
+        
         _nameController.text = prediction.primaryText;
+        _isNameLocked = true;
+
         _namePredictions = [];
         _showNamePredictions = false;
         
         // Also populate phone if available
         if (place.phoneNumber != null) {
           _phoneController.text = place.phoneNumber!;
+          _isPhoneLocked = true;
         }
 
         // Populate website if available
         if (place.websiteUri != null) {
           _websiteController.text = place.websiteUri.toString();
+          _isWebsiteLocked = true;
         }
 
         // Set matched type if found
@@ -226,10 +262,47 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
           _selectedOrgType = matchedType;
           _updateTitleOptions(matchedType);
         }
+        
+        // Capture Rich Data
+        _selectedRichData = {
+           if (place.rating != null) 'rating': place.rating,
+           if (place.userRatingsTotal != null) 'userRatingsTotal': place.userRatingsTotal,
+           if (place.openingHours != null) 'openingHours': place.openingHours,
+           if (place.photoMetadatas != null) 'photos': place.photoMetadatas,
+           if (place.priceLevel != null) 'priceLevel': place.priceLevel,
+           if (place.editorialSummary != null) 'editorialSummary': place.editorialSummary,
+        };
+        
+        // Smart Description Population
+        if (place.editorialSummary != null && place.editorialSummary!.isNotEmpty) {
+           _descController.text = place.editorialSummary!;
+        } else {
+           // Fallback format: "A [Type] in [City]"
+           final type = matchedType != null 
+              ? matchedType.split(' (').first 
+              : (prediction.secondaryText.isNotEmpty ? prediction.secondaryText : 'Organization');
+           
+           // Use city from location population or full address roughly
+           String location = 'Area';
+             final components = place.addressComponents ?? [];
+             for (final c in components) {
+               if (c.types.contains('locality')) location = c.name;
+             }
+             if (location == 'Area') {
+                // Try from address
+                location = place.address?.split(',').first ?? 'Area';
+             }
+           
+           _descController.text = 'A $type in $location.';
+        }
+
       });
       
       // Auto-populate location from the business place
       _populateLocation(place, prediction.fullText);
+      setState(() {
+         _isLocationLocked = true;
+      });
     }
   }
 
@@ -323,7 +396,13 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
             .child('business_logos')
             .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
             
-           await storageRef.putFile(_logoImage!);
+           final metadata = SettableMetadata(cacheControl: 'public, max-age=31536000', contentType: 'image/jpeg');
+           if (kIsWeb) {
+             final bytes = await _logoImage!.readAsBytes();
+             await storageRef.putData(bytes, metadata);
+           } else {
+             await storageRef.putFile(File(_logoImage!.path), metadata);
+           }
            logoUrl = await storageRef.getDownloadURL();
          } catch (e) {
             debugPrint('Logo upload error: $e');
@@ -364,6 +443,7 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
           locationCountry: _locationCountry,
           homeCountryCode: homeCountryCode,
           creatorTitle: _selectedTitle,
+          richData: _selectedRichData, // Pass Rich Data
         );
       } catch (e) {
          debugPrint('Registration Submit Error: $e');
@@ -437,28 +517,35 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
           ),
           const SizedBox(height: 16),
           
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(LucideIcons.building2, color: Colors.blue),
                 ),
-                child: const Icon(LucideIcons.building2, color: Colors.blue),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Organization Registration', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('Register your organization', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Organization Registration', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('Register your organization', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+                if (_isVerifiedBusiness)
+                if (_isVerifiedBusiness)
+                  IconButton(
+                    onPressed: _resetSelection,
+                    icon: const Icon(LucideIcons.rotateCcw, color: Colors.red),
+                    tooltip: 'Reset Selection',
+                  ),
+              ],
+            ),
           
           
           const SizedBox(height: 24),
@@ -478,7 +565,9 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
                              CircleAvatar(
                                radius: 40,
                                backgroundColor: Colors.grey.shade200,
-                               backgroundImage: _logoImage != null ? FileImage(_logoImage!) : null,
+                               backgroundImage: _logoImage != null 
+                                 ? (kIsWeb ? NetworkImage(_logoImage!.path) : FileImage(File(_logoImage!.path)) as ImageProvider)
+                                 : null,
                                child: _logoImage == null 
                                   ? const Icon(LucideIcons.image, size: 30, color: Colors.grey)
                                   : null,
@@ -502,46 +591,52 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
                     const Center(child: Text('Upload Logo', style: TextStyle(fontSize: 12, color: Colors.grey))),
                     const SizedBox(height: 24),
 
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextFormField(
-                          controller: _nameController,
-                          textCapitalization: TextCapitalization.words,
-                          onChanged: _onNameChanged,
-                          decoration: const InputDecoration(
-                            labelText: 'Business / Organization Name',
-                            prefixIcon: Icon(LucideIcons.building2, size: 18),
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (v) => v?.isEmpty == true ? 'Required' : null,
-                        ),
-                        if (_showNamePredictions && _namePredictions.isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            constraints: const BoxConstraints(maxHeight: 150),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).cardColor,
-                              border: Border.all(color: Theme.of(context).dividerColor),
-                              borderRadius: BorderRadius.circular(8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextFormField(
+                            controller: _nameController,
+                            textCapitalization: TextCapitalization.words,
+                            onChanged: _onNameChanged,
+                            readOnly: _isNameLocked,
+                            decoration: InputDecoration(
+                              labelText: 'Business / Organization Name',
+                              prefixIcon: const Icon(LucideIcons.building2, size: 18),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: _isNameLocked 
+                                ? const Icon(LucideIcons.lock, size: 16, color: Colors.green)
+                                : null,
+                              filled: _isNameLocked,
+                              fillColor: _isNameLocked ? Colors.green.withOpacity(0.05) : null,
                             ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: _namePredictions.length,
-                              itemBuilder: (context, index) {
-                                final p = _namePredictions[index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(LucideIcons.search, size: 16),
-                                  title: Text(p.primaryText, style: const TextStyle(fontSize: 14)),
-                                  subtitle: p.secondaryText.isNotEmpty ? Text(p.secondaryText, style: const TextStyle(fontSize: 11)) : null,
-                                  onTap: () => _selectBusiness(p),
-                                );
-                              },
-                            ),
+                            validator: (v) => v?.isEmpty == true ? 'Required' : null,
                           ),
-                      ],
-                    ),
+                          if (_showNamePredictions && _namePredictions.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              constraints: const BoxConstraints(maxHeight: 150),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                border: Border.all(color: Theme.of(context).dividerColor),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _namePredictions.length,
+                                itemBuilder: (context, index) {
+                                  final p = _namePredictions[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(LucideIcons.search, size: 16),
+                                    title: Text(p.primaryText, style: const TextStyle(fontSize: 14)),
+                                    subtitle: p.secondaryText.isNotEmpty ? Text(p.secondaryText, style: const TextStyle(fontSize: 11)) : null,
+                                    onTap: () => _selectBusiness(p),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _descController,
@@ -556,66 +651,82 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
                     ),
                     const SizedBox(height: 16),
                     
-                    // Location Autocomplete Field
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TextFormField(
-                          controller: _locationController,
-                          onChanged: _onLocationChanged,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: InputDecoration(
-                            labelText: 'City / Location',
-                            prefixIcon: const Icon(LucideIcons.mapPin, size: 18),
-                            border: const OutlineInputBorder(),
-                            suffixIcon: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_locationLat != null)
-                                  const Icon(LucideIcons.checkCircle, color: Colors.green, size: 18),
-                                IconButton(
-                                  icon: const Icon(LucideIcons.locate, size: 18),
-                                  onPressed: _useCurrentLocation,
-                                  tooltip: 'Use current location',
-                                ),
-                              ],
+                      // Location Autocomplete Field
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextFormField(
+                            controller: _locationController,
+                            onChanged: _onLocationChanged,
+                            textCapitalization: TextCapitalization.sentences,
+                            readOnly: _isLocationLocked,
+                            decoration: InputDecoration(
+                              labelText: 'City / Location',
+                              prefixIcon: const Icon(LucideIcons.mapPin, size: 18),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_isLocationLocked)
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 8.0),
+                                      child: Icon(LucideIcons.lock, color: Colors.green, size: 16),
+                                    )
+                                  else if (_locationLat != null)
+                                    const Icon(LucideIcons.checkCircle, color: Colors.green, size: 18),
+                                    
+                                  if (!_isLocationLocked)
+                                    IconButton(
+                                      icon: const Icon(LucideIcons.locate, size: 18),
+                                      onPressed: _useCurrentLocation,
+                                      tooltip: 'Use current location',
+                                    ),
+                                ],
+                              ),
+                              filled: _isLocationLocked,
+                              fillColor: _isLocationLocked ? Colors.green.withOpacity(0.05) : null,
                             ),
+                            validator: (v) => v?.isEmpty == true ? 'Required' : null,
                           ),
-                          validator: (v) => v?.isEmpty == true ? 'Required' : null,
-                        ),
-                        if (_showPredictions && _predictions.isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            constraints: const BoxConstraints(maxHeight: 150),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).cardColor,
-                              border: Border.all(color: Theme.of(context).dividerColor),
-                              borderRadius: BorderRadius.circular(8),
+                          if (_showPredictions && _predictions.isNotEmpty && !_isLocationLocked)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              constraints: const BoxConstraints(maxHeight: 150),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                border: Border.all(color: Theme.of(context).dividerColor),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _predictions.length,
+                                itemBuilder: (context, index) {
+                                  final p = _predictions[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(LucideIcons.mapPin, size: 16),
+                                    title: Text(p.fullText, style: const TextStyle(fontSize: 14)),
+                                    onTap: () => _selectPlace(p),
+                                  );
+                                },
+                              ),
                             ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: _predictions.length,
-                              itemBuilder: (context, index) {
-                                final p = _predictions[index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(LucideIcons.mapPin, size: 16),
-                                  title: Text(p.fullText, style: const TextStyle(fontSize: 14)),
-                                  onTap: () => _selectPlace(p),
-                                );
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      ),
                     const SizedBox(height: 16),
                     
                      TextFormField(
                       controller: _phoneController,
-                      decoration: const InputDecoration(
+                      readOnly: _isPhoneLocked,
+                      decoration: InputDecoration(
                         labelText: 'Business Phone',
-                        prefixIcon: Icon(LucideIcons.phone, size: 18),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(LucideIcons.phone, size: 18),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: _isPhoneLocked 
+                          ? const Icon(LucideIcons.lock, size: 16, color: Colors.green)
+                          : null,
+                        filled: _isPhoneLocked,
+                        fillColor: _isPhoneLocked ? Colors.green.withOpacity(0.05) : null,
                       ),
                        keyboardType: TextInputType.phone,
                        validator: (v) => v?.isEmpty == true ? 'Required' : null,
@@ -648,10 +759,16 @@ class _BusinessRegistrationModalState extends ConsumerState<BusinessRegistration
                     const SizedBox(height: 16),
                      TextFormField(
                        controller: _websiteController,
-                       decoration: const InputDecoration(
+                       readOnly: _isWebsiteLocked,
+                       decoration: InputDecoration(
                          labelText: 'Website URL (optional)',
-                         prefixIcon: Icon(LucideIcons.globe, size: 18),
-                         border: OutlineInputBorder(),
+                         prefixIcon: const Icon(LucideIcons.globe, size: 18),
+                         border: const OutlineInputBorder(),
+                         suffixIcon: _isWebsiteLocked 
+                          ? const Icon(LucideIcons.lock, size: 16, color: Colors.green)
+                          : null,
+                         filled: _isWebsiteLocked,
+                         fillColor: _isWebsiteLocked ? Colors.green.withOpacity(0.05) : null,
                        ),
                        keyboardType: TextInputType.url,
                      ),

@@ -23,9 +23,22 @@ class CommunityChatUtils {
   /// Ports logic from React: `utils/communityLocationUtils.ts`
   static String generateCommunityName(Chat chat) {
     if (!chat.isCommunity) return chat.name;
+    
+    // [FIX] Derive locationType from ID if not present on object
+    String type = chat.locationType ?? '';
+    if (type.isEmpty) {
+       if (chat.id.contains('_host_')) {
+         type = 'host';
+       } else if (chat.id.contains('_past_')) {
+         type = 'past';
+       } else {
+         type = 'home';
+       }
+    }
+
     return generateCommunityNameFromParts(
         name: chat.name,
-        locationType: chat.locationType ?? 'home',
+        locationType: type,
         id: chat.id);
   }
 
@@ -202,9 +215,9 @@ class CommunityChatUtils {
     // 3. Country Flag logic
     if (effectiveType == 'country') {
       final countryCode = () {
-        // [FIX] For host/past communities, extract the TARGET country from ID if possible
-        // ID format: host_country_[target]_[home]
-        if ((effectiveLocationType == 'host' || effectiveLocationType == 'past') && effectiveId.contains('_country_')) {
+        // [FIX] Extract TARGET country from ID for ALL types (host, past, AND home)
+        // ID format: host_country_[target]_[home] OR home_country_[target]
+        if ((effectiveLocationType == 'host' || effectiveLocationType == 'past' || effectiveLocationType == 'home') && effectiveId.contains('_country_')) {
            final parts = effectiveId.split('_');
            final countryIndex = parts.indexOf('country');
            if (countryIndex != -1 && countryIndex + 1 < parts.length) {

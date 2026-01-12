@@ -22,21 +22,35 @@ class AuthController extends Notifier<bool> {
       await repository.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         verificationCompleted: (credential) async {
-          state = false;
-          final userCredential = await repository.signInWithCredential(credential);
-          if (userCredential?.user != null) {
-            await _handleSuccessfulSignIn(context, userCredential!.user!);
+          // Auto-verification happened (e.g. instant verification or code auto-retrieval)
+          print('Phone Auth: verificationCompleted triggered');
+          state = true; 
+          try {
+            final userCredential = await repository.signInWithCredential(credential);
+            if (userCredential.user != null) {
+              await _handleSuccessfulSignIn(context, userCredential.user!);
+            }
+          } catch (e) {
+             state = false;
+             if(context.mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Auto-sign in failed: ${e.toString()}')));
+             }
           }
         },
         verificationFailed: (e) {
+             print('Phone Auth: verificationFailed: ${e.message}');
              state = false;
              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Verification failed')));
         },
         codeSent: (verificationId, resendToken) {
+            print('Phone Auth: codeSent. ID: $verificationId');
             state = false;
             context.push('/auth/otp', extra: {'verificationId': verificationId, 'phoneNumber': phoneNumber});
         },
-        codeAutoRetrievalTimeout: (verificationId) {},
+        codeAutoRetrievalTimeout: (verificationId) {
+             print('Phone Auth: codeAutoRetrievalTimeout. ID: $verificationId');
+             // Do not set state = false here necessarily, as user might still be typing
+        },
       );
     } catch (e) {
       state = false;

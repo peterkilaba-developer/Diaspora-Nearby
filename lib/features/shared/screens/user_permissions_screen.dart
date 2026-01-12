@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -57,9 +58,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
 
       if (mounted) {
         setState(() {
-          _locationGranted = locationStatus.isGranted || locationStatus.isLimited;
-          _notificationGranted = notificationStatus.isGranted;
-          _backgroundLocationGranted = backgroundLocationGranted;
+          _locationGranted = kIsWeb ? true : (locationStatus.isGranted || locationStatus.isLimited);
+          _notificationGranted = kIsWeb ? true : notificationStatus.isGranted;
+          _backgroundLocationGranted = kIsWeb ? true : backgroundLocationGranted;
         });
       }
     } catch (e) {
@@ -150,7 +151,8 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
   }
 
   void _continue() {
-    if (_locationGranted && _notificationGranted && _backgroundLocationGranted) {
+    final canContinue = kIsWeb || (_locationGranted && _notificationGranted && _backgroundLocationGranted);
+    if (canContinue) {
       _proceedToNextScreen();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -163,77 +165,110 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              const Icon(LucideIcons.shieldCheck, size: 64, color: Color(0xFF9CAF88)),
-              const SizedBox(height: 24),
-              const Text(
-                'Permissions Required',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'To verify your location and keep you connected, we need a few permissions.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const Spacer(),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 24),
+                    const Icon(LucideIcons.shieldCheck, size: 64, color: Color(0xFF9CAF88)),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Permissions Required',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'To verify your location and keep you connected, we need a few permissions.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 32),
               
-              // Notification Permission (First)
-              _buildPermissionItem(
-                title: 'Notifications',
-                description: 'Stay updated with chat messages and alerts.',
-                icon: LucideIcons.bell,
-                isGranted: _notificationGranted,
-                onPressed: _requestNotifications,
-              ),
+                    // Notification Permission (First)
+                    _buildPermissionItem(
+                      title: 'Notifications',
+                      description: 'Stay updated with chat messages and alerts.',
+                      icon: LucideIcons.bell,
+                      isGranted: _notificationGranted,
+                      onPressed: _requestNotifications,
+                    ),
               
-              const SizedBox(height: 16),
+                    const SizedBox(height: 16),
               
-              // Location Permission (Second - Requires Notifications)
-              _buildPermissionItem(
-                title: 'Location Service',
-                description: "Required to show nearby. Click on 'While using the app'.",
-                icon: LucideIcons.mapPin,
-                isGranted: _locationGranted,
-                onPressed: _requestLocation,
-                isDisabled: !_notificationGranted, // Disabled until Notif granted
-              ),
+                    // Location Permission (Second - Requires Notifications)
+                    _buildPermissionItem(
+                      title: 'Location Service',
+                      description: "Required to show nearby. Click on 'While using the app'.",
+                      icon: LucideIcons.mapPin,
+                      isGranted: _locationGranted,
+                      onPressed: _requestLocation,
+                      isDisabled: !_notificationGranted, // Disabled until Notif granted
+                    ),
               
-              const SizedBox(height: 16),
+                    const SizedBox(height: 16),
               
-              // Background Location Permission (Third - Requires Location)
-              _buildPermissionItem(
-                title: 'Background Location',
-                description: "Required for alerts. Click on 'Allow all the time' in settings.",
-                icon: LucideIcons.map,
-                isGranted: _backgroundLocationGranted,
-                onPressed: _requestBackgroundLocation,
-                isDisabled: !_locationGranted, // Disabled until Location granted
-              ),
-
-              const Spacer(flex: 2),
+                    // Background Location Permission (Third - Requires Location)
+                    if (!kIsWeb)
+                      _buildPermissionItem(
+                        title: 'Background Location',
+                        description: "Required for alerts. Click on 'Allow all the time' in settings.",
+                        icon: LucideIcons.map,
+                        isGranted: _backgroundLocationGranted,
+                        onPressed: _requestBackgroundLocation,
+                        isDisabled: !_locationGranted, // Disabled until Location granted
+                      ),
               
-              // Continue Button - Requires ALL permissions
-              ElevatedButton(
-                onPressed: (_locationGranted && _notificationGranted && _backgroundLocationGranted) 
-                    ? _continue 
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: const Color(0xFF9CAF88),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
+                    if (kIsWeb)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        child: Text(
+                          'Note: Background location and app-alerts are managed by your browser settings on the web.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                    
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-            ],
-          ),
+            ),
+            
+            // Sticky Continue Button
+            Container(
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (kIsWeb || (_locationGranted && _notificationGranted && _backgroundLocationGranted)) 
+                      ? _continue 
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: const Color(0xFF9CAF88),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
+                  child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

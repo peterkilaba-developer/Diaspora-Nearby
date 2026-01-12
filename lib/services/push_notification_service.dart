@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -14,6 +14,18 @@ import 'package:flutter/foundation.dart';
 final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
   return PushNotificationService(ref);
 });
+
+// Holds the pending route to navigate to after authentication
+// Holds the pending route
+class PendingNavigationNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void setRoute(String? route) => state = route;
+  void clear() => state = null;
+}
+
+final pendingNavigationProvider = NotifierProvider<PendingNavigationNotifier, String?>(PendingNavigationNotifier.new);
 
 class PushNotificationService {
   final Ref _ref;
@@ -34,7 +46,9 @@ class PushNotificationService {
     _isInitialized = true;
     
     // 1. Initialize Local Notifications
-    await _initializeLocalNotifications();
+    if (!kIsWeb) {
+      await _initializeLocalNotifications();
+    }
 
     // 3. Setup Message Handlers
     _setupMessageHandlers();
@@ -53,6 +67,14 @@ class PushNotificationService {
       if (user != null) {
         debugPrint('PushNotificationService: User signed in (${user.uid}), registering notifications...');
         registerForUser(user.uid);
+        
+        // Handle Pending Navigation
+        final pendingRoute = _ref.read(pendingNavigationProvider);
+        if (pendingRoute != null) {
+          debugPrint('PushNotificationService: Navigating to pending route: $pendingRoute');
+          _ref.read(routerProvider).push(pendingRoute);
+          _ref.read(pendingNavigationProvider.notifier).clear();
+        }
       } else {
         debugPrint('PushNotificationService: User signed out.');
       }
@@ -145,27 +167,72 @@ class PushNotificationService {
 
       final notification = message.notification;
       final android = message.notification?.android;
+      final data = message.data;
 
-      // Show local notification if notification data exists
-      if (notification != null && android != null) {
-        try {
-          _localNotifications.show(
-            notification.hashCode,
-            notification.title,
-            notification.body,
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                'high_importance_channel',
-                'High Importance Notifications',
-                icon: '@mipmap/ic_launcher',
-                priority: Priority.high,
-                importance: Importance.max,
+      // Show local notification if notification data exists OR if it's a data-only message we recognize
+      if (!kIsWeb) {
+        String? title = notification?.title;
+        String? body = notification?.body;
+
+        // Fallback for Data-Only Messages
+        if (title == null && body == null) {
+           // Try to construct from data
+           if (data['type'] == 'chat' || data['type'] == 'text' || data['type'] == 'image' || data['type'] == 'video') {
+              title = data['senderName'] ?? 'New Message';
+              body = data['content'] ?? data['body'] ?? 'Sent a message';
+              
+              // Handle media labels if content is empty
+              if ((body == null || body.isEmpty) && data['type'] != 'text') {
+                 if (data['type'] == 'image') body = 'Photo';
+                 else if (data['type'] == 'video') body = 'Video';
+              }
+           } else if (data['type'] == 'dsp_transfer') {
+               title = 'Diaspora Nearby';
+               // Body construction logic below will handle the rest
+           }
+        }
+
+        // [NEW] Intercept DSP Transfer messages to show correct text
+        if (data['type'] == 'dsp_transfer') {
+           title = 'Diaspora Nearby'; // Force title
+           dynamic amountVal = data['amount'];
+           if (amountVal == null && data['metadata'] != null) {
+              if (data['metadata'] is String) {
+                 try {
+                   final meta = jsonDecode(data['metadata']);
+                   amountVal = meta['amount'];
+                 } catch (_) {}
+              } else if (data['metadata'] is Map) {
+                 amountVal = data['metadata']['amount'];
+              }
+           }
+           
+           if (amountVal != null) {
+             final senderName = data['senderName'] ?? notification?.title ?? 'Someone';
+             body = 'You received $amountVal DSP from $senderName';
+           }
+        }
+
+        if (title != null && body != null) {
+          try {
+             _localNotifications.show(
+              notification?.hashCode ?? DateTime.now().millisecond,
+              title,
+              body,
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'high_importance_channel',
+                  'High Importance Notifications',
+                  icon: '@mipmap/ic_launcher',
+                  priority: Priority.high,
+                  importance: Importance.max,
+                ),
               ),
-            ),
-            payload: _encodePayload(message.data),
-          );
-        } catch (e) {
-          debugPrint('Error showing foreground notification: $e');
+              payload: _encodePayload(message.data),
+            );
+          } catch (e) {
+            debugPrint('Error showing foreground notification: $e');
+          }
         }
       }
     });
@@ -270,21 +337,35 @@ class PushNotificationService {
       final type = data['type'];
       final router = _ref.read(routerProvider);
       
+      String? targetRoute;
       if (type == 'direct_message' && data['chatId'] != null) {
-        router.push('/chats/${data['chatId']}');
+        targetRoute = '/chats/${data['chatId']}';
       } else if (type == 'event_reminder' && data['eventId'] != null) {
-        router.push('/events/${data['eventId']}');
+        targetRoute = '/events/${data['eventId']}';
       } else if (type == 'money_transfer') {
-        router.push('/notifications');
+        targetRoute = '/notifications';
+      } else if (type == 'dsp_transfer' && data['chatId'] != null) { // [NEW]
+        targetRoute = '/chats/${data['chatId']}';
       } else if (type == 'group_mention' && data['chatId'] != null) {
-         router.push('/chats/${data['chatId']}');
+        targetRoute = '/chats/${data['chatId']}';
       } else if (type == 'nearby_compatriot' && data['userId'] != null) {
-         router.push('/profile/${data['userId']}');
+        targetRoute = '/profile/${data['userId']}';
       } else {
-         router.push('/notifications');
+        targetRoute = '/notifications';
+      }
+
+      if (targetRoute != null) {
+        final currentUser = _ref.read(authRepositoryProvider).currentUser;
+        if (currentUser == null) {
+           debugPrint('PushNotificationService: User not logged in, queueing route: $targetRoute');
+           _ref.read(pendingNavigationProvider.notifier).setRoute(targetRoute);
+           // We might also want to ensure we are on auth screen, but Router redirect handles that.
+        } else {
+           router.push(targetRoute);
+        }
       }
     } catch (e) {
-      // Error parsing notification payload
+      debugPrint('Error parsing notification payload: $e');
     }
   }
   
@@ -299,10 +380,10 @@ class PushNotificationService {
       final nearbyCompatriots = await homeRepo.getNearbyCompatriots();
       
       if (nearbyCompatriots.isNotEmpty) {
-        // Filter for users strictly within 10 miles for notification
-        final closeCompatriots = nearbyCompatriots.where((u) => (u.distance ?? 999999) <= 10).toList();
+        // Filter for users strictly within 999 miles for notification
+        final closeCompatriots = nearbyCompatriots.where((u) => (u.distance ?? 999999) <= 999).toList();
         
-        if (closeCompatriots.isNotEmpty) {
+        if (closeCompatriots.isNotEmpty && !kIsWeb) {
           final compatriot = closeCompatriots.first;
           final name = compatriot.firstName;
           final homeCountry = compatriot.homeCountry ?? 'your home country';
@@ -318,6 +399,7 @@ class PushNotificationService {
                   'high_importance_channel',
                   'High Importance Notifications',
                   icon: '@mipmap/ic_launcher',
+                  largeIcon: const DrawableResourceAndroidBitmap('ic_launcher_foreground'),
                   priority: Priority.high,
                   importance: Importance.max,
                 ),

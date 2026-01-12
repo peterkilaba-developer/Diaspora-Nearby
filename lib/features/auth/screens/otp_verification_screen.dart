@@ -57,14 +57,28 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     try {
       setState(() => _isListening = true);
       // Start listening for incoming SMS
-      listenForCode();
+      await SmsAutoFill().listenForCode();
       // Get app signature for SMS format (useful for debugging)
-      await SmsAutoFill().getAppSignature;
-    } catch (e) {}
+      final signature = await SmsAutoFill().getAppSignature;
+      print('OTPVerificationScreen: App Signature for SMS: $signature');
+      
+      // Auto-stop listening after 60 seconds
+      Future.delayed(const Duration(seconds: 60), () {
+        if (mounted && _isListening) {
+          setState(() => _isListening = false);
+        }
+      });
+    } catch (e) {
+      print('OTPVerificationScreen: Failed to start listening: $e');
+      setState(() => _isListening = false);
+    }
   }
 
   void _verify() {
     if (_otpCode.length == 6) {
+      final isLoading = ref.read(authControllerProvider);
+      if (isLoading) return; // Prevent double submission
+
       ref.read(authControllerProvider.notifier).verifyOTP(
             context,
             widget.verificationId,

@@ -7,104 +7,101 @@ part of 'profile_data.dart';
 // **************************************************************************
 
 ProfileData _$ProfileDataFromJson(Map<String, dynamic> json) => ProfileData(
-  uid: json['uid'] as String?,
-  homeLocation: UserLocation.fromJson(
-    json['homeLocation'] as Map<String, dynamic>,
-  ),
-  hostLocation: UserLocation.fromJson(
-    json['hostLocation'] as Map<String, dynamic>,
-  ),
-  firstName: json['firstName'] as String,
-  lastName: json['lastName'] as String,
-  phone: json['phone'] as String,
-  profileImage: json['profilePhoto'] as String,
-  bio: json['bio'] as String?,
-  interests: (json['interests'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  occupation: json['occupation'] as String?,
-  dateOfBirth: json['dateOfBirth'] as String?,
-  workLocation: json['workLocation'] == null
-      ? null
-      : UserLocation.fromJson(json['workLocation'] as Map<String, dynamic>),
-  education: (json['education'] as List<dynamic>?)
-      ?.map((e) => Education.fromJson(e as Map<String, dynamic>))
-      .toList(),
-  languages: (json['languages'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  socialLinks: json['socialLinks'] == null
-      ? null
-      : SocialLinks.fromJson(json['socialLinks'] as Map<String, dynamic>),
-  homeCountry: json['homeCountry'] as String?,
-  hostCountry: json['hostCountry'] as String?,
-  homeCountryCode: json['homeCountryCode'] as String?,
-  hostCountryCode: json['hostCountryCode'] as String?,
-  currentLocation: json['currentLocation'] == null
-      ? null
-      : CurrentLocation.fromJson(
-          json['currentLocation'] as Map<String, dynamic>,
-        ),
-  communityMemberships: (json['communityMemberships'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  organizationMemberships: (json['organizationMemberships'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  profession: (json['profession'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  industry: (json['industry'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  yearsInHostCountry: json['yearsInHostCountry'] as String?,
-  servicesOffered: (json['servicesOffered'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  lookingFor: (json['lookingFor'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  availability: (json['availability'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  meetingPreferences: (json['meetingPreferences'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  pastLocations: (json['pastLocations'] as List<dynamic>?)
-      ?.map((e) => PastLocation.fromJson(e as Map<String, dynamic>))
-      .toList(),
-  businessProfile: json['businessProfile'] == null
-      ? null
-      : BusinessProfile.fromJson(
-          json['businessProfile'] as Map<String, dynamic>,
-        ),
-  advertReportCount: (json['advertReportCount'] as num?)?.toInt(),
-  isBanned: json['isBanned'] as bool?,
-  bannedAt: json['bannedAt'] as String?,
-  bannedReason: json['bannedReason'] as String?,
-  radioFavorites: (json['radioFavorites'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  radioRecents: (json['radioRecents'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  radioCurrentStation: json['radioCurrentStation'] as String?,
-  radioIsPlaying: json['radioIsPlaying'] as bool?,
-  notificationsEnabled: json['notificationsEnabled'] as bool?,
-  fcmToken: json['fcmToken'] as String?,
-  fcmTopics: (json['fcmTopics'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  distance: (json['distance'] as num?)?.toDouble(),
-  isAdmin: json['isAdmin'] as bool?,
-  blockedUsers: (json['blockedUsers'] as List<dynamic>?)
-      ?.map((e) => e as String)
-      .toList(),
-  createdAt: json['createdAt'] == null
-      ? null
-      : DateTime.parse(json['createdAt'] as String),
-  showCurrentLocationName: json['showCurrentLocationName'] as bool?,
-);
+      uid: json['uid'] as String?,
+      homeLocation:
+          UserLocation.fromJson(json['homeLocation'] as Map<String, dynamic>),
+      hostLocation:
+          UserLocation.fromJson(json['hostLocation'] as Map<String, dynamic>),
+      firstName: json['firstName'] as String,
+      lastName: json['lastName'] as String,
+      phone: json['phone'] as String,
+      profileImage: json['profilePhoto'] as String,
+      bio: json['bio'] as String?,
+      interests: (json['interests'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      occupation: json['occupation'] as String?,
+      dateOfBirth: json['dateOfBirth'] as String?,
+      workLocation: json['workLocation'] == null
+          ? null
+          : UserLocation.fromJson(json['workLocation'] as Map<String, dynamic>),
+      education: (json['education'] as List<dynamic>?)
+          ?.map((e) => Education.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      languages: (json['languages'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      socialLinks: json['socialLinks'] == null
+          ? null
+          : SocialLinks.fromJson(json['socialLinks'] as Map<String, dynamic>),
+      homeCountry: json['homeCountry'] as String?,
+      hostCountry: json['hostCountry'] as String?,
+      homeCountryCode: json['homeCountryCode'] as String?,
+      hostCountryCode: json['hostCountryCode'] as String?,
+      currentLocation: json['currentLocation'] == null
+          ? null
+          : CurrentLocation.fromJson(
+              json['currentLocation'] as Map<String, dynamic>),
+      communityMemberships: (json['communityMemberships'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      organizationMemberships:
+          (json['organizationMemberships'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList(),
+      profession: (json['profession'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      industry: (json['industry'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      yearsInHostCountry: json['yearsInHostCountry'] as String?,
+      servicesOffered: (json['servicesOffered'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      lookingFor: (json['lookingFor'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      availability: (json['availability'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      meetingPreferences: (json['meetingPreferences'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      pastLocations: (json['pastLocations'] as List<dynamic>?)
+          ?.map((e) => PastLocation.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      businessProfile: json['businessProfile'] == null
+          ? null
+          : BusinessProfile.fromJson(
+              json['businessProfile'] as Map<String, dynamic>),
+      advertReportCount: json['advertReportCount'] as int?,
+      isBanned: json['isBanned'] as bool?,
+      bannedAt: json['bannedAt'] as String?,
+      bannedReason: json['bannedReason'] as String?,
+      radioFavorites: (json['radioFavorites'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      radioRecents: (json['radioRecents'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      radioCurrentStation: json['radioCurrentStation'] as String?,
+      radioIsPlaying: json['radioIsPlaying'] as bool?,
+      notificationsEnabled: json['notificationsEnabled'] as bool?,
+      fcmToken: json['fcmToken'] as String?,
+      fcmTopics: (json['fcmTopics'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      distance: (json['distance'] as num?)?.toDouble(),
+      isAdmin: json['isAdmin'] as bool?,
+      blockedUsers: (json['blockedUsers'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      createdAt: json['createdAt'] == null
+          ? null
+          : DateTime.parse(json['createdAt'] as String),
+      showCurrentLocationName: json['showCurrentLocationName'] as bool?,
+    );
 
 Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
     <String, dynamic>{
@@ -158,23 +155,23 @@ Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
     };
 
 Education _$EducationFromJson(Map<String, dynamic> json) => Education(
-  institution: json['institution'] as String,
-  degree: json['degree'] as String,
-  graduationYear: json['graduationYear'] as String,
-);
+      institution: json['institution'] as String,
+      degree: json['degree'] as String,
+      graduationYear: json['graduationYear'] as String,
+    );
 
 Map<String, dynamic> _$EducationToJson(Education instance) => <String, dynamic>{
-  'institution': instance.institution,
-  'degree': instance.degree,
-  'graduationYear': instance.graduationYear,
-};
+      'institution': instance.institution,
+      'degree': instance.degree,
+      'graduationYear': instance.graduationYear,
+    };
 
 SocialLinks _$SocialLinksFromJson(Map<String, dynamic> json) => SocialLinks(
-  instagram: json['instagram'] as String?,
-  twitter: json['twitter'] as String?,
-  linkedin: json['linkedin'] as String?,
-  facebook: json['facebook'] as String?,
-);
+      instagram: json['instagram'] as String?,
+      twitter: json['twitter'] as String?,
+      linkedin: json['linkedin'] as String?,
+      facebook: json['facebook'] as String?,
+    );
 
 Map<String, dynamic> _$SocialLinksToJson(SocialLinks instance) =>
     <String, dynamic>{
@@ -189,12 +186,11 @@ CurrentLocation _$CurrentLocationFromJson(Map<String, dynamic> json) =>
       formattedAddress: json['formatted_address'] as String,
       placeId: json['place_id'] as String,
       geometry: UserLocationGeometry.fromJson(
-        json['geometry'] as Map<String, dynamic>,
-      ),
+          json['geometry'] as Map<String, dynamic>),
       city: json['city'] as String?,
       state: json['state'] as String?,
       countryCode: json['countryCode'] as String?,
-      timestamp: (json['timestamp'] as num).toInt(),
+      timestamp: json['timestamp'] as int,
     );
 
 Map<String, dynamic> _$CurrentLocationToJson(CurrentLocation instance) =>

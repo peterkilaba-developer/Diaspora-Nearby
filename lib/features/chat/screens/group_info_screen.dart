@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -43,7 +44,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   // For Batch Editing
   final Set<String> _membersToRemove = {};
   final Set<String> _membersToAdd = {};
-  File? _newGroupImageFile;
+  XFile? _newGroupImageFile;
 
   @override
   void initState() {
@@ -170,11 +171,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
+    final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
     if (image == null) return;
 
     setState(() {
-      _newGroupImageFile = File(image.path);
+      _newGroupImageFile = image;
     });
   }
 
@@ -304,7 +305,12 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                   shape: BoxShape.circle,
                                   color: theme.colorScheme.primaryContainer,
                                   image: _newGroupImageFile != null
-                                      ? DecorationImage(image: FileImage(_newGroupImageFile!), fit: BoxFit.cover)
+                                      ? DecorationImage(
+                                          image: (kIsWeb 
+                                              ? NetworkImage(_newGroupImageFile!.path) 
+                                              : FileImage(File(_newGroupImageFile!.path))) as ImageProvider,
+                                          fit: BoxFit.cover,
+                                        )
                                       : _currentGroupImage != null
                                           ? DecorationImage(
                                               image: CachedNetworkImageProvider(_currentGroupImage!),

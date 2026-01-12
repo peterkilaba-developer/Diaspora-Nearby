@@ -1,8 +1,69 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+  
+    // Helper function to check for images
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    function isSmallEnough() {
+       return request.resource.size < 5 * 1024 * 1024; // 5MB
+    }
+
+    // --- Profile Photos & Business Logos ---
+    // Path: profile_photos/{userId}/...
+    match /profile_photos/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // [DEBUG] Allow public deletion
+      // allow write: if request.auth != null && request.auth.uid == userId && isImage() && isSmallEnough();
+    }
+
+    // --- Event Images ---
+    // Path: event_images/{eventId} (or similar)
+    // We allow authenticated users to upload event images. 
+    // Ideally we would check 'createdBy' on the event doc, but the image might be uploaded before the doc.
+    match /event_images/{allPaths=**} {
+      allow read: if true;
+      allow write: if true; // [DEBUG]
+      // allow write: if request.auth != null && isImage() && isSmallEnough();
+    }
+
+    // --- Chat/Group Media ---
+    // Path: groups/{chatId}/... or chat_media/...
+    match /groups/{chatId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 10 * 1024 * 1024; // Allow slightly larger for shared media
+    }
+    
+    match /chat_media/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 20 * 1024 * 1024; 
+    }
+
+    // [NEW] Explicit rules for folders used by ChatMessagingService
+    match /chat_images/{chatId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && isImage() && isSmallEnough();
+    }
+
+    match /chat_videos/{chatId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 50 * 1024 * 1024; // 50MB for videos
+    }
+
+    match /chat_voices/{chatId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 10 * 1024 * 1024; // 10MB audio
+    }
+
+    match /chat_documents/{chatId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 20 * 1024 * 1024; // 20MB docs
+    }
+
+    // Default deny
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

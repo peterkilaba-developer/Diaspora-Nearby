@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -39,7 +40,13 @@ class ChatMessagingService {
     String? senderIdOverride,
     String? senderNameOverride,
     String? senderImageOverride,
-    List<String>? participants, 
+
+    List<String>? participants,
+    List<String>? mentions,
+    String? richContent,
+    String? replyToSenderId, // [NEW] Notification target for replies
+    String type = 'text',
+    Map<String, dynamic>? metadata,
   }) async {
     if (currentUserId == null) return null;
 
@@ -66,10 +73,12 @@ class ChatMessagingService {
       'senderHomeCountryCode': homeCountryCode,
       'content': content, // [FIX] Revert to raw content to trigger backend notifications
  
-      'type': 'text',
+      'type': type, // [FIX] Use passed type (default 'text')
       'timestamp': now,
       'status': 'sent',
-
+      if (mentions != null) 'mentions': { for (var m in mentions) m: true },
+      if (richContent != null) 'richContent': richContent,
+      if (metadata != null) 'metadata': metadata, // [NEW]
     };
     
     if (replyToMessageId != null) {
@@ -98,30 +107,93 @@ class ChatMessagingService {
         'timestamp': now,
         'senderId': senderIdOverride ?? currentUserId,
         'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
-        'type': 'text',
+        'type': type,
         'status': 'sent',
       });
       await _rtdb.ref('chats/$chatId/updatedAt').set(now);
 
       var targetParticipants = participants;
+      debugPrint('📤 sendTextMessage: Initial participants: $targetParticipants');
+
       if (targetParticipants == null || targetParticipants.isEmpty) {
+          debugPrint('⚠️ Participants missing. Fetching from RTDB...');
           final chatSnapshot = await _rtdb.ref('chats/$chatId').get();
           if (chatSnapshot.exists && chatSnapshot.value != null) {
             final chatData = Map<String, dynamic>.from(chatSnapshot.value as Map);
-            targetParticipants = List<String>.from(chatData['participants'] ?? []);
+            final rawParticipants = chatData['participants'];
+            if (rawParticipants is List) {
+               targetParticipants = rawParticipants.map((e) => e.toString()).toList();
+            } else if (rawParticipants is Map) {
+               if (rawParticipants.isEmpty) {
+                  targetParticipants = [];
+               } else {
+                   final firstVal = rawParticipants.values.first;
+                   if (firstVal is bool || (firstVal is num && firstVal == 1)) {
+                      targetParticipants = rawParticipants.keys.map((e) => e.toString()).toList();
+                   } else {
+                      targetParticipants = rawParticipants.values.map((e) => e.toString()).toList();
+                   }
+               }
+            } else {
+               targetParticipants = [];
+            }
+            debugPrint('✅ Fetched participants: $targetParticipants');
+          } else {
+            debugPrint('❌ Failed to fetch chat data for participant fallback.');
           }
       }
 
       final Set<String> allTargets = {};
       if (targetParticipants != null) allTargets.addAll(targetParticipants);
+      
+      // [NEW] Explicitly add mentioned users to targets to ensure they get notifications
+      // even if not in the loaded participants list (optimistic/community chats)
+      if (mentions != null) {
+          allTargets.addAll(mentions);
+      }
+      
+      // [NEW] Explicitly add reply target
+      if (replyToSenderId != null) {
+         allTargets.add(replyToSenderId);
+      }
 
       if (senderIdOverride != null) allTargets.add(senderIdOverride);
       else if (currentUserId != null) allTargets.add(currentUserId!);
+      
+      debugPrint('🎯 [DEBUG] sendTextMessage: Targets: $allTargets');
+      if (mentions != null) debugPrint('🎯 [DEBUG] sendTextMessage: Mentions: $mentions');
 
       for (final userId in allTargets) {
           try {
+             // [FIX] REVISED: Use standard 'text' type to ensure delivery (like DMs)
+             // We removed the 'You were mentioned:' prefix here to handle it purely in MentionMonitorService
+             // and avoid double prefixes or dirty data in the chat list.
              String userSpecificContent = content;
+             
+             // [NEW] Customize notification/preview text for DSP transfers
+             if (type == 'dsp_transfer') {
+                final isSender = userId == (senderIdOverride ?? currentUserId);
+                final amount = metadata?['amount'] ?? 0;
+                final senderName = senderNameOverride ?? '$firstName $lastName'.trim();
+                
+                final baseText = isSender 
+                    ? 'You sent $amount DSP' 
+                    : 'You received $amount DSP from $senderName';
+                
+                // If there is a caption (and it's not the fallback text we used in ChatScreen)
+                // Note: userSpecificContent currently holds the 'content' passed from ChatScreen.
+                // In ChatScreen we passed `caption ?? ''`. 
+                // So if caption is empty, content is empty.
+                if (content.isNotEmpty) {
+                   userSpecificContent = '$baseText: $content';
+                } else {
+                   userSpecificContent = baseText;
+                }
+             }
+             
+             final messageType = type; // Use actual type
 
+             debugPrint('   -> Updating userChats/$userId/$chatId');
 
              await _rtdb.ref('userChats/$userId/$chatId').update({
                'lastMessage': {
@@ -129,14 +201,18 @@ class ChatMessagingService {
                  'timestamp': now,
                  'senderId': senderIdOverride ?? currentUserId,
                  'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
-                 'type': 'text',
+                 'type': messageType,
                  'status': 'sent',
+                 // [FIX] Convert mentions list to Map {uid: true} for compatibility with Firebase Triggers
+                 if (mentions != null) 'mentions': { for (var m in mentions) m: true },
                 },
                'updatedAt': now,
-               'unreadCount': ServerValue.increment(1), // [NEW] Increment unread count
+               'unreadCount': ServerValue.increment(1), 
+               'isDeleted': null, // [NEW] Revive chat if deleted
              });
+             debugPrint('   -> [SUCCESS] Updated userChats for $userId');
           } catch (e) {
-             debugPrint('Error updating userChat for $userId: $e');
+             debugPrint('❌ Error updating userChat for $userId: $e');
           }
       }
 
@@ -253,6 +329,8 @@ class ChatMessagingService {
                  'status': 'sent',
                },
                'updatedAt': now,
+               'unreadCount': ServerValue.increment(1),
+               'isDeleted': null, // [NEW] Revive chat
              });
           } catch (e) {
              debugPrint('Error updating userChat for $userId: $e');
@@ -270,12 +348,12 @@ class ChatMessagingService {
 
   String _getMessageTypeLabel(String type) {
     switch (type) {
-      case 'image': return '📷 Photo';
-      case 'video': return '📹 Video';
-      case 'audio': return '🎤 Voice message';
-      case 'audio_file': return '🎵 Audio';
-      case 'location': return '📍 Location';
-      case 'document': return '📄 Document';
+      case 'image': return 'Photo';
+      case 'video': return 'Video';
+      case 'audio': return 'Voice message';
+      case 'audio_file': return 'Audio';
+      case 'location': return 'Location';
+      case 'document': return 'Document';
       default: return 'Forwarded message';
     }
   }
@@ -286,7 +364,7 @@ class ChatMessagingService {
 
   Future<Message?> sendImageMessage(
     String chatId, 
-    String imagePath, {
+    XFile imageFile, {
     String? caption,
     String? replyToMessageId,
     void Function(Message confirmedMessage)? onConfirmed,
@@ -294,7 +372,8 @@ class ChatMessagingService {
     String? senderIdOverride,
     String? senderNameOverride,
     String? senderImageOverride,
-    List<String>? participants, 
+    List<String>? participants,
+    String? replyToSenderId,
   }) async {
     if (currentUserId == null) return null;
 
@@ -315,7 +394,7 @@ class ChatMessagingService {
       senderImage: senderImageOverride ?? profileImage,
       content: caption?.trim() ?? '',
       type: 'image',
-      imageUrl: 'file://$imagePath', 
+      imageUrl: imageFile.path, 
       timestamp: now,
       status: 'sending',
       replyTo: replyToMessageId,
@@ -323,9 +402,9 @@ class ChatMessagingService {
       adminImage: senderIdOverride != null ? profileImage : null,
     );
 
-    _uploadMediaAsync(
+    await _uploadMediaAsync(
       chatId: chatId,
-      file: File(imagePath),
+      file: imageFile,
       type: 'image',
       caption: caption,
       now: now,
@@ -338,6 +417,7 @@ class ChatMessagingService {
       senderNameOverride: senderNameOverride,
       senderImageOverride: senderImageOverride,
       participants: participants,
+      replyToSenderId: replyToSenderId,
     );
 
     return optimisticMessage;
@@ -345,7 +425,7 @@ class ChatMessagingService {
 
   Future<Message?> sendVideoMessage(
     String chatId,
-    String videoPath, {
+    XFile videoFile, {
     String? caption,
     String? replyToMessageId,
     void Function(Message confirmedMessage)? onConfirmed,
@@ -354,6 +434,7 @@ class ChatMessagingService {
     String? senderNameOverride,
     String? senderImageOverride,
     List<String>? participants,
+    String? replyToSenderId,
   }) async {
     if (currentUserId == null) throw Exception('User not logged in');
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -373,7 +454,7 @@ class ChatMessagingService {
       senderImage: senderImageOverride ?? profileImage,
       content: caption?.trim() ?? '',
       type: 'video',
-      documentUrl: 'file://$videoPath', // Temporary mapping
+      documentUrl: videoFile.path, // Temporary mapping
       timestamp: now,
       status: 'sending',
       replyTo: replyToMessageId,
@@ -381,9 +462,9 @@ class ChatMessagingService {
       adminImage: senderIdOverride != null ? profileImage : null,
     );
 
-    _uploadMediaAsync(
+    await _uploadMediaAsync(
       chatId: chatId,
-      file: File(videoPath), 
+      file: videoFile, 
       type: 'video',
       caption: caption,
       now: now,
@@ -396,6 +477,7 @@ class ChatMessagingService {
       senderNameOverride: senderNameOverride,
       senderImageOverride: senderImageOverride,
       participants: participants,
+      replyToSenderId: replyToSenderId,
     );
 
     return optimisticMessage;
@@ -403,7 +485,7 @@ class ChatMessagingService {
 
   Future<Message?> sendAudioMessage(
     String chatId, 
-    String audioPath, {
+    XFile audioFile, {
     int? durationSeconds,
     String? caption,
     String? replyToMessageId,
@@ -413,7 +495,8 @@ class ChatMessagingService {
     String? senderNameOverride,
     String? senderImageOverride,
     List<String>? participants,
-    String messageType = 'audio', // [NEW] Allow override
+    String messageType = 'audio',
+    String? replyToSenderId,
   }) async {
     if (currentUserId == null) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -433,7 +516,7 @@ class ChatMessagingService {
       senderImage: senderImageOverride ?? profileImage,
       content: caption?.trim() ?? '',
       type: messageType, // Use dynamic type
-      documentUrl: 'file://$audioPath', 
+      documentUrl: audioFile.path, 
       audioDuration: durationSeconds,
       timestamp: now,
       status: 'sending',
@@ -442,9 +525,9 @@ class ChatMessagingService {
       adminImage: senderIdOverride != null ? profileImage : null,
     );
 
-    _uploadMediaAsync(
+    await _uploadMediaAsync(
       chatId: chatId,
-      file: File(audioPath),
+      file: audioFile,
       type: messageType, // Use dynamic type
       caption: caption,
       now: now,
@@ -458,6 +541,7 @@ class ChatMessagingService {
       senderNameOverride: senderNameOverride,
       senderImageOverride: senderImageOverride,
       participants: participants,
+      replyToSenderId: replyToSenderId,
     );
     
     return optimisticMessage;
@@ -465,30 +549,32 @@ class ChatMessagingService {
   
   Future<Message?> sendAudioFileMessage(
     String chatId, 
-    String audioPath, {
+    XFile audioFile, {
     String? caption,
     String? replyToMessageId,
     String? senderIdOverride,
     String? senderNameOverride,
     String? senderImageOverride,
     List<String>? participants,
+    String? replyToSenderId,
   }) async {
     return sendAudioMessage(
       chatId, 
-      audioPath, 
+      audioFile, 
       caption: caption,
       replyToMessageId: replyToMessageId,
       senderIdOverride: senderIdOverride,
       senderNameOverride: senderNameOverride,
       senderImageOverride: senderImageOverride,
       participants: participants,
-      messageType: 'audio_file', // [NEW] Specify type
+      messageType: 'audio_file', 
+      replyToSenderId: replyToSenderId,
     );
   }
 
   Future<Message?> sendDocumentMessage(
     String chatId,
-    String filePath, {
+    XFile file, {
     String? caption,
     String? replyToMessageId,
     void Function(Message confirmedMessage)? onConfirmed,
@@ -497,6 +583,7 @@ class ChatMessagingService {
     String? senderNameOverride,
     String? senderImageOverride,
     List<String>? participants,
+    String? replyToSenderId,
   }) async {
     if (currentUserId == null) throw Exception('User not logged in');
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -516,7 +603,7 @@ class ChatMessagingService {
       senderImage: senderImageOverride ?? profileImage,
       content: caption?.trim() ?? '',
       type: 'document',
-      documentUrl: 'file://$filePath',
+      documentUrl: file.path,
       timestamp: now,
       status: 'sending',
       replyTo: replyToMessageId,
@@ -524,9 +611,9 @@ class ChatMessagingService {
       adminImage: senderIdOverride != null ? profileImage : null,
     );
 
-    _uploadMediaAsync(
+    await _uploadMediaAsync(
       chatId: chatId,
-      file: File(filePath),
+      file: file,
       type: 'document',
       caption: caption,
       now: now,
@@ -538,7 +625,9 @@ class ChatMessagingService {
       senderIdOverride: senderIdOverride,
       senderNameOverride: senderNameOverride,
       senderImageOverride: senderImageOverride,
+
       participants: participants,
+      replyToSenderId: replyToSenderId,
     );
     
     return optimisticMessage;
@@ -554,6 +643,7 @@ class ChatMessagingService {
     String? senderNameOverride,
     String? senderImageOverride,
     List<String>? participants,
+    String? replyToSenderId,
   }) async {
     if (currentUserId == null) return null;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -615,6 +705,7 @@ class ChatMessagingService {
            await _rtdb.ref('userChats/$userId/$chatId').update({
              'lastMessage': lastMessageData, 
              'updatedAt': now, 
+             'isDeleted': null, // [NEW] Revive chat
            });
          } catch (e) {
            debugPrint('Error updating userChat for $userId: $e');
@@ -631,7 +722,7 @@ class ChatMessagingService {
   // Unified Upload Helper
   Future<void> _uploadMediaAsync({
     required String chatId,
-    required File file,
+    required XFile file,
     required String type,
     String? caption,
     required int now,
@@ -645,6 +736,7 @@ class ChatMessagingService {
     String? senderNameOverride,
     String? senderImageOverride,
     List<String>? participants,
+    String? replyToSenderId,
   }) async {
     try {
       final folder = type == 'image' ? 'chat_images' : 
@@ -664,7 +756,7 @@ class ChatMessagingService {
           ext = '.m4a';
         }
       } else {
-        ext = '_${file.uri.pathSegments.last}';
+        ext = '_${file.name}';
       }
                   
       final fileName = '${now}_${type}$ext';
@@ -672,13 +764,22 @@ class ChatMessagingService {
       
       debugPrint('🚀 Starting media upload: $fileName to path: $folder/$chatId/$fileName');
       
-      final uploadTask = await storageRef.putFile(
-        file,
-        SettableMetadata(contentType: type == 'video' ? 'video/mp4' : 
-                                    (type == 'audio' || type == 'audio_file') ? 'audio/mpeg' : 
-                                    type == 'image' ? 'image/jpeg' : null),
-      );
-      final derivedUrl = await uploadTask.ref.getDownloadURL();
+      final metadata = SettableMetadata(
+          contentType: type == 'video' ? 'video/mp4' : 
+                       (type == 'audio' || type == 'audio_file') ? 'audio/mpeg' : 
+                       type == 'image' ? 'image/jpeg' : null,
+          cacheControl: 'public, max-age=31536000',
+        );
+
+      UploadTask uploadTask;
+      if (kIsWeb) {
+         final bytes = await file.readAsBytes();
+         uploadTask = storageRef.putData(bytes, metadata);
+      } else {
+         uploadTask = storageRef.putFile(File(file.path), metadata);
+      }
+      final snapshot = await uploadTask;
+      final derivedUrl = await snapshot.ref.getDownloadURL();
       
       debugPrint('✅ Upload successful. URL: $derivedUrl');
 
@@ -722,10 +823,10 @@ class ChatMessagingService {
       await newMessageRef.set(messageData);
 
       // Icon for last message
-      String icon = type == 'image' ? '📷 Photo' :
-                    type == 'video' ? '📹 Video' :
-                    type == 'audio' ? '🎤 Voice message' : 
-                    type == 'audio_file' ? '🎵 Audio' : '📄 Document';
+      String icon = type == 'image' ? 'Photo' :
+                    type == 'video' ? 'Video' :
+                    type == 'audio' ? 'Voice message' : 
+                    type == 'audio_file' ? 'Audio' : 'Document';
 
       await _rtdb.ref('chats/$chatId/lastMessage').set({
         'content': caption?.isNotEmpty == true ? caption : icon,
@@ -737,15 +838,58 @@ class ChatMessagingService {
       });
       await _rtdb.ref('chats/$chatId/updatedAt').set(now);
 
-      final userIdsToUpdate = Set<String>.from(participants ?? []);
+
+      
+      var targetParticipants = participants;
+      debugPrint('📤 _uploadMediaAsync: Initial participants: $targetParticipants');
+
+      if (targetParticipants == null || targetParticipants.isEmpty) {
+          // Fallback: Fetch from chat data
+          try {
+            debugPrint('⚠️ Media participants missing. Fetching from RTDB...');
+            final chatSnapshot = await _rtdb.ref('chats/$chatId').get();
+            if (chatSnapshot.exists && chatSnapshot.value != null) {
+              final chatData = Map<String, dynamic>.from(chatSnapshot.value as Map);
+              final rawParticipants = chatData['participants'];
+              if (rawParticipants is List) {
+                 targetParticipants = rawParticipants.map((e) => e.toString()).toList();
+              } else if (rawParticipants is Map) {
+                 if (rawParticipants.isEmpty) {
+                    targetParticipants = [];
+                 } else {
+                     final firstVal = rawParticipants.values.first;
+                     if (firstVal is bool || (firstVal is num && firstVal == 1)) {
+                        targetParticipants = rawParticipants.keys.map((e) => e.toString()).toList();
+                     } else {
+                        targetParticipants = rawParticipants.values.map((e) => e.toString()).toList();
+                     }
+                 }
+              } else {
+                 targetParticipants = [];
+              }
+              debugPrint('✅ Fetched participants: $targetParticipants');
+            }
+          } catch (e) {
+             debugPrint('❌ Error fetching participants fallback: $e');
+          }
+      }
+
+      final userIdsToUpdate = Set<String>.from(targetParticipants ?? []);
+      if (replyToSenderId != null) userIdsToUpdate.add(replyToSenderId);
+      
       if (senderIdOverride != null) userIdsToUpdate.add(senderIdOverride);
       else if (currentUserId != null) userIdsToUpdate.add(currentUserId!);
       
+      debugPrint('🎯 Updating userChats (media) for targets: $userIdsToUpdate');
+      
       for (final userId in userIdsToUpdate) {
          try {
+           final contentPreview = caption?.isNotEmpty == true ? caption : icon;
+           debugPrint('   -> Updating userChats/$userId/$chatId with content: "$contentPreview"');
+
            await _rtdb.ref('userChats/$userId/$chatId').update({
              'lastMessage': {
-                'content': caption?.isNotEmpty == true ? caption : icon,
+                'content': contentPreview,
                 'timestamp': now,
                 'senderId': senderIdOverride ?? currentUserId,
                 'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
@@ -753,6 +897,8 @@ class ChatMessagingService {
                 'status': 'sent',
              }, 
              'updatedAt': now, 
+             'unreadCount': ServerValue.increment(1),
+             'isDeleted': null, // [NEW] Revive chat
            });
          } catch (e) {
            debugPrint('Error updating userChat for $userId: $e');
@@ -769,5 +915,50 @@ class ChatMessagingService {
     }
   }
 
+
+  // ============================================
+  // REACTIONS (Notification Aware)
+  // ============================================
+
+  Future<void> sendReaction({
+    required String chatId,
+    required String messageId,
+    required String emoji,
+    required String messageSenderId, // TARGET for notification
+  }) async {
+    final currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) return;
+    
+    // 1. Add reaction to the message
+    await _rtdb.ref('chats/$chatId/messages/$messageId/reactions/$currentUserId').set(emoji);
+
+    // 2. Notify the message sender (if not self)
+    if (messageSenderId != currentUserId) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        
+        // Fetch current user name for the notification text
+        // Fetch current user name for the notification text
+        // [FIX] Don't use _ref here, use firestore directly like sendTextMessage
+        final userDoc = await _firestore.collection('users').doc(currentUserId).get();
+        final userData = userDoc.data();
+        final senderName = userData?['firstName'] as String? ?? 'Someone';
+
+        debugPrint('🔔 Triggering reaction notification for user: $messageSenderId');
+        
+        // Update userChats for the message OWNER to trigger push notification
+        await _rtdb.ref('userChats/$messageSenderId/$chatId').update({
+           'lastMessage': {
+              'content': 'Reacted $emoji to your message',
+              'timestamp': now,
+              'senderId': currentUserId,
+              'senderName': senderName,
+              'type': 'reaction', // Special type
+              'status': 'sent',
+           },
+           'updatedAt': now,
+           'unreadCount': ServerValue.increment(1),
+        });
+    }
+  }
 
 }

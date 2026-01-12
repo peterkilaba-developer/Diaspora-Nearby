@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.diasporanearby.diasporanearby",
+            "sha256_cert_fingerprints": [
+                "1A:DE:19:94:27:EA:6A:61:96:A3:19:5E:6E:00:2D:74:83:7A:71:B7:F3:01:43:91:6F:41:64:B3:57:96:F2:A5"
+            ]
+        }
+    }
+]

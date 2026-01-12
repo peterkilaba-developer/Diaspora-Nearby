@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:diaspora_nearby/models/google_places_models.dart';
 import 'package:diaspora_nearby/models/location.dart' as loc_model;
 
 class ProfileSetupHomeStep extends StatelessWidget {

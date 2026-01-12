@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
@@ -167,6 +168,7 @@ class ProfileRepository {
     String? locationCountry,
     String? homeCountryCode, // Creator's home country code for filtering
     String? creatorTitle,
+    Map<String, dynamic>? richData, // Rich data from Google Places
   }) async {
     // 1. Create the Organization Document in Firestore
     final orgRef = _firestore.collection('organizations').doc();
@@ -237,6 +239,8 @@ class ProfileRepository {
       if (creatorTitle != null) 'adminTitles': {
         uid: creatorTitle,
       },
+      // Save Rich Data if available
+      if (richData != null) 'richData': richData,
     };
 
     await orgRef.set(orgData);
@@ -281,14 +285,28 @@ class ProfileRepository {
       'updatedAt': cf.FieldValue.serverTimestamp(),
     });
   }
-  Future<String> uploadProfileImage(String uid, File image) async {
+  Future<String> uploadProfileImage(String uid, XFile image) async {
     try {
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('profile_photos/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg');
       
-      final uploadTask = await storageRef.putFile(image);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      final metadata = SettableMetadata(
+        contentType: 'image/jpeg',
+        cacheControl: 'public, max-age=31536000',
+      );
+
+      UploadTask uploadTask;
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        uploadTask = storageRef.putData(bytes, metadata);
+      } else {
+        // Use putFile on mobile for better performance/resumability
+        uploadTask = storageRef.putFile(File(image.path), metadata);
+      }
+      
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
       return downloadUrl;
     } catch (e) {
       debugPrint('Error uploading profile image: $e');

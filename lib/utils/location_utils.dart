@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:diaspora_nearby/data/countries.dart' as country_data;
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:diaspora_nearby/models/google_places_models.dart';
 
 // --------------------------------------------------------------------------
 // Models
@@ -42,10 +42,26 @@ LocationParsed? parseLocationComponents(String address, List<AddressComponent> c
     }
   }
 
+  // [FALLBACK] If no city found (e.g. Region selected), use first part of address
+  if (city == null && address.isNotEmpty) {
+      final parts = address.split(',');
+      if (parts.isNotEmpty) {
+          city = parts.first.trim();
+      }
+  }
+
+  // [FALLBACK] If no city found (e.g. Region selected), use first part of address
+  if (city == null && address.isNotEmpty) {
+      final parts = address.split(',');
+      if (parts.isNotEmpty) {
+          city = parts.first.trim();
+      }
+  }
+
   if (country == null || countryCode == null) return null;
 
   // Verify if country supports state level
-  if (countryCode != null && !country_data.hasStateLevelHierarchyFromData(countryCode)) {
+  if (!country_data.hasStateLevelHierarchyFromData(countryCode)) {
     state = null;
   }
   
@@ -253,6 +269,27 @@ String formatLocationName(String? name) {
   if (upper == 'U.S.' || upper == 'USA') return 'United States';
   if (upper == 'UK') return 'United Kingdom';
   if (upper == 'UAE') return 'United Arab Emirates';
+  
+  // 4. Remove common administrative suffixes unless intrinsic to the name
+  // Standardize cleaning: remove Region, State, Province, District, County from end of string
+  // Exception: 'City' is usually kept if intrinsic (e.g. New York City, Salt Lake City), but 'New York State' -> 'New York'
+  
+  // Cleaned is roughly the name now. Let's process suffixes.
+  // Case-insensitive regex for suffixes
+  final suffixRegex = RegExp(r'\s+(Region|State|Province|District|County|Township)\b', caseSensitive: false);
+  
+  // Specific exclusions where "City" or "State" might be part of the name
+  // Note: "New York City" is handled by parseLocationComponents usually, but if it comes here as "New York State", we want "New York".
+  // If "Iowa State", we want "Iowa".
+  // If "Kilimanjaro Region", we want "Kilimanjaro".
+  
+  // We apply the regex to remove them.
+  // Exception: If the result becomes empty (e.g. place named "Region"), we revert.
+  String processed = cleaned.replaceAll(suffixRegex, '').trim();
+  
+  if (processed.isNotEmpty) {
+      return processed;
+  }
   
   return cleaned;
 }

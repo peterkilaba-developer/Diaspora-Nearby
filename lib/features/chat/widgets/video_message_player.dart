@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -35,7 +36,7 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer> with AutomaticK
 
   Future<void> _initializeVideo() async {
     try {
-      if (widget.videoUrl.startsWith('http')) {
+      if (widget.videoUrl.startsWith('http') || widget.videoUrl.startsWith('blob:') || kIsWeb) {
         _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
       } else {
          // Local file (Optimistic UI)

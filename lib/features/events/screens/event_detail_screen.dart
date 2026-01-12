@@ -58,43 +58,60 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
          body: const Center(child: Text('Event not found')),
        );
     }
+    
+    // Parse Dates (Robustly, handling potentials)
+    DateTime? startDate;
+    try {
+      startDate = DateTime.parse('${event.startDate} ${event.startTime}');
+    } catch (_) {
+      try { startDate = DateTime.parse(event.startDate); } catch (_) {}
+    }
 
-          // Date formatting
-          DateTime? startDate;
-          try {
-            startDate = DateTime.parse(event.startDate);
-          } catch (_) {}
-          
-          
-          final dateStr = startDate != null ? DateFormat('EEE, MMM d, y').format(startDate) : event.startDate;
-          final timeStr = event.startTime;
+    final dateStr = startDate != null ? DateFormat('EEE, MMM d, y').format(startDate) : event.startDate;
+    
+    // Determine Display Time (Am/Pm)
+    String formatToAmPm(String time) {
+      try {
+        final parts = time.split(':');
+        if (parts.length >= 2) {
+           final hour = int.parse(parts[0]);
+           final minute = int.parse(parts[1]);
+           final dt = DateTime(2000, 1, 1, hour, minute);
+           return DateFormat('h:mm a').format(dt);
+        }
+      } catch (_) {}
+      return time;
+    }
+    
+    final displayStartTime = formatToAmPm(event.startTime);
+    String? displayEndTime;
+    String? endDateStr;
 
-          // End Date Parsing
-          DateTime? endDate;
-          if (event.endDate != null) {
-             try {
-                endDate = DateTime.parse(event.endDate!);
-             } catch (_) {}
-          }
-          final endDateStr = endDate != null ? DateFormat('EEE, MMM d, y').format(endDate) : dateStr;
-          final endTimeStr = event.endTime ?? timeStr;
-
-          // Time Formatting Helper
-          String formatToAmPm(String time) {
-            try {
-              final parts = time.split(':');
-              if (parts.length >= 2) {
-                final hour = int.parse(parts[0]);
-                final minute = int.parse(parts[1]);
-                final dt = DateTime(2000, 1, 1, hour, minute);
-                return DateFormat('h:mm a').format(dt);
-              }
-            } catch (_) {}
-            return time;
-          }
-
-          final displayStartTime = formatToAmPm(timeStr);
-          final displayEndTime = formatToAmPm(endTimeStr);
+    if (event.endDate != null && event.endTime != null) {
+       try {
+          final end = DateTime.parse('${event.endDate!} ${event.endTime!}');
+          endDateStr = DateFormat('EEE, MMM d, y').format(end);
+          displayEndTime = formatToAmPm(event.endTime!);
+       } catch (_) {
+          // Fallback
+          endDateStr = event.endDate;
+          displayEndTime = event.endTime;
+       }
+    } else {
+        // Fallback default end (3h later) logic from card? 
+        // Details page should explicitly show what IS there.
+        // If null, we might show "Until Late" or calculate it.
+        // For consistency with card "starts in", we kept that logic in model.
+        // Visual consistency:
+        endDateStr = endDateStr ?? dateStr; // Same day default
+        
+        if (startDate != null) {
+           final end = startDate.add(const Duration(hours: 3));
+           displayEndTime = DateFormat('h:mm a').format(end); 
+        } else {
+           displayEndTime = 'Late';
+        }
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -189,6 +206,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   ),
                                 ),
                               ),
+                              const Spacer(),
+                              if (event.getStatusBadgeInfo()['text'] != null)
+                                Text(
+                                  (event.getStatusBadgeInfo()['text'] as String).toUpperCase(),
+                                  style: TextStyle(
+                                    color: event.getStatusBadgeInfo()['color'] == 'green' 
+                                        ? Colors.green 
+                                        : theme.colorScheme.primary, 
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -370,18 +400,22 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Start', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-                                      Text(dateStr, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text('Start', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10)),
+                                      Text(dateStr, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2), // Tighter spacing like card
                                       Row(
                                         children: [
-                                          Icon(LucideIcons.clock, size: 14, color: theme.colorScheme.outline),
+                                          Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                                           const SizedBox(width: 4),
                                           Expanded(
                                             child: Text(
                                               displayStartTime, 
-                                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.labelSmall?.copyWith(
+                                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6), 
+                                                fontWeight: FontWeight.w600
+                                              ),
+                                              maxLines: 1, 
+                                              overflow: TextOverflow.ellipsis
                                             ),
                                           ),
                                         ],
@@ -390,29 +424,33 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 8), // 8px spacer like card (was 12)
                               Expanded(
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
                                     color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                                    borderRadius: BorderRadius.circular(16),
+                                    borderRadius: BorderRadius.circular(12), // 12px radius like card (was 16)
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('End', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-                                      Text(endDateStr, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text('End', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10)),
+                                      Text(endDateStr ?? '', style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2),
                                       Row(
                                         children: [
-                                          Icon(LucideIcons.clock, size: 14, color: theme.colorScheme.outline),
+                                          Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                                           const SizedBox(width: 4),
                                           Expanded(
                                             child: Text(
-                                              displayEndTime, 
-                                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                              displayEndTime ?? '', 
+                                              style: theme.textTheme.labelSmall?.copyWith(
+                                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6), 
+                                                fontWeight: FontWeight.w600
+                                              ),
+                                              maxLines: 1, 
+                                              overflow: TextOverflow.ellipsis
                                             ),
                                           ),
                                         ],
@@ -424,89 +462,124 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             ],
                           ),
                           
-                          // Two-Row Address Card
+                          // [NEW] 16px padding
+                          const SizedBox(height: 16),
+                          
+                          // Two-Row Address Card (Restructured)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const SizedBox(height: 80, width: 0), // Minimum height
+                                // Left: Icon
                                 Container(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
                                     color: Colors.orange.withValues(alpha: 0.1),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(LucideIcons.mapPin, color: Colors.orange, size: 24),
+                                  child: const Icon(LucideIcons.mapPin, color: Colors.orange, size: 20),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 12),
+                                // Right: Content Column (Name, Address, City, Distance, Directions)
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      if (event.venueName != null && event.venueName!.isNotEmpty)
-                                        Text(
-                                          event.venueName!,
-                                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                                        ),
+                                      // Venue Name
+                                      Text(
+                                        (event.venueName != null && event.venueName!.isNotEmpty) 
+                                            ? event.venueName! 
+                                            : 'Event Location',
+                                        style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      
+                                      // Address (Cleaned: Remove City/State/Country duplication)
                                       if (event.venueAddress != null && event.venueAddress!.isNotEmpty)
                                         Text(
-                                          event.venueAddress!.split(',').first,
-                                          style: theme.textTheme.bodyMedium?.copyWith(
-                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
-                                            height: 1.2,
+                                          event.venueAddress!.split(',').first.trim(),
+                                          style: TextStyle(
+                                            fontSize: 12, 
+                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                            height: 1.3,
                                           ),
                                         )
                                       else if (event.location.isNotEmpty)
                                         Text(
-                                          event.location.split(',').first,
-                                          style: theme.textTheme.bodyMedium?.copyWith(
-                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
-                                            height: 1.2,
+                                          event.location.split(',').first.trim(),
+                                            style: TextStyle(
+                                            fontSize: 12, 
+                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                            height: 1.3,
                                           ),
                                         ),
+                                      
+                                      // City/State (Full Standard Display)
+                                      const SizedBox(height: 4),
                                       Text(
                                         [
                                           event.venueCity,
                                           event.venueState,
                                           event.venueCountry
                                         ].where((e) => e != null && e.isNotEmpty).join(', '),
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                          fontSize: 10,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                if (event.distance != null)
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Optional: Navigation Icon
-                                        // const Icon(LucideIcons.navigation, size: 20, color: Colors.orange),
-                                        Text(
-                                          '${event.distance!.toStringAsFixed(1)}km',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.orange,
+
+                                      const SizedBox(height: 16),
+                                      const Divider(height: 1), 
+                                      const SizedBox(height: 12),
+
+                                      // Bottom Nav Bar: Distance (Left) | Directions (Right)
+                                      // Now inside this column, so it matches indentation
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          // Left: Distance
+                                          if (event.distance != null)
+                                            Text(
+                                              '${event.distance!.toStringAsFixed(1)}km Away',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.orange,
+                                              ),
+                                            )
+                                          else
+                                            const SizedBox.shrink(),
+
+                                          // Right: Navigation Action
+                                          InkWell(
+                                            onTap: () => _openDirections(event.location),
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    'Get Directions', 
+                                                    style: theme.textTheme.labelMedium?.copyWith(
+                                                      color: Colors.orange,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  const Icon(LucideIcons.navigation, size: 14, color: Colors.orange),
+                                                ],
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                IconButton(
-                                  icon: const Icon(LucideIcons.navigation, color: Colors.orange),
-                                  onPressed: () => _openDirections(event.location),
-                                  style: IconButton.styleFrom(
-                                     backgroundColor: Colors.orange.withValues(alpha: 0.1),
-                                     padding: const EdgeInsets.all(8),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],

@@ -16,61 +16,34 @@ import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
 /// Provider for other user's profile in direct chats (or Organization details)
-final chatUserProfileProvider = FutureProvider.family<ProfileData?, Chat>((ref, chat) async {
-  if (!chat.isDirect) return null;
-  
-  // Get the other participant's ID
-  final currentUserId = ref.watch(authStateProvider).value?.uid;
-  if (currentUserId == null) return null;
-  
-  final otherUserId = chat.participants.firstWhere(
-    (id) => id != currentUserId,
-    orElse: () => '',
-  );
-  
-  if (otherUserId.isEmpty) return null;
-  
-  // 1. Try fetching User Profile
+/// Provider for chat partner profile (User or Organization)
+/// Keyed by USER ID (String), so it is stable across Chat updates.
+final chatPartnerProvider = FutureProvider.family<ProfileData?, String>((ref, userId) async {
+  if (userId.isEmpty) return null;
   // 1. Try fetching User Profile
   final profileRepo = ref.watch(profileRepositoryProvider);
-  final userProfile = await profileRepo.getUserProfile(otherUserId);
-  
+  final userProfile = await profileRepo.getUserProfile(userId);
   if (userProfile != null) return userProfile;
-  // This assumes Organizations are participants in chats with their IDs
+
+  // 2. Fallback to Organization
   final orgRepo = ref.watch(organizationRepositoryProvider);
   try {
-     final org = await orgRepo.getOrganization(otherUserId);
+     final org = await orgRepo.getOrganization(userId);
      if (org != null) {
-        // Construct a dummy ProfileData for display purposes
         return ProfileData(
            uid: org['id'],
            firstName: org['businessName'] ?? org['name'] ?? 'Organization',
-           lastName: '', // Display name often combines first+last, or we handle it
+           lastName: '', 
            phone: '',
            profileImage: org['profileImage'] ?? '',
-           homeLocation: const UserLocation(formattedAddress: '', placeId: '', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))), // Dummy
-           hostLocation: const UserLocation(formattedAddress: '', placeId: '', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))), // Dummy
-           // Add a flag or specific field? 
-           // We can abuse 'profession' or 'occupation' to store 'Organization' or logic check
+           homeLocation: const UserLocation(formattedAddress: '', placeId: '', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))),
+           hostLocation: const UserLocation(formattedAddress: '', placeId: '', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))), 
            occupation: 'Organization', 
         );
      }
-  } catch (e) {
-     // Not an organization
-  }
+  } catch (e) {}
   
   return null;
-});
-
-/// Provider for chat display name in chat list
-final chatCardDisplayNameProvider = FutureProvider.family<String, Chat>((ref, chat) async {
-  // [NEW] Use utility for community chats, enriched with user context
-  if (chat.isCommunity) {
-     return CommunityChatUtils.generateCommunityName(chat);
-  }
-  
-  final chatRepo = ref.watch(chatRepositoryProvider);
-  return chatRepo.getDisplayNameForChat(chat);
 });
 
 /// Chat Card Widget
@@ -182,27 +155,31 @@ class ChatCard extends ConsumerWidget {
     switch (lastMessage.type) {
       case 'image':
         icon = LucideIcons.image;
-        text = 'Photo';
+        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Photo';
         break;
       case 'video':
         icon = LucideIcons.video;
-        text = 'Video';
+        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Video';
         break;
       case 'audio':
         icon = LucideIcons.mic; 
-        text = 'Voice message';
+        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Voice message';
         break;
       case 'audio_file':
         icon = LucideIcons.music;
-        text = 'Audio file';
+        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Audio file';
         break;
       case 'location':
         icon = LucideIcons.locateFixed;
-        text = 'Location';
+        text = 'Location'; // Location doesn't usually have a caption we want to show instead of 'Location' label, unless address?
+        // Logic: if content is address, show it? Original logic sends address as content.
+        if (lastMessage.content != 'Location' && lastMessage.content != '📍 Location') {
+           text = lastMessage.content;
+        }
         break;
       case 'document':
         icon = LucideIcons.fileText;
-        text = 'Document';
+        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Document';
         break;
       case 'money-transfer':
         icon = LucideIcons.banknote;
@@ -255,7 +232,9 @@ class ChatCard extends ConsumerWidget {
   Widget _buildAvatar(BuildContext context, ThemeData theme, WidgetRef ref) {
     // For direct chats, show profile image with location flag
     if (chat.isDirect) {
-      final userProfileAsync = ref.watch(chatUserProfileProvider(chat));
+      final currentUserId = ref.watch(authStateProvider).value?.uid;
+      final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
+      final userProfileAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
       
       return userProfileAsync.when(
         data: (profile) {
@@ -360,8 +339,20 @@ class ChatCard extends ConsumerWidget {
     final hasUnread = chat.unreadCount > 0;
     
     // Get display name (for DM chats, gets the other participant's name)
-    final displayNameAsync = ref.watch(chatCardDisplayNameProvider(chat));
-    final displayName = displayNameAsync.asData?.value ?? chat.name;
+    // Get display name
+    String displayName = chat.name;
+    if (chat.isCommunity) {
+       displayName = CommunityChatUtils.generateCommunityName(chat);
+    } else if (chat.isDirect) {
+       final currentUserId = ref.watch(authStateProvider).value?.uid;
+       final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
+       final partnerAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
+       
+       if (partnerAsync.hasValue && partnerAsync.value != null) {
+          final p = partnerAsync.value!;
+          displayName = '${p.firstName} ${p.lastName}'.trim();
+       }
+    }
 
     return Card(
       elevation: 0,
@@ -435,7 +426,9 @@ class ChatCard extends ConsumerWidget {
                               if (chat.isDirect)
                                 Consumer(
                                   builder: (context, ref, child) {
-                                    final profileAsync = ref.watch(chatUserProfileProvider(chat));
+                                    final currentUserId = ref.watch(authStateProvider).value?.uid;
+                                    final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
+                                    final profileAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
                                     return profileAsync.maybeWhen(
                                       data: (profile) {
                                         // [NEW] Logic: If it is an Organization, show Building Icon

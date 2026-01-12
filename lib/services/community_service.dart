@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:firebase_database/firebase_database.dart' as rtdb;
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // [NEW]
+import 'package:flutter/foundation.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/utils/location_utils.dart';
 import 'package:diaspora_nearby/data/countries.dart' as country_data;
@@ -26,6 +28,8 @@ class CommunityService {
     final userId = profile.uid!;
     final homeCountryCode = profile.homeCountryCode!;
     final hostCountryCode = profile.hostCountryCode ?? 'XX';
+    // [NEW] Extract User Name for Notifications
+    final userName = profile.fullName;
 
     // Parse locations
     final homeParsed = LocationParsed(
@@ -44,12 +48,6 @@ class CommunityService {
       placeId: profile.hostLocation.placeId,
     );
 
-    // Get continents
-    final homeContinent = getContinentByCountryCode(homeCountryCode);
-    final hostContinent = getContinentByCountryCode(hostCountryCode);
-    final homeContinentName = getContinentName(homeContinent);
-    final hostContinentName = getContinentName(hostContinent);
-
     // Collect all community IDs and chat IDs for batch operations
     final List<String> communityIds = [];
     final List<String> chatIds = [];
@@ -65,6 +63,7 @@ class CommunityService {
       homeCountryCode: homeCountryCode,
       hostCountryCode: null,
       onFirstMember: onFirstMember,
+      userName: userName,
     );
     communityIds.add(globalId);
     chatIds.add('chat_$globalId');
@@ -79,6 +78,7 @@ class CommunityService {
       homeCountryCode: homeCountryCode,
       hostCountryCode: null,
       onFirstMember: onFirstMember,
+      userName: userName,
     );
     communityIds.addAll(homeCommunityIds);
     chatIds.addAll(homeCommunityIds.map((id) => 'chat_$id'));
@@ -93,6 +93,7 @@ class CommunityService {
       homeCountryCode: homeCountryCode,
       hostCountryCode: hostCountryCode,
       onFirstMember: onFirstMember,
+      userName: userName,
     );
     communityIds.addAll(hostCommunityIds);
     chatIds.addAll(hostCommunityIds.map((id) => 'chat_$id'));
@@ -119,6 +120,7 @@ class CommunityService {
     String? hostCountryCode,
     bool syncToUserProfile = false, // [NEW] Option to auto-sync to profile
     Function(String)? onFirstMember,
+    String? userName, // [NEW] For notification
   }) async {
     final List<String> ids = [];
     final countryCode = locationType == 'home' ? homeCountryCode : (hostCountryCode ?? location.countryCode);
@@ -137,6 +139,7 @@ class CommunityService {
       homeCountryCode: homeCountryCode,
       hostCountryCode: hostCountryCode,
       onFirstMember: onFirstMember,
+      userName: userName,
     );
     ids.add(continentId);
 
@@ -149,6 +152,7 @@ class CommunityService {
       homeCountryCode: homeCountryCode,
       hostCountryCode: hostCountryCode,
       onFirstMember: onFirstMember,
+      userName: userName,
     );
     ids.add(countryId);
 
@@ -171,6 +175,7 @@ class CommunityService {
         homeCountryCode: homeCountryCode,
         hostCountryCode: hostCountryCode,
         onFirstMember: onFirstMember,
+        userName: userName,
       );
       ids.add(stateId);
     }
@@ -185,6 +190,7 @@ class CommunityService {
         homeCountryCode: homeCountryCode,
         hostCountryCode: hostCountryCode,
         onFirstMember: onFirstMember,
+        userName: userName,
       );
       ids.add(cityId);
     }
@@ -197,7 +203,7 @@ class CommunityService {
          });
        } catch (e) {
          // Log but don't fail the whole flow if sync fails, though it's critical
-         print('CommunityService: Error syncing memberships to profile: $e');
+         debugPrint('CommunityService: Error syncing memberships to profile: $e');
        }
     }
 
@@ -206,6 +212,7 @@ class CommunityService {
 
 
 
+  /// Ensures a community exists, creates if not. Returns community ID.
   /// Ensures a community exists, creates if not. Returns community ID.
   Future<String> _ensureCommunity({
     required String type,
@@ -216,7 +223,11 @@ class CommunityService {
     required String homeCountryCode,
     String? hostCountryCode,
     Function(String)? onFirstMember,
+    String? userName, // [NEW] For notification
   }) async {
+    String? existingCommunityId;
+    String? existingCommunityName;
+
     // 1. [NEW] Check if community exists by Google Place ID (Priority)
     // This allows multiple names for the same physical place to resolve to one community.
     if (location.placeId != null && location.placeId!.isNotEmpty) {
@@ -231,22 +242,18 @@ class CommunityService {
             .get();
 
          if (query.docs.isNotEmpty) {
-           print('CommunityService: Found existing community by PlaceID: ${query.docs.first.id}');
-           // Ensure user is member (idempotent)
-           await _firestore.collection('communities').doc(query.docs.first.id).update({
-              'members': cf.FieldValue.arrayUnion([userId]),
-              'memberCount': cf.FieldValue.increment(0), // Just to trigger update if needed, but arrayUnion handles logic
-              // Real member count logic usually requires reading members.length or cloud function
-           });
-           return query.docs.first.id;
+           final doc = query.docs.first;
+           existingCommunityId = doc.id;
+           existingCommunityName = doc.data()['name'] as String?;
+           debugPrint('CommunityService: Found existing community by PlaceID: $existingCommunityId');
          }
        } catch (e) {
-         print('CommunityService: Check by PlaceID failed, falling back to ID Gen: $e');
+         debugPrint('CommunityService: Check by PlaceID failed, falling back to ID Gen: $e');
        }
     }
 
-    // 2. Fallback: Generate community ID (matches deterministic generation)
-    final communityId = generateCommunityId(
+    // 2. Determine Community ID and Name
+    final communityId = existingCommunityId ?? generateCommunityId(
       locationType: locationType,
       type: type,
       location: location,
@@ -254,8 +261,7 @@ class CommunityService {
       homeCountryCode: (locationType == 'host' || locationType == 'past') ? homeCountryCode : null,
     );
     
-    // Generate community name
-    final communityName = generateCommunityName(
+    final communityName = existingCommunityName ?? generateCommunityName(
       type: type,
       location: location,
       continent: continent,
@@ -307,8 +313,6 @@ class CommunityService {
       }
       
       // [FIX] Add chat to userChats index for the creator/joiner
-      // This is crucial for 'ensureCommunitiesForLocationHierarchy' calls (e.g. Past Locations)
-      // which don't trigger the batch update.
       final chatId = 'chat_$communityId';
       await _rtdb.ref('userChats/$userId/$chatId').set({
         'chatId': chatId,
@@ -345,7 +349,7 @@ class CommunityService {
             
             Map<String, dynamic> data;
             if (mutableData is Map) {
-              data = Map<String, dynamic>.from(mutableData as Map);
+              data = Map<String, dynamic>.from(mutableData);
             } else {
               return rtdb.Transaction.success(mutableData);
             }
@@ -368,10 +372,60 @@ class CommunityService {
             data['updatedAt'] = rtdb.ServerValue.timestamp;
             return rtdb.Transaction.success(data);
           });
+
+          // [NEW] Announce to Community (triggers Notification)
+          // Only if strictly NEW to the chat
+          if (userName != null && userName.isNotEmpty) {
+             try {
+                final now = DateTime.now().millisecondsSinceEpoch;
+                final messageRef = chatRef.child('messages').push();
+                
+                final systemMessage = {
+                  'id': messageRef.key,
+                  'chatId': chatId,
+                  'senderId': userId,
+                  'senderName': userName,
+                  'content': 'joined the community',
+                  'type': 'system', // or 'join_event'
+                  'timestamp': now,
+                  'status': 'sent',
+                };
+                
+                await messageRef.set(systemMessage);
+                
+                // Update Last Message on Chat
+                final lastMsg = {
+                    'content': '$userName joined the community',
+                    'timestamp': now,
+                    'senderId': userId,
+                    'senderName': userName,
+                    'type': 'system',
+                    'status': 'sent',
+                };
+                await chatRef.child('lastMessage').set(lastMsg);
+                await chatRef.child('updatedAt').set(now);
+                
+                // Fan-out to ALL participants (including self, though self logic handles below)
+                final allTargetIds = List<String>.from(participants); // Use snapshot participants (others)
+                allTargetIds.add(userId); // Add self to be sure
+                
+                final Map<String, dynamic> updates = {};
+                for (final pid in allTargetIds) {
+                   updates['userChats/$pid/$chatId/lastMessage'] = lastMsg;
+                   updates['userChats/$pid/$chatId/updatedAt'] = now;
+                   // Don't overwrite other fields like addedAt/lastRead
+                }
+                await _rtdb.ref().update(updates);
+                
+                debugPrint('🔔 Announced new member $userName to $chatId');
+             } catch (e) {
+                debugPrint('Error announcing new member: $e');
+             }
+          }
         }
         
-        // Add chat to user's userChats index
-        await _rtdb.ref('userChats/$userId/$chatId').set({
+        // Add chat to user's userChats index (Backup if fan-out missed or logic above skipped)
+        await _rtdb.ref('userChats/$userId/$chatId').update({ // Use update to not wipe lastMessage if fan-out wrote it
           'chatId': chatId,
           'lastRead': rtdb.ServerValue.timestamp,
           'addedAt': rtdb.ServerValue.timestamp,
@@ -468,7 +522,7 @@ class CommunityService {
             await _rtdb.ref('chats/$chatId').remove();
           }
           
-          print('Pruned empty community: ${doc.id}');
+          debugPrint('Pruned empty community: ${doc.id}');
        }
     }
 
@@ -485,33 +539,86 @@ class CommunityService {
   /// HARD RESET DATABASE
   /// Deletes selected collections and services.
   /// [resetTargets] list of keys: 'users', 'communities', 'events', 'organizations', 'radio', 'chats', 'storage'
-  Future<void> hardResetDatabase({List<String> resetTargets = const ['users', 'communities', 'events', 'organizations', 'radio', 'chats', 'storage']}) async {
+  /// Returns a report of { 'success': [], 'failed': [] } keys.
+  Future<Map<String, List<String>>> hardResetDatabase({List<String> resetTargets = const ['users', 'communities', 'events', 'organizations', 'radio', 'chats', 'storage', 'points']}) async {
+    final List<String> succeeded = [];
+    final List<String> failed = [];
+
+    // Helper to track status
+    Future<void> tryTarget(String target, Future<void> Function() action) async {
+      try {
+        await action();
+        succeeded.add(target);
+      } catch (e) {
+        // debugPrint('Error resetting $target: $e');
+        failed.add('$target: ${e.toString().split(']').last.trim()}'); // Clean error slightly
+      }
+    }
+
+    // 1. Delete Collections (Remote)
+    if (resetTargets.contains('communities')) await tryTarget('communities', () => _deleteCollection('communities'));
+    if (resetTargets.contains('users')) await tryTarget('users', () => _deleteCollection('users')); 
+    if (resetTargets.contains('events')) await tryTarget('events', () => _deleteCollection('events'));
+    if (resetTargets.contains('organizations')) await tryTarget('organizations', () => _deleteCollection('organizations'));
+    if (resetTargets.contains('radio')) await tryTarget('radio', () => _deleteCollection('radio_station_health'));
+
+    if (resetTargets.contains('points')) {
+      await tryTarget('points', () async {
+        await _deleteCollection('user_points');
+        await _deleteCollection('points_transactions');
+        await _deleteCollection('referral_codes');
+      });
+    }
     
-    // 1. Delete Collections
-    if (resetTargets.contains('communities')) await _deleteCollection('communities');
-    if (resetTargets.contains('users')) await _deleteCollection('users'); 
-    if (resetTargets.contains('events')) await _deleteCollection('events');
-    if (resetTargets.contains('organizations')) await _deleteCollection('organizations');
-    if (resetTargets.contains('radio')) {
-      await _deleteCollection('radio_station_health'); // Corrected Name
-      // Note: Add other radio collections if consistent with your architecture, e.g. radio_reviews
+    if (resetTargets.contains('feedback')) {
+       await tryTarget('feedback', () => _deleteCollection('feedback'));
     }
 
     // 2. Delete RTDB Paths
     if (resetTargets.contains('chats')) {
-       await _rtdb.ref('chats').remove();
-       await _rtdb.ref('userChats').remove();
+       await tryTarget('chats', () async {
+         await _rtdb.ref('chats').remove();
+         await _rtdb.ref('userChats').remove();
+       });
     }
     
     // 3. Delete Storage Folders
     if (resetTargets.contains('storage')) {
-      await _deleteStorageFolder('profile_photos');
-      await _deleteStorageFolder('community_headers');
-      // Add other folders as needed
+      await tryTarget('storage', () async {
+        await _deleteStorageFolder('profile_photos');
+        await _deleteStorageFolder('community_headers');
+      });
     }
 
-    // Re-seed logic removed as per on-demand requirement
+    // 4. Clear Local Preferences
+    // Only verify preferences if explicitly requested or part of user cleanup
+    if (resetTargets.any((t) => ['proximity', 'onboarding', 'users', 'radio'].contains(t))) {
+       await tryTarget('local_storage', () async {
+         final prefs = await SharedPreferences.getInstance();
+         
+         if (resetTargets.contains('proximity')) {
+            await prefs.remove('last_proximity_notification_time');
+         }
+         
+         if (resetTargets.contains('onboarding')) {
+            await prefs.clear(); 
+         }
+         
+         // Original behavior: Full clear safeguard
+         if (resetTargets.contains('users') || resetTargets.contains('radio')) {
+            await prefs.clear();
+         }
+       });
+    }
+    
+    return {
+      'success': succeeded,
+      'failed': failed,
+    };
   }
+
+  // Obsolete helper _tryDeleteCollection removed in favor of tryTarget pattern above
+
 
   Future<void> _deleteCollection(String collectionPath) async {
     final collection = _firestore.collection(collectionPath);

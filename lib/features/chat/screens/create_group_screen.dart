@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,7 +21,7 @@ class CreateGroupScreen extends ConsumerStatefulWidget {
 class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final TextEditingController _nameController = TextEditingController();
   final Set<String> _selectedIds = {};
-  File? _groupImage;
+  XFile? _groupImage;
   bool _isLoading = false;
   bool _isLoadingContacts = true;
   List<ProfileData> _contacts = [];
@@ -55,10 +56,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
+    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
     if (picked != null) {
       setState(() {
-        _groupImage = File(picked.path);
+        _groupImage = picked;
       });
     }
   }
@@ -135,7 +136,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                                 color: theme.colorScheme.primaryContainer,
                                 shape: BoxShape.circle,
                                 image: _groupImage != null
-                                    ? DecorationImage(image: FileImage(_groupImage!), fit: BoxFit.cover)
+                                    ? DecorationImage(
+                                        image: (kIsWeb 
+                                            ? NetworkImage(_groupImage!.path) 
+                                            : FileImage(File(_groupImage!.path))) as ImageProvider,
+                                        fit: BoxFit.cover
+                                      )
                                     : null,
                               ),
                               child: _groupImage == null

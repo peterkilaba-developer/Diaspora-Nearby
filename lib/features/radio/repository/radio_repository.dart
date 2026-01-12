@@ -42,8 +42,9 @@ class RadioRepository {
 
       _unreliableStationsCache = snapshot.docs.map((d) => d.id).toSet();
       _lastCacheUpdate = DateTime.now();
+      print('RadioHealth: Updated cache with ${_unreliableStationsCache.length} unreliable stations');
     } catch (e) {
-      // Failed to update unreliable stations cache
+      print('RadioHealth: Failed to update cache (Check Indexes?): $e');
     }
   }
 
@@ -64,6 +65,7 @@ class RadioRepository {
         throw Exception('Failed to load stations');
       }
     } catch (e) {
+      print('RadioRepo: Error fetching stations: $e');
       return [];
     }
   }
@@ -83,6 +85,7 @@ class RadioRepository {
         throw Exception('Failed to load top stations');
       }
     } catch (e) {
+      print('RadioRepo: Error fetching top stations: $e');
       return [];
     }
   }
@@ -97,7 +100,7 @@ class RadioRepository {
         'lastReported': cf.FieldValue.serverTimestamp(),
       }, cf.SetOptions(merge: true));
     } catch (e) {
-      // Failed to report radio failure
+      print('RadioHealth: Failed report failure: $e');
     }
   }
 
@@ -109,7 +112,7 @@ class RadioRepository {
         'lastReported': cf.FieldValue.serverTimestamp(),
       }, cf.SetOptions(merge: true));
     } catch (e) {
-        // Failed to report radio success
+       print('RadioHealth: Failed report success: $e');
     }
   }
   
@@ -135,17 +138,24 @@ class RadioRepository {
   }
   
   Future<List<RadioStation>> getFavorites(String userId) async {
-    final snapshot = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('radio_favorites')
-        .orderBy('addedAt', descending: true)
-        .get();
-        
-    return snapshot.docs.map((doc) => RadioStation.fromJson(doc.data())).toList();
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('radio_favorites')
+          .orderBy('addedAt', descending: true)
+          .get();
+          
+      return snapshot.docs.map((doc) => RadioStation.fromJson(_sanitizeStationData(doc.data()))).toList();
+    } catch (e) {
+      print('RadioRepo: Error fetching favorites: $e');
+      return [];
+    }
   }
   
   Future<void> addToHistory(String userId, RadioStation station) async {
+     // Limit history size to 20 technically handled by read limit but write should arguably prune old ones? 
+     // For now just write.
      await _firestore
           .collection('users')
           .doc(userId)
@@ -158,6 +168,7 @@ class RadioRepository {
   }
   
   Future<List<RadioStation>> getHistory(String userId) async {
+    try {
       final snapshot = await _firestore
         .collection('users')
         .doc(userId)
@@ -166,6 +177,24 @@ class RadioRepository {
         .limit(20)
         .get();
         
-    return snapshot.docs.map((doc) => RadioStation.fromJson(doc.data())).toList();
+      return snapshot.docs.map((doc) => RadioStation.fromJson(_sanitizeStationData(doc.data()))).toList();
+    } catch (e) {
+       print('RadioRepo: Error fetching history: $e');
+       return [];
+    }
+  }
+
+  // Helper to ensure types match what RadioStation.fromJson expects
+  Map<String, dynamic> _sanitizeStationData(Map<String, dynamic> data) {
+    if (data['votes'] is String) {
+      data['votes'] = int.tryParse(data['votes']) ?? 0;
+    }
+    if (data['bitrate'] is String) {
+      data['bitrate'] = int.tryParse(data['bitrate']) ?? 0;
+    }
+    // Remove timestamps that might confuse restrictive parsers (though usually ignored)
+    // data.remove('addedAt');
+    // data.remove('playedAt');
+    return data;
   }
 }

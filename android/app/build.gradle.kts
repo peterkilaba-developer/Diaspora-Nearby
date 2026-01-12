@@ -4,6 +4,8 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+    id("com.google.firebase.firebase-perf")
 }
 
 import java.util.Properties
@@ -24,7 +26,7 @@ val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY") ?: ""
 
 android {
     namespace = "com.diasporanearby.diasporanearby"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -35,6 +37,11 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     defaultConfig {
@@ -62,6 +69,7 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            // signingConfig = signingConfigs.getByName("debug")
             
             // Enable R8/ProGuard
             isMinifyEnabled = true

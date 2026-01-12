@@ -12,6 +12,8 @@ import 'package:diaspora_nearby/features/shared/widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/features/shared/ui/skeleton_loader.dart';
 import 'package:diaspora_nearby/providers/view_mode_provider.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 
 final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   final chatRepo = ref.watch(chatRepositoryProvider);
@@ -87,10 +89,23 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
             itemCount: results.length,
             itemBuilder: (context, index) {
               final chat = results[index];
-              return ChatCard(
+                  return ChatCard(
                  chat: chat,
                  searchQuery: searchQuery,
-                 onTap: () {
+                 onTap: () async {
+                    // [NEW] Track Discovery Click
+                    final user = ref.read(authRepositoryProvider).currentUser;
+                    if (user != null) {
+                       final actionId = 'action_discover_chat_${chat.id}';
+                       final rewarded = await ref.read(pointsServiceProvider).trackExplorationReward(user.uid, actionId);
+                       if (rewarded && context.mounted) {
+                           confettiOverlayKey.currentState?.play();
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(content: Text('🎉 +1 DSP Earned for discovering ${chat.name}!'), backgroundColor: Colors.green)
+                           );
+                       }
+                    }
+
                     // Navigate to entity details instead of chat screen
                     if (chat.type == 'event') {
                        // Ensure we pass eventId if available, otherwise we might have issues if chat.eventId is null
@@ -156,6 +171,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
             itemBuilder: (context, index) {
               final chat = filteredChats[index];
               return ChatCard(
+                key: ValueKey(chat.id),
                 chat: chat,
                 searchQuery: searchQuery.isNotEmpty ? searchQuery : null,
                 onTap: () => context.push('/chats/${chat.id}'),

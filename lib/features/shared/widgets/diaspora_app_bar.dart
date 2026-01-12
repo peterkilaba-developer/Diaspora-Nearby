@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/data/countries.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
-import 'package:go_router/go_router.dart';
+
 import 'package:diaspora_nearby/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 

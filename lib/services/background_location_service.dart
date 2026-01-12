@@ -2,15 +2,23 @@ import 'dart:async';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/firebase_options.dart';
 import 'package:diaspora_nearby/services/location_update_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:diaspora_nearby/services/proximity_service.dart'; 
+import 'package:diaspora_nearby/services/mention_monitor_service.dart'; // [NEW]
 
+@pragma('vm:entry-point')
 class BackgroundLocationService {
   static bool _isInitialized = false;
+  static const String _notificationChannelId = 'diaspora_location_channel';
+  static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   static Future<void> initializeService() async {
     if (_isInitialized) {
@@ -20,14 +28,41 @@ class BackgroundLocationService {
 
     final service = FlutterBackgroundService();
 
+    // Initialize Local Notifications Plugin
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: DarwinInitializationSettings(),
+    );
+    await _notificationsPlugin.initialize(initializationSettings);
+
+    // [FIX] Explicitly create the Notification Channel with HIGH importance
+    const String newChannelId = 'diaspora_location_v2';
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      newChannelId, 
+      'Background Service', 
+      description: 'Used for background location updates', 
+      importance: Importance.low, // [UPDATED] Low importance to prevent popping up
+    );
+
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+        await flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
+    }
+    
+    // Configure Service
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: false, 
-        isForegroundMode: false, // [CRITICAL] Start as background to bypass strict OS timer
-        notificationChannelId: 'foreground_service_channel',
+        autoStart: true, 
+        isForegroundMode: true,
+        notificationChannelId: newChannelId, // Use the high importance channel
         initialNotificationTitle: 'Diaspora Nearby',
-        initialNotificationContent: 'Initializing service...',
+        initialNotificationContent: 'Background location active',
         foregroundServiceNotificationId: 888,
       ),
       iosConfiguration: IosConfiguration(
@@ -48,23 +83,32 @@ class BackgroundLocationService {
   }
 
   @pragma('vm:entry-point')
-  static void onStart(ServiceInstance service) {
+  static Future<void> onStart(ServiceInstance service) async {
+    // [fix] Ensure bindings are initialized FIRST
+    DartPluginRegistrant.ensureInitialized();
+    WidgetsFlutterBinding.ensureInitialized();
+
+    debugPrint('📍 [BACKGROUND] BackgroundLocationService started (Release Mode).');
+
     if (service is AndroidServiceInstance) {
-      // [CRITICAL] Manual promotion: we start as background and then "request" foreground status.
-      // This is allowed while the app is in the foreground (User is on Nearby page).
-      service.setAsForegroundService();
-      service.setForegroundNotificationInfo(
-        title: 'Diaspora Nearby',
-        content: 'Background location active',
-      );
+      service.on('setAsForeground').listen((event) {
+        service.setAsForegroundService();
+      });
+      service.on('setAsBackground').listen((event) {
+        service.setAsBackgroundService();
+      });
     }
+    
+    service.on('stopService').listen((event) {
+      service.stopSelf();
+    });
 
     try {
-      DartPluginRegistrant.ensureInitialized();
-      WidgetsFlutterBinding.ensureInitialized();
-
-      // Initialize Firebase (AFTER promotion attempt)
-      _initFirebaseAndWork(service);
+      // Initialize Firebase
+      await _initFirebaseAndWork(service);
+      
+      // [NEW] Start Mention Monitor in Background Service Isolate
+      await MentionMonitorService().initialize(); 
     } catch (e) {
       debugPrint('CRITICAL: Error in background service onStart: $e');
     }
@@ -77,29 +121,44 @@ class BackgroundLocationService {
           options: DefaultFirebaseOptions.currentPlatform,
         );
       }
+      
+      // Re-init notifications inside the isolate
+      final AndroidInitializationSettings initializationSettingsAndroid =
+          const AndroidInitializationSettings('@mipmap/ic_launcher');
+      final InitializationSettings initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid,
+      );
+      await _notificationsPlugin.initialize(initializationSettings);
 
-      if (service is AndroidServiceInstance) {
-        service.on('setAsForeground').listen((event) {
-          service.setAsForegroundService();
-        });
+      // [DEBUG] Explicit startup log
+      debugPrint('📍 [BACKGROUND] Service Started. Scheduling immediate check...');
 
-        service.on('setAsBackground').listen((event) {
-          service.setAsBackgroundService();
-        });
-      }
-
-      service.on('stopService').listen((event) {
-        service.stopSelf();
+      // [DEBUG] Run immediately after 5 seconds to verify logic without waiting
+      Future.delayed(const Duration(seconds: 5), () async {
+         debugPrint('📍 [BACKGROUND] Running IMMEDIATE initial check...');
+         try {
+           final user = FirebaseAuth.instance.currentUser;
+           if (user != null) {
+              await LocationUpdateService().updateCurrentLocation(user.uid);
+              await ProximityService().checkAndNotify(user.uid);
+           } else {
+              debugPrint('📍 [BACKGROUND] No user for immediate check.');
+           }
+         } catch(e) {
+            debugPrint('📍 [BACKGROUND] Immediate check failed: $e');
+         }
       });
 
       // Start location updates
-      Timer.periodic(const Duration(minutes: 15), (timer) async {
+      // [UPDATED] Interval: 15 minutes for Release to improve proximity responsiveness
+      final duration = kDebugMode ? const Duration(minutes: 1) : const Duration(minutes: 15);
+      Timer.periodic(duration, (timer) async {
         try {
           if (service is AndroidServiceInstance) {
             if (await service.isForegroundService()) {
               service.setForegroundNotificationInfo(
                 title: 'Diaspora Nearby',
-                content: 'Updated location at ${DateTime.now()}',
+                content: 'Active in background',
               );
             }
           }
@@ -109,8 +168,8 @@ class BackgroundLocationService {
             debugPrint('Background: Updating location for ${user.uid}');
             await LocationUpdateService().updateCurrentLocation(user.uid);
             
-            // [NEW] Trigger proximity check after location update
-            await _checkAndNotifyNearby(service, user.uid);
+            // [NEW] Delegate to ProximityService
+            await ProximityService().checkAndNotify(user.uid);
           } else {
             debugPrint('No user logged in, skipping background location update.');
           }
@@ -122,86 +181,5 @@ class BackgroundLocationService {
       debugPrint('CRITICAL: Error in background service onStart: $e');
     }
   }
-
-  static Future<void> _checkAndNotifyNearby(ServiceInstance service, String userId) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      
-      // 1. Get current user data
-      final userDoc = await firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists) return;
-      
-      final userData = userDoc.data()!;
-      final homeCountryCode = userData['homeCountryCode'] as String?;
-      if (homeCountryCode == null) return;
-
-      // Location for distance calc
-      final myLoc = userData['currentLocation'] as Map<String, dynamic>?;
-      final myLat = (myLoc?['geometry']?['location']?['lat'] as num?)?.toDouble();
-      final myLng = (myLoc?['geometry']?['location']?['lng'] as num?)?.toDouble();
-      
-      if (myLat == null || myLng == null) return;
-
-      // 2. Query compatriots
-      final snapshot = await firestore.collection('users')
-          .where('homeCountryCode', isEqualTo: homeCountryCode)
-          .limit(50) // Small limit for background efficiency
-          .get();
-
-      final List<Map<String, dynamic>> closeUsers = [];
-      
-      for (var doc in snapshot.docs) {
-        if (doc.id == userId) continue;
-        
-        final data = doc.data();
-        final theirLoc = data['currentLocation'] as Map<String, dynamic>?;
-        final theirLat = (theirLoc?['geometry']?['location']?['lat'] as num?)?.toDouble();
-        final theirLng = (theirLoc?['geometry']?['location']?['lng'] as num?)?.toDouble();
-        
-        if (theirLat != null && theirLng != null) {
-          // Simplified distance calc (Haversine or similar already used in app)
-          // We can use a basic calc or just a rough box check for efficiency
-          // But for consistency, we should ideally use the same formula.
-          // Since we can't easily import the util here without ensuring it's isolate-safe,
-          // we'll use a simple approximation for 10 miles.
-          
-          final double distance = _calculateSimpleDistance(myLat, myLng, theirLat, theirLng);
-          if (distance <= 10.0) { // 10 miles
-            closeUsers.add(data);
-          }
-        }
-      }
-
-      if (closeUsers.isNotEmpty) {
-        final first = closeUsers.first;
-        final name = first['firstName'] ?? 'Someone';
-        final country = first['homeCountry'] ?? 'your home country';
-
-        debugPrint('Background: Found nearby compatriot: $name');
-
-        // Note: For background notifications in iOS/Android, we use setForegroundNotificationInfo 
-        // OR the push notification service. Here, we can trigger the native notification.
-        if (service is AndroidServiceInstance) {
-          service.setForegroundNotificationInfo(
-            title: 'Diaspora Nearby',
-            content: '$name from $country is nearby!',
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error in background proximity check: $e');
-    }
-  }
-
-  // Simple Euclidean distance approximation for small distances (miles)
-  static double _calculateSimpleDistance(double lat1, double lon1, double lat2, double lon2) {
-    const double milesPerDegreeLat = 69.0;
-    final double milesPerDegreeLon = 69.0 * 0.96; // Approximation for mid-latitudes
-    
-    final double dLat = (lat2 - lat1).abs() * milesPerDegreeLat;
-    final double dLon = (lon2 - lon1).abs() * milesPerDegreeLon;
-    
-    // sqrt(a^2 + b^2)
-    return math.sqrt(dLat * dLat + dLon * dLon);
-  }
 }
+

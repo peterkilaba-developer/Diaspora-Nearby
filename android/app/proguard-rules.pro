@@ -43,3 +43,10 @@
 -dontwarn com.google.android.play.core.tasks.OnFailureListener
 -dontwarn com.google.android.play.core.tasks.OnSuccessListener
 -dontwarn com.google.android.play.core.tasks.Task
+
+# Isar
+-keep class isar.** { *; }
+-keep class com.isar.** { *; }
+
+# Coroutines
+-keep class kotlinx.coroutines.** { *; }

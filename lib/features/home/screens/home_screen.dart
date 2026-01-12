@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/home/repository/home_repository.dart';
@@ -12,6 +13,8 @@ import 'package:lucide_icons/lucide_icons.dart'; // [NEW] For icons
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:diaspora_nearby/services/background_location_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:diaspora_nearby/services/proximity_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -30,35 +33,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
+
   Future<void> _ensureBackgroundService() async {
+     if (kIsWeb) return; 
      try {
-       // [CRITICAL] Increased delay to ensure UI is fully settled
-       await Future.delayed(const Duration(seconds: 3));
+       // [DEBUG] Reduced delay
+       await Future.delayed(const Duration(seconds: 1));
        if (!mounted) return;
 
        final service = FlutterBackgroundService();
-       if (!await service.isRunning()) {
-          if (await Permission.locationAlways.isGranted) {
-            debugPrint('HomeScreen: Permission granted. Initializing and starting service...');
+       final isRunning = await service.isRunning();
+       print('HomeScreen: Background Service status: isRunning=$isRunning'); // Changed to print
 
-            // Initialize service here (safe lazy init)
+       if (!isRunning) {
+          if (await Permission.location.isGranted) {
+            print('HomeScreen: Permission granted. Initializing and starting service...'); // Changed to print
+
             await BackgroundLocationService.initializeService();
 
-            final service = FlutterBackgroundService(); 
             if (await service.isRunning()) {
-              debugPrint('HomeScreen: Service already running');
+              print('HomeScreen: Service started successfully during initialization.'); // Changed to print
             } else {
-              debugPrint('HomeScreen: Starting service...');
+              print('HomeScreen: Starting service manually...'); // Changed to print
               await service.startService();
             }
           } else {
-            debugPrint('HomeScreen: Skipping background service start: Permission not granted yet.');
+            print('HomeScreen: Skipping background service start: Permission not granted yet.'); // Changed to print
           }
+       } else {
+         print('HomeScreen: Service is already running.'); // Changed to print
        }
+       
+       // [DEBUG] Trigger Foreground Proximity Check to verify logic works
+       final user = FirebaseAuth.instance.currentUser;
+       if (user != null) {
+         print('HomeScreen: Triggering FOREGROUND Proximity Check...');
+         await ProximityService().checkAndNotify(user.uid);
+       }
+
      } catch (e) {
-       debugPrint('Error starting background service from Home: $e');
+       print('Error starting background service from Home: $e'); // Changed to print
      }
   }
+
 
 
 
@@ -66,8 +83,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final homeRepo = ref.watch(homeRepositoryProvider);
     final viewMode = ref.watch(nearbyViewModeProvider);
-    // [FIX] Read Global Search Query from Provider
     final searchQuery = ref.watch(globalSearchProvider);
+    final userProfileAsync = ref.watch(userProfileProvider);
     
     final isGlobal = viewMode == ViewMode.global;
 
@@ -92,7 +109,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             // Local empty state
             // Retrieve home country for message
-            final userProfileAsync = ref.watch(userProfileProvider);
             final homeCountry = userProfileAsync.value?.homeCountry ?? 'your home country';
             // Default range logic (matches backend default usually, e.g. 5000km or similar, but user prompt says "999 Mile/ 1398 km")
             // We'll use the user's requested specific text for now.

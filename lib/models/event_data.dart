@@ -199,5 +199,77 @@ class Event {
       organizationName: organizationName ?? this.organizationName,
     );
   }
+  // Shared UI Helpers
+  Map<String, dynamic> getStatusBadgeInfo() {
+    final now = DateTime.now();
+    DateTime? start;
+    try {
+      start = DateTime.parse('$startDate $startTime');
+    } catch (_) {
+      try { start = DateTime.parse(startDate); } catch (_) {}
+    }
+
+    if (start == null) return {};
+
+    DateTime? end;
+    if (endDate != null && endTime != null) {
+      try {
+        end = DateTime.parse('$endDate $endTime');
+      } catch (_) {
+        try { end = DateTime.parse(endDate!); } catch (_) {}
+      }
+    }
+    // Default end if missing: 3 hours after start
+    end ??= start.add(const Duration(hours: 3));
+
+    String? statusText;
+    // We return color as String or generic type and let UI resolve Color object?
+    // Models cannot easily import flutter/material.dart for Colors class if this is a pure model package.
+    // Assuming 'color': 'green' | 'orange' | 'red' for now, or just logic.
+    // Actually, this project seems to mix UI usage? No, models usually pure.
+    // Check imports... json_annotation. 
+    // I won't return Color object. I'll return a semantic status string.
+    
+    String semanticColor = 'secondary'; // default
+
+    final diffToStart = start.difference(now);
+    final diffToEnd = end.difference(now);
+
+    if (now.isAfter(start) && now.isBefore(end)) {
+      statusText = 'Happening Now';
+      semanticColor = 'green';
+      if (diffToEnd.inHours < 4 && diffToEnd.inHours >= 1) {
+        statusText = 'Ends in ${diffToEnd.inHours}h';
+      } else if (diffToEnd.inHours < 1 && diffToEnd.inMinutes > 0) {
+        statusText = 'Ends in ${diffToEnd.inMinutes}m';
+      }
+    } else if (diffToStart.isNegative == false) {
+      // Future Event
+      if (diffToStart.inHours < 24) {
+          if (diffToStart.inHours >= 1) {
+            statusText = 'Starts in ${diffToStart.inHours}h';
+          } else {
+            statusText = 'Starts in ${diffToStart.inMinutes}m';
+          }
+      } else if (diffToStart.inHours >= 24 && diffToStart.inHours < 48) {
+          final tomorrow = DateTime(now.year, now.month, now.day + 1);
+          final eventDate = DateTime(start.year, start.month, start.day);
+          
+          if (eventDate.isAtSameMomentAs(tomorrow)) {
+             statusText = 'Tomorrow';
+          } else {
+             statusText = 'In ${(diffToStart.inHours / 24).round()} days';
+          }
+      } else {
+         final days = diffToStart.inDays;
+         statusText = 'In $days days';
+      }
+    }
+    
+    return {
+      'text': statusText,
+      'color': semanticColor,
+    };
+  }
 }
 

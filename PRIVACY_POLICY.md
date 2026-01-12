@@ -67,8 +67,8 @@ The App is not intended for children under the age of 13. We do not knowingly co
 ## 8. Contact Us
 If you have questions or comments about this Privacy Policy, please contact us at:
 
-*   **Email:** [Insert Your Support Email Here]
-*   **Website:** [Insert Your Website URL Here]
+*   **Email:** support@diasporanearby.com
+*   **Website:** https://diasporanearby.com
 
 ---
 *This privacy policy is tailored for the specific features (Location, Audio, Camera) detected in your application.*

@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/models/message.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -37,30 +38,28 @@ class ImageMessageContent extends StatelessWidget {
               boundaryMargin: const EdgeInsets.all(20),
               minScale: 0.5,
               maxScale: 4.0,
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const CircularProgressIndicator(color: Colors.white);
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.imageOff, color: Colors.white, size: 48),
-                      SizedBox(height: 16),
-                      Text(
-                        'Could not load image',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            decoration: TextDecoration.none),
-                      ),
-                    ],
-                  );
-                },
-              ),
+              child: (kIsWeb || imageUrl.startsWith('http') || imageUrl.startsWith('blob:'))
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return const Center(child: CircularProgressIndicator(color: Colors.white));
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      if (kIsWeb) {
+                        debugPrint('❌ Message Image failed to load on Web: $error');
+                      }
+                      return _buildErrorWidget();
+                    },
+                  )
+                : Image.file(
+                    File(imageUrl.replaceFirst('file://', '')),
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _buildErrorWidget();
+                    },
+                  ),
             ),
           ),
         ],
@@ -85,19 +84,8 @@ class ImageMessageContent extends StatelessWidget {
               children: [
                 Hero(
                   tag: imageUrl,
-                  child: isLocalFile
-                      ? Image.file(
-                          File(imageUrl.replaceFirst('file://', '')),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: 200,
-                            height: 150,
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: const Icon(LucideIcons.imageOff),
-                          ),
-                        )
-                      : Image.network(
+                  child: (kIsWeb || imageUrl.startsWith('http') || imageUrl.startsWith('blob:'))
+                      ? Image.network(
                           imageUrl,
                           fit: BoxFit.cover,
                           width: double.infinity,
@@ -117,6 +105,17 @@ class ImageMessageContent extends StatelessWidget {
                               ),
                             );
                           },
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 200,
+                            height: 150,
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Icon(LucideIcons.imageOff),
+                          ),
+                        )
+                      : Image.file(
+                          File(imageUrl.replaceFirst('file://', '')),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
                           errorBuilder: (_, __, ___) => Container(
                             width: 200,
                             height: 150,
@@ -156,6 +155,23 @@ class ImageMessageContent extends StatelessWidget {
           ),
         if (message.content.isNotEmpty)
            TopLevelTextContent(message: message, isOwn: isOwn),
+      ],
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return const Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(LucideIcons.imageOff, color: Colors.white, size: 48),
+        SizedBox(height: 16),
+        Text(
+          'Could not load image',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              decoration: TextDecoration.none),
+        ),
       ],
     );
   }

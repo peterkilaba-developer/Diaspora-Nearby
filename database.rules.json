@@ -1,13 +1,33 @@
 {
     "rules": {
-        ".read": true,
-        ".write": true,
         "chats": {
+            ".write": "true",
             "$chatId": {
+                ".read": "auth != null",
+                ".write": "true",
                 "messages": {
-                    ".indexOn": ["timestamp"]
+                    ".indexOn": [
+                        "timestamp"
+                    ]
                 }
             }
+        },
+        "userChats": {
+            ".write": "true",
+            "$userId": {
+                ".read": "auth != null && auth.uid == $userId",
+                ".write": "true"
+            }
+        },
+        "messages": {
+            "$chatId": {
+                ".read": "auth != null",
+                ".write": "auth != null"
+            }
+        },
+        "onlineStatus": {
+            ".read": "auth != null",
+            ".write": "auth != null"
         }
     }
 }

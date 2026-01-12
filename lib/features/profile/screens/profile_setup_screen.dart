@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +10,7 @@ import 'package:diaspora_nearby/services/google_places_service.dart';
 import 'package:diaspora_nearby/utils/location_utils.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/models/location.dart' as loc_model;
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:diaspora_nearby/models/google_places_models.dart';
 import '../repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/router.dart';
@@ -19,6 +20,7 @@ import 'package:diaspora_nearby/services/community_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:diaspora_nearby/services/session_service.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
@@ -42,6 +44,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
+  final _referralCodeController = TextEditingController(); // [NEW]
 
   
   // Current step in the flow
@@ -53,7 +56,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   CurrentLocation? _currentLocation;
   
   // Profile Photo
-  File? _profileImage;
+  XFile? _profileImage;
   
   // UI State
   bool _isSubmitting = false;
@@ -110,6 +113,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _hostSearchController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
+    _referralCodeController.dispose(); // [NEW]
 
     super.dispose();
   }
@@ -262,19 +266,94 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             _homeComponents = components;
             _homeSearchController.text = loc.formattedAddress;
           } else {
-            _hostLocation = loc;
-            _hostComponents = components;
-            _hostSearchController.text = loc.formattedAddress;
+             // For Host Location, Verify against GPS
+             _verifySelectedHostLocation(loc, components);
           }
         });
       }
     }
   }
 
+  Future<void> _verifySelectedHostLocation(loc_model.UserLocation selected, List<AddressComponent> components) async {
+      try {
+         // 1. Permission (Should be granted by now, but check)
+         LocationPermission permission = await Geolocator.checkPermission();
+         if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+             _showErrorDialog('Location Required', 'We need your GPS location to verify you are currently in this city.');
+             return;
+         }
+
+         // 2. Get Current Position (Use cached if available and fresh, otherwise fetch)
+         double? currentLat;
+         double? currentLng;
+         
+         if (_currentLocation != null) {
+            currentLat = _currentLocation!.geometry.location.lat;
+            currentLng = _currentLocation!.geometry.location.lng;
+            debugPrint('Using cached location for verification');
+         } else {
+            final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+            currentLat = position.latitude;
+            currentLng = position.longitude;
+             debugPrint('Fetched fresh location for verification');
+         }
+         
+         // 3. Calculate Distance
+         // Selected Lat/Lng
+         double? targetLat = selected.geometry?.location.lat;
+         double? targetLng = selected.geometry?.location.lng;
+         
+         if (targetLat == null || targetLng == null) {
+             // If autocomplete didn't give geometry, we must trust (or block). 
+             // Usually it does. Let's warn.
+             _showErrorDialog('Verification Failed', 'Could not determine coordinates of selected city.');
+             return;
+         }
+
+         if (currentLat == null || currentLng == null) {
+             _showErrorDialog('Location Error', 'Could not determine your current location.');
+             return;
+         }
+
+         final distanceKm = calculateDistance(
+             currentLat, currentLng, targetLat, targetLng
+         );
+         
+         const double MAX_DISTANCE_KM = 50.0; // 50km radius leeway
+
+         if (distanceKm > MAX_DISTANCE_KM) {
+             _showErrorDialog(
+                'Location Mismatch', 
+                'You are ${distanceKm.round()}km away from ${selected.city}. You must be physically located in your host city to select it.'
+             );
+             
+             // [NEW] Clear input so user can search again immediately
+             setState(() {
+               _predictions = [];
+               _hostSearchController.clear();
+             });
+             return;
+         }
+
+         // Verification Success
+         setState(() {
+             _hostLocation = selected;
+             _hostComponents = components;
+             _hostSearchController.text = selected.formattedAddress;
+         });
+
+      } catch (e) {
+          debugPrint('Verification error: $e');
+          _showErrorDialog('Error', 'Could not verify location: $e');
+      }
+  }
+
   void _goToNextStep() {
-    if (_currentStep == SetupStep.home && _homeLocation != null) {
-      setState(() => _currentStep = SetupStep.host);
-    }
+      setState(() {
+         // [NOTE] We do NOT auto-fill host location anymore based on pivot.
+         // We might show the detected location as a hint in the UI, but we let user search.
+         _currentStep = SetupStep.host;
+      });
   }
 
   void _goBack() {
@@ -315,14 +394,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     try {
       final pickedFile = await picker.pickImage(
         source: source,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
       );
       
       if (pickedFile != null) {
         setState(() {
-          _profileImage = File(pickedFile.path);
+          _profileImage = pickedFile;
         });
       }
     } catch (e) {
@@ -347,10 +426,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           .child(userId)
           .child('profile.jpg');
       
-      final uploadTask = await storageRef.putFile(_profileImage!);
-      debugPrint('ð¸ Upload complete. Bytes transferred: ${uploadTask.bytesTransferred}');
+      UploadTask uploadTask;
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+
+      if (kIsWeb) {
+         final bytes = await _profileImage!.readAsBytes();
+         uploadTask = storageRef.putData(bytes, metadata);
+      } else {
+         uploadTask = storageRef.putFile(File(_profileImage!.path), metadata);
+      }
+      final snapshot = await uploadTask;
+      debugPrint('ð¸ Upload complete. Bytes transferred: ${snapshot.bytesTransferred}');
       
-      final downloadUrl = await storageRef.getDownloadURL();
+      final downloadUrl = await snapshot.ref.getDownloadURL();
       debugPrint('ð¸ Download URL: $downloadUrl');
       
       return downloadUrl;
@@ -377,11 +465,32 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       if (user == null) throw Exception('No user found');
 
       // 1. Parse Locations to get codes
-      final homeParsed = parseLocationComponents(_homeLocation!.formattedAddress, _homeComponents ?? []);
-      final hostParsed = parseLocationComponents(_hostLocation!.formattedAddress, _hostComponents ?? []);
+      LocationParsed? homeParsed = parseLocationComponents(_homeLocation!.formattedAddress, _homeComponents ?? []);
+      LocationParsed? hostParsed = parseLocationComponents(_hostLocation!.formattedAddress, _hostComponents ?? []);
+
+      // Fallback: If parsing failed (e.g. auto-detected location has no components map), use the direct fields
+      if (hostParsed == null && _hostLocation!.countryCode != null && _hostLocation!.country != null) {
+          hostParsed = LocationParsed(
+             city: _hostLocation!.city,
+             state: _hostLocation!.state,
+             country: _hostLocation!.country!,
+             countryCode: _hostLocation!.countryCode!,
+             placeId: _hostLocation!.placeId
+          );
+      }
+      
+      if (homeParsed == null && _homeLocation!.countryCode != null && _homeLocation!.country != null) {
+          homeParsed = LocationParsed(
+             city: _homeLocation!.city,
+             state: _homeLocation!.state,
+             country: _homeLocation!.country!,
+             countryCode: _homeLocation!.countryCode!,
+             placeId: _homeLocation!.placeId
+          );
+      }
 
       if (homeParsed == null || hostParsed == null) {
-        throw Exception('Could not parse location');
+        throw Exception('Could not parse location details. Please try selecting the location again.');
       }
 
       // 2. Upload profile image (if selected)
@@ -414,6 +523,39 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
       // 4. Save to Firestore
       await ref.read(profileRepositoryProvider).saveUserProfile(user.uid, profile);
+
+      // 4.5 Initialize Points System & Process Referral
+      try {
+        final pointsService = ref.read(pointsServiceProvider);
+        
+        // Initialize user points
+        await pointsService.initializeUserPoints(user.uid);
+        
+        // Process referral if code was provided
+        final referralCode = _referralCodeController.text.trim();
+        if (referralCode.isNotEmpty) {
+           try {
+              await pointsService.processReferral(referralCode, user.uid);
+              debugPrint('Referral processed successfully: $referralCode');
+           } catch (e) {
+              // Log but don't fail signup (or should we show error? usually better to be silent on failure or just log)
+              // User might typo. Maybe we should validate before submit? 
+              // For now, let's just log. Better UX would be validation in the step itself, but processReferral does the awarding.
+              debugPrint('Error processing referral: $e');
+              // We could show a toast here later if critical.
+           }
+        }
+        
+        // Generate referral code for this new user
+        await pointsService.generateReferralCode(
+          user.uid,
+          profile.firstName,
+          homeParsed.countryCode,
+        );
+      } catch (e) {
+        debugPrint('Error initializing points: $e');
+        // Don't fail signup if points initialization fails
+      }
 
       // 5. Create Communities & Chats (Critical Step)
       // We do this BEFORE invalidating/navigating to ensure it succeeds
@@ -615,13 +757,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           selectedLocation: _hostLocation,
           onSearchChanged: (v) => _onSearchChanged(v, false),
           onSelectPlace: (id) => _selectPlace(id, false),
-          onNext: () async {
-            if (_hostLocation != null) {
-              final verified = await _verifyHostLocation();
-              if (verified) {
+          onNext: () {
+             if (_hostLocation != null) {
                 setState(() => _currentStep = SetupStep.profile);
-              }
-            }
+             }
           },
           onBack: _goBack,
         );
@@ -637,6 +776,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           isSubmitting: _isSubmitting,
           showLocation: _showCurrentLocationName,
           onLocationToggleChanged: (v) => setState(() => _showCurrentLocationName = v),
+          referralCodeController: _referralCodeController, // [NEW]
         );
     }
   }

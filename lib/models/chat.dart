@@ -70,9 +70,11 @@ class LastMessage {
       senderId: data['senderId'] as String? ?? '',
       senderName: data['senderName'] as String? ?? 'Unknown',
       type: data['type'] as String? ?? 'text',
-      mentions: (data['mentions'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList(),
+      mentions: (data['mentions'] is List)
+          ? (data['mentions'] as List).map((e) => e.toString()).toList()
+          : (data['mentions'] is Map)
+              ? (data['mentions'] as Map).keys.map((e) => e.toString()).toList()
+              : null,
       forwarded: data['forwarded'] as bool?,
       status: data['status'] as String?,
       deletedForEveryone: data['deletedForEveryone'] as bool?,
@@ -184,7 +186,17 @@ class Chat {
     List<String> parseParticipants(dynamic value) {
       if (value == null) return [];
       if (value is List) return value.map((e) => e.toString()).toList();
-      if (value is Map) return value.keys.map((e) => e.toString()).toList();
+      if (value is Map) {
+         // Handle both { "uid": true } and { "0": "uid" } formats
+         if (value.isEmpty) return [];
+         final firstVal = value.values.first;
+         if (firstVal is bool || (firstVal is num && firstVal == 1)) {
+            // Assume Set format: { uid: true }
+            return value.keys.map((e) => e.toString()).toList();
+         }
+         // Assume List-as-Map format: { "0": "uid" }
+         return value.values.map((e) => e.toString()).toList();
+      }
       return [];
     }
 
@@ -211,6 +223,57 @@ class Chat {
       eventId: data['eventId'] as String?,
       memberCount: parseInt(data['memberCount'], 0),
       flag: data['flag'] as String?,
+      unreadCount: parseInt(data['unreadCount'], 0),
+    );
+  }
+
+  Chat copyWith({
+    String? id,
+    String? communityId,
+    String? homeCountryCode,
+    String? hostCountryCode,
+    String? locationType,
+    String? type,
+    String? name,
+    String? photoUrl,
+    ChatProfileImage? profileImage,
+    List<String>? participants,
+    List<String>? admins,
+    String? createdBy,
+    LastMessage? lastMessage,
+    int? createdAt,
+    int? updatedAt,
+    String? eventId,
+    int? memberCount,
+    String? flag,
+    bool? isPinned,
+    bool? isPinnedBottom,
+    bool? isMuted,
+    int? unreadCount,
+  }) {
+    return Chat(
+      id: id ?? this.id,
+      communityId: communityId ?? this.communityId,
+      homeCountryCode: homeCountryCode ?? this.homeCountryCode,
+      hostCountryCode: hostCountryCode ?? this.hostCountryCode,
+      locationType: locationType ?? this.locationType,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      photoUrl: photoUrl ?? this.photoUrl,
+      profileImage: profileImage ?? this.profileImage,
+      participants: participants ?? this.participants,
+      admins: admins ?? this.admins,
+      createdBy: createdBy ?? this.createdBy,
+      lastMessage: lastMessage ?? this.lastMessage,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      eventId: eventId ?? this.eventId,
+      memberCount: memberCount ?? this.memberCount,
+      flag: flag ?? this.flag,
+      isPinned: isPinned ?? this.isPinned,
+      isPinnedBottom: isPinnedBottom ?? this.isPinnedBottom,
+      isMuted: isMuted ?? this.isMuted,
+      unreadCount: unreadCount ?? this.unreadCount,
     );
   }
 }

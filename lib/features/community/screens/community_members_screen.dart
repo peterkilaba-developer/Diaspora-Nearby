@@ -15,6 +15,9 @@ import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/utils/location_utils.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
+
 class CommunityMembersScreen extends ConsumerStatefulWidget {
   final String communityId;
   final Community community;
@@ -30,6 +33,31 @@ class CommunityMembersScreen extends ConsumerStatefulWidget {
 }
 
 class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen> {
+  
+  @override
+  void initState() {
+    super.initState();
+    _trackExploration(); // [NEW]
+  }
+
+  // [NEW] Track reward
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref.read(pointsServiceProvider).trackExplorationReward(user.uid, 'open_my_community');
+      if (rewarded && mounted) {
+        confettiOverlayKey.currentState?.play();
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(
+             content: Text('🎉 +1 DSP Earned for visiting your community!'),
+             backgroundColor: Colors.green,
+             behavior: SnackBarBehavior.floating,
+           )
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,11 +147,12 @@ class _CommunityMembersScreenState extends ConsumerState<CommunityMembersScreen>
                  child: Column(
                    mainAxisAlignment: MainAxisAlignment.center,
                    children: [
-                     Container(
+                     Container( // [FIX] Restored Container
                        padding: const EdgeInsets.all(24),
                        decoration: BoxDecoration(
                          color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                         shape: BoxShape.circle,
+                         shape: BoxShape.rectangle,
+                         borderRadius: BorderRadius.circular(20),
                        ),
                        child: const Icon(LucideIcons.partyPopper, size: 48, color: Colors.amber),
                      ),

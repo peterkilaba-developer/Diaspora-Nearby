@@ -345,69 +345,118 @@ class EventCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (event.venueName != null && event.venueName!.isNotEmpty)
-                                    SearchHighlightUtils.highlightText(
-                                      event.venueName!,
-                                      searchQuery,
-                                      theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-                                      context
+                                    // Title Logic: Venue Name OR City
+                                    Builder(
+                                      builder: (context) {
+                                        String displayTitle = '';
+                                        bool showSubtitle = false;
+                                        String subtitleText = '';
+
+                                        // Prioritize Venue Name
+                                        if (event.venueName != null && event.venueName!.isNotEmpty) {
+                                          displayTitle = event.venueName!; // Don't split, show full name unless too long? Actually split is okay for title.
+                                          // displayTitle = event.venueName!.split(',').first.trim(); // Maybe keep full name
+                                          showSubtitle = true; 
+                                        } 
+                                        // Fallback to City Name if no Venue Name
+                                        else if (event.venueCity != null && event.venueCity!.isNotEmpty) {
+                                          displayTitle = event.venueCity!;
+                                          showSubtitle = true;
+                                        }
+                                        // Fallback to parsing raw location string
+                                        else {
+                                           final rawLocation = event.venueAddress?.isNotEmpty == true ? event.venueAddress! : event.location;
+                                           // Heuristic: If it looks like "123 Main St, City, State", grab "123 Main St" or "City".
+                                           // User wants to avoid raw address. Maybe prioritize City if possible?
+                                           // Actually, if we don't have structured data, splitting by comma is risky.
+                                           // BUT, if we have structure:
+                                           
+                                           final parts = rawLocation.split(',');
+                                           if (parts.length >= 2) {
+                                              // Assume format: "Venue/Street, City, ..."
+                                              // If part 0 is numeric (street), maybe skip to part 1 (City)?
+                                              // Let's try to be smart.
+                                              displayTitle = parts.first.trim();
+                                              if (parts.length > 1) {
+                                                 showSubtitle = true;
+                                                 subtitleText = parts.sublist(1).join(', ').trim(); 
+                                              }
+                                           } else {
+                                              displayTitle = rawLocation;
+                                           }
+                                        }
+
+                                        // Construct Subtitle 
+                                        // If we already have a subtitleText from parsing, use it.
+                                        // Otherwise build from City/State/Country
+                                        if (subtitleText.isEmpty) {
+                                           // If we used VenueName -> Subtitle = City, State
+                                           if (event.venueName != null && event.venueName!.isNotEmpty) {
+                                              subtitleText = [
+                                                event.venueAddress, // Maybe address is useful as subtitle?
+                                                event.venueCity,
+                                              ].where((e) => e != null && e.isNotEmpty).join(', ');
+                                              // Actually better: City, State
+                                               if (event.venueCity != null) {
+                                                  subtitleText = event.venueCity!;
+                                               } else if (event.venueAddress != null) {
+                                                  subtitleText = event.venueAddress!;
+                                               }
+                                           } 
+                                           // If we used City -> Subtitle = State, Country
+                                           else if (event.venueCity != null) {
+                                              subtitleText = [
+                                                event.venueState,
+                                                event.venueCountry
+                                              ].where((e) => e != null && e.isNotEmpty).join(', ');
+                                           }
+                                        }
+
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            SearchHighlightUtils.highlightText(
+                                              displayTitle,
+                                              searchQuery,
+                                              theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+                                              context
+                                            ),
+                                            if (showSubtitle && subtitleText.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 2),
+                                                child: SearchHighlightUtils.highlightText(
+                                                  subtitleText,
+                                                  searchQuery,
+                                                  theme.textTheme.labelSmall?.copyWith(
+                                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                                    fontSize: 10,
+                                                  ),
+                                                  context
+                                                ),
+                                              ),
+                                          ],
+                                        );
+                                      }
                                     ),
-                                  if (event.venueAddress != null && event.venueAddress!.isNotEmpty)
-                                    Text(
-                                      event.venueAddress!.split(',').first,
-                                      style: TextStyle(
-                                        fontSize: 12, 
-                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                                        height: 1.2,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  else if (event.location.isNotEmpty)
-                                    Text(
-                                      event.location.split(',').first,
-                                      style: TextStyle(
-                                        fontSize: 12, 
-                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
-                                        height: 1.2,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  
-                                  // City, State, Country Row
-                                  SearchHighlightUtils.highlightText(
-                                    [
-                                      event.venueCity,
-                                      event.venueState,
-                                      event.venueCountry
-                                    ].where((e) => e != null && e.isNotEmpty).join(', '),
-                                    searchQuery,
-                                    theme.textTheme.labelSmall?.copyWith(
-                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                      fontSize: 10,
-                                    ),
-                                    context
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
                             if (event.distance != null)
                               Padding(
                                 padding: const EdgeInsets.only(left: 8),
-                                child: Column(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(LucideIcons.navigation, size: 16, color: Colors.orange),
-                                    const SizedBox(height: 2),
                                     Text(
                                       '${event.distance!.toStringAsFixed(1)}km',
                                       style: const TextStyle(
-                                        fontSize: 9,
+                                        fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.orange,
                                       ),
                                     ),
+                                    const SizedBox(width: 4),
+                                    const Icon(LucideIcons.navigation, size: 14, color: Colors.orange),
                                   ],
                                 ),
                               )
@@ -499,78 +548,32 @@ class EventCard extends StatelessWidget {
 
   Widget _buildStatusBadge(BuildContext context) {
     final theme = Theme.of(context);
-    final now = DateTime.now();
-
-    // Reconstruct start and end date objects
-    DateTime? start;
-    try {
-      start = DateTime.parse('${event.startDate} ${event.startTime}');
-    } catch (_) {
-      try {
-        start = DateTime.parse(event.startDate);
-      } catch (_) {}
-    }
-
-    if (start == null) return const SizedBox.shrink();
-
-    DateTime? end;
-    if (event.endDate != null && event.endTime != null) {
-      try {
-        end = DateTime.parse('${event.endDate!} ${event.endTime!}');
-      } catch (_) {
-        try {
-          end = DateTime.parse(event.endDate!);
-        } catch (_) {}
-      }
-    }
-
-    // Default end if missing: 3 hours after start
-    end ??= start.add(const Duration(hours: 3));
-
-    String? statusText;
-    Color badgeColor = theme.colorScheme.secondary;
-
-    final diffToStart = start.difference(now);
-    final diffToEnd = end.difference(now);
-
-    if (now.isAfter(start) && now.isBefore(end)) {
-      statusText = 'Happening Now';
-      badgeColor = Colors.green;
-      if (diffToEnd.inHours < 4 && diffToEnd.inHours >= 1) {
-        statusText = 'Ending in ${diffToEnd.inHours}h';
-      } else if (diffToEnd.inHours < 1 && diffToEnd.inMinutes > 0) {
-        statusText = 'Ending in ${diffToEnd.inMinutes}m';
-      }
-    } else if (diffToStart.isNegative == false) {
-      if (diffToStart.inHours < 24 && start.day == now.day) {
-        if (diffToStart.inHours >= 1) {
-          statusText = 'Starts in ${diffToStart.inHours}h';
-        } else {
-          statusText = 'Starts in ${diffToStart.inMinutes}m';
-        }
-      } else {
-         final tomorrow = DateTime(now.year, now.month, now.day + 1);
-         if (start.year == tomorrow.year && start.month == tomorrow.month && start.day == tomorrow.day) {
-           statusText = 'Tomorrow';
-         }
-      }
-    }
+    
+    final statusInfo = event.getStatusBadgeInfo();
+    final statusText = statusInfo['text'] as String?;
+    final semanticColor = statusInfo['color'] as String?;
 
     if (statusText == null) return const SizedBox.shrink();
+
+    // Map semantic color to Color
+    Color badgeColor = theme.colorScheme.secondary;
+    if (semanticColor == 'green') badgeColor = Colors.green;
+    
+    // For default secondary, maybe orange?
+    // Original code used theme.colorScheme.secondary mostly.
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
+        color: badgeColor,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        statusText.toUpperCase(),
-        style: TextStyle(
-          color: badgeColor,
+        statusText,
+        style: const TextStyle(
+          color: Colors.white,
           fontSize: 10,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.5,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

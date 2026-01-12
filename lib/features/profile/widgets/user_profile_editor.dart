@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
+import 'package:diaspora_nearby/models/google_places_models.dart';
 
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/models/location.dart' as loc_model;
@@ -12,13 +12,13 @@ import 'package:diaspora_nearby/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/utils/location_utils.dart' as loc_utils;
 import '../../shared/widgets/multi_select_dialog.dart';
 import '../widgets/add_past_location_dialog.dart';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 
 class UserProfileEditor extends ConsumerStatefulWidget {
   final ProfileData initialProfile;
-  final Future<void> Function(ProfileData, File?) onSave;
+  final Future<void> Function(ProfileData, XFile?) onSave;
 
   const UserProfileEditor({
     super.key,
@@ -53,14 +53,14 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
   List<loc_model.PastLocation> _pastLocations = [];
   String _selectedYearsInHost = '';
   bool _showCurrentLocationName = true;
-  File? _newProfileImage;
+  XFile? _newProfileImage;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, maxHeight: 800);
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
     if (pickedFile != null) {
       setState(() {
-        _newProfileImage = File(pickedFile.path);
+        _newProfileImage = pickedFile;
       });
     }
   }
@@ -180,6 +180,8 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
 
   // --- Location Logic ---
 
+  // --- Location Logic ---
+  
   void _onSearchChanged(String input) async {
     if (input.isEmpty) {
       if (mounted) setState(() => _predictions = []);
@@ -190,93 +192,9 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
     if (mounted) setState(() => _predictions = results);
   }
 
-  Future<void> _selectPlace(String placeId) async {
-    setState(() => _isUpdatingLocation = true);
-    try {
-      final places = ref.read(googlePlacesServiceProvider);
-      final response = await places.getPlaceDetails(placeId);
-      final place = response?.place;
-      
-      if (place == null) throw Exception('Could not fetch place details');
+  // _selectPlace Logic is below under _buildLocationUpdateSection region
 
-      List<AddressComponent> components = place.addressComponents ?? [];
-      final parsedLoc = loc_utils.parseLocationComponents(place.address ?? '', components);
-      if (parsedLoc == null) throw Exception('Could not parse location components');
 
-      final newLocation = loc_model.UserLocation(
-        formattedAddress: place.address ?? '',
-        placeId: place.id ?? placeId,
-        city: parsedLoc.city,
-        state: parsedLoc.state,
-        country: parsedLoc.country,
-        countryCode: parsedLoc.countryCode,
-        geometry: place.latLng != null ? loc_model.UserLocationGeometry(
-          location: loc_model.UserLocationCoordinates(
-            lat: place.latLng!.lat,
-            lng: place.latLng!.lng,
-          ),
-        ) : null,
-      );
-
-      await _verifyLocation(newLocation, parsedLoc.countryCode);
-      
-      if (!mounted) return;
-      if (_isLocationVerified) {
-         setState(() {
-           _tempSelectedLocation = newLocation;
-           _predictions = [];
-           _searchController.text = newLocation.formattedAddress;
-         });
-         FocusScope.of(context).unfocus(); 
-      }
-    } catch (e) {
-      if (mounted) {
-        if (!e.toString().contains('Verification failed')) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-        }
-        setState(() {
-          _tempSelectedLocation = null;
-          _isLocationVerified = false;
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _isUpdatingLocation = false);
-    }
-  }
-
-  Future<void> _verifyLocation(loc_model.UserLocation newLoc, String targetCountryCode) async {
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) throw Exception('Location permission denied');
-    }
-    if (permission == LocationPermission.deniedForever) throw Exception('Location permission permanently denied');
-
-    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
-    List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
-    if (placemarks.isEmpty) throw Exception('Could not determine your current country');
-
-    final currentCountryCode = placemarks.first.isoCountryCode;
-    final normalizedTarget = targetCountryCode.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '').substring(0, 2);
-    final normalizedCurrent = currentCountryCode?.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '').substring(0, 2);
-
-    if (normalizedCurrent != normalizedTarget) {
-      _showVerificationErrorDialog(newLoc.country ?? 'the target country', normalizedCurrent ?? '??', normalizedTarget);
-      throw Exception('Verification failed'); 
-    }
-    _isLocationVerified = true;
-  }
-
-  void _showVerificationErrorDialog(String targetCountry, String currentCode, String targetCode) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Verification Failed'),
-        content: Text('You must be physically located in $targetCountry to update your host town to this location.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Understand'))],
-      ),
-    );
-  }
 
   // --- UI Building ---
 
@@ -310,6 +228,7 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
                   user: widget.initialProfile,
                   localImage: _newProfileImage,
                   isStatic: true,
+                  onImageTap: _pickImage, // [NEW] Tap avatar to change photo
                 ),
                 Positioned(
                   left: 24, // Align with avatar
@@ -587,16 +506,31 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
      return Column(
        children: [
           const SizedBox(height: 16),
+          // 1. Search Bar (Restored)
           TextField(
             controller: _searchController, 
             onChanged: _onSearchChanged, 
             textCapitalization: TextCapitalization.sentences, 
             decoration: InputDecoration(
-               hintText: 'Update Host City', 
-               suffixIcon: _isUpdatingLocation ? const CircularProgressIndicator() : const Icon(LucideIcons.search),
-               border: const OutlineInputBorder()
+               hintText: 'Search Host City (GPS Verified)', 
+               suffixIcon: _isUpdatingLocation 
+                  ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)) 
+                  : _searchController.text.isNotEmpty
+                      ? IconButton(
+                           icon: const Icon(LucideIcons.x, size: 18),
+                           onPressed: () {
+                             _searchController.clear();
+                             _onSearchChanged('');
+                             setState(() => _tempSelectedLocation = null);
+                           },
+                        )
+                      : const Icon(LucideIcons.search),
+               border: const OutlineInputBorder(),
+               helperText: 'You must be physically located in the city you select.',
             )
           ),
+          
+          // 2. Suggestions
           if (_predictions.isNotEmpty) 
             Material(
               elevation: 4,
@@ -626,6 +560,103 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
             ),
        ],
      );
+  }
+
+  // --- Hybrid Verification Logic ---
+
+  Future<void> _selectPlace(String placeId) async {
+    setState(() => _isUpdatingLocation = true);
+    try {
+      final places = ref.read(googlePlacesServiceProvider);
+      // 1. Get Place Details (Target)
+      final response = await places.getPlaceDetails(placeId);
+      final place = response?.place;
+      
+      if (place == null) throw Exception('Could not fetch place details');
+
+      final targetLat = place.latLng?.lat;
+      final targetLng = place.latLng?.lng;
+      if (targetLat == null || targetLng == null) throw Exception('Selected place has no coordinates');
+
+      List<AddressComponent> components = place.addressComponents ?? [];
+      final parsedLoc = loc_utils.parseLocationComponents(place.address ?? '', components);
+      if (parsedLoc == null) throw Exception('Could not parse location components');
+
+      // 2. GPS Check
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) throw Exception('Location permission denied');
+      }
+      if (permission == LocationPermission.deniedForever) throw Exception('Location permission permanently denied');
+
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium);
+      
+      // 3. Distance Calculation
+      final distanceKm = loc_utils.calculateDistance(
+         position.latitude, position.longitude, targetLat, targetLng
+      );
+      
+      const double MAX_DISTANCE_KM = 50.0;
+      
+      if (distanceKm > MAX_DISTANCE_KM) {
+         _showVerificationErrorDialog(parsedLoc.city ?? 'Selected City', distanceKm);
+         // Clear predictions but don't set location
+         setState(() {
+            _predictions = [];
+            _searchController.clear();
+         });
+         return; 
+      }
+
+      // 4. Success - Set Location
+      final newLocation = loc_model.UserLocation(
+        formattedAddress: place.address ?? '',
+        placeId: place.id ?? placeId,
+        city: parsedLoc.city,
+        state: parsedLoc.state,
+        country: parsedLoc.country,
+        countryCode: parsedLoc.countryCode,
+        geometry: loc_model.UserLocationGeometry(
+          location: loc_model.UserLocationCoordinates(
+             lat: targetLat,
+             lng: targetLng
+          )
+        ),
+      );
+
+      if (mounted) {
+         setState(() {
+           _tempSelectedLocation = newLocation;
+           _predictions = [];
+           _searchController.text = newLocation.formattedAddress;
+           _isLocationVerified = true;
+         });
+         FocusScope.of(context).unfocus(); 
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() {
+          _tempSelectedLocation = null;
+          _isLocationVerified = false;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingLocation = false);
+    }
+  }
+
+  void _showVerificationErrorDialog(String targetCity, double distanceKm) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Verification Failed'),
+        content: Text('You are ${distanceKm.round()}km away from $targetCity.\n\nTo ensure community integrity, you must be physically located in/near your host city to update it.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Understand'))],
+      ),
+    );
   }
 
   Widget _buildMultiSelectDropdown({

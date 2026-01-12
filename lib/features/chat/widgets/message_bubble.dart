@@ -13,6 +13,7 @@ import 'message_content/video_message_content.dart';
 import 'message_content/audio_message_content.dart';
 import 'message_content/document_message_content.dart';
 import 'message_content/location_message_content.dart';
+import 'message_content/dsp_transfer_message_content.dart'; // [NEW]
 
 /// Message Bubble Widget
 /// Displays a single message in the chat
@@ -445,6 +446,8 @@ class MessageBubble extends ConsumerWidget {
         return LocationMessageContent(message: message, isOwn: isOwn);
       case 'document':
         return DocumentMessageContent(message: message, isOwn: isOwn);
+      case 'dsp_transfer': // [NEW]
+        return DSPTransferMessageContent(message: message, isOwn: isOwn);
       case 'money-transfer':
         return TextMessageContent(message: message, isOwn: isOwn); // Placeholder
       case 'system':

@@ -1,4 +1,6 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -19,10 +21,23 @@ class CapitalizeFirstLetterFormatter extends TextInputFormatter {
   }
 }
 
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+    );
+  }
+}
+
 class ProfileSetupDetailsStep extends StatelessWidget {
   final TextEditingController firstNameController;
   final TextEditingController lastNameController;
-  final File? profileImage;
+  final XFile? profileImage;
   final loc_model.UserLocation? homeLocation;
   final loc_model.UserLocation? hostLocation;
   final VoidCallback onPickImage;
@@ -30,6 +45,7 @@ class ProfileSetupDetailsStep extends StatelessWidget {
   final bool isSubmitting;
   final bool showLocation;
   final ValueChanged<bool> onLocationToggleChanged;
+  final TextEditingController referralCodeController; // [NEW]
 
   const ProfileSetupDetailsStep({
     super.key,
@@ -43,6 +59,7 @@ class ProfileSetupDetailsStep extends StatelessWidget {
     required this.isSubmitting,
     required this.showLocation,
     required this.onLocationToggleChanged,
+    required this.referralCodeController, // [NEW]
   });
 
   @override
@@ -61,7 +78,11 @@ class ProfileSetupDetailsStep extends StatelessWidget {
                 CircleAvatar(
                   radius: 60,
                   backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  backgroundImage: profileImage != null ? FileImage(profileImage!) : null,
+                  backgroundImage: profileImage != null 
+                    ? (kIsWeb 
+                        ? NetworkImage(profileImage!.path) 
+                        : FileImage(File(profileImage!.path))) as ImageProvider
+                    : null,
                   child: profileImage == null
                     ? Icon(LucideIcons.user, size: 48, color: theme.colorScheme.onSurfaceVariant)
                     : null,
@@ -116,6 +137,23 @@ class ProfileSetupDetailsStep extends StatelessWidget {
           ),
           inputFormatters: [CapitalizeFirstLetterFormatter()],
           validator: (v) => v?.isEmpty == true ? 'Required' : null,
+        ),
+        
+        const SizedBox(height: 16),
+
+        TextFormField(
+          controller: referralCodeController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(
+            labelText: 'Referral Code (Optional)',
+            prefixIcon: const Icon(LucideIcons.ticket),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            filled: true,
+            hintText: 'e.g. PETER-UK-1234',
+          ),
+          inputFormatters: [
+             UpperCaseTextFormatter(),
+          ],
         ),
         
         const SizedBox(height: 24),

@@ -2,40 +2,149 @@
 <html>
 
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+
+  <!-- Open Graph / Social Media Meta Tags (Must be early for WhatsApp) -->
+  <meta property="og:title" content="Diaspora Nearby">
+  <meta property="og:description"
+    content="Bringing Together Global Diaspora Communities. Join Diaspora Communities, Discover and Connect with people from your home country nearby or across the world.">
+  <meta property="og:image" content="https://diasporanearby.com/icons/Icon-512.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:url" content="https://diasporanearby.com">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Diaspora Nearby App">
+
+  <!-- Fallback for other parsers -->
+  <meta itemprop="name" content="Diaspora Nearby">
+  <meta itemprop="description"
+    content="Bringing Together Global Diaspora Communities. Join Diaspora Communities, Discover and Connect with people from your home country nearby or across the world.">
+  <meta itemprop="image" content="https://diasporanearby.com/icons/Icon-512.png">
+
+  <!-- Twitter Card data -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Diaspora Nearby">
+  <meta name="twitter:description"
+    content="Bringing Together Global Diaspora Communities. Join Diaspora Communities, Discover and Connect with people from your home country nearby or across the world.">
+  <meta name="twitter:image" content="https://diasporanearby.com/icons/Icon-512.png">
+
+  <meta name="description" content="Connecting diaspora communities worldwide.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="diaspora_flutter">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Diaspora">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png" />
 
-  <title>diaspora_flutter</title>
+  <title>Diaspora Nearby</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    body {
+      background-color: #FAFAFA;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-radius: 50%;
+      border-top: 4px solid #9CAF88;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-text {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #9CAF88;
+      font-weight: 500;
+      font-size: 18px;
+    }
+  </style>
 </head>
 
 <body>
+  <div id="loading-indicator" class="loading">
+    <div class="loader"></div>
+    <div class="loading-text">Diaspora Nearby</div>
+  </div>
+
+  <script>
+    // Force HTML renderer to solve CORS issues with CanvasKit on the web
+    window.flutterConfiguration = {
+      renderer: "html"
+    };
+    // Legacy support for older bootstrapping
+    window.flutterWebRenderer = "html";
+  </script>
   <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    window.addEventListener('load', function (ev) {
+      // Remove loading indicator when app is ready
+      // This is a bit tricky with flutter_bootstrap.js, 
+      // usually Flutter handles the splash screen if configured in pubspec.yaml,
+      // but a native HTML splash is faster.
+      // We'll rely on Flutter to cover it once it loads.
+    });
+
+    // PWA Install Prompt handling
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      deferredPrompt = e;
+      // Optionally, send a message to Flutter that install is available
+      console.log('PWA: Install prompt available');
+    });
+
+    window.addEventListener('appinstalled', (evt) => {
+      console.log('PWA: App was installed');
+    });
+
+    // Global function for Flutter to call
+    window.presentPWAInstall = async function () {
+      if (!deferredPrompt) {
+        console.log('PWA: Install prompt not stashed');
+        return false;
+      }
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`PWA: User response to the install prompt: ${outcome}`);
+      deferredPrompt = null;
+      return outcome === 'accepted';
+    };
+  </script>
 </body>
 
 </html>

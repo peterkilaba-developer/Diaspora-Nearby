@@ -1,5 +1,8 @@
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:universal_io/io.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
@@ -136,7 +139,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> with Widg
     await Geolocator.openAppSettings();
   }
 
-  Future<void> _saveProfile(ProfileData updatedProfile, File? newImage) async {
+  Future<void> _saveProfile(ProfileData updatedProfile, XFile? newImage) async {
     // FocusScope.of(context).unfocus(); // Handled by Editor
     // setState(() => _isSaving = true); // Handled by Editor
     try {
@@ -385,6 +388,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> with Widg
               ),
             ),
           ),
+        
+
       ],
     );
   }

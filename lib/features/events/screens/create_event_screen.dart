@@ -1,4 +1,6 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,12 +17,13 @@ import 'package:diaspora_nearby/models/community_data.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/community/models/hierarchy_item.dart';
 import 'package:uuid/uuid.dart';
-import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart' as places;
+import 'package:diaspora_nearby/models/google_places_models.dart' as places;
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/events/screens/organizer_events_screen.dart';
+import 'package:diaspora_nearby/services/google_places_service.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/models/chat.dart';
 
@@ -89,7 +92,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   final _maxAttendeesController = TextEditingController();
 
   // State Variables
-  File? _imageFile;
+  XFile? _imageFile;
   String? _existingImageUrl;
   DateTime _startDate = DateTime.now().add(const Duration(minutes: 30));
   TimeOfDay _startTime = TimeOfDay.now();
@@ -111,7 +114,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   bool _isPublished = true; // [NEW] Default to published
   
   // Places
-  late final places.FlutterGooglePlacesSdk _places;
   List<places.AutocompletePrediction> _placePredictions = [];
   bool _showPredictions = false;
   
@@ -139,7 +141,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   @override
   void initState() {
     super.initState();
-    _places = places.FlutterGooglePlacesSdk(Env.googleMapsApiKey);
     
     // Set initial times
     final now = DateTime.now();
@@ -280,17 +281,17 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           if (widget.eventToEdit == null) {
               if (_myCommunities.isNotEmpty) {
                  final defaultCommunity = _myCommunities.firstWhere(
-                    // Priority 1: Home Country National Community
-                    (c) => c.locationType == 'home' && c.type == 'country', 
+                    // Priority 1: Global Community (User Requested Default)
+                    (c) => c.type == 'global',
                     orElse: () => _myCommunities.firstWhere(
-                       // Priority 2: Any Home Community
-                       (c) => c.locationType == 'home',
+                       // Priority 2: Home Country National Community
+                       (c) => c.locationType == 'home' && c.type == 'country',
                        orElse: () => _myCommunities.firstWhere(
-                          // Priority 3: National Community
-                          (c) => c.type == 'country',
+                          // Priority 3: Any Home Community
+                          (c) => c.locationType == 'home',
                           orElse: () => _myCommunities.firstWhere(
-                             // Priority 4: Global
-                             (c) => c.type == 'global',
+                             // Priority 4: Any National Community
+                             (c) => c.type == 'country',
                              orElse: () => _myCommunities.first
                           )
                        )
@@ -325,10 +326,10 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
 
    Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
     if (pickedFile != null) {
       setState(() {
-        _imageFile = File(pickedFile.path);
+        _imageFile = pickedFile;
       });
     }
   }
@@ -338,8 +339,8 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
       setState(() { _placePredictions = []; _showPredictions = false; });
       return;
     }
-    _places.findAutocompletePredictions(value).then((response) {
-      setState(() { _placePredictions = response.predictions; _showPredictions = true; });
+    ref.read(googlePlacesServiceProvider).autocomplete(value, filter: places.PlaceTypeFilter.VENUES).then((predictions) {
+      setState(() { _placePredictions = predictions; _showPredictions = true; });
     });
   }
 
@@ -349,17 +350,9 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     FocusScope.of(context).unfocus();
 
     try {
-      final response = await _places.fetchPlace(
-        prediction.placeId,
-        fields: [
-          places.PlaceField.Name,
-          places.PlaceField.Address,
-          places.PlaceField.AddressComponents,
-          places.PlaceField.Location,
-        ],
-      );
+      final response = await ref.read(googlePlacesServiceProvider).getPlaceDetails(prediction.placeId);
       
-      final place = response.place;
+      final place = response?.place;
       if (place != null) {
         setState(() {
           _venueName = place.name;
@@ -458,7 +451,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                             color: Theme.of(context).colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(12),
                             image: _imageFile != null 
-                              ? DecorationImage(image: FileImage(_imageFile!), fit: BoxFit.cover)
+                              ? DecorationImage(
+                                  image: kIsWeb 
+                                      ? NetworkImage(_imageFile!.path) 
+                                      : FileImage(File(_imageFile!.path)) as ImageProvider,
+                                  fit: BoxFit.cover
+                                )
                               : (_existingImageUrl != null 
                                    ? DecorationImage(image: NetworkImage(_existingImageUrl!), fit: BoxFit.cover)
                                    : null),
@@ -574,7 +572,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                         children: [
                            Expanded(child: OutlinedButton.icon(
                                onPressed: () async {
-                                 final d = await showDatePicker(context: context, initialDate: _startDate, firstDate: DateTime.now(), lastDate: DateTime(2030));
+                                 final d = await showDatePicker(
+                                   context: context, 
+                                   initialDate: _startDate, 
+                                   firstDate: DateTime.now(), 
+                                   lastDate: DateTime.now().add(const Duration(days: 30))
+                                 );
                                  if (d != null) {
                                     setState(() {
                                        _startDate = d;
@@ -732,7 +735,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                       const SizedBox(height: 24),
                       
                       // Audience
-                      const Text('Who can attend?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text('Audience Visibility', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       if (_isLoadingAudience)
                          const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()))
                       else

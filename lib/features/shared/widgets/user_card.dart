@@ -1,4 +1,7 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +13,7 @@ import 'package:diaspora_nearby/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
+import 'package:diaspora_nearby/features/shared/widgets/shimmer_effect.dart';
 
 class UserCardView extends ConsumerStatefulWidget {
   final ProfileData user;
@@ -17,7 +21,7 @@ class UserCardView extends ConsumerStatefulWidget {
   final VoidCallback? onChatTap;
   final String? searchQuery; // Optional search query for highlighting
   final double? distanceKm; // Optional distance override for search results
-  final File? localImage; // Optional local image override
+  final XFile? localImage; // Optional local image override
   final bool isStatic; // Static mode for community lists
   
   const UserCardView({
@@ -31,35 +35,21 @@ class UserCardView extends ConsumerStatefulWidget {
     this.isStatic = false,
     this.titleSuffix,
     this.backgroundColor,
+    this.onImageTap, // [NEW] Allow overriding image tap (e.g. for picking new image)
   });
 
   final String? titleSuffix;
   final Color? backgroundColor;
+  final VoidCallback? onImageTap;
 
   @override
   ConsumerState<UserCardView> createState() => _UserCardViewState();
 }
 
-class _UserCardViewState extends ConsumerState<UserCardView> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
+class _UserCardViewState extends ConsumerState<UserCardView> {
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   // ... (keep all helper methods same) ...
@@ -168,6 +158,12 @@ class _UserCardViewState extends ConsumerState<UserCardView> with SingleTickerPr
                     return const CircularProgressIndicator(color: Colors.white);
                   },
                   errorBuilder: (context, error, stackTrace) {
+                     if (kIsWeb) {
+                       debugPrint('❌ Image failed to load on Web: $error (URL: ${widget.user.profileImage})');
+                       if (widget.user.profileImage.contains('firebasestorage.googleapis.com')) {
+                         debugPrint('💡 Suggestion: If this is a CORS error, use --web-renderer html or configure CORS for Storage.');
+                       }
+                     }
                      return const Icon(LucideIcons.imageOff, color: Colors.white, size: 50);
                   },
                 ),
@@ -250,44 +246,58 @@ class _UserCardViewState extends ConsumerState<UserCardView> with SingleTickerPr
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http')) {
-                          _showFullScreenImage(context);
-                        } else if (widget.onNameTap != null) {
-                          widget.onNameTap!();
-                        }
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          width: 80,
-                          height: 96,
-                          color: theme.colorScheme.surfaceVariant,
-                          child: widget.localImage != null
-                            ? Image.file(
-                                widget.localImage!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _buildInitials(theme),
-                              )
-                            : (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http'))
-                              ? Image.network(
-                                  widget.user.profileImage,
-                                  fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (_, error, ___) => _buildInitials(theme),
+                      GestureDetector(
+                        onTap: () {
+                          // [MODIFIED] Check custom handler first (e.g. for Edit Profile)
+                          if (widget.onImageTap != null) {
+                            widget.onImageTap!();
+                            return;
+                          }
+                          // Default behavior: specific check for full screen
+                          if (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http')) {
+                            _showFullScreenImage(context);
+                          } else if (widget.onNameTap != null) {
+                            widget.onNameTap!();
+                          }
+                        },
+                      child: Hero(
+                        tag: 'user-avatar-${widget.user.uid}',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: 80,
+                            height: 96,
+                            color: theme.colorScheme.surfaceVariant,
+                            child: widget.localImage != null
+                              ? (kIsWeb 
+                                  ? Image.network(
+                                      widget.localImage!.path,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => _buildInitials(theme),
+                                    )
+                                  : Image.file(
+                                      File(widget.localImage!.path),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => _buildInitials(theme),
+                                    )
                                 )
-                              : _buildInitials(theme),
+                              : (widget.user.profileImage.isNotEmpty && widget.user.profileImage.startsWith('http'))
+                                ? CachedNetworkImage(
+                                    imageUrl: widget.user.profileImage,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => const ShimmerEffect(width: 80, height: 96),
+                                    errorWidget: (context, url, error) {
+                                       // Debug print using the error object
+                                       if (kDebugMode) {
+                                          print('UserCardView Image Error for ${widget.user.uid}: $error');
+                                          print('URL: ${widget.user.profileImage}');
+                                       }
+                                       return _buildInitials(theme);
+                                    },
+                                    fadeInDuration: const Duration(milliseconds: 300),
+                                  )
+                                : _buildInitials(theme),
+                          ),
                         ),
                       ),
                     ),

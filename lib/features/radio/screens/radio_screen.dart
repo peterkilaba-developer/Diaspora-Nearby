@@ -11,6 +11,8 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 
 // --- Providers ---
 final stationsByCountryProvider = FutureProvider.family<List<RadioStation>, String>((ref, countryCode) async {
@@ -39,6 +41,28 @@ class _RadioScreenState extends ConsumerState<RadioScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
+    // [NEW] Track Radio Exploration
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+       ref.read(pointsServiceProvider).trackExplorationReward(ref.read(authRepositoryProvider).currentUser?.uid ?? '', 'explore_page_radio').then((rewarded) {
+          if (rewarded && mounted) {
+             // We need a way to show confetti here. 
+             // RadioScreen is inside ScaffoldWithNavBar which has the overlay key? 
+             // Using global key from main.dart might be safer if imported, 
+             // OR just fire the toast. Use global key if imported.
+             // Importing confetti_overlay is needed.
+             // import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [FIX] Removed invalid import
+             confettiOverlayKey.currentState?.play();
+             ScaffoldMessenger.of(context).showSnackBar(
+               const SnackBar(
+                 content: Text('🎉 +1 DSP Earned for tuning in!'),
+                 backgroundColor: Colors.green,
+                 behavior: SnackBarBehavior.floating,
+               )
+             );
+          }
+       });
+    });
+
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (_tabController.index != _currentIndex) {
