@@ -47,3 +47,21 @@ google-services.json
 GoogleService-Info.plist
 *firebase-config.json
 pub_cache/
+
+# Node modules
+node_modules/
+**/node_modules/
+functions/node_modules/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Test outputs
+*_test_output.txt
+test_output.txt
+test_results.txt
+logic_summary.txt
+targeted_analysis.txt
+proximity_test_output.txt
+
