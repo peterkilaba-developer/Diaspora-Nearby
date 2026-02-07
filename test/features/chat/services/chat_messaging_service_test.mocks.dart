@@ -10,6 +10,8 @@ import 'dart:typed_data' as _i12;
 import 'package:cloud_firestore/cloud_firestore.dart' as _i8;
 import 'package:cloud_firestore_platform_interface/cloud_firestore_platform_interface.dart'
     as _i7;
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart'
+    as _i15;
 import 'package:firebase_auth/firebase_auth.dart' as _i10;
 import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart'
     as _i9;
@@ -3642,4 +3644,550 @@ class MockDataSnapshot extends _i1.Mock implements _i6.DataSnapshot {
           ),
         ),
       ) as _i6.DataSnapshot);
+}
+
+/// A class which mocks [PointsService].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockPointsService extends _i1.Mock implements _i15.PointsService {
+  MockPointsService() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i5.Future<void> trackBlockPenalty(
+    String? userId,
+    int? newBlocksCount,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackBlockPenalty,
+          [
+            userId,
+            newBlocksCount,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackFlagPenalty(
+    String? userId,
+    int? newFlagCount,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackFlagPenalty,
+          [
+            userId,
+            newFlagCount,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> awardManualPoints(
+    String? userId,
+    int? points,
+    String? reason, {
+    Map<String, dynamic>? metadata,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #awardManualPoints,
+          [
+            userId,
+            points,
+            reason,
+          ],
+          {#metadata: metadata},
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> initializeUserPoints(String? userId) => (super.noSuchMethod(
+        Invocation.method(
+          #initializeUserPoints,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackDailyShare(
+    String? userId,
+    bool? isIncoming,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackDailyShare,
+          [
+            userId,
+            isIncoming,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackMessageSent(String? userId) => (super.noSuchMethod(
+        Invocation.method(
+          #trackMessageSent,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackCommunityMessage(
+    String? userId,
+    String? communityId,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackCommunityMessage,
+          [
+            userId,
+            communityId,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackNewDM(
+    String? userId,
+    String? targetUserId,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackNewDM,
+          [
+            userId,
+            targetUserId,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackVerifierReward(String? userId) => (super.noSuchMethod(
+        Invocation.method(
+          #trackVerifierReward,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackVouchReward(
+    String? userId,
+    String? vouchedUserId,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackVouchReward,
+          [
+            userId,
+            vouchedUserId,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<bool> trackExternalShare(
+    String? userId,
+    String? contentType,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackExternalShare,
+          [
+            userId,
+            contentType,
+          ],
+        ),
+        returnValue: _i5.Future<bool>.value(false),
+      ) as _i5.Future<bool>);
+
+  @override
+  _i5.Future<void> trackIncomingShare(
+    String? userId,
+    String? contentType,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackIncomingShare,
+          [
+            userId,
+            contentType,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<String?> processReferral(
+    String? code,
+    String? newUserId,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #processReferral,
+          [
+            code,
+            newUserId,
+          ],
+        ),
+        returnValue: _i5.Future<String?>.value(),
+      ) as _i5.Future<String?>);
+
+  @override
+  _i5.Future<bool> trackExplorationReward(
+    String? userId,
+    String? actionId, {
+    int? points = 10,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackExplorationReward,
+          [
+            userId,
+            actionId,
+          ],
+          {#points: points},
+        ),
+        returnValue: _i5.Future<bool>.value(false),
+      ) as _i5.Future<bool>);
+
+  @override
+  _i5.Future<void> trackRelationshipReward({
+    required String? senderId,
+    required String? receiverId,
+    required String? status,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackRelationshipReward,
+          [],
+          {
+            #senderId: senderId,
+            #receiverId: receiverId,
+            #status: status,
+          },
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackRelationshipAction(
+    String? senderId,
+    String? receiverId,
+    bool? isAccepted,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackRelationshipAction,
+          [
+            senderId,
+            receiverId,
+            isAccepted,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> reportSpam(String? senderId) => (super.noSuchMethod(
+        Invocation.method(
+          #reportSpam,
+          [senderId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordFakeVerificationPenalty(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #recordFakeVerificationPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordFraudPenalty(String? userId) => (super.noSuchMethod(
+        Invocation.method(
+          #recordFraudPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordVouchingBadActorPenalty(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #recordVouchingBadActorPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackVerifiedCheckIn(String? userId) => (super.noSuchMethod(
+        Invocation.method(
+          #trackVerifiedCheckIn,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackLocalKnowledgeHelper(
+    String? userId,
+    String? otherUserId,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackLocalKnowledgeHelper,
+          [
+            userId,
+            otherUserId,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackHostATraveler(
+    String? userId,
+    String? guestUserId,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackHostATraveler,
+          [
+            userId,
+            guestUserId,
+          ],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackEmergencyContactAnnual(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackEmergencyContactAnnual,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackOrganizationVetting(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackOrganizationVetting,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackIdentityQRExchange(
+    String? userId,
+    String? otherUid, {
+    bool? isServiceProvider = false,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #trackIdentityQRExchange,
+          [
+            userId,
+            otherUid,
+          ],
+          {#isServiceProvider: isServiceProvider},
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordEventNoShowPenalty(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #recordEventNoShowPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordMisinformationPenalty(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #recordMisinformationPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordDeceptiveOrgPenalty(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #recordDeceptiveOrgPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> recordUnresponsiveLiaisonPenalty(String? userId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #recordUnresponsiveLiaisonPenalty,
+          [userId],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<String> generateReferralCode(
+    String? userId,
+    String? firstName,
+    String? countryCode,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #generateReferralCode,
+          [
+            userId,
+            firstName,
+            countryCode,
+          ],
+        ),
+        returnValue: _i5.Future<String>.value(_i11.dummyValue<String>(
+          this,
+          Invocation.method(
+            #generateReferralCode,
+            [
+              userId,
+              firstName,
+              countryCode,
+            ],
+          ),
+        )),
+      ) as _i5.Future<String>);
+
+  @override
+  _i5.Future<String?> getReferralCode(String? userId) => (super.noSuchMethod(
+        Invocation.method(
+          #getReferralCode,
+          [userId],
+        ),
+        returnValue: _i5.Future<String?>.value(),
+      ) as _i5.Future<String?>);
+
+  @override
+  _i5.Future<void> transferPoints({
+    required String? fromUserId,
+    required String? toUserId,
+    required int? amount,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #transferPoints,
+          [],
+          {
+            #fromUserId: fromUserId,
+            #toUserId: toUserId,
+            #amount: amount,
+          },
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> syncTreasuryBalances() => (super.noSuchMethod(
+        Invocation.method(
+          #syncTreasuryBalances,
+          [],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> awardPoints({
+    required String? userId,
+    required int? amount,
+    required String? reason,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #awardPoints,
+          [],
+          {
+            #userId: userId,
+            #amount: amount,
+            #reason: reason,
+          },
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> deductPoints({
+    required String? userId,
+    required int? amount,
+    required String? reason,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deductPoints,
+          [],
+          {
+            #userId: userId,
+            #amount: amount,
+            #reason: reason,
+          },
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 }
