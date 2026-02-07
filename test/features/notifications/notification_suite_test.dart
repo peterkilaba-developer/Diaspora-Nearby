@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:diaspora_nearby/services/proximity_service.dart';
+import 'package:diaspora_nearby/core/services/proximity_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; 
@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
 import 'package:firebase_database/firebase_database.dart' hide Query; 
 import 'package:firebase_storage/firebase_storage.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart'; 
 
 // Manual Fakes to bypass build_runner dependency issues
@@ -14,7 +15,7 @@ import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.da
 // ==========================================
 // Fake Notifications
 // ==========================================
-class FakeLocalNotifications extends Fake implements FlutterLocalNotificationsPlugin {
+class FakeLocalNotifications extends Mock implements FlutterLocalNotificationsPlugin {
   bool showCalled = false;
   int? lastId;
   String? lastTitle;
@@ -33,6 +34,18 @@ class FakeLocalNotifications extends Fake implements FlutterLocalNotificationsPl
     lastTitle = title;
     lastBody = body;
   }
+
+  @override
+  Future<bool> initialize(
+    InitializationSettings initializationSettings, {
+    onDidReceiveNotificationResponse,
+    onDidReceiveBackgroundNotificationResponse,
+  }) async => true;
+}
+
+class FakeAndroidNotifications extends Fake implements AndroidFlutterLocalNotificationsPlugin {
+  @override
+  Future<void> createNotificationChannel(AndroidNotificationChannel channel) async {}
 }
 
 // ==========================================
@@ -162,6 +175,7 @@ class FakeDatabaseReference extends Fake implements DatabaseReference {
   final Map<String, FakeDatabaseReference> children = {};
   final List<Map<String, dynamic>> setCalls = [];
   final List<Map<String, dynamic>> updateCalls = [];
+  Object? valueToReturn;
 
   @override
   DatabaseReference child(String path) {
@@ -190,7 +204,23 @@ class FakeDatabaseReference extends Fake implements DatabaseReference {
   }
 
   @override
+  Future<DataSnapshot> get() async {
+    return FakeDataSnapshot(valueToReturn);
+  }
+
+  @override
   String? get key => 'fake_key';
+}
+
+class FakeDataSnapshot extends Fake implements DataSnapshot {
+  final Object? _value;
+  FakeDataSnapshot(this._value);
+
+  @override
+  Object? get value => _value;
+
+  @override
+  bool get exists => _value != null;
 }
 
 // ==========================================
@@ -220,6 +250,14 @@ class FakeUser extends Fake implements User {
 
 
 
+// ==========================================
+// Fake Points Service
+// ==========================================
+class FakePointsService extends Fake implements PointsService {
+  @override
+  Future<void> trackMessageSent(String userId) async {}
+}
+
 void main() {
   late FakeFirestore fakeFirestore;
   late FakeLocalNotifications fakeNotifications;
@@ -230,13 +268,17 @@ void main() {
   late FakeFirebaseDatabase fakeRtdb;
   late FakeAuth fakeAuth;
   late FakeFirebaseStorage fakeStorage;
+  late FakePointsService fakePointsService;
 
   setUp(() {
     fakeFirestore = FakeFirestore();
     fakeNotifications = FakeLocalNotifications();
     fakePrefs = FakeSharedPreferences();
+    fakeRtdb = FakeFirebaseDatabase();
+    
     proximityService = ProximityService(
       firestore: fakeFirestore,
+      rtdb: fakeRtdb,
       notificationsPlugin: fakeNotifications,
       prefs: fakePrefs,
     );
@@ -340,12 +382,14 @@ void main() {
       fakeFirestore = FakeFirestore();
       fakeAuth = FakeAuth(FakeUser('sender_123'));
       fakeStorage = FakeFirebaseStorage();
+      fakePointsService = FakePointsService();
       
       final chatService = ChatMessagingService(
         rtdb: fakeRtdb, 
         firestore: fakeFirestore,
         auth: fakeAuth,
         storage: fakeStorage, // Fake storage to prevent DefaultBinaryMessenger error
+        pointsService: fakePointsService,
       );
 
       // Mock Sender Profile (needed for sendTextMessage)
@@ -372,7 +416,7 @@ void main() {
       
       // Navigate to the FakeDatabaseReference for the mentioned user
       // Path: userChats/mentioned_user_999/chat_abc
-      final userChatRef = fakeRtdb.root.children['userChats']?.children[mentionedUserId]?.children[chatId] as FakeDatabaseReference?;
+      final userChatRef = fakeRtdb.root.children['userChats']?.children[mentionedUserId]?.children[chatId];
       
       expect(userChatRef, isNotNull, reason: 'userChats node for mentioned user should be created/accessed');
       expect(userChatRef!.updateCalls, isNotEmpty, reason: 'update should be called on userChats');

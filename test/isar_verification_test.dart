@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:diaspora_nearby/services/database_service.dart';
 import 'package:diaspora_nearby/features/shared/data/local/entities/community_entity.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 
 void main() {
   test('Architecture Verification: Offline-First Components', () {
