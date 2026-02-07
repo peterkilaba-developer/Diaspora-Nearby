@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/location.dart' as loc_model;
+import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/shared/models/location.dart'
+    as loc_model;
 
 /// Auto-capitalize first letter formatter
 class CapitalizeFirstLetterFormatter extends TextInputFormatter {
@@ -65,7 +67,7 @@ class ProfileSetupDetailsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -78,14 +80,19 @@ class ProfileSetupDetailsStep extends StatelessWidget {
                 CircleAvatar(
                   radius: 60,
                   backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  backgroundImage: profileImage != null 
-                    ? (kIsWeb 
-                        ? NetworkImage(profileImage!.path) 
-                        : FileImage(File(profileImage!.path))) as ImageProvider
-                    : null,
+                  backgroundImage: profileImage != null
+                      ? (kIsWeb
+                                ? NetworkImage(profileImage!.path)
+                                : FileImage(File(profileImage!.path)))
+                            as ImageProvider
+                      : null,
                   child: profileImage == null
-                    ? Icon(LucideIcons.user, size: 48, color: theme.colorScheme.onSurfaceVariant)
-                    : null,
+                      ? Icon(
+                          LucideIcons.user,
+                          size: 48,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        )
+                      : null,
                 ),
                 Positioned(
                   bottom: 0,
@@ -96,7 +103,11 @@ class ProfileSetupDetailsStep extends StatelessWidget {
                       color: theme.colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(LucideIcons.camera, size: 20, color: Colors.white),
+                    child: const Icon(
+                      LucideIcons.camera,
+                      size: 20,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -106,11 +117,13 @@ class ProfileSetupDetailsStep extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'Tap to add photo',
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
-        
+
         // Name Fields with auto-capitalize
         TextFormField(
           controller: firstNameController,
@@ -125,7 +138,7 @@ class ProfileSetupDetailsStep extends StatelessWidget {
           validator: (v) => v?.isEmpty == true ? 'Required' : null,
         ),
         const SizedBox(height: 16),
-        
+
         TextFormField(
           controller: lastNameController,
           textCapitalization: TextCapitalization.words,
@@ -138,7 +151,7 @@ class ProfileSetupDetailsStep extends StatelessWidget {
           inputFormatters: [CapitalizeFirstLetterFormatter()],
           validator: (v) => v?.isEmpty == true ? 'Required' : null,
         ),
-        
+
         const SizedBox(height: 16),
 
         TextFormField(
@@ -151,22 +164,24 @@ class ProfileSetupDetailsStep extends StatelessWidget {
             filled: true,
             hintText: 'e.g. PETER-UK-1234',
           ),
-          inputFormatters: [
-             UpperCaseTextFormatter(),
-          ],
+          inputFormatters: [UpperCaseTextFormatter()],
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Location summary
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             child: Column(
               children: [
                 Row(
                   children: [
-                    const Icon(LucideIcons.home, size: 20, color: Colors.orange),
+                    const Icon(
+                      LucideIcons.home,
+                      size: 20,
+                      color: Colors.orange,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -180,7 +195,11 @@ class ProfileSetupDetailsStep extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(LucideIcons.mapPin, size: 20, color: Colors.blue),
+                    const Icon(
+                      LucideIcons.mapPin,
+                      size: 20,
+                      color: Colors.blue,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -195,34 +214,44 @@ class ProfileSetupDetailsStep extends StatelessWidget {
             ),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         SwitchListTile(
           title: const Text('Show my current city name'),
-          subtitle: const Text('If off, other users will only see your country and distance away.'),
+          subtitle: const Text(
+            'If off, other users will only see your country and distance away.',
+          ),
           value: showLocation,
           onChanged: onLocationToggleChanged,
           secondary: const Icon(LucideIcons.eye),
           contentPadding: EdgeInsets.zero,
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         SizedBox(
           height: 56,
           child: FilledButton(
             onPressed: isSubmitting ? null : onSubmit,
             style: FilledButton.styleFrom(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: isSubmitting 
-              ? const SizedBox(
-                  height: 24, 
-                  width: 24, 
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                )
-              : const Text('Complete Profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: isSubmitting
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    'Complete Profile',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
           ),
         ),
       ],

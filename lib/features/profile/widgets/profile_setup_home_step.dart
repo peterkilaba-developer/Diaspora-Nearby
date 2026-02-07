@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/google_places_models.dart';
-import 'package:diaspora_nearby/models/location.dart' as loc_model;
+import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
+import 'package:diaspora_nearby/features/shared/models/location.dart'
+    as loc_model;
 
 class ProfileSetupHomeStep extends StatelessWidget {
   final TextEditingController searchController;
@@ -26,7 +27,7 @@ class ProfileSetupHomeStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -34,17 +35,21 @@ class ProfileSetupHomeStep extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           'Where are you from?',
-          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
           'This helps us connect you with others from your home country',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
-        
+
         TextFormField(
           controller: searchController,
           focusNode: focusNode,
@@ -57,11 +62,12 @@ class ProfileSetupHomeStep extends StatelessWidget {
           ),
           onChanged: onSearchChanged,
         ),
-        
-        if (predictions.isNotEmpty)
-          _buildSuggestionsList(theme),
-        
-        if (selectedLocation != null && predictions.isEmpty && searchController.text.isNotEmpty) ...[
+
+        if (predictions.isNotEmpty) _buildSuggestionsList(theme),
+
+        if (selectedLocation != null &&
+            predictions.isEmpty &&
+            searchController.text.isNotEmpty) ...[
           const SizedBox(height: 16),
           OutlinedButton(
             onPressed: onNext,
@@ -69,7 +75,9 @@ class ProfileSetupHomeStep extends StatelessWidget {
               foregroundColor: Colors.green,
               side: const BorderSide(color: Colors.green, width: 2),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -105,7 +113,11 @@ class ProfileSetupHomeStep extends StatelessWidget {
         itemBuilder: (context, index) {
           final prediction = predictions[index];
           return ListTile(
-            leading: const Icon(LucideIcons.mapPin, size: 20, color: Colors.grey),
+            leading: const Icon(
+              LucideIcons.mapPin,
+              size: 20,
+              color: Colors.grey,
+            ),
             title: Text(prediction.primaryText),
             subtitle: Text(prediction.secondaryText ?? ''),
             onTap: () => onSelectPlace(prediction.placeId),
