@@ -13,9 +13,9 @@ extension GetCommunityEntityCollection on Isar {
   IsarCollection<CommunityEntity> get communityEntitys => this.collection();
 }
 
-final CommunityEntitySchema = CollectionSchema(
+const CommunityEntitySchema = CollectionSchema(
   name: r'CommunityEntity',
-  id: int.parse('-4734722205235891796'),
+  id: -4734722205235891796,
   properties: {
     r'admins': PropertySchema(
       id: 0,
@@ -42,88 +42,83 @@ final CommunityEntitySchema = CollectionSchema(
       name: r'createdAt',
       type: IsarType.long,
     ),
-    r'description': PropertySchema(
-      id: 5,
-      name: r'description',
-      type: IsarType.string,
-    ),
     r'firestoreId': PropertySchema(
-      id: 6,
+      id: 5,
       name: r'firestoreId',
       type: IsarType.string,
     ),
     r'flag': PropertySchema(
-      id: 7,
+      id: 6,
       name: r'flag',
       type: IsarType.string,
     ),
     r'homeCountryCode': PropertySchema(
-      id: 8,
+      id: 7,
       name: r'homeCountryCode',
       type: IsarType.string,
     ),
     r'hostCountryCode': PropertySchema(
-      id: 9,
+      id: 8,
       name: r'hostCountryCode',
       type: IsarType.string,
     ),
     r'images': PropertySchema(
-      id: 10,
+      id: 9,
       name: r'images',
       type: IsarType.stringList,
     ),
     r'isPrivate': PropertySchema(
-      id: 11,
+      id: 10,
       name: r'isPrivate',
       type: IsarType.bool,
     ),
     r'locationJson': PropertySchema(
-      id: 12,
+      id: 11,
       name: r'locationJson',
       type: IsarType.string,
     ),
     r'locationType': PropertySchema(
-      id: 13,
+      id: 12,
       name: r'locationType',
       type: IsarType.string,
     ),
     r'memberCount': PropertySchema(
-      id: 14,
+      id: 13,
       name: r'memberCount',
       type: IsarType.long,
     ),
     r'members': PropertySchema(
-      id: 15,
+      id: 14,
       name: r'members',
       type: IsarType.stringList,
     ),
     r'name': PropertySchema(
-      id: 16,
+      id: 15,
       name: r'name',
       type: IsarType.string,
     ),
     r'profileImage': PropertySchema(
-      id: 17,
+      id: 16,
       name: r'profileImage',
       type: IsarType.string,
     ),
     r'state': PropertySchema(
-      id: 18,
+      id: 17,
       name: r'state',
       type: IsarType.string,
     ),
     r'totalMembers': PropertySchema(
-      id: 19,
+      id: 18,
       name: r'totalMembers',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 20,
+      id: 19,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 21,
+      id: 20,
       name: r'updatedAt',
       type: IsarType.long,
     )
@@ -135,7 +130,7 @@ final CommunityEntitySchema = CollectionSchema(
   idName: r'id',
   indexes: {
     r'firestoreId': IndexSchema(
-      id: int.parse('1863077355534729001'),
+      id: 1863077355534729001,
       name: r'firestoreId',
       unique: true,
       replace: true,
@@ -148,7 +143,7 @@ final CommunityEntitySchema = CollectionSchema(
       ],
     ),
     r'homeCountryCode': IndexSchema(
-      id: int.parse('5068684165260240807'),
+      id: 5068684165260240807,
       name: r'homeCountryCode',
       unique: false,
       replace: false,
@@ -161,7 +156,7 @@ final CommunityEntitySchema = CollectionSchema(
       ],
     ),
     r'locationType': IndexSchema(
-      id: int.parse('-329961797783839228'),
+      id: -329961797783839228,
       name: r'locationType',
       unique: false,
       replace: false,
@@ -174,7 +169,7 @@ final CommunityEntitySchema = CollectionSchema(
       ],
     ),
     r'createdAt': IndexSchema(
-      id: int.parse('-3433535483987302584'),
+      id: -3433535483987302584,
       name: r'createdAt',
       unique: false,
       replace: false,
@@ -227,12 +222,6 @@ int _communityEntityEstimateSize(
   }
   {
     final value = object.country;
-    if (value != null) {
-      bytesCount += 3 + value.length * 3;
-    }
-  }
-  {
-    final value = object.description;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
     }
@@ -325,23 +314,22 @@ void _communityEntitySerialize(
   writer.writeString(offsets[2], object.city);
   writer.writeString(offsets[3], object.country);
   writer.writeLong(offsets[4], object.createdAt);
-  writer.writeString(offsets[5], object.description);
-  writer.writeString(offsets[6], object.firestoreId);
-  writer.writeString(offsets[7], object.flag);
-  writer.writeString(offsets[8], object.homeCountryCode);
-  writer.writeString(offsets[9], object.hostCountryCode);
-  writer.writeStringList(offsets[10], object.images);
-  writer.writeBool(offsets[11], object.isPrivate);
-  writer.writeString(offsets[12], object.locationJson);
-  writer.writeString(offsets[13], object.locationType);
-  writer.writeLong(offsets[14], object.memberCount);
-  writer.writeStringList(offsets[15], object.members);
-  writer.writeString(offsets[16], object.name);
-  writer.writeString(offsets[17], object.profileImage);
-  writer.writeString(offsets[18], object.state);
-  writer.writeLong(offsets[19], object.totalMembers);
-  writer.writeString(offsets[20], object.type);
-  writer.writeLong(offsets[21], object.updatedAt);
+  writer.writeString(offsets[5], object.firestoreId);
+  writer.writeString(offsets[6], object.flag);
+  writer.writeString(offsets[7], object.homeCountryCode);
+  writer.writeString(offsets[8], object.hostCountryCode);
+  writer.writeStringList(offsets[9], object.images);
+  writer.writeBool(offsets[10], object.isPrivate);
+  writer.writeString(offsets[11], object.locationJson);
+  writer.writeString(offsets[12], object.locationType);
+  writer.writeLong(offsets[13], object.memberCount);
+  writer.writeStringList(offsets[14], object.members);
+  writer.writeString(offsets[15], object.name);
+  writer.writeString(offsets[16], object.profileImage);
+  writer.writeString(offsets[17], object.state);
+  writer.writeLong(offsets[18], object.totalMembers);
+  writer.writeString(offsets[19], object.type);
+  writer.writeLong(offsets[20], object.updatedAt);
 }
 
 CommunityEntity _communityEntityDeserialize(
@@ -356,24 +344,23 @@ CommunityEntity _communityEntityDeserialize(
   object.city = reader.readStringOrNull(offsets[2]);
   object.country = reader.readStringOrNull(offsets[3]);
   object.createdAt = reader.readLongOrNull(offsets[4]);
-  object.description = reader.readStringOrNull(offsets[5]);
-  object.firestoreId = reader.readString(offsets[6]);
-  object.flag = reader.readStringOrNull(offsets[7]);
-  object.homeCountryCode = reader.readStringOrNull(offsets[8]);
-  object.hostCountryCode = reader.readStringOrNull(offsets[9]);
+  object.firestoreId = reader.readString(offsets[5]);
+  object.flag = reader.readStringOrNull(offsets[6]);
+  object.homeCountryCode = reader.readStringOrNull(offsets[7]);
+  object.hostCountryCode = reader.readStringOrNull(offsets[8]);
   object.id = id;
-  object.images = reader.readStringList(offsets[10]);
-  object.isPrivate = reader.readBool(offsets[11]);
-  object.locationJson = reader.readStringOrNull(offsets[12]);
-  object.locationType = reader.readStringOrNull(offsets[13]);
-  object.memberCount = reader.readLong(offsets[14]);
-  object.members = reader.readStringList(offsets[15]);
-  object.name = reader.readString(offsets[16]);
-  object.profileImage = reader.readStringOrNull(offsets[17]);
-  object.state = reader.readStringOrNull(offsets[18]);
-  object.totalMembers = reader.readLongOrNull(offsets[19]);
-  object.type = reader.readStringOrNull(offsets[20]);
-  object.updatedAt = reader.readLongOrNull(offsets[21]);
+  object.images = reader.readStringList(offsets[9]);
+  object.isPrivate = reader.readBool(offsets[10]);
+  object.locationJson = reader.readStringOrNull(offsets[11]);
+  object.locationType = reader.readStringOrNull(offsets[12]);
+  object.memberCount = reader.readLong(offsets[13]);
+  object.members = reader.readStringList(offsets[14]);
+  object.name = reader.readString(offsets[15]);
+  object.profileImage = reader.readStringOrNull(offsets[16]);
+  object.state = reader.readStringOrNull(offsets[17]);
+  object.totalMembers = reader.readLongOrNull(offsets[18]);
+  object.type = reader.readStringOrNull(offsets[19]);
+  object.updatedAt = reader.readLongOrNull(offsets[20]);
   return object;
 }
 
@@ -395,38 +382,36 @@ P _communityEntityDeserializeProp<P>(
     case 4:
       return (reader.readLongOrNull(offset)) as P;
     case 5:
-      return (reader.readStringOrNull(offset)) as P;
-    case 6:
       return (reader.readString(offset)) as P;
+    case 6:
+      return (reader.readStringOrNull(offset)) as P;
     case 7:
       return (reader.readStringOrNull(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readStringOrNull(offset)) as P;
-    case 10:
       return (reader.readStringList(offset)) as P;
-    case 11:
+    case 10:
       return (reader.readBool(offset)) as P;
+    case 11:
+      return (reader.readStringOrNull(offset)) as P;
     case 12:
       return (reader.readStringOrNull(offset)) as P;
     case 13:
-      return (reader.readStringOrNull(offset)) as P;
-    case 14:
       return (reader.readLong(offset)) as P;
-    case 15:
+    case 14:
       return (reader.readStringList(offset)) as P;
-    case 16:
+    case 15:
       return (reader.readString(offset)) as P;
+    case 16:
+      return (reader.readStringOrNull(offset)) as P;
     case 17:
       return (reader.readStringOrNull(offset)) as P;
     case 18:
-      return (reader.readStringOrNull(offset)) as P;
-    case 19:
       return (reader.readLongOrNull(offset)) as P;
-    case 20:
+    case 19:
       return (reader.readStringOrNull(offset)) as P;
-    case 21:
+    case 20:
       return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1662,160 +1647,6 @@ extension CommunityEntityQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'description',
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'description',
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionEqualTo(
-    String? value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'description',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionGreaterThan(
-    String? value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'description',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionLessThan(
-    String? value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'description',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionBetween(
-    String? lower,
-    String? upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'description',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'description',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'description',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionContains(String value, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'description',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionMatches(String pattern, {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'description',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'description',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterFilterCondition>
-      descriptionIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'description',
-        value: '',
       ));
     });
   }
@@ -4143,20 +3974,6 @@ extension CommunityEntityQuerySortBy
   }
 
   QueryBuilder<CommunityEntity, CommunityEntity, QAfterSortBy>
-      sortByDescription() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'description', Sort.asc);
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterSortBy>
-      sortByDescriptionDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'description', Sort.desc);
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterSortBy>
       sortByFirestoreId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'firestoreId', Sort.asc);
@@ -4405,20 +4222,6 @@ extension CommunityEntityQuerySortThenBy
   }
 
   QueryBuilder<CommunityEntity, CommunityEntity, QAfterSortBy>
-      thenByDescription() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'description', Sort.asc);
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterSortBy>
-      thenByDescriptionDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'description', Sort.desc);
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QAfterSortBy>
       thenByFirestoreId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'firestoreId', Sort.asc);
@@ -4660,13 +4463,6 @@ extension CommunityEntityQueryWhereDistinct
   }
 
   QueryBuilder<CommunityEntity, CommunityEntity, QDistinct>
-      distinctByDescription({bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'description', caseSensitive: caseSensitive);
-    });
-  }
-
-  QueryBuilder<CommunityEntity, CommunityEntity, QDistinct>
       distinctByFirestoreId({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'firestoreId', caseSensitive: caseSensitive);
@@ -4816,13 +4612,6 @@ extension CommunityEntityQueryProperty
   QueryBuilder<CommunityEntity, int?, QQueryOperations> createdAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'createdAt');
-    });
-  }
-
-  QueryBuilder<CommunityEntity, String?, QQueryOperations>
-      descriptionProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'description');
     });
   }
 
