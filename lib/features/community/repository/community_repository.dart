@@ -1,49 +1,160 @@
-import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Query;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
-import 'package:diaspora_nearby/models/community_data.dart';
-import 'package:diaspora_nearby/services/database_service.dart';
-import 'package:diaspora_nearby/features/shared/data/local/entities/community_entity.dart';
+import 'package:diaspora_nearby/features/community/models/community_data.dart';
+import 'package:diaspora_nearby/features/community/services/community_local_service.dart';
+import 'package:rxdart/rxdart.dart';
 
 final communityRepositoryProvider = Provider((ref) => CommunityRepository());
 
+final communityProvider = StreamProvider.family<Community?, String>((ref, communityId) {
+  return ref.watch(communityRepositoryProvider).watchCommunity(communityId);
+});
+
+final userCommunitiesStreamProvider = StreamProvider.family<List<Community>, String>((ref, uid) {
+  return ref.watch(communityRepositoryProvider).watchUserCommunities(uid);
+});
+
+final homeCountryCommunityProvider = StreamProvider.family<Community?, String>((ref, countryCode) {
+  return ref.watch(communityRepositoryProvider).watchHomeCountryCommunity(countryCode);
+});
+
+final homeContinentCommunityProvider = StreamProvider.family<Community?, String>((ref, continentName) {
+  return ref.watch(communityRepositoryProvider).watchHomeContinentCommunity(continentName);
+});
+
 class CommunityRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Isar? _isar = DatabaseService().isar;
+  final CommunityLocalService _localService = CommunityLocalService();
 
   // ===========================================================================
   // OFFLINE-FIRST METHODS (Isar)
   // ===========================================================================
 
   Stream<List<Community>> watchUserCommunities(String uid) {
-    if (_isar == null) {
+    if (kIsWeb) {
       // WEB: Direct Firestore watch
       return _firestore
           .collection('communities')
           .where('members', arrayContains: uid)
           .snapshots()
-          .map((snapshot) => snapshot.docs.map((doc) {
-                final data = doc.data();
+          .map(
+            (snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              try {
                 return Community.fromJson({...data, 'id': doc.id});
-              }).toList());
+              } catch (e) {
+                debugPrint('Error parsing community ${doc.id}: $e');
+                return null;
+              }
+            }).whereType<Community>().toList(),
+          );
     }
-    return _isar!.communityEntitys
-        .filter()
-        .membersElementEqualTo(uid)
-        .watch(fireImmediately: true)
-        .map((entities) => entities.map(_mapEntityToModel).toList());
+    return _localService.watchUserCommunities(uid);
+  }
+
+  Stream<Community?> watchCommunity(String communityId) {
+    final communityDoc = _firestore.collection('communities').doc(communityId);
+    final metadataStream = communityDoc.snapshots();
+    final treasuryStream = communityDoc.collection('treasury').doc('current').snapshots();
+
+    return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
+      metadataStream,
+      treasuryStream,
+      (metaDoc, treasuryDoc) {
+        if (!metaDoc.exists) return null;
+        try {
+          final metaData = metaDoc.data() as Map<String, dynamic>;
+          final treasuryData = treasuryDoc.exists 
+              ? treasuryDoc.data() as Map<String, dynamic> 
+              : <String, dynamic>{};
+          
+          return Community.fromJson({
+            ...metaData,
+            ...treasuryData,
+            'id': metaDoc.id,
+          });
+        } catch (e) {
+          debugPrint('Error parsing community $communityId: $e');
+          return null;
+        }
+      },
+    ).asBroadcastStream();
+  }
+
+  Stream<Community?> watchHomeCountryCommunity(String countryCode) {
+    return _firestore
+        .collection('communities')
+        .where('locationType', isEqualTo: 'home')
+        .where('homeCountryCode', isEqualTo: countryCode)
+        .where('type', isEqualTo: 'country')
+        .limit(1)
+        .snapshots()
+        .switchMap((snapshot) {
+      if (snapshot.docs.isEmpty) return Stream.value(null);
+      
+      final communityDoc = snapshot.docs.first.reference;
+      final metadataStream = snapshot.docs.first.reference.snapshots();
+      final treasuryStream = communityDoc.collection('treasury').doc('current').snapshots();
+
+      return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
+        metadataStream,
+        treasuryStream,
+        (metaDoc, treasuryDoc) {
+          if (!metaDoc.exists) return null;
+          final metaData = metaDoc.data() as Map<String, dynamic>;
+          final treasuryData = treasuryDoc.exists 
+              ? treasuryDoc.data() as Map<String, dynamic> 
+              : <String, dynamic>{};
+          
+          return Community.fromJson({
+            ...metaData,
+            ...treasuryData,
+            'id': metaDoc.id,
+          });
+        },
+      );
+    });
+  }
+
+  Stream<Community?> watchHomeContinentCommunity(String continentName) {
+    return _firestore
+        .collection('communities')
+        .where('locationType', isEqualTo: 'home')
+        .where('type', isEqualTo: 'continent')
+        .where('continent', isEqualTo: continentName)
+        .limit(1)
+        .snapshots()
+        .switchMap((snapshot) {
+      if (snapshot.docs.isEmpty) return Stream.value(null);
+      
+      final communityDoc = snapshot.docs.first.reference;
+      final metadataStream = snapshot.docs.first.reference.snapshots();
+      final treasuryStream = communityDoc.collection('treasury').doc('current').snapshots();
+
+      return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
+        metadataStream,
+        treasuryStream,
+        (metaDoc, treasuryDoc) {
+          if (!metaDoc.exists) return null;
+          final metaData = metaDoc.data() as Map<String, dynamic>;
+          final treasuryData = treasuryDoc.exists 
+              ? treasuryDoc.data() as Map<String, dynamic> 
+              : <String, dynamic>{};
+          
+          return Community.fromJson({
+            ...metaData,
+            ...treasuryData,
+            'id': metaDoc.id,
+          });
+        },
+      );
+    });
   }
 
   /// Get communities from Local DB (Snapshot)
   Future<List<Community>> getLocalUserCommunities(String uid) async {
-    if (_isar == null) return [];
-    final entities = await _isar!.communityEntitys
-        .filter()
-        .membersElementEqualTo(uid)
-        .findAll();
-    return entities.map(_mapEntityToModel).toList();
+    return _localService.getLocalUserCommunities(uid);
   }
 
   /// Sync User Communities (Remote -> Local)
@@ -55,36 +166,18 @@ class CommunityRepository {
           .where('members', arrayContains: uid)
           .get();
 
-      // Legacy support for 'memberIds'
-      final memberIdsQuery = await _firestore
-          .collection('communities')
-          .where('memberIds', arrayContains: uid)
-          .get();
-
-      final allDocs = [...membersQuery.docs, ...memberIdsQuery.docs];
-      final uniqueDocs = <String, DocumentSnapshot>{};
-      
-      for (var doc in allDocs) {
-        uniqueDocs[doc.id] = doc;
-      }
-
-      final communities = uniqueDocs.values.map((doc) {
+      final communities = membersQuery.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        if (data['members'] == null && data['memberIds'] != null) {
-          data['members'] = data['memberIds'];
-        }
         return Community.fromJson({...data, 'id': doc.id});
       }).toList();
 
-      if (_isar != null) {
-        await _saveCommunitiesToLocal(communities);
-        debugPrint('✅ Synced ${communities.length} communities to local DB');
-      }
+      // Save valid communities
+      await _localService.saveCommunitiesToLocal(communities);
+      
+      debugPrint('✅ Synced ${communities.length} communities to local DB');
       
     } catch (e) {
       debugPrint('❌ Error syncing communities: $e');
-      // In offline-first, we just fail silently for the sync, 
-      // the user still sees local data.
     }
   }
 
@@ -95,29 +188,46 @@ class CommunityRepository {
   /// Get Community (Try Local, then Remote)
   Future<Community?> getCommunity(String communityId) async {
     // 1. Try Local
-    if (_isar != null) {
-      final local = await _isar!.communityEntitys
-          .filter()
-          .firestoreIdEqualTo(communityId)
-          .findFirst();
-          
-      if (local != null) {
-        // Trigger background update if needed (stale-while-revalidate logic can go here)
-        _fetchAndSaveCommunity(communityId); 
-        return _mapEntityToModel(local);
-      }
+    final local = await _localService.getCommunity(communityId);
+    if (local != null) {
+      // Trigger background update if needed (stale-while-revalidate logic can go here)
+      _fetchAndSaveCommunity(communityId);
+      return local;
     }
 
     // 2. Fetch Remote
     return await _fetchAndSaveCommunity(communityId);
   }
 
+  Future<Community?> getHomeCountryCommunity(String countryCode) async {
+    try {
+      final snapshot = await _firestore
+          .collection('communities')
+          .where('locationType', isEqualTo: 'home')
+          .where('homeCountryCode', isEqualTo: countryCode)
+          .where('type', isEqualTo: 'country')
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        return Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id});
+      }
+    } catch (e) {
+      debugPrint('Error getting home country community: $e');
+    }
+    return null;
+  }
+
   Future<Community?> _fetchAndSaveCommunity(String communityId) async {
     try {
-      final doc = await _firestore.collection('communities').doc(communityId).get();
+      final doc = await _firestore
+          .collection('communities')
+          .doc(communityId)
+          .get();
       if (doc.exists) {
-        final community = Community.fromJson({...doc.data()!, 'id': doc.id});
-        await _saveCommunitiesToLocal([community]);
+        final community = Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id});
+        await _localService.saveCommunitiesToLocal([community]);
         return community;
       }
     } catch (e) {
@@ -130,222 +240,115 @@ class CommunityRepository {
   // WRITE METHODS (Ideally invalidates cache or optimistic updates)
   // ===========================================================================
 
-  Future<Community?> joinOrCreateCommunity({
-    required String uid,
-    required String homeCountryCode,
-    String? hostCountryCode,
-    required String city,
-    required String locationType,
-    String? state,
-    String? country,
-  }) async {
-    // ... (Keep existing complex logic, but update local DB on success)
-    // For brevity, I'm keeping the logic but adding the local save.
-    
-    try {
-       var query = _firestore.collection('communities')
-          .where('locationType', isEqualTo: locationType)
-          .where('homeCountryCode', isEqualTo: homeCountryCode);
-          
-      if (hostCountryCode != null) {
-        query = query.where('hostCountryCode', isEqualTo: hostCountryCode);
-      }
-      
-      final querySnapshot = await query.get();
-      Community? existingCommunity;
-      
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final loc = data['location'] as Map<String, dynamic>?;
-        if (loc != null && 
-            loc['city'] == city && 
-            loc['state'] == state && 
-            loc['country'] == country) {
-              existingCommunity = Community.fromJson({...data, 'id': doc.id});
-              break;
-        }
-      }
-
-      final now = DateTime.now().millisecondsSinceEpoch;
-
-      if (existingCommunity != null) {
-        if (!existingCommunity.members.contains(uid)) {
-          await _firestore.collection('communities').doc(existingCommunity.id).update({
-            'members': FieldValue.arrayUnion([uid]),
-            'totalMembers': FieldValue.increment(1),
-          });
-          
-          final updated = existingCommunity.copyWith(
-            members: [...existingCommunity.members, uid],
-            memberCount: (existingCommunity.memberCount) + 1
-          );
-          
-          await _saveCommunitiesToLocal([updated]);
-          return updated;
-        }
-        await _saveCommunitiesToLocal([existingCommunity]);
-        return existingCommunity;
-      } else {
-        // Create new
-        final newDocRef = _firestore.collection('communities').doc();
-         final name = '$city Community'; 
-        
-        final newCommunity = Community(
-          id: newDocRef.id,
-          name: name,
-          description: 'Community for $city',
-          type: 'diaspora',
-          locationType: locationType,
-          homeCountryCode: homeCountryCode,
-          hostCountryCode: hostCountryCode,
-          location: {
-            'city': city,
-            'state': state,
-            'country': country,
-            'countryCode': hostCountryCode ?? homeCountryCode,
-          },
-          members: [uid],
-          admins: [uid],
-          memberCount: 1,
-          totalMembers: 1,
-          createdAt: now,
-          updatedAt: now,
-          isPrivate: false,
-          images: [],
-        );
-
-        final data = newCommunity.toJson();
-        data['members'] = [uid];
-        data['memberCount'] = 1;
-        data['totalMembers'] = 1;
-        
-        await newDocRef.set(data);
-        await _saveCommunitiesToLocal([newCommunity]);
-        return newCommunity;
-      }
-    } catch (e) {
-      debugPrint("Error joining/creating community: $e");
-      return null;
-    }
-  }
+  // [REMOVED] joinOrCreateCommunity - Use CommunityService for hierarchy-based creation
 
   // ===========================================================================
   // HELPERS
   // ===========================================================================
-  
+
   // Backwards compatibility for existing FutureProvider calls
   Future<List<Community>> getUserCommunities(String uid) async {
     // Trigger sync
-    syncUserCommunities(uid); 
+    syncUserCommunities(uid);
     // Return local immediately (stale but fast)
     return getLocalUserCommunities(uid);
   }
 
   Future<List<Community>> getAllCommunities() async {
-     // This might be heavy, but let's just fetch from firestore for now as it's rarely used
-     // Or implement syncAllCommunities()
-      try {
+    // This might be heavy, but let's just fetch from firestore for now as it's rarely used
+    // Or implement syncAllCommunities()
+    try {
       final snapshot = await _firestore.collection('communities').get();
       final list = snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
+          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
           .toList();
-      await _saveCommunitiesToLocal(list);
+      await _localService.saveCommunitiesToLocal(list);
       return list;
     } catch (e) {
       return [];
     }
   }
 
-  Future<void> _saveCommunitiesToLocal(List<Community> communities) async {
-    if (_isar == null) return;
-    await _isar!.writeTxn(() async {
-      for (final c in communities) {
-        final entity = _mapModelToEntity(c);
-        
-        // Check if exists to preserve ID if possible? Isar handles upsert by index.
-        // We use firestoreId as a unique index with replace=true.
-        // However, we need to map the internal Isar ID if we want to update.
-        // But here we rely on the @Index(replace: true) on firestoreId.
-        // Wait, Isar auto-increment ID is separate.
-        // We need to find the existing Isar ID if we want to update it properly
-        // OR rely on Isar's distinct constraint to replace the object.
-        // If unique:true, replace:true is set, putting a new object with same firestoreId
-        // might replace it, but the auto-increment ID changes unless we reuse it.
-        // Better: Find existing by firestoreId.
-        
-        final existing = await _isar!.communityEntitys
-            .filter()
-            .firestoreIdEqualTo(c.id)
-            .findFirst();
-            
-        if (existing != null) {
-          entity.id = existing.id; // Preserve Local ID
-        }
-        
-        await _isar!.communityEntitys.put(entity);
-      }
-    });
-  }
+  /// [NEW] Gets all child communities of a given parent community for hierarchical governance.
+  Future<List<Community>> getChildCommunities(Community parent) async {
+    Query query = _firestore.collection('communities');
 
-  Community _mapEntityToModel(CommunityEntity entity) {
-    Map<String, dynamic>? locMap;
-    if (entity.locationJson != null) {
-      try {
-        locMap = jsonDecode(entity.locationJson!);
-      } catch (_) {}
+    if (parent.id == 'global_community') {
+      // Children of Global are Continents
+      query = query.where('type', isEqualTo: 'continent');
+    } else if (parent.type == 'continent') {
+      // Children of Continent are Countries
+      // Note: We'd need to filter by continent in Firestore which requires a field
+      // For now, fetch all countries and filter in Dart if continent mapping is available
+      final snapshot = await query.where('type', isEqualTo: 'country').get();
+      // Filter by continent (Logic would use LocationUtils mapping)
+      return snapshot.docs
+          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
+          .toList(); 
+    } else if (parent.type == 'country') {
+      // Children of Country are States or Cities
+      // If 3-tier: States. If 2-tier: Cities.
+      final snapshot = await query
+          .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
+          .where('type', whereIn: ['state', 'city'])
+          .get();
+      
+      final results = snapshot.docs
+          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
+          .toList();
+
+      // If any states exist, they are the direct children.
+      final states = results.where((c) => c.type == 'state').toList();
+      if (states.isNotEmpty) return states;
+      
+      // Otherwise cities are direct children
+      return results.where((c) => c.type == 'city').toList();
+    } else if (parent.type == 'state') {
+      // Children of State are Cities
+      final snapshot = await query
+          .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
+          .where('type', isEqualTo: 'city')
+          .get();
+      
+      final results = snapshot.docs
+          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
+          .toList();
+      
+      // Filter by state field in location map
+      final parentState = (parent.location?['state'] as String?)?.toLowerCase();
+      return results.where((c) {
+        final cityState = (c.location?['state'] as String?)?.toLowerCase();
+        return cityState == parentState;
+      }).toList();
     }
 
-    return Community(
-      id: entity.firestoreId,
-      name: entity.name,
-      description: entity.description,
-      homeCountryCode: entity.homeCountryCode,
-      hostCountryCode: entity.hostCountryCode,
-      locationType: entity.locationType,
-      type: entity.type,
-      profileImage: entity.profileImage,
-      memberCount: entity.memberCount,
-      totalMembers: entity.totalMembers,
-      isPrivate: entity.isPrivate,
-      location: locMap,
-      chatId: entity.chatId,
-      flag: entity.flag,
-      members: entity.members ?? [],
-      admins: entity.admins ?? [],
-      createdAt: entity.createdAt,
-      updatedAt: entity.updatedAt,
-      images: entity.images ?? [],
-    );
+    return [];
   }
 
-  CommunityEntity _mapModelToEntity(Community model) {
-    final entity = CommunityEntity();
-    entity.firestoreId = model.id;
-    entity.name = model.name;
-    entity.description = model.description;
-    entity.homeCountryCode = model.homeCountryCode;
-    entity.hostCountryCode = model.hostCountryCode;
-    entity.locationType = model.locationType;
-    entity.type = model.type;
-    entity.profileImage = model.profileImage;
-    entity.memberCount = model.memberCount;
-    entity.totalMembers = model.totalMembers;
-    entity.isPrivate = model.isPrivate;
-    entity.chatId = model.chatId;
-    entity.flag = model.flag;
-    entity.members = model.members;
-    entity.admins = model.admins;
-    entity.createdAt = model.createdAt;
-    entity.updatedAt = model.updatedAt;
-    entity.images = model.images;
-    
-    if (model.location != null) {
-      entity.locationJson = jsonEncode(model.location);
-      entity.city = model.location!['city'];
-      entity.state = model.location!['state'];
-      entity.country = model.location!['country'];
+  /// [NEW] Search for communities by name or description
+  Future<List<Community>> searchCommunities(String query) async {
+    final queryLower = query.toLowerCase();
+    try {
+      // Basic search: Fetch recent/active ones. 
+      // Ideally we'd have a 'searchable' index, but for now fetch all or a subset.
+      final snapshot = await _firestore
+          .collection('communities')
+          .limit(50)
+          .get();
+
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data();
+            return Community.fromJson({...data, 'id': doc.id});
+          })
+          .where((community) {
+            if (query.isEmpty) return true;
+            return community.name.toLowerCase().contains(queryLower);
+          })
+          .toList();
+    } catch (e) {
+      debugPrint('Error searching communities: $e');
+      return [];
     }
-    
-    return entity;
   }
 }
