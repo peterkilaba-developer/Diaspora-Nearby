@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart'; // [NEW]
 import 'blocked_users_screen.dart';
 
 class PrivacySettingsScreen extends StatelessWidget {
@@ -45,7 +46,44 @@ class PrivacySettingsScreen extends StatelessWidget {
             onTap: () {},
           ),
           */
+          const SizedBox(height: 24),
+          _buildSectionHeader(context, 'LEGAL'),
+          _buildSettingsItem(
+            context,
+            icon: LucideIcons.fileText,
+            title: 'Privacy Policy',
+            subtitle: 'Read our privacy policy',
+            onTap: () => _launchUrl('https://diasporanearby.com/privacy'),
+          ),
+          _buildSettingsItem(
+            context,
+            icon: LucideIcons.fileSignature,
+            title: 'Terms of Service (EULA)',
+            subtitle: 'Read our terms of service',
+            onTap: () => _launchUrl('https://diasporanearby.com/terms'),
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
+  }
+
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+              color: Theme.of(context).colorScheme.primary,
+            ),
       ),
     );
   }
@@ -58,7 +96,10 @@ class PrivacySettingsScreen extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      leading: Icon(
+        icon,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
       title: Text(title),
       subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
       trailing: const Icon(LucideIcons.chevronRight, size: 16),

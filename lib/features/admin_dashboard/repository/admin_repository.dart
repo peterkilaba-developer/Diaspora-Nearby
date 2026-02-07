@@ -10,7 +10,10 @@ class AdminRepository {
   Future<Map<String, int>> getDashboardStats() async {
     try {
       final userCount = await _firestore.collection('users').count().get();
-      final communityCount = await _firestore.collection('communities').count().get();
+      final communityCount = await _firestore
+          .collection('communities')
+          .count()
+          .get();
       final eventCount = await _firestore.collection('events').count().get();
 
       // If no reports collection, let's just return 0 for now.
@@ -32,9 +35,15 @@ class AdminRepository {
   }
 
   // User Management
-  Future<List<Map<String, dynamic>>> getAllUsers({int limit = 50, DocumentSnapshot? startAfter}) async {
+  Future<List<Map<String, dynamic>>> getAllUsers({
+    int limit = 50,
+    DocumentSnapshot? startAfter,
+  }) async {
     try {
-      Query query = _firestore.collection('users').orderBy('createdAt', descending: true).limit(limit);
+      Query query = _firestore
+          .collection('users')
+          .orderBy('createdAt', descending: true)
+          .limit(limit);
       if (startAfter != null) {
         query = query.startAfterDocument(startAfter);
       }
@@ -61,7 +70,10 @@ class AdminRepository {
   // Community Management
   Future<List<Map<String, dynamic>>> getAllCommunities({int limit = 50}) async {
     try {
-      final snapshot = await _firestore.collection('communities').limit(limit).get();
+      final snapshot = await _firestore
+          .collection('communities')
+          .limit(limit)
+          .get();
 
       return snapshot.docs.map((doc) {
         final data = doc.data();

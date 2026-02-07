@@ -50,7 +50,7 @@ class AuthRepository {
   Future<void> deleteAccount() async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return;
-    
+
     final uid = user.uid;
     final firestore = FirebaseFirestore.instance;
 
@@ -58,7 +58,9 @@ class AuthRepository {
     final userDoc = await firestore.collection('users').doc(uid).get();
     if (userDoc.exists) {
       final userData = userDoc.data();
-      final communities = List<String>.from(userData?['communityMemberships'] ?? []);
+      final communities = List<String>.from(
+        userData?['communityMemberships'] ?? [],
+      );
 
       for (final communityId in communities) {
         // Check member count (including this user)
@@ -68,13 +70,13 @@ class AuthRepository {
             .where('communityMemberships', arrayContains: communityId)
             .count()
             .get();
-        
+
         if ((countQuery.count ?? 0) <= 1) {
           // Delete empty community
           await firestore.collection('communities').doc(communityId).delete();
         }
       }
-      
+
       // 1.5. Organization Cleanup
       // Query organizations where user is an admin
       final orgsQuery = await firestore
@@ -85,47 +87,22 @@ class AuthRepository {
       for (final orgDoc in orgsQuery.docs) {
         final orgData = orgDoc.data();
         final admins = List<dynamic>.from(orgData['admins'] ?? []);
-        
+
         if (admins.length <= 1) {
           // Sole admin -> Delete Organization
           // (Optionally delete the associated chat if ID is known/consistent, e.g. org_ID)
           await firestore.collection('organizations').doc(orgDoc.id).delete();
-          // Also try deleting associated chat
-          await firestore.collection('chats').doc('org_${orgDoc.id}').delete();
         } else {
           // Multiple admins -> Remove user from admins
           await firestore.collection('organizations').doc(orgDoc.id).update({
-            'admins': FieldValue.arrayRemove([uid])
+            'admins': FieldValue.arrayRemove([uid]),
           });
         }
       }
 
-      // 1.6. Chat Cleanup (Group/Org Cleanliness)
-      // Remove user from participants in Group/Org chats so they don't look like active members.
-      // Leave DMs alone so history is preserved for the other user.
-      final chatsQuery = await firestore
-          .collection('chats')
-          .where('participants', arrayContains: uid)
-          .get();
-
-      for (final chatDoc in chatsQuery.docs) {
-        final chatType = chatDoc.data()['type'] as String?;
-        // If it's a group or organization chat, check if we should remove them
-        if (chatType == 'group' || chatType == 'organization' || chatType == 'event') {
-             // For events/orgs, if they are the creator/sole admin, we might have deleted it above (for orgs). 
-             // If not deleted, remove them from participants.
-             if (chatDoc.exists) {
-                await firestore.collection('chats').doc(chatDoc.id).update({
-                  'participants': FieldValue.arrayRemove([uid])
-                });
-             }
-        }
-        // DMs: Do nothing.
-      }
-      
       // 2. Delete User Profile
       await firestore.collection('users').doc(uid).delete();
-      
+
       // 3. Delete auxiliary data (Points, etc.)
       await firestore.collection('user_points').doc(uid).delete();
     }
@@ -134,4 +111,3 @@ class AuthRepository {
     await user.delete();
   }
 }
-

@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InterestRegistration {
   final String userId;
-  final String service; // e.g., 'crypto', 'remittances', 'bereavement', 'airline', 'dfdi'
+  final String
+  service; // e.g., 'crypto', 'remittances', 'bereavement', 'airline', 'dfdi'
   final String country;
   final DateTime timestamp;
 

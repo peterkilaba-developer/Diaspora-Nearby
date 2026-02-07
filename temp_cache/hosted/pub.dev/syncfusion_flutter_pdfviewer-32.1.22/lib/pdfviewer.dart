@@ -12,7 +12,7 @@
 /// * [Video tutorials](https://www.syncfusion.com/tutorial-videos/flutter/pdf-viewer)
 /// * [Knowledge base](https://www.syncfusion.com/kb/flutter)
 
-library pdfviewer;
+library;
 
 export 'src/annotation/annotation.dart' show Annotation;
 export 'src/annotation/annotation_settings.dart'

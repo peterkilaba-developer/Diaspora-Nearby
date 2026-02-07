@@ -20,10 +20,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _checkAuth() async {
     // Artificial delay for splash effect
     await Future.delayed(const Duration(seconds: 2));
-    
+
     // Auth state is handled by the router redirect usually, but for explicit splash logic:
     final authState = ref.read(authStateProvider);
-    
+
     authState.when(
       data: (user) {
         if (user != null) {
@@ -33,7 +33,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         }
       },
       loading: () {
-        // Wait and retry or let stream listener handle it. 
+        // Wait and retry or let stream listener handle it.
         // Better pattern: Listen to the provider in build or use a listener
       },
       error: (err, stack) {
@@ -66,7 +66,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               'assets/icons/logo-original.png',
               width: 150,
               height: 150,
-              errorBuilder: (c, o, s) => const Icon(Icons.public, size: 100, color: Colors.blue),
+              errorBuilder: (c, o, s) =>
+                  const Icon(Icons.public, size: 100, color: Colors.blue),
             ),
             const SizedBox(height: 24),
             const CircularProgressIndicator(),

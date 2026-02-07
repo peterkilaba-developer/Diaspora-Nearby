@@ -45,13 +45,13 @@ SwitchHeadDefault get default_ =>
     SwitchHeadDefault._(location: computeLocation());
 
 ConstExpression get nullLiteral =>
-    new NullLiteral._(location: computeLocation());
+    NullLiteral._(location: computeLocation());
 
-Expression get this_ => new This._(location: computeLocation());
+Expression get this_ => This._(location: computeLocation());
 
 Statement assert_(ProtoExpression condition, [ProtoExpression? message]) {
   var location = computeLocation();
-  return new Assert._(
+  return Assert._(
     condition.asExpression(location: location),
     message?.asExpression(location: location),
     location: location,
@@ -59,18 +59,18 @@ Statement assert_(ProtoExpression condition, [ProtoExpression? message]) {
 }
 
 Statement block(List<ProtoStatement> statements) =>
-    new Block._(statements, location: computeLocation());
+    Block._(statements, location: computeLocation());
 
 Expression booleanLiteral(bool value) =>
     BooleanLiteral._(value, location: computeLocation());
 
 Statement break_([Label? target]) =>
-    new Break(target, location: computeLocation());
+    Break(target, location: computeLocation());
 
 /// Creates a pseudo-expression whose function is to verify that flow analysis
 /// considers [variable]'s assigned state to be [expectedAssignedState].
 Expression checkAssigned(Var variable, bool expectedAssignedState) =>
-    new CheckAssigned._(
+    CheckAssigned._(
       variable,
       expectedAssignedState,
       location: computeLocation(),
@@ -79,12 +79,12 @@ Expression checkAssigned(Var variable, bool expectedAssignedState) =>
 /// Creates a pseudo-expression whose function is to verify that flow analysis
 /// considers [promotable] to be un-promoted.
 Expression checkNotPromoted(Promotable promotable) =>
-    new CheckPromoted._(promotable, null, location: computeLocation());
+    CheckPromoted._(promotable, null, location: computeLocation());
 
 /// Creates a pseudo-expression whose function is to verify that flow analysis
 /// considers [promotable]'s assigned state to be promoted to [expectedTypeStr].
 Expression checkPromoted(Promotable promotable, String? expectedTypeStr) =>
-    new CheckPromoted._(
+    CheckPromoted._(
       promotable,
       expectedTypeStr,
       location: computeLocation(),
@@ -93,7 +93,7 @@ Expression checkPromoted(Promotable promotable, String? expectedTypeStr) =>
 Expression checkPromotionChain(
   Promotable promotable,
   List<String> expectedPromotionChain,
-) => new CheckPromotionChain._(
+) => CheckPromotionChain._(
   promotable,
   expectedPromotionChain,
   location: computeLocation(),
@@ -103,12 +103,12 @@ Expression checkPromotionChain(
 /// considers the current location's reachability state to be
 /// [expectedReachable].
 Expression checkReachable(bool expectedReachable) =>
-    new CheckReachable(expectedReachable, location: computeLocation());
+    CheckReachable(expectedReachable, location: computeLocation());
 
 /// Creates a pseudo-expression whose function is to verify that flow analysis
 /// considers [variable]'s unassigned state to be [expectedUnassignedState].
 Expression checkUnassigned(Var variable, bool expectedUnassignedState) =>
-    new CheckUnassigned._(
+    CheckUnassigned._(
       variable,
       expectedUnassignedState,
       location: computeLocation(),
@@ -148,7 +148,7 @@ String computeLocation() {
 }
 
 Statement continue_([Label? target]) =>
-    new Continue._(target, location: computeLocation());
+    Continue._(target, location: computeLocation());
 
 Statement declare(
   Var variable, {
@@ -159,7 +159,7 @@ Statement declare(
   String? expectInferredType,
 }) {
   var location = computeLocation();
-  return new VariableDeclaration._(
+  return VariableDeclaration._(
     variable: variable,
     isLate: isLate,
     isFinal: isFinal,
@@ -180,12 +180,12 @@ Statement do_(List<ProtoStatement> body, ProtoExpression condition) {
 }
 
 Expression dotShorthandHead(String name) =>
-    new DotShorthandHead._(name, location: computeLocation());
+    DotShorthandHead._(name, location: computeLocation());
 
 /// Creates a pseudo-expression having type [typeStr] that otherwise has no
 /// effect on flow analysis.
 ConstExpression expr(String typeStr) =>
-    new PlaceholderExpression._(new Type(typeStr), location: computeLocation());
+    PlaceholderExpression._(Type(typeStr), location: computeLocation());
 
 /// Creates a conventional `for` statement.  Optional boolean [forCollection]
 /// indicates that this `for` statement is actually a collection element, so
@@ -198,7 +198,7 @@ Statement for_(
   bool forCollection = false,
 }) {
   var location = computeLocation();
-  return new For._(
+  return For._(
     initializer?.asStatement(location: location),
     condition?.asExpression(location: location),
     updater?.asExpression(location: location),
@@ -221,7 +221,7 @@ Statement forEachWithNonVariable(
   List<ProtoStatement> body,
 ) {
   var location = computeLocation();
-  return new ForEach._(
+  return ForEach._(
     null,
     iterable.asExpression(location: location),
     Block._(body, location: location),
@@ -243,7 +243,7 @@ Statement forEachWithVariableDecl(
   List<ProtoStatement> body,
 ) {
   var location = computeLocation();
-  return new ForEach._(
+  return ForEach._(
     variable,
     iterable.asExpression(location: location),
     block(body),
@@ -266,7 +266,7 @@ Statement forEachWithVariableSet(
   List<ProtoStatement> body,
 ) {
   var location = computeLocation();
-  return new ForEach._(
+  return ForEach._(
     variable,
     iterable.asExpression(location: location),
     Block._(body, location: location),
@@ -281,7 +281,7 @@ Statement if_(
   List<ProtoStatement>? ifFalse,
 ]) {
   var location = computeLocation();
-  return new If._(
+  return If._(
     condition.asExpression(location: location),
     Block._(ifTrue, location: location),
     ifFalse == null ? null : Block._(ifFalse, location: location),
@@ -315,7 +315,7 @@ CollectionElement ifCaseElement(
 ]) {
   var location = computeLocation();
   var guardedPattern = pattern._asGuardedPattern;
-  return new IfCaseElement(
+  return IfCaseElement(
     expression.asExpression(location: location),
     guardedPattern.pattern,
     guardedPattern.guard,
@@ -331,7 +331,7 @@ CollectionElement ifElement(
   ProtoCollectionElement? ifFalse,
 ]) {
   var location = computeLocation();
-  return new IfElement._(
+  return IfElement._(
     condition.asExpression(location: location),
     ifTrue.asCollectionElement(location: location),
     ifFalse?.asCollectionElement(location: location),
@@ -340,7 +340,7 @@ CollectionElement ifElement(
 }
 
 ConstExpression intLiteral(int value, {bool? expectConversionToDouble}) =>
-    new IntLiteral(
+    IntLiteral(
       value,
       expectConversionToDouble: expectConversionToDouble,
       location: computeLocation(),
@@ -478,7 +478,7 @@ Statement patternForIn(
   bool hasAwait = false,
 }) {
   var location = computeLocation();
-  return new PatternForIn(
+  return PatternForIn(
     pattern,
     expression.asExpression(location: location),
     Block._(body, location: location),
@@ -500,7 +500,7 @@ CollectionElement patternForInElement(
   bool hasAwait = false,
 }) {
   var location = computeLocation();
-  return new PatternForInElement(
+  return PatternForInElement(
     pattern,
     expression.asExpression(location: location),
     body.asCollectionElement(location: location),
@@ -515,7 +515,7 @@ Statement patternVariableDeclaration(
   bool isFinal = false,
 }) {
   var location = computeLocation();
-  return new PatternVariableDeclaration._(
+  return PatternVariableDeclaration._(
     pattern,
     initializer.asExpression(location: location),
     isFinal: isFinal,
@@ -553,7 +553,7 @@ Pattern relationalPattern(
 RestPattern restPattern([Pattern? subPattern]) =>
     RestPattern._(subPattern, location: computeLocation());
 
-Statement return_() => new Return._(location: computeLocation());
+Statement return_() => Return._(location: computeLocation());
 
 /// Models a call to a generic Dart function that takes two arguments and
 /// returns the second argument; in other words, a function defined this way:
@@ -572,7 +572,7 @@ Expression second(ProtoExpression first, ProtoExpression second) {
   );
 }
 
-PromotableLValue superProperty(String name) => new ThisOrSuperProperty._(
+PromotableLValue superProperty(String name) => ThisOrSuperProperty._(
   name,
   location: computeLocation(),
   isSuperAccess: true,
@@ -589,7 +589,7 @@ Statement switch_(
   String? expectScrutineeType,
 }) {
   var location = computeLocation();
-  return new SwitchStatement(
+  return SwitchStatement(
     expression.asExpression(location: location),
     cases,
     isLegacyExhaustive,
@@ -605,7 +605,7 @@ Statement switch_(
 
 Expression switchExpr(ProtoExpression expression, List<ExpressionCase> cases) {
   var location = computeLocation();
-  return new SwitchExpression._(
+  return SwitchExpression._(
     expression.asExpression(location: location),
     cases,
     location: location,
@@ -626,7 +626,7 @@ SwitchStatementMember switchStatementMember(
   );
 }
 
-PromotableLValue thisProperty(String name) => new ThisOrSuperProperty._(
+PromotableLValue thisProperty(String name) => ThisOrSuperProperty._(
   name,
   location: computeLocation(),
   isSuperAccess: false,
@@ -634,7 +634,7 @@ PromotableLValue thisProperty(String name) => new ThisOrSuperProperty._(
 
 Expression throw_(ProtoExpression operand) {
   var location = computeLocation();
-  return new Throw._(
+  return Throw._(
     operand.asExpression(location: location),
     location: location,
   );
@@ -642,7 +642,7 @@ Expression throw_(ProtoExpression operand) {
 
 TryBuilder try_(List<ProtoStatement> body) {
   var location = computeLocation();
-  return new TryStatementImpl(
+  return TryStatementImpl(
     Block._(body, location: location),
     [],
     null,
@@ -652,7 +652,7 @@ TryBuilder try_(List<ProtoStatement> body) {
 
 Statement while_(ProtoExpression condition, List<ProtoStatement> body) {
   var location = computeLocation();
-  return new While._(
+  return While._(
     condition.asExpression(location: location),
     Block._(body, location: location),
     location: location,
@@ -766,7 +766,7 @@ class BooleanLiteral extends Expression {
   ExpressionTypeAnalysisResult visit(Harness h, SharedTypeSchemaView schema) {
     var type = h.typeAnalyzer.analyzeBoolLiteral(this, value);
     h.irBuilder.atom('$value', Kind.expression, location: location);
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(type));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(type));
   }
 }
 
@@ -1172,7 +1172,7 @@ class CheckReachable extends Expression {
   ExpressionTypeAnalysisResult visit(Harness h, SharedTypeSchemaView schema) {
     expect(h.flow.isReachable, expectedReachable, reason: 'at $location');
     h.irBuilder.atom('null', Kind.expression, location: location);
-    return new ExpressionTypeAnalysisResult(
+    return ExpressionTypeAnalysisResult(
       type: SharedTypeView(NullType.instance),
     );
   }
@@ -1777,7 +1777,7 @@ class GuardedPattern extends Node with PossiblyGuardedPattern {
 }
 
 class Harness {
-  static Map<String, Type> _coreMemberTypes = {
+  static final Map<String, Type> _coreMemberTypes = {
     'int.<': Type('bool Function(num)'),
     'int.<=': Type('bool Function(num)'),
     'int.>': Type('bool Function(num)'),
@@ -2119,8 +2119,7 @@ abstract class IfBase extends Statement {
 
   @override
   String toString() =>
-      'if ($_conditionPartString) $ifTrue' +
-      (ifFalse == null ? '' : 'else $ifFalse');
+      'if ($_conditionPartString) $ifTrue${ifFalse == null ? '' : 'else $ifFalse'}';
 }
 
 class IfCase extends IfBase {
@@ -2297,8 +2296,7 @@ abstract class IfElementBase extends CollectionElement {
 
   @override
   String toString() =>
-      'if ($_conditionPartString) $ifTrue' +
-      (ifFalse == null ? '' : 'else $ifFalse');
+      'if ($_conditionPartString) $ifTrue${ifFalse == null ? '' : 'else $ifFalse'}';
 }
 
 class IfNull extends Expression {
@@ -2766,7 +2764,7 @@ abstract class LValue extends Expression {
   /// Creates an expression representing a write to this L-value.
   Expression write(ProtoExpression? value) {
     var location = computeLocation();
-    return new Write(
+    return Write(
       this,
       value?.asExpression(location: location),
       location: location,
@@ -2969,7 +2967,7 @@ class MapPatternEntry extends Node implements MapPatternElement {
 class MiniAstOperations
     with TypeAnalyzerOperationsMixin<Var, Type, String, Node>
     implements TypeAnalyzerOperations<Var, Type, String, Node> {
-  static const Map<String, bool> _coreExhaustiveness = const {
+  static const Map<String, bool> _coreExhaustiveness = {
     '()': true,
     '(int, int?)': false,
     'bool': true,
@@ -3074,9 +3072,9 @@ class MiniAstOperations
     _coreDownwardInferenceResults,
   );
 
-  Map<String, Map<String, String>> _promotionExceptions = {};
+  final Map<String, Map<String, String>> _promotionExceptions = {};
 
-  Map<String, Type> _normalizeResults = Map.of(_coreNormalizeResults);
+  final Map<String, Type> _normalizeResults = Map.of(_coreNormalizeResults);
 
   final TypeSystem _typeSystem = TypeSystem();
 
@@ -3616,7 +3614,7 @@ class MiniAstOperations
     } else {
       return null;
     }
-    return new TypeDeclarationMatchResult(
+    return TypeDeclarationMatchResult(
       typeDeclarationKind: typeDeclarationKind,
       typeDeclaration: type.name,
       typeDeclarationType: type,
@@ -4002,7 +4000,7 @@ abstract class Pattern extends Node
       LogicalAndPattern._(this, other, location: computeLocation());
 
   Pattern as_(String type) =>
-      new CastPattern(this, Type(type), location: computeLocation());
+      CastPattern(this, Type(type), location: computeLocation());
 
   /// Creates a pattern assignment expression assigning [rhs] to this pattern.
   Expression assign(ProtoExpression rhs) {
@@ -4292,7 +4290,7 @@ class PatternVariableJoin extends Var {
     );
     expect(components, expectedComponents, reason: 'at $location');
     this.inconsistency = inconsistency;
-    this.isJoined = true;
+    isJoined = true;
     visitor._assignedVariables.declare(this);
   }
 }
@@ -4312,7 +4310,7 @@ class PlaceholderExpression extends ConstExpression {
   ExpressionTypeAnalysisResult visit(Harness h, SharedTypeSchemaView schema) {
     h.irBuilder.atom(type.type, Kind.type, location: location);
     h.irBuilder.apply('expr', [Kind.type], Kind.expression, location: location);
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(type));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(type));
   }
 }
 
@@ -4367,7 +4365,7 @@ class PostIncDec extends Expression {
         .analyzeExpression(lhs, h.operations.unknownType)
         .unwrapTypeView();
     lhs._visitPostIncDec(h, this, type);
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(type));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(type));
   }
 }
 
@@ -4544,7 +4542,7 @@ mixin ProtoExpression
   /// `x`.
   Expression get dotShorthand {
     var location = computeLocation();
-    return new DotShorthand._(
+    return DotShorthand._(
       asExpression(location: location),
       location: location,
     );
@@ -4553,7 +4551,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `x!`.
   Expression get nonNullAssert {
     var location = computeLocation();
-    return new NonNullAssert._(
+    return NonNullAssert._(
       asExpression(location: location),
       location: location,
     );
@@ -4562,13 +4560,13 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `!x`.
   Expression get not {
     var location = computeLocation();
-    return new Not._(asExpression(location: location), location: location);
+    return Not._(asExpression(location: location), location: location);
   }
 
   /// If `this` is an expression `x`, creates the expression `(x)`.
   Expression get parenthesized {
     var location = computeLocation();
-    return new ParenthesizedExpression._(
+    return ParenthesizedExpression._(
       asExpression(location: location),
       location: location,
     );
@@ -4577,7 +4575,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `x && other`.
   Expression and(ProtoExpression other) {
     var location = computeLocation();
-    return new Logical._(
+    return Logical._(
       asExpression(location: location),
       other.asExpression(location: location),
       isAnd: true,
@@ -4588,7 +4586,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `x as typeStr`.
   Expression as_(String typeStr) {
     var location = computeLocation();
-    return new As._(
+    return As._(
       asExpression(location: location),
       Type(typeStr),
       location: location,
@@ -4614,7 +4612,7 @@ mixin ProtoExpression
 
   @override
   Statement asStatement({required String location}) =>
-      new ExpressionStatement._(
+      ExpressionStatement._(
         asExpression(location: location),
         location: location,
       );
@@ -4674,7 +4672,7 @@ mixin ProtoExpression
   /// `x ? ifTrue : ifFalse`.
   Expression conditional(ProtoExpression ifTrue, ProtoExpression ifFalse) {
     var location = computeLocation();
-    return new Conditional._(
+    return Conditional._(
       asExpression(location: location),
       ifTrue.asExpression(location: location),
       ifFalse.asExpression(location: location),
@@ -4685,7 +4683,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `x == other`.
   Expression eq(ProtoExpression other) {
     var location = computeLocation();
-    return new Equal._(
+    return Equal._(
       asExpression(location: location),
       other.asExpression(location: location),
       false,
@@ -4696,7 +4694,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `x ?? other`.
   Expression ifNull(ProtoExpression other) {
     var location = computeLocation();
-    return new IfNull._(
+    return IfNull._(
       asExpression(location: location),
       other.asExpression(location: location),
       location: location,
@@ -4723,7 +4721,7 @@ mixin ProtoExpression
     bool isNullAware = false,
   }) {
     var location = computeLocation();
-    return new InvokeMethod._(
+    return InvokeMethod._(
       asExpression(location: location),
       name,
       [
@@ -4740,7 +4738,7 @@ mixin ProtoExpression
   /// With [isInverted] set to `true`, creates the expression `x is! typeStr`.
   Expression is_(String typeStr, {bool isInverted = false}) {
     var location = computeLocation();
-    return new Is._(
+    return Is._(
       asExpression(location: location),
       Type(typeStr),
       isInverted,
@@ -4773,7 +4771,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the expression `x || other`.
   Expression or(ProtoExpression other) {
     var location = computeLocation();
-    return new Logical._(
+    return Logical._(
       asExpression(location: location),
       other.asExpression(location: location),
       isAnd: false,
@@ -4784,7 +4782,7 @@ mixin ProtoExpression
   /// If `this` is an expression `x`, creates the L-value `x.name`.
   PromotableLValue property(String name, {bool isNullAware = false}) {
     var location = computeLocation();
-    return new Property._(
+    return Property._(
       asExpression(location: location),
       name,
       location: location,
@@ -4798,7 +4796,7 @@ mixin ProtoExpression
   /// visited.
   Expression thenStmt(ProtoStatement stmt) {
     var location = computeLocation();
-    return new WrappedExpression._(
+    return WrappedExpression._(
       null,
       asExpression(location: location),
       stmt.asStatement(location: location),
@@ -5587,10 +5585,10 @@ class Var extends Node
 
   @override
   LValue asExpression({required String location}) =>
-      new VariableReference._(this, null, location: location);
+      VariableReference._(this, null, location: location);
 
   Pattern pattern({String? type, String? expectInferredType}) =>
-      new VariablePattern._(
+      VariablePattern._(
         type == null ? null : Type(type),
         this,
         expectInferredType,
@@ -5601,8 +5599,8 @@ class Var extends Node
   /// operation applied to this variable.
   Expression postIncDec() {
     var location = computeLocation();
-    return new PostIncDec(
-      new VariableReference._(this, null, location: location),
+    return PostIncDec(
+      VariableReference._(this, null, location: location),
       location: location,
     );
   }
@@ -5613,7 +5611,7 @@ class Var extends Node
   /// Creates an expression representing a read of this variable, which as a
   /// side effect will call the given callback with the returned promoted type.
   Expression readAndCheckPromotedType(void Function(Type?) callback) =>
-      new VariableReference._(this, callback, location: computeLocation());
+      VariableReference._(this, callback, location: computeLocation());
 
   @override
   String toString() => 'var $name';
@@ -5621,8 +5619,8 @@ class Var extends Node
   /// Creates an expression representing a write to this variable.
   Expression write(ProtoExpression? value) {
     var location = computeLocation();
-    return new Write(
-      new VariableReference._(this, null, location: location),
+    return Write(
+      VariableReference._(this, null, location: location),
       value?.asExpression(location: location),
       location: location,
     );
@@ -6059,7 +6057,7 @@ class WrappedExpression extends Expression {
     if (before != null) {
       h.irBuilder.let(beforeTmp, location: location);
     }
-    return new ExpressionTypeAnalysisResult(type: type);
+    return ExpressionTypeAnalysisResult(type: type);
   }
 }
 
@@ -6100,7 +6098,7 @@ class Write extends Expression {
     }
     lhs._visitWrite(h, this, type, rhs);
     // TODO(paulberry): null shorting
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(type));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(type));
   }
 }
 
@@ -6521,7 +6519,7 @@ class _MiniAstTypeAnalyzer
     } else if (isLogical) {
       flow.logicalBinaryOp_end(node, rhs, isAnd: isAnd);
     }
-    return new ExpressionTypeAnalysisResult(type: operations.boolType);
+    return ExpressionTypeAnalysisResult(type: operations.boolType);
   }
 
   void analyzeBlock(Iterable<Statement> statements) {
@@ -6553,7 +6551,7 @@ class _MiniAstTypeAnalyzer
     var ifFalseType = analyzeExpression(ifFalse, operations.unknownType);
     var lubType = operations.lub(ifTrueType, ifFalseType);
     flow.conditional_end(node, lubType, ifFalse, ifFalseType);
-    return new ExpressionTypeAnalysisResult(type: lubType);
+    return ExpressionTypeAnalysisResult(type: lubType);
   }
 
   void analyzeContinueStatement(Statement? target) {
@@ -6573,7 +6571,7 @@ class _MiniAstTypeAnalyzer
     SharedTypeSchemaView schema,
   ) {
     var type = analyzeDotShorthand(expression, schema);
-    return new ExpressionTypeAnalysisResult(type: type);
+    return ExpressionTypeAnalysisResult(type: type);
   }
 
   ExpressionTypeAnalysisResult analyzeDotShorthandHeadExpression(
@@ -6582,7 +6580,7 @@ class _MiniAstTypeAnalyzer
     SharedTypeSchemaView schema,
   ) {
     _irBuilder.atom(name, Kind.expression, location: node.location);
-    return new ExpressionTypeAnalysisResult(
+    return ExpressionTypeAnalysisResult(
       type: SharedTypeView(getDotShorthandContext().unwrapTypeSchemaView()),
     );
   }
@@ -6600,7 +6598,7 @@ class _MiniAstTypeAnalyzer
     flow.ifNullExpression_rightBegin(lhs, leftType);
     var rightType = analyzeExpression(rhs, operations.unknownType);
     flow.ifNullExpression_end();
-    return new ExpressionTypeAnalysisResult(
+    return ExpressionTypeAnalysisResult(
       type: operations.lub(
         flow.operations.promoteToNonNull(leftType),
         rightType,
@@ -6620,7 +6618,7 @@ class _MiniAstTypeAnalyzer
   ) {
     analyzeExpression(expression, operations.unknownType);
     flow.logicalNot_end(node, expression);
-    return new ExpressionTypeAnalysisResult(type: operations.boolType);
+    return ExpressionTypeAnalysisResult(type: operations.boolType);
   }
 
   /// Invokes the appropriate flow analysis methods, and creates the IR
@@ -6678,7 +6676,7 @@ class _MiniAstTypeAnalyzer
       Kind.expression,
       location: node.location,
     );
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(returnType));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(returnType));
   }
 
   ExpressionTypeAnalysisResult analyzeNonNullAssert(
@@ -6691,14 +6689,14 @@ class _MiniAstTypeAnalyzer
       continueNullShorting: true,
     );
     flow.nonNullAssert_end(expression);
-    return new ExpressionTypeAnalysisResult(
+    return ExpressionTypeAnalysisResult(
       type: flow.operations.promoteToNonNull(type),
     );
   }
 
   ExpressionTypeAnalysisResult analyzeNullLiteral(Expression node) {
     flow.nullLiteral(node, SharedTypeView(nullType));
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(nullType));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(nullType));
   }
 
   ExpressionTypeAnalysisResult analyzeParenthesizedExpression(
@@ -6708,7 +6706,7 @@ class _MiniAstTypeAnalyzer
   ) {
     var type = analyzeExpression(expression, schema);
     flow.parenthesizedExpression(node, expression);
-    return new ExpressionTypeAnalysisResult(type: type);
+    return ExpressionTypeAnalysisResult(type: type);
   }
 
   /// Invokes the appropriate flow analysis methods, and creates the IR
@@ -6735,7 +6733,7 @@ class _MiniAstTypeAnalyzer
     // Build the property get IR.
     _harness.irBuilder.propertyGet(propertyName, location: node.location);
     // TODO(paulberry): handle null shorting
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(propertyType));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(propertyType));
   }
 
   void analyzeReturnStatement() {
@@ -6745,7 +6743,7 @@ class _MiniAstTypeAnalyzer
   ExpressionTypeAnalysisResult analyzeThis(Expression node) {
     var thisType = this.thisType;
     flow.thisOrSuper(node, SharedTypeView(thisType), isSuper: false);
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(thisType));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(thisType));
   }
 
   ExpressionTypeAnalysisResult analyzeThisOrSuperPropertyGet(
@@ -6766,7 +6764,7 @@ class _MiniAstTypeAnalyzer
           SharedTypeView(memberType),
         )
         ?.unwrapTypeView();
-    return new ExpressionTypeAnalysisResult(
+    return ExpressionTypeAnalysisResult(
       type: SharedTypeView(promotedType ?? memberType),
     );
   }
@@ -6777,7 +6775,7 @@ class _MiniAstTypeAnalyzer
   ) {
     analyzeExpression(expression, operations.unknownType);
     flow.handleExit();
-    return new ExpressionTypeAnalysisResult(type: operations.neverType);
+    return ExpressionTypeAnalysisResult(type: operations.neverType);
   }
 
   void analyzeTryStatement(
@@ -6829,7 +6827,7 @@ class _MiniAstTypeAnalyzer
       subExpressionType: subExpressionType,
       castType: SharedTypeView(type),
     );
-    return new ExpressionTypeAnalysisResult(type: SharedTypeView(type));
+    return ExpressionTypeAnalysisResult(type: SharedTypeView(type));
   }
 
   ExpressionTypeAnalysisResult analyzeTypeTest(
@@ -6849,7 +6847,7 @@ class _MiniAstTypeAnalyzer
       subExpressionType: subExpressionType,
       checkedType: SharedTypeView(type),
     );
-    return new ExpressionTypeAnalysisResult(type: operations.boolType);
+    return ExpressionTypeAnalysisResult(type: operations.boolType);
   }
 
   ExpressionTypeAnalysisResult analyzeVariableGet(
@@ -6859,7 +6857,7 @@ class _MiniAstTypeAnalyzer
   ) {
     var promotedType = flow.variableRead(node, variable);
     callback?.call(promotedType?.unwrapTypeView());
-    return new ExpressionTypeAnalysisResult(
+    return ExpressionTypeAnalysisResult(
       type: promotedType ?? SharedTypeView(variable.type),
     );
   }

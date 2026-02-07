@@ -12,13 +12,11 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 class StartDirectChatScreen extends ConsumerStatefulWidget {
   final String otherUserId;
 
-  const StartDirectChatScreen({
-    super.key,
-    required this.otherUserId,
-  });
+  const StartDirectChatScreen({super.key, required this.otherUserId});
 
   @override
-  ConsumerState<StartDirectChatScreen> createState() => _StartDirectChatScreenState();
+  ConsumerState<StartDirectChatScreen> createState() =>
+      _StartDirectChatScreenState();
 }
 
 class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
@@ -38,14 +36,18 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       final currentUser = ref.read(authRepositoryProvider).currentUser;
       if (currentUser != null && currentUser.uid == widget.otherUserId) {
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You cannot chat with yourself")));
-           context.pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("You cannot chat with yourself")),
+          );
+          context.pop();
         }
         return;
       }
 
       // First check if a chat already exists with this user
-      final existingChat = await chatRepo.getExistingDirectChat(widget.otherUserId);
+      final existingChat = await chatRepo.getExistingDirectChat(
+        widget.otherUserId,
+      );
 
       if (!mounted) return;
 
@@ -109,7 +111,11 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: theme.colorScheme.error,
+              ),
               const SizedBox(height: 16),
               Text(_error!, style: theme.textTheme.bodyLarge),
               const SizedBox(height: 16),

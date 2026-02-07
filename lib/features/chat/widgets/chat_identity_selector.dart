@@ -1,8 +1,22 @@
-import 'package:flutter/material.dart'; 
-import 'package:go_router/go_router.dart';
+import 'package:flutter/material.dart';
 
 class ChatIdentitySelector extends StatelessWidget {
-  const ChatIdentitySelector({super.key, this.child, this.initialOrgId, this.orgId, this.initialData, this.verificationId, this.phoneNumber, this.chatId, this.groupName, this.groupImage, this.currentUserId, this.otherUserId, this.navigationShell, this.eventToEdit});
+  const ChatIdentitySelector({
+    super.key,
+    this.child,
+    this.initialOrgId,
+    this.orgId,
+    this.initialData,
+    this.verificationId,
+    this.phoneNumber,
+    this.chatId,
+    this.groupName,
+    this.groupImage,
+    this.currentUserId,
+    this.otherUserId,
+    this.navigationShell,
+    this.eventToEdit,
+  });
 
   final Widget? child;
   final dynamic navigationShell;
@@ -21,23 +35,23 @@ class ChatIdentitySelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (navigationShell != null) {
-       // Wrapper for StatefulShellRoute
-       return Scaffold(
-         body: navigationShell,
-         bottomNavigationBar: NavigationBar(
-           selectedIndex: navigationShell.currentIndex,
-           onDestinationSelected: (idx) => navigationShell.goBranch(idx),
-           destinations: const [
-             NavigationDestination(icon: Icon(Icons.message), label: 'Chats'),
-             NavigationDestination(icon: Icon(Icons.map), label: 'Nearby'),
-             NavigationDestination(icon: Icon(Icons.event), label: 'Events'),
-           ],
-         ),
-       );
+      // Wrapper for StatefulShellRoute
+      return Scaffold(
+        body: navigationShell,
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (idx) => navigationShell.goBranch(idx),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.message), label: 'Chats'),
+            NavigationDestination(icon: Icon(Icons.map), label: 'Nearby'),
+            NavigationDestination(icon: Icon(Icons.event), label: 'Events'),
+          ],
+        ),
+      );
     }
     return Scaffold(
-      appBar: AppBar(title: Text('ChatIdentitySelector (Stub)')),
-      body: Center(child: Text('Coming Soon: ChatIdentitySelector')),
+      appBar: AppBar(title: const Text('ChatIdentitySelector (Stub)')),
+      body: const Center(child: Text('Coming Soon: ChatIdentitySelector')),
     );
   }
 }

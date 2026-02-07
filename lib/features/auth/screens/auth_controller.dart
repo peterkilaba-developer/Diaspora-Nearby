@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // Needed for FirebaseAuthException
 import '../repository/auth_repository.dart';
-import 'package:diaspora_nearby/services/session_service.dart';
+import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-final authControllerProvider = NotifierProvider<AuthController, bool>(AuthController.new);
+final authControllerProvider = NotifierProvider<AuthController, bool>(
+  AuthController.new,
+);
 
 class AuthController extends Notifier<bool> {
   @override
@@ -23,39 +25,53 @@ class AuthController extends Notifier<bool> {
         phoneNumber: phoneNumber,
         verificationCompleted: (credential) async {
           // Auto-verification happened (e.g. instant verification or code auto-retrieval)
-          print('Phone Auth: verificationCompleted triggered');
-          state = true; 
+          debugPrint('Phone Auth: verificationCompleted triggered');
+          state = true;
           try {
-            final userCredential = await repository.signInWithCredential(credential);
-            if (userCredential.user != null) {
+            final userCredential = await repository.signInWithCredential(
+              credential,
+            );
+            if (context.mounted) {
               await _handleSuccessfulSignIn(context, userCredential.user!);
             }
           } catch (e) {
-             state = false;
-             if(context.mounted) {
-               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Auto-sign in failed: ${e.toString()}')));
-             }
+            state = false;
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Auto-sign in failed: ${e.toString()}')),
+              );
+            }
           }
         },
         verificationFailed: (e) {
-             print('Phone Auth: verificationFailed: ${e.message}');
-             state = false;
-             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Verification failed')));
+          debugPrint('Phone Auth: verificationFailed: ${e.message}');
+          state = false;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message ?? 'Verification failed')),
+          );
         },
         codeSent: (verificationId, resendToken) {
-            print('Phone Auth: codeSent. ID: $verificationId');
-            state = false;
-            context.push('/auth/otp', extra: {'verificationId': verificationId, 'phoneNumber': phoneNumber});
+          debugPrint('Phone Auth: codeSent. ID: $verificationId');
+          state = false;
+          context.push(
+            '/auth/otp',
+            extra: {
+              'verificationId': verificationId,
+              'phoneNumber': phoneNumber,
+            },
+          );
         },
         codeAutoRetrievalTimeout: (verificationId) {
-             print('Phone Auth: codeAutoRetrievalTimeout. ID: $verificationId');
-             // Do not set state = false here necessarily, as user might still be typing
+          debugPrint('Phone Auth: codeAutoRetrievalTimeout. ID: $verificationId');
+          // Do not set state = false here necessarily, as user might still be typing
         },
       );
     } catch (e) {
       state = false;
       if (context.mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -63,34 +79,44 @@ class AuthController extends Notifier<bool> {
   Future<void> _handleSuccessfulSignIn(BuildContext context, User user) async {
     try {
       // Check if user profile exists in Firestore
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final profileExists = userDoc.exists;
 
       // Update Session based on Profile Existence
-      await ref.read(sessionServiceProvider).saveSession(
-        userId: user.uid,
-        hasCompletedOnboarding: true, // Assuming if they are here, they passed onboarding
-        profileComplete: profileExists, // Only complete if profile exists
-        isReturningUser: profileExists, // New users start as non-returning (for router logic)
-      );
+      await ref
+          .read(sessionServiceProvider)
+          .saveSession(
+            userId: user.uid,
+            hasCompletedOnboarding:
+                true, // Assuming if they are here, they passed onboarding
+            profileComplete: profileExists, // Only complete if profile exists
+            isReturningUser:
+                profileExists, // New users start as non-returning (for router logic)
+          );
 
       if (context.mounted) {
         if (profileExists) {
-           context.go('/chats'); 
+          context.go('/chats');
         } else {
-           context.go('/profile-setup');
+          context.go('/profile-setup');
         }
       }
     } catch (e) {
-      print('Auth Controller Error: $e');
-      // Fallback: If firestore fails, we assume incomplete but let them in? 
+      debugPrint('Auth Controller Error: $e');
+      // Fallback: If firestore fails, we assume incomplete but let them in?
       // Or we just default to profile setup to be safe.
-       if (context.mounted) context.go('/profile-setup');
+      if (context.mounted) context.go('/profile-setup');
     }
   }
 
-
-  void verifyOTP(BuildContext context, String verificationId, String smsCode) async {
+  void verifyOTP(
+    BuildContext context,
+    String verificationId,
+    String smsCode,
+  ) async {
     state = true;
     final repository = ref.read(authRepositoryProvider);
     try {
@@ -99,17 +125,21 @@ class AuthController extends Notifier<bool> {
         smsCode: smsCode,
       );
       final userCredential = await repository.signInWithCredential(credential);
-      
-      if (userCredential?.user != null) {
-         await _handleSuccessfulSignIn(context, userCredential!.user!);
+
+      if (userCredential.user != null) {
+        if (context.mounted) {
+          await _handleSuccessfulSignIn(context, userCredential.user!);
+        }
       }
-      
+
       state = false;
       // Navigation is now handled inside _handleSuccessfulSignIn
     } catch (e) {
       state = false;
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }

@@ -27,10 +27,9 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
 
-    final hasRegistered = await ref.read(interestRepositoryProvider).checkInterest(
-      userId: user.uid,
-      service: 'dfdi',
-    );
+    final hasRegistered = await ref
+        .read(interestRepositoryProvider)
+        .checkInterest(userId: user.uid, service: 'dfdi');
 
     if (mounted) {
       setState(() {
@@ -42,17 +41,19 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
   Future<void> _registerInterest() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     final profile = ref.read(userProfileProvider).value;
-    
+
     if (user == null || profile == null) return;
 
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(interestRepositoryProvider).registerInterest(
-        userId: user.uid,
-        service: 'dfdi',
-        country: profile.homeCountry ?? 'Unknown',
-      );
+      await ref
+          .read(interestRepositoryProvider)
+          .registerInterest(
+            userId: user.uid,
+            service: 'dfdi',
+            country: profile.homeCountry ?? 'Unknown',
+          );
 
       if (mounted) {
         setState(() {
@@ -60,15 +61,17 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You have been added to the notification list!')),
+          const SnackBar(
+            content: Text('You have been added to the notification list!'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -79,27 +82,24 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
     final country = profile?.homeCountry ?? 'Your Country';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Diaspora Foreign Direct Investments'),
-      ),
+      appBar: AppBar(title: const Text('Diaspora Foreign Direct Investments')),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(AppTheme.cardPadding),
+          padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: AppTheme.cardPadding),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                LucideIcons.trendingUp,
-                size: 80,
-                color: AppTheme.accent, // Sage Green
+              Image.asset(
+                'assets/icons/logo-original.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
+                color: Colors.orange,
               ),
               const SizedBox(height: 32),
               const Text(
                 'Diaspora Foreign Direct Investments',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -113,19 +113,18 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Invest in your home country across 6 key sectors: Food, Healthcare, Education, Real Estate, Water, and Energy.',
+                'Invest in your home country using Diaspora (\$DSP) across 6 key sectors: Food, Healthcare, Education, Real Estate, Water, and Energy.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),
               const SizedBox(height: 40),
-              
+
               if (_hasRegistered)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.accent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(30),
@@ -134,11 +133,15 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.check, color: AppTheme.accent, size: 20),
+                      const Icon(
+                        LucideIcons.check,
+                        color: AppTheme.accent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'You are on the list for $country',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AppTheme.accent,
                           fontWeight: FontWeight.bold,
                         ),
@@ -153,18 +156,27 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
                     onPressed: _isLoading ? null : _registerInterest,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.accent,
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
                     ),
                     child: _isLoading
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
                         : Text(
                             'Notify Me When Available for $country Community',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                   ),
                 ),

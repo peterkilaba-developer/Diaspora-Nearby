@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/models/profile_data.dart';
 import 'package:diaspora_nearby/models/chat.dart';
 import 'package:diaspora_nearby/models/event_data.dart' as event_model;
-import 'package:diaspora_nearby/models/community_data.dart' as comm_model;
+import 'package:diaspora_nearby/features/community/models/community_data.dart' as comm_model;
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/data/countries.dart' as country_data;

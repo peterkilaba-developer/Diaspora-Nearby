@@ -9,7 +9,7 @@ import 'package:_fe_analyzer_shared/src/macros/compiler/request_channel.dart';
 import 'package:_fe_analyzer_shared/src/macros/executor/serialization.dart';
 import 'package:test/test.dart';
 
-main() {
+void main() {
   group('ByteDataSerializer', () {
     group('addAny', () {
       Uint8List write(Object? object) {
@@ -20,7 +20,7 @@ main() {
 
       Object? read(Uint8List bytes) {
         final deserializer = ByteDataDeserializer(
-          new ByteData.sublistView(bytes),
+          ByteData.sublistView(bytes),
         );
         return deserializer.expectAny();
       }

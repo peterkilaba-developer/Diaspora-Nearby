@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/message.dart';
+import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:diaspora_nearby/features/chat/widgets/video_message_player.dart'; // Assume this exists as used in original
 import 'top_level_text_content.dart';
 
@@ -24,13 +24,19 @@ class VideoMessageContent extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.video,
-              color: isOwn ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface),
+          Icon(
+            LucideIcons.video,
+            color: isOwn
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurface,
+          ),
           const SizedBox(width: 8),
           Text(
             'Video',
             style: TextStyle(
-              color: isOwn ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+              color: isOwn
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.onSurface,
             ),
           ),
         ],
@@ -42,15 +48,9 @@ class VideoMessageContent extends StatelessWidget {
       children: [
         Stack(
           children: [
-            Container(
+            SizedBox(
               width: double.infinity,
-              constraints: const BoxConstraints(
-                maxHeight: 400,
-              ),
-              child: VideoMessagePlayer(
-                videoUrl: videoUrl,
-                isOwn: isOwn,
-              ),
+              child: VideoMessagePlayer(videoUrl: videoUrl, isOwn: isOwn),
             ),
             if (isSending)
               Positioned.fill(

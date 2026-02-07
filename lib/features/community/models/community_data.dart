@@ -7,6 +7,7 @@ part 'community_data.g.dart';
 class Community {
   final String id;
   final String name;
+  final String? description;
   final String? homeCountryCode;
   final String? hostCountryCode;
   final String? locationType; // 'home' | 'host' | 'global'
@@ -33,6 +34,7 @@ class Community {
   Community({
     required this.id,
     required this.name,
+    this.description,
     this.homeCountryCode,
     this.hostCountryCode,
     this.type,
@@ -60,6 +62,7 @@ class Community {
   Community copyWith({
     String? id,
     String? name,
+    String? description,
     String? homeCountryCode,
     String? hostCountryCode,
     String? type,
@@ -86,6 +89,7 @@ class Community {
     return Community(
       id: id ?? this.id,
       name: name ?? this.name,
+      description: description ?? this.description,
       homeCountryCode: homeCountryCode ?? this.homeCountryCode,
       hostCountryCode: hostCountryCode ?? this.hostCountryCode,
       type: type ?? this.type,

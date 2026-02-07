@@ -20,17 +20,21 @@ class AdminOverviewScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-            
+
             // Stats Row
             StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .snapshots(),
               builder: (context, userSnapshot) {
                 return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('communities').snapshots(),
+                  stream: FirebaseFirestore.instance
+                      .collection('communities')
+                      .snapshots(),
                   builder: (context, commSnapshot) {
                     final userCount = userSnapshot.data?.size ?? 0;
                     final commCount = commSnapshot.data?.size ?? 0;
-                    
+
                     return Row(
                       children: [
                         Expanded(
@@ -51,7 +55,7 @@ class AdminOverviewScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 24),
-                        Expanded(
+                        const Expanded(
                           child: _StatCard(
                             title: 'Active Chats',
                             value: '...', // Placeholder until RTDB integration
@@ -61,13 +65,13 @@ class AdminOverviewScreen extends ConsumerWidget {
                         ),
                       ],
                     );
-                  }
+                  },
                 );
-              }
+              },
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Recent Activity / Charts Placeholder
             const Text(
               'User Growth (Last 30 Days)',
@@ -88,7 +92,10 @@ class AdminOverviewScreen extends ConsumerWidget {
                   children: [
                     Icon(LucideIcons.barChart, size: 48, color: Colors.grey),
                     SizedBox(height: 16),
-                    Text('Growth chart visualization placeholder', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      'Growth chart visualization placeholder',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   ],
                 ),
               ),
@@ -148,14 +155,10 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 }
-

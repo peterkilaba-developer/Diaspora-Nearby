@@ -2,23 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/chat.dart';
-import 'package:diaspora_nearby/models/profile_data.dart';
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/features/chat/models/chat.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart'; // [NEW] Import utility
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart'; // [NEW]
-import 'package:diaspora_nearby/models/location.dart'; // [NEW] Needed for UserLocationGeometry
+import 'package:diaspora_nearby/features/shared/models/location.dart'; // [NEW] Needed for UserLocationGeometry
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
 /// Provider for other user's profile in direct chats (or Organization details)
 /// Provider for chat partner profile (User or Organization)
 /// Keyed by USER ID (String), so it is stable across Chat updates.
-final chatPartnerProvider = FutureProvider.family<ProfileData?, String>((ref, userId) async {
+final chatPartnerProvider = FutureProvider.family<ProfileData?, String>((
+  ref,
+  userId,
+) async {
   if (userId.isEmpty) return null;
   // 1. Try fetching User Profile
   final profileRepo = ref.watch(profileRepositoryProvider);
@@ -28,21 +31,33 @@ final chatPartnerProvider = FutureProvider.family<ProfileData?, String>((ref, us
   // 2. Fallback to Organization
   final orgRepo = ref.watch(organizationRepositoryProvider);
   try {
-     final org = await orgRepo.getOrganization(userId);
-     if (org != null) {
-        return ProfileData(
-           uid: org['id'],
-           firstName: org['businessName'] ?? org['name'] ?? 'Organization',
-           lastName: '', 
-           phone: '',
-           profileImage: org['profileImage'] ?? '',
-           homeLocation: const UserLocation(formattedAddress: '', placeId: '', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))),
-           hostLocation: const UserLocation(formattedAddress: '', placeId: '', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))), 
-           occupation: 'Organization', 
-        );
-     }
+    final org = await orgRepo.getOrganization(userId);
+    if (org != null) {
+      return ProfileData(
+        uid: org['id'],
+        firstName: org['businessName'] ?? org['name'] ?? 'Organization',
+        lastName: '',
+        phone: '',
+        profileImage: org['profileImage'] ?? '',
+        homeLocation: const UserLocation(
+          formattedAddress: '',
+          placeId: '',
+          geometry: UserLocationGeometry(
+            location: UserLocationCoordinates(lat: 0, lng: 0),
+          ),
+        ),
+        hostLocation: const UserLocation(
+          formattedAddress: '',
+          placeId: '',
+          geometry: UserLocationGeometry(
+            location: UserLocationCoordinates(lat: 0, lng: 0),
+          ),
+        ),
+        occupation: 'Organization',
+      );
+    }
   } catch (e) {}
-  
+
   return null;
 });
 
@@ -85,31 +100,52 @@ class ChatCard extends ConsumerWidget {
     }
   }
 
-  Widget _buildLastMessagePreview(BuildContext context, ThemeData theme, WidgetRef ref, LastMessage? lastMessage) {
+  Widget _buildLastMessagePreview(
+    BuildContext context,
+    ThemeData theme,
+    WidgetRef ref,
+    LastMessage? lastMessage,
+  ) {
     // 1. Check for typing status
     final typingAsync = ref.watch(typingIndicatorsProvider(chat.id));
     final typingUsers = typingAsync.value ?? [];
-    
+
     if (typingUsers.isNotEmpty) {
       if (typingUsers.length == 1 && !chat.isDirect) {
-          // Multiple people chat, try to show name
-          final profileAsync = ref.watch(userProfileByIdProvider(typingUsers.first));
-          return profileAsync.when(
-            data: (profile) => Text(
-              '${profile?.firstName ?? 'Someone'} is typing...',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
-                fontStyle: FontStyle.italic,
-              ),
+        // Multiple people chat, try to show name
+        final profileAsync = ref.watch(
+          userProfileByIdProvider(typingUsers.first),
+        );
+        return profileAsync.when(
+          data: (profile) => Text(
+            '${profile?.firstName ?? 'Someone'} is typing...',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w600,
+              fontStyle: FontStyle.italic,
             ),
-            loading: () => Text('typing...', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontStyle: FontStyle.italic)),
-            error: (_, __) => Text('typing...', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontStyle: FontStyle.italic)),
-          );
+          ),
+          loading: () => Text(
+            'typing...',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          error: (_, __) => Text(
+            'typing...',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        );
       }
-      
+
       return Text(
-        typingUsers.length > 1 ? '${typingUsers.length} people typing...' : 'typing...',
+        typingUsers.length > 1
+            ? '${typingUsers.length} people typing...'
+            : 'typing...',
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.primary,
           fontWeight: FontWeight.w600,
@@ -133,7 +169,11 @@ class ChatCard extends ConsumerWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.ban, size: 14, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+          Icon(
+            LucideIcons.ban,
+            size: 14,
+            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+          ),
           const SizedBox(width: 4),
           Text(
             'Message deleted',
@@ -146,40 +186,41 @@ class ChatCard extends ConsumerWidget {
       );
     }
 
-
-
     IconData? icon;
     String text = lastMessage.content;
     bool isMedia = true;
+    Color?
+    customIconColor; // [NEW] Allow custom color for specific message types
 
     switch (lastMessage.type) {
       case 'image':
         icon = LucideIcons.image;
-        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Photo';
+        text = 'Photo message';
         break;
       case 'video':
         icon = LucideIcons.video;
-        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Video';
+        text = 'Video message';
         break;
       case 'audio':
-        icon = LucideIcons.mic; 
-        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Voice message';
+        icon = LucideIcons.mic;
+        text = 'Voice message';
         break;
       case 'audio_file':
         icon = LucideIcons.music;
-        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Audio file';
+        text = 'Audio message';
         break;
       case 'location':
-        icon = LucideIcons.locateFixed;
-        text = 'Location'; // Location doesn't usually have a caption we want to show instead of 'Location' label, unless address?
-        // Logic: if content is address, show it? Original logic sends address as content.
-        if (lastMessage.content != 'Location' && lastMessage.content != '📍 Location') {
-           text = lastMessage.content;
-        }
+        icon = LucideIcons.mapPin;
+        text = 'Location message';
         break;
       case 'document':
         icon = LucideIcons.fileText;
-        text = lastMessage.content.isNotEmpty ? lastMessage.content : 'Document';
+        text = 'Document message';
+        break;
+      case 'dsp_transfer': // [NEW]
+        icon = LucideIcons.coins;
+        text = 'Transfer message';
+        customIconColor = theme.colorScheme.tertiary; // Sage Green
         break;
       case 'money-transfer':
         icon = LucideIcons.banknote;
@@ -189,32 +230,103 @@ class ChatCard extends ConsumerWidget {
         isMedia = false;
         text = lastMessage.content;
     }
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (lastMessage.metadata?['isShared'] == true) ...[
+          Icon(
+            LucideIcons.forward,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+        ],
         if (isMedia && icon != null) ...[
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          Icon(
+            icon,
+            size: 16,
+            color: customIconColor ?? theme.colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(width: 4),
         ],
         Flexible(
           child: SearchHighlightUtils.highlightText(
-            text, 
-            searchQuery, 
+            text,
+            searchQuery,
             theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : null,
             ),
-            context
+            context,
           ),
         ),
       ],
     );
   }
 
+  Widget _buildStatusIcon(ThemeData theme, String? status) {
+    Color color;
+    bool isDouble = false;
 
+    switch (status) {
+      case 'read':
+        color = theme.colorScheme.primary;
+        isDouble = true;
+        break;
+      case 'delivered':
+        color = theme.colorScheme.onSurfaceVariant;
+        isDouble = true;
+        break;
+      case 'sent':
+      default:
+        color = theme.colorScheme.onSurfaceVariant;
+        isDouble = false;
+        break;
+    }
 
+    // Pending state (if status is null or unknown, though strictly covered by default above if passed)
+    if (status != 'sent' && status != 'delivered' && status != 'read') {
+       return Icon(
+          LucideIcons.clock,
+          size: 14,
+          color: theme.colorScheme.onSurfaceVariant,
+        );
+    }
 
+    if (isDouble) {
+      return SizedBox(
+        width: 17, // Tighter width for overlapping
+        height: 16,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              child: Icon(
+                LucideIcons.check,
+                size: 16,
+                color: color,
+              ),
+            ),
+            Positioned(
+              left: 5, // Overlap
+              child: Icon(
+                LucideIcons.check,
+                size: 16,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Icon(
+      LucideIcons.check,
+      size: 16,
+      color: color,
+    );
+  }
 
   IconData _getChatTypeIcon() {
     switch (chat.type) {
@@ -230,37 +342,68 @@ class ChatCard extends ConsumerWidget {
   }
 
   Widget _buildAvatar(BuildContext context, ThemeData theme, WidgetRef ref) {
+    // [NEW] Bereavement Chat Styling
+    final isBereavement =
+        chat.metadata?['isBereavement'] == true ||
+        chat.name.startsWith('Bereaving ');
+
+    if (isBereavement) {
+      return Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200, // Neutral background
+          shape: BoxShape.circle,
+        ),
+        child: const Center(
+          child: Icon(
+            LucideIcons.heartCrack, // Broken heart
+            color: Colors.black, // Black icon
+            size: 24,
+          ),
+        ),
+      );
+    }
+
     // For direct chats, show profile image with location flag
     if (chat.isDirect) {
       final currentUserId = ref.watch(authStateProvider).value?.uid;
       final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
-      final userProfileAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
-      
+      final userProfileAsync = ref.watch(
+        chatPartnerProvider(otherUserId ?? ''),
+      );
+
       return userProfileAsync.when(
         data: (profile) {
-            // Profile photo or initials
+          // Profile photo or initials
           final photoUrl = profile?.profileImage;
           final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
-          
+
           return CircleAvatar(
             radius: 28,
             backgroundColor: Colors.transparent,
             backgroundImage: hasPhoto
                 ? CachedNetworkImageProvider(photoUrl)
                 : null,
-              child: !hasPhoto
-                  ? (profile?.occupation == 'Organization' // Check if Org for fallback icon
-                      ? Icon(LucideIcons.building2, color: theme.colorScheme.onPrimaryContainer)
+            child: !hasPhoto
+                ? (profile?.occupation ==
+                          'Organization' // Check if Org for fallback icon
+                      ? Icon(
+                          LucideIcons.building2,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        )
                       : Text(
-                          chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
+                          chat.name.isNotEmpty
+                              ? chat.name[0].toUpperCase()
+                              : '?',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.onPrimaryContainer,
                           ),
                         ))
-                  : null,
-            );
+                : null,
+          );
         },
         loading: () => CircleAvatar(
           radius: 28,
@@ -292,14 +435,16 @@ class ChatCard extends ConsumerWidget {
     // [NEW] Community Avatars using parity utility
     if (chat.isCommunity) {
       return CommunityChatUtils.getCommunityAvatar(
-        chat: chat, 
+        chat: chat,
         size: 56,
-        context: context
+        context: context,
       );
     }
 
     // For group/event/org chats, show photo if available, else icon
-    if ((chat.isEvent || chat.isGroup || chat.isOrganization) && chat.photoUrl != null && chat.photoUrl!.isNotEmpty) {
+    if ((chat.isEvent || chat.isGroup || chat.isOrganization) &&
+        chat.photoUrl != null &&
+        chat.photoUrl!.isNotEmpty) {
       return CircleAvatar(
         radius: 28,
         backgroundColor: Colors.transparent,
@@ -314,20 +459,24 @@ class ChatCard extends ConsumerWidget {
         _getChatTypeIcon(),
         size: 24,
         color: chat.isEvent
-                ? Colors.orange.shade700
-                : (chat.isOrganization ? Colors.blue.shade700 : Colors.green.shade700),
+            ? Colors.orange.shade700
+            : (chat.isOrganization
+                  ? Colors.blue.shade700
+                  : Colors.green.shade700),
       ),
     );
   }
 
-  Widget _buildHighlightedName(String name, ThemeData theme, BuildContext context) {
+  Widget _buildHighlightedName(
+    String name,
+    ThemeData theme,
+    BuildContext context,
+  ) {
     return SearchHighlightUtils.highlightText(
-      name, 
-      searchQuery, 
-      theme.textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
-      context
+      name,
+      searchQuery,
+      theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      context,
     );
   }
 
@@ -337,68 +486,98 @@ class ChatCard extends ConsumerWidget {
     final lastMessageAsync = ref.watch(chatLastMessageStreamProvider(chat.id));
     final lastMessage = lastMessageAsync.value ?? chat.lastMessage;
     final hasUnread = chat.unreadCount > 0;
-    
+
     // Get display name (for DM chats, gets the other participant's name)
     // Get display name
     String displayName = chat.name;
     if (chat.isCommunity) {
-       displayName = CommunityChatUtils.generateCommunityName(chat);
+      displayName = CommunityChatUtils.generateCommunityName(chat);
     } else if (chat.isDirect) {
-       final currentUserId = ref.watch(authStateProvider).value?.uid;
-       final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
-       final partnerAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
-       
-       if (partnerAsync.hasValue && partnerAsync.value != null) {
-          final p = partnerAsync.value!;
-          displayName = '${p.firstName} ${p.lastName}'.trim();
-       }
+      final currentUserId = ref.watch(authStateProvider).value?.uid;
+      final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
+      final partnerAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
+
+      if (partnerAsync.hasValue && partnerAsync.value != null) {
+        final p = partnerAsync.value!;
+        displayName = '${p.firstName} ${p.lastName}'.trim();
+      }
     }
 
     return Card(
       elevation: 0,
       color: Colors.transparent, // Removed contrast as requested
       margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Slidable(
         key: ValueKey(chat.id),
+        // Swipe Right -> Pin to Bottom
         startActionPane: ActionPane(
           motion: const ScrollMotion(),
-          dismissible: null,
           children: [
-            // Pin / Unpin
-            SlidableAction(
+            CustomSlidableAction(
               onPressed: (context) {
-                ref.read(chatRepositoryProvider).togglePin(chat.id, !chat.isPinned);
+                ref
+                    .read(chatRepositoryProvider)
+                    .togglePinBottom(chat.id, !chat.isPinnedBottom);
               },
-              backgroundColor: chat.isPinned 
-                  ? theme.colorScheme.surfaceContainerHighest 
-                  : theme.colorScheme.primary,
-              foregroundColor: chat.isPinned 
-                  ? theme.colorScheme.onSurface 
-                  : theme.colorScheme.onPrimary,
-              icon: chat.isPinned ? LucideIcons.pinOff : LucideIcons.pin,
-              label: chat.isPinned ? 'Unpin' : 'Pin',
-            ),
-          ],
-        ),
-        endActionPane: ActionPane(
-          motion: const ScrollMotion(),
-          children: [
-            // Pin to Bottom / Unpin from Bottom
-            SlidableAction(
-              onPressed: (context) {
-                ref.read(chatRepositoryProvider).togglePinBottom(chat.id, !chat.isPinnedBottom);
-              },
-              backgroundColor: chat.isPinnedBottom 
+              backgroundColor: chat.isPinnedBottom
                   ? theme.colorScheme.surfaceContainerHighest
                   : theme.colorScheme.secondary,
               foregroundColor: chat.isPinnedBottom
                   ? theme.colorScheme.onSurface
                   : theme.colorScheme.onSecondary,
-              icon: chat.isPinnedBottom ? LucideIcons.arrowUpFromLine : LucideIcons.arrowDownToLine,
-              label: chat.isPinnedBottom ? 'Unpin Btm' : 'Pin Btm',
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // "Pin Upright" -> Standard Pin icon
+                  Icon(LucideIcons.pin, size: 24),
+                  SizedBox(height: 4),
+                  Text(
+                    'Pin', // User requested just "Pin"
+                    style: TextStyle(
+                      fontSize: 12,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        // Swipe Left -> Pin to Top (Upside Down Pin)
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          children: [
+            CustomSlidableAction(
+              onPressed: (context) {
+                ref
+                    .read(chatRepositoryProvider)
+                    .togglePin(chat.id, !chat.isPinned);
+              },
+              backgroundColor: chat.isPinned
+                  ? theme.colorScheme.surfaceContainerHighest
+                  : theme.colorScheme.primary,
+              foregroundColor: chat.isPinned
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onPrimary,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // "Pin Upside Down" -> Rotated 180 degrees
+                  Transform.rotate(
+                    angle: 3.14159, // 180 degrees in radians
+                    child: const Icon(LucideIcons.pin, size: 24),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Pin', // User requested just "Pin"
+                    style: TextStyle(
+                      fontSize: 12,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -409,192 +588,217 @@ class ChatCard extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             child: Row(
               children: [
-              // Avatar
-              _buildAvatar(context, theme, ref),
-              const SizedBox(width: 12),
-              // Chat info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Name and time
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              if (chat.isDirect)
-                                Consumer(
-                                  builder: (context, ref, child) {
-                                    final currentUserId = ref.watch(authStateProvider).value?.uid;
-                                    final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
-                                    final profileAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
-                                    return profileAsync.maybeWhen(
-                                      data: (profile) {
-                                        // [NEW] Logic: If it is an Organization, show Building Icon
-                                        // We used 'occupation' as a flag in the provider above
-                                        final isOrganization = profile?.occupation == 'Organization';
-                                        
-                                        if (isOrganization) {
-                                            return const Padding(
-                                               padding: EdgeInsets.only(right: 6.0),
-                                               child: Icon(LucideIcons.building2, size: 16, color: Colors.blue),
-                                            );
-                                        }
-
-                                        // Fallback chain: Current GPS -> Top-level Host Country -> Host Location Object
-                                        final countryCode = profile?.currentLocation?.countryCode 
-                                            ?? profile?.hostCountryCode 
-                                            ?? profile?.hostLocation.countryCode;
-                                        if (countryCode != null && countryCode.isNotEmpty) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(right: 6.0),
-                                            child: Text(
-                                              _getCountryFlag(countryCode),
-                                              style: const TextStyle(fontSize: 16),
-                                            ),
+                // Avatar
+                _buildAvatar(context, theme, ref),
+                const SizedBox(width: 12),
+                // Chat info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name and time
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                if (chat.isDirect)
+                                  Consumer(
+                                    builder: (context, ref, child) {
+                                      final currentUserId = ref
+                                          .watch(authStateProvider)
+                                          .value
+                                          ?.uid;
+                                      final otherUserId = chat
+                                          .getOtherParticipantId(
+                                            currentUserId ?? '',
                                           );
-                                        }
-                                        return const SizedBox.shrink();
-                                      },
-                                      orElse: () => const SizedBox.shrink(),
-                                    );
-                                  },
-                                ),
-                              // [NEW] Event Icon Check
+                                      final profileAsync = ref.watch(
+                                        chatPartnerProvider(otherUserId ?? ''),
+                                      );
+                                      return profileAsync.maybeWhen(
+                                        data: (profile) {
+                                          // [NEW] Logic: If it is an Organization, show Building Icon
+                                          // We used 'occupation' as a flag in the provider above
+                                          final isOrganization =
+                                              profile?.occupation ==
+                                              'Organization';
+
+                                          if (isOrganization) {
+                                            return const Padding(
+                                              padding: EdgeInsets.only(
+                                                right: 6.0,
+                                              ),
+                                              child: Icon(
+                                                LucideIcons.building2,
+                                                size: 16,
+                                                color: Colors.blue,
+                                              ),
+                                            );
+                                          }
+
+                                          // Fallback chain: Current GPS -> Top-level Host Country -> Host Location Object
+                                          final countryCode =
+                                              profile
+                                                  ?.currentLocation
+                                                  ?.countryCode ??
+                                              profile?.hostCountryCode ??
+                                              profile?.hostLocation.countryCode;
+                                          if (countryCode != null &&
+                                              countryCode.isNotEmpty) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 6.0,
+                                              ),
+                                              child: Text(
+                                                _getCountryFlag(countryCode),
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return const SizedBox.shrink();
+                                        },
+                                        orElse: () => const SizedBox.shrink(),
+                                      );
+                                    },
+                                  ),
+                                // [NEW] Event Icon Check
                                 if (chat.isEvent)
                                   const Padding(
-                                     padding: EdgeInsets.only(right: 6.0),
-                                     child: Icon(LucideIcons.calendar, size: 16, color: Colors.orange),
+                                    padding: EdgeInsets.only(right: 6.0),
+                                    child: Icon(
+                                      LucideIcons.calendar,
+                                      size: 16,
+                                      color: Colors.orange,
+                                    ),
                                   ),
                                 if (chat.isOrganization)
                                   const Padding(
-                                     padding: EdgeInsets.only(right: 6.0),
-                                     child: Icon(LucideIcons.building2, size: 16, color: Colors.blue),
+                                    padding: EdgeInsets.only(right: 6.0),
+                                    child: Icon(
+                                      LucideIcons.building2,
+                                      size: 16,
+                                      color: Colors.blue,
+                                    ),
                                   ),
                                 if (chat.isGroup)
                                   const Padding(
-                                     padding: EdgeInsets.only(right: 6.0),
-                                     child: Icon(LucideIcons.users, size: 16, color: Colors.green),
+                                    padding: EdgeInsets.only(right: 6.0),
+                                    child: Icon(
+                                      LucideIcons.users,
+                                      size: 16,
+                                      color: Colors.green,
+                                    ),
                                   ),
-                              Flexible(
-                                child: _buildHighlightedName(displayName, theme, context),
-                              ),
-                              if (chat.isMuted) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  LucideIcons.bellOff,
-                                  size: 14,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                                Flexible(
+                                  child: _buildHighlightedName(
+                                    displayName,
+                                    theme,
+                                    context,
+                                  ),
                                 ),
+                                if (chat.isMuted) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    LucideIcons.bellOff,
+                                    size: 14,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
-                        ),
-                        if (chat.isPinned) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            LucideIcons.pin,
-                            size: 14, // Slightly larger visual weight
-                            color: Colors.orange.shade700,
-                          ),
-                        ],
-                        if (chat.isPinnedBottom) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            LucideIcons.arrowDownToLine,
-                            size: 14,
-                            color: Colors.orange.shade700,
-                          ),
-                        ],
-                        if (lastMessage != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatLastMessageTime(lastMessage.timestamp),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: hasUnread
-                                  ? theme.colorScheme.primary
-                                  : theme.colorScheme.onSurfaceVariant,
-                              fontWeight: hasUnread ? FontWeight.w600 : null,
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // Last message preview
-                    Row(
-                      children: [
-                        // Message status icon (for own messages)
-                        if (lastMessage != null && lastMessage.status != null) ...[
-                          _buildStatusIcon(lastMessage.status!, theme),
-                          const SizedBox(width: 4),
-                        ],
-                        // Message preview
-                        Expanded(
-                          child: _buildLastMessagePreview(context, theme, ref, lastMessage),
-                        ),
-                        // Unread badge
-                        if (hasUnread) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              chat.unreadCount > 99
-                                  ? '99+'
-                                  : chat.unreadCount.toString(),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onPrimary,
-                                fontWeight: FontWeight.w600,
+                          if (chat.isPinned) ...[
+                            const SizedBox(width: 8),
+                            Transform.rotate(
+                              angle: 3.14159, // Upside down pin for Top
+                              child: Icon(
+                                LucideIcons.pin,
+                                size: 14,
+                                color: Colors.orange.shade700,
                               ),
                             ),
-                          ),
+                          ] else if (chat.isPinnedBottom) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              LucideIcons.pin, // Upright pin for Bottom
+                              size: 14,
+                              color: Colors.orange.shade700,
+                            ),
+                          ],
+                          if (lastMessage != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatLastMessageTime(lastMessage.timestamp),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: hasUnread
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight: hasUnread ? FontWeight.w600 : null,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Last message preview
+                      Row(
+                        children: [
+                          // Message status icon (for own messages)
+                          if (lastMessage != null &&
+                              lastMessage.status != null &&
+                              chat.isDirect &&
+                              lastMessage.senderId ==
+                                  ref.watch(authStateProvider).value?.uid) ...[
+                            _buildStatusIcon(theme, lastMessage.status),
+                            const SizedBox(width: 4),
+                          ],
+                          // Message preview
+                          Expanded(
+                            child: _buildLastMessagePreview(
+                              context,
+                              theme,
+                              ref,
+                              lastMessage,
+                            ),
+                          ),
+                          // Unread badge
+                          if (hasUnread) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                chat.unreadCount > 99
+                                    ? '99+'
+                                    : chat.unreadCount.toString(),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
   }
 
-  Widget _buildStatusIcon(String status, ThemeData theme) {
-    switch (status) {
-      case 'read':
-        return Icon(
-          LucideIcons.checkCheck,
-          size: 16,
-          color: Colors.blue,
-        );
-      case 'delivered':
-        return Icon(
-          LucideIcons.checkCheck,
-          size: 16,
-          color: Colors.green.shade700,
-        );
-      case 'sent':
-      default:
-        return Icon(
-          LucideIcons.check,
-          size: 16,
-          color: theme.colorScheme.onSurfaceVariant,
-        );
-    }
-  }
+
 }
-
-
-
-

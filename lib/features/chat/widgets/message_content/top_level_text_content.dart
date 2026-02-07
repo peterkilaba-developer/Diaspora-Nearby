@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:diaspora_nearby/models/message.dart';
+import 'package:diaspora_nearby/features/chat/models/message.dart';
 
 /// Helper widget to display text content within media messages
 /// Replaces logic like `_buildTextContent` usage inside other build methods
@@ -7,7 +7,11 @@ class TopLevelTextContent extends StatelessWidget {
   final Message message;
   final bool isOwn;
 
-  const TopLevelTextContent({super.key, required this.message, required this.isOwn});
+  const TopLevelTextContent({
+    super.key,
+    required this.message,
+    required this.isOwn,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +22,9 @@ class TopLevelTextContent extends StatelessWidget {
         message.content,
         textAlign: TextAlign.left,
         style: theme.textTheme.bodyMedium?.copyWith(
-          color: isOwn ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+          color: isOwn
+              ? theme.colorScheme.onPrimary
+              : theme.colorScheme.onSurface,
         ),
       ),
     );

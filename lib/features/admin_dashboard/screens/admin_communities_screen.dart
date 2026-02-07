@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:diaspora_nearby/models/community_data.dart';
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/features/community/models/community_data.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 class AdminCommunitiesScreen extends ConsumerStatefulWidget {
   const AdminCommunitiesScreen({super.key});
 
   @override
-  ConsumerState<AdminCommunitiesScreen> createState() => _AdminCommunitiesScreenState();
+  ConsumerState<AdminCommunitiesScreen> createState() =>
+      _AdminCommunitiesScreenState();
 }
 
-class _AdminCommunitiesScreenState extends ConsumerState<AdminCommunitiesScreen> {
+class _AdminCommunitiesScreenState
+    extends ConsumerState<AdminCommunitiesScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
@@ -30,7 +33,7 @@ class _AdminCommunitiesScreenState extends ConsumerState<AdminCommunitiesScreen>
         children: [
           // Header Actions
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
             color: Colors.white,
             child: Row(
               children: [
@@ -60,33 +63,48 @@ class _AdminCommunitiesScreenState extends ConsumerState<AdminCommunitiesScreen>
               ],
             ),
           ),
-          
+
           const Divider(height: 1),
-          
+
           // Communities List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('communities').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('communities')
+                  .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final communities = snapshot.data?.docs.map((doc) {
-                  return Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id});
-                }).where((c) {
-                  final query = _searchQuery.toLowerCase();
-                  return c.name.toLowerCase().contains(query) ||
-                         (c.type?.toLowerCase().contains(query) ?? false);
-                }).toList() ?? [];
+                final communities =
+                    snapshot.data?.docs
+                        .map((doc) {
+                          return Community.fromJson({
+                            ...doc.data() as Map<String, dynamic>,
+                            'id': doc.id,
+                          });
+                        })
+                        .where((c) {
+                          final query = _searchQuery.toLowerCase();
+                          return c.name.toLowerCase().contains(query) ||
+                              (c.type?.toLowerCase().contains(query) ?? false);
+                        })
+                        .toList() ??
+                    [];
 
                 if (communities.isEmpty) {
                   return const Center(child: Text('No communities found.'));
                 }
 
                 return GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 24,
+                  ),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 16,
@@ -136,9 +154,14 @@ class _CommunityCard extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    community.hostCountryCode != null 
-                        ? (country_data.getCountryByCode(community.hostCountryCode!)?.flag ?? (community.type?.substring(0, 1).toUpperCase() ?? 'C'))
-                        : (community.type?.substring(0, 1).toUpperCase() ?? 'C'),
+                    community.hostCountryCode != null
+                        ? (country_data
+                                  .getCountryByCode(community.hostCountryCode!)
+                                  ?.flag ??
+                              (community.type?.substring(0, 1).toUpperCase() ??
+                                  'C'))
+                        : (community.type?.substring(0, 1).toUpperCase() ??
+                              'C'),
                     style: const TextStyle(fontSize: 20),
                   ),
                 ),
@@ -156,12 +179,20 @@ class _CommunityCard extends StatelessWidget {
                     ),
                     Text(
                       community.type?.toUpperCase() ?? 'COMMUNITY',
-                      style: TextStyle(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[500],
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const Icon(LucideIcons.moreVertical, size: 16, color: Colors.grey),
+              const Icon(
+                LucideIcons.moreVertical,
+                size: 16,
+                color: Colors.grey,
+              ),
             ],
           ),
           const Spacer(),
@@ -172,10 +203,16 @@ class _CommunityCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${community.memberCount ?? 0}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    '${community.memberCount}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
-                  const Text('Members', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const Text(
+                    'Members',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
               _StatusBadge(isPrivate: community.isPrivate),
@@ -202,8 +239,8 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         isPrivate ? 'PRIVATE' : 'PUBLIC',
         style: TextStyle(
-          fontSize: 10, 
-          fontWeight: FontWeight.bold, 
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
           color: isPrivate ? Colors.orange : Colors.green,
         ),
       ),
@@ -234,13 +271,14 @@ class _ActionButton extends StatelessWidget {
         backgroundColor: primary ? Colors.blue : Colors.white,
         foregroundColor: primary ? Colors.white : Colors.black,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: 8),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: primary ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
+          side: primary
+              ? BorderSide.none
+              : BorderSide(color: Colors.grey.shade300),
         ),
       ),
     );
   }
 }
-

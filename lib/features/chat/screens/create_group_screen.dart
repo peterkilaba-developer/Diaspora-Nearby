@@ -4,15 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
-import 'package:diaspora_nearby/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
+import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
+
+import 'package:diaspora_nearby/features/community/repository/community_repository.dart'; // [NEW]
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
   final String? initialParticipantId;
-  
-  const CreateGroupScreen({super.key, this.initialParticipantId});
+  final String? communityId; // [NEW]
+
+  const CreateGroupScreen({
+    super.key,
+    this.initialParticipantId,
+    this.communityId,
+  });
 
   @override
   ConsumerState<CreateGroupScreen> createState() => _CreateGroupScreenState();
@@ -20,11 +29,14 @@ class CreateGroupScreen extends ConsumerStatefulWidget {
 
 class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   final Set<String> _selectedIds = {};
   XFile? _groupImage;
   bool _isLoading = false;
   bool _isLoadingContacts = true;
+
   List<ProfileData> _contacts = [];
+  bool _isPublic = false; // [NEW] for community groups
 
   @override
   void initState() {
@@ -32,12 +44,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     if (widget.initialParticipantId != null) {
       _selectedIds.add(widget.initialParticipantId!);
     }
+    // [NEW] Default to public for community groups
+    if (widget.communityId != null) {
+      _isPublic = true;
+    }
     _loadContacts();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -45,7 +62,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     setState(() => _isLoadingContacts = true);
     final repo = ref.read(chatRepositoryProvider);
     final contacts = await repo.getContactsWithDMs();
-    
+
     if (mounted) {
       setState(() {
         _contacts = contacts;
@@ -56,7 +73,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
     if (picked != null) {
       setState(() {
         _groupImage = picked;
@@ -68,35 +90,89 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final name = _nameController.text.trim();
     if (_groupImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a group photo')));
+        const SnackBar(content: Text('Please select a group photo')),
+      );
       return;
     }
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a group name')));
+        const SnackBar(content: Text('Please enter a group name')),
+      );
       return;
     }
-    if (_selectedIds.isEmpty) {
+    // [MODIFIED] Helper check for community groups
+    if (widget.communityId == null && _selectedIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select at least one member')));
+        const SnackBar(content: Text('Please select at least one member')),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
     final repo = ref.read(chatRepositoryProvider);
-    
+
     // Create logic
-    final chatId = await repo.createGroup(name, _selectedIds.toList(), groupImage: _groupImage);
-    
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (chatId != null) {
-        // Pop this screen and replace with chat screen
-        if (context.canPop()) context.pop();
-        context.pushReplacement('/chats/$chatId');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to create group')));
+    try {
+      debugPrint('Calling repo.createGroup...');
+      // Create group with NO members initially (only creator)
+      final chat = await repo.createGroup(
+        name,
+        [], // Empty list - members are invited, not added directly
+        groupImage: _groupImage,
+        description: _descriptionController.text.trim(),
+        communityId: widget.communityId, // [NEW]
+        isPublic: widget.communityId != null ? true : _isPublic, // [NEW] Force public if community
+      );
+      debugPrint('Group created: ${chat?.id}');
+
+      if (chat != null) {
+        // [NEW] Invitation logic: Auto-invite community members or use manual selection
+        List<String> invitationTargets;
+        if (widget.communityId != null) {
+          debugPrint('Fetching community members for auto-invitation...');
+          final communityRepo = ref.read(communityRepositoryProvider);
+          final community = await communityRepo.getCommunity(widget.communityId!);
+          final currentUserId = repo.currentUserId;
+          
+          invitationTargets = community?.members
+              .where((id) => id != currentUserId)
+              .toList() ?? [];
+          debugPrint('Found ${invitationTargets.length} community members to invite');
+        } else {
+          invitationTargets = _selectedIds.toList();
+        }
+
+        if (invitationTargets.isNotEmpty) {
+          debugPrint('Sending invitations to ${invitationTargets.length} users...');
+          final messagingService = ref.read(chatMessagingServiceProvider);
+          await messagingService.sendGroupInvitation(
+            chat.id,
+            name,
+            invitationTargets,
+          );
+          debugPrint('Invitations sent');
+        }
+      }
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (chat != null) {
+          // Pop this screen and replace with chat screen
+          if (context.canPop()) context.pop();
+          context.pushReplacement('/chats/${chat.id}');
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Failed to create group')));
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('Error in _createGroup: $e\n$stack');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -104,14 +180,19 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+    // [NEW] Fetch community details if applicable
+    final kCommunityId = widget.communityId;
+    final communityAsync = kCommunityId != null 
+        ? ref.watch(communityProvider(kCommunityId)) 
+        : const AsyncValue.data(null);
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(LucideIcons.x),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Create New Group'),
+        title: Text(kCommunityId != null ? 'Create Community Group' : 'Create New Group'),
         centerTitle: false,
       ),
       body: Column(
@@ -137,10 +218,16 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                                 shape: BoxShape.circle,
                                 image: _groupImage != null
                                     ? DecorationImage(
-                                        image: (kIsWeb 
-                                            ? NetworkImage(_groupImage!.path) 
-                                            : FileImage(File(_groupImage!.path))) as ImageProvider,
-                                        fit: BoxFit.cover
+                                        image:
+                                            (kIsWeb
+                                                    ? NetworkImage(
+                                                        _groupImage!.path,
+                                                      )
+                                                    : FileImage(
+                                                        File(_groupImage!.path),
+                                                      ))
+                                                as ImageProvider,
+                                        fit: BoxFit.cover,
                                       )
                                     : null,
                               ),
@@ -148,12 +235,22 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                                   ? Center(
                                       child: _nameController.text.isNotEmpty
                                           ? Text(
-                                              _nameController.text.substring(0, 1).toUpperCase(),
-                                              style: theme.textTheme.titleLarge?.copyWith(
-                                                  color: theme.colorScheme.onPrimaryContainer
-                                              ),
+                                              _nameController.text
+                                                  .substring(0, 1)
+                                                  .toUpperCase(),
+                                              style: theme.textTheme.titleLarge
+                                                  ?.copyWith(
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onPrimaryContainer,
+                                                  ),
                                             )
-                                          : Icon(LucideIcons.users, color: theme.colorScheme.onPrimaryContainer),
+                                          : Icon(
+                                              LucideIcons.users,
+                                              color: theme
+                                                  .colorScheme
+                                                  .onPrimaryContainer,
+                                            ),
                                     )
                                   : null,
                             ),
@@ -161,13 +258,20 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                               bottom: 0,
                               right: 0,
                               child: Container(
-                                padding: const EdgeInsets.all(4),
+                                padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
+                                  border: Border.all(
+                                    color: theme.scaffoldBackgroundColor,
+                                    width: 2,
+                                  ),
                                 ),
-                                child: const Icon(LucideIcons.camera, size: 12, color: Colors.white),
+                                child: const Icon(
+                                  LucideIcons.camera,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ],
@@ -181,71 +285,178 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                           decoration: const InputDecoration(
                             labelText: 'Group Name',
                             border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                           ),
-                          onChanged: (val) => setState(() {}), // rebuild for avatar preview
+                          onChanged: (val) =>
+                              setState(() {}), // rebuild for avatar preview
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  
-                  // Members Section
-                  Text(
-                    'Add Members (${_selectedIds.length} selected)',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  if (_isLoadingContacts)
-                    const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
-                  else if (_contacts.isEmpty)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            Icon(LucideIcons.users, size: 48, color: theme.disabledColor),
-                            const SizedBox(height: 16),
-                            const Text('No contacts found'),
-                            Text('Start chatting with people to add them.', style: theme.textTheme.bodySmall),
-                          ],
-                        ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _descriptionController,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLines: 4,
+                    minLines: 3,
+                    maxLength: 200,
+                    decoration: const InputDecoration(
+                      labelText: 'Group Description (Optional)',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
                       ),
-                    )
-                  else
-                    ..._contacts.map((contact) {
-                      final userId = contact.uid;
-                      final isSelected = _selectedIds.contains(userId);
-                      
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              if (userId == null) return;
-                              if (isSelected) {
-                                _selectedIds.remove(userId);
-                              } else {
-                                _selectedIds.add(userId);
-                              }
-                            });
-                          },
-                          child: UserCardView(
-                            user: contact,
-                            isStatic: true,
-                            backgroundColor: isSelected
-                                ? theme.colorScheme.primaryContainer.withOpacity(0.5)
-                                : null,
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+
+                  // [new] Community Context or Member Selection
+                  if (kCommunityId != null) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.dividerColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                           Row(
+                            children: [
+                              Icon(LucideIcons.globe, color: theme.colorScheme.primary, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Community Public Group',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                           ),
+                           const SizedBox(height: 8),
+                             Text(
+                               'Public groups must be topic-based (e.g., "Business", "Investments", "Faith"). Location-based groups are not permitted as they duplicate community functionality.',
+                               style: theme.textTheme.bodyMedium,
+                             ),
+                           const SizedBox(height: 12),
+                           communityAsync.when(
+                             data: (community) => Row(
+                               children: [
+                                 Icon(LucideIcons.users, size: 16, color: theme.textTheme.bodySmall?.color),
+                                 const SizedBox(width: 4),
+                                 Text(
+                                   '${community?.totalMembers ?? 0} Community Members',
+                                   style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                                 ),
+                               ],
+                             ),
+                             loading: () => const SizedBox(
+                               height: 16, 
+                               width: 16, 
+                               child: CircularProgressIndicator(strokeWidth: 2),
+                             ),
+                             error: (_, __) => const SizedBox.shrink(),
+                           ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                     const SizedBox(height: 24),
+
+                    // Members Section (Only for non-community)
+                    Text(
+                      'Send Request to Join Group (${_selectedIds.length} selected)',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    if (_isLoadingContacts)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else if (_contacts.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            children: [
+                              Icon(
+                                LucideIcons.users,
+                                size: 48,
+                                color: theme.disabledColor,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text('No contacts found'),
+                              Text(
+                                'Start chatting with people to add them.',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    }),
+                      )
+                    else
+                      ..._contacts.map((contact) {
+                        final userId = contact.uid;
+                        final isSelected = _selectedIds.contains(userId);
+
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (userId == null) return;
+                                if (isSelected) {
+                                  _selectedIds.remove(userId);
+                                } else {
+                                  _selectedIds.add(userId);
+                                }
+                              });
+                            },
+                            child: Stack(
+                              children: [
+                                UserCardView(
+                                  user: contact,
+                                  isStatic: true,
+                                ),
+                                if (isSelected)
+                                  Positioned.fill(
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ), // Match card margin
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: theme.colorScheme.primary, // [FIX] Use theme primary
+                                          width: 2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
                 ],
               ),
             ),
           ),
-          
+
           // Fixed Footer
           SafeArea(
             top: false,
@@ -255,32 +466,41 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                 color: theme.scaffoldBackgroundColor,
                 border: Border(top: BorderSide(color: theme.dividerColor)),
               ),
-             child: Row(
-               children: [
-                 Expanded(
-                   child: OutlinedButton(
-                     onPressed: _isLoading ? null : () => context.pop(),
-                     child: const Text('Cancel'),
-                   ),
-                 ),
-                 const SizedBox(width: 16),
-                 Expanded(
-                   child: FilledButton(
-                     onPressed: (_isLoading ||
-                                  _nameController.text.isEmpty ||
-                                  _selectedIds.isEmpty ||
-                                  _groupImage == null)
-                         ? null
-                         : _createGroup,
-                     child: _isLoading
-                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                         : const Text('Create Group'),
-                   ),
-                 ),
-               ],
-             ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : () => context.pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed:
+                          (_isLoading ||
+                              _nameController.text.isEmpty ||
+                              // Relax validation if communityId is set
+                              ((kCommunityId == null) && _selectedIds.isEmpty) ||
+                              _groupImage == null)
+                          ? null
+                          : _createGroup,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(kCommunityId != null ? 'Create Group' : 'Create Group'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
         ],
       ),
     );

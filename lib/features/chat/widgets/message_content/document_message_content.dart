@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:diaspora_nearby/models/message.dart';
+import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:diaspora_nearby/features/chat/widgets/document_viewer_screen.dart';
 
 class DocumentMessageContent extends StatelessWidget {
@@ -21,40 +21,46 @@ class DocumentMessageContent extends StatelessWidget {
     final isSending = message.status == 'sending';
 
     return InkWell(
-      onTap: isSending ? null : () async {
-        final docUrl = message.documentUrl ?? message.imageUrl;
-        if (docUrl != null) {
-          final url = docUrl;
-          final isPdf = message.documentName?.toLowerCase().endsWith('.pdf') ?? 
-                        url.toLowerCase().contains('.pdf') ?? false;
+      onTap: isSending
+          ? null
+          : () async {
+              final docUrl = message.documentUrl ?? message.imageUrl;
+              if (docUrl != null) {
+                final url = docUrl;
+                final isPdf =
+                    message.documentName?.toLowerCase().endsWith('.pdf') ??
+                    url.toLowerCase().contains('.pdf') ??
+                    false;
 
-          if (isPdf) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => DocumentViewerScreen(
-                  url: url,
-                  fileName: message.documentName ?? 'Document',
-                ),
-                fullscreenDialog: true,
-              ),
-            );
-          } else {
-            // Non-PDF files open externally
-            final uri = Uri.parse(url);
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            } else {
-              debugPrint('Could not launch $url');
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Could not open document')),
-                );
+                if (isPdf) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DocumentViewerScreen(
+                        url: url,
+                        fileName: message.documentName ?? 'Document',
+                      ),
+                      fullscreenDialog: true,
+                    ),
+                  );
+                } else {
+                  // Non-PDF files open externally
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    debugPrint('Could not launch $url');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open document'),
+                        ),
+                      );
+                    }
+                  }
+                }
               }
-            }
-          }
-        }
-      },
+            },
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -94,7 +100,9 @@ class DocumentMessageContent extends StatelessWidget {
                     fileName,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: isOwn ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+                      color: isOwn
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.onSurface,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -103,8 +111,8 @@ class DocumentMessageContent extends StatelessWidget {
                   Text(
                     isSending ? 'Uploading...' : 'Tap to open',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: isOwn 
-                          ? theme.colorScheme.onPrimary.withValues(alpha: 0.7) 
+                      color: isOwn
+                          ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
                           : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),

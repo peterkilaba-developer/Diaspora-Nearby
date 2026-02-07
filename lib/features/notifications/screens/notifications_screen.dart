@@ -18,7 +18,7 @@ class NotificationsScreen extends StatelessWidget {
               size: 64,
               color: Theme.of(context).disabledColor,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'No notifications yet',
               style: TextStyle(color: Theme.of(context).hintColor),
@@ -29,4 +29,3 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 }
-

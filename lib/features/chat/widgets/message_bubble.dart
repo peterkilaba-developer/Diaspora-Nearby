@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/message.dart';
+import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 import 'message_content/text_message_content.dart';
 import 'message_content/image_message_content.dart';
@@ -25,8 +25,10 @@ class MessageBubble extends ConsumerWidget {
   final Function(String)? onReplyTap; // Callback to jump to message
   final VoidCallback? onLongPress; // Add callback for long press
   final VoidCallback? onRetry; // Callback to retry sending failed messages
-  final Message? repliedMessage; // The message being replied to (if replyTo is set)
-  final bool isHighlighted; // Whether the message is currently highlighted (from "Jump to Message")
+  final Message?
+  repliedMessage; // The message being replied to (if replyTo is set)
+  final bool
+  isHighlighted; // Whether the message is currently highlighted (from "Jump to Message")
   final bool showAvatar; // Show avatar for group chats, hide for DMs
 
   const MessageBubble({
@@ -76,35 +78,39 @@ class MessageBubble extends ConsumerWidget {
       background: Container(
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 20),
-        child: Icon(
-          LucideIcons.reply,
-          color: theme.colorScheme.primary,
-        ),
+        child: Icon(LucideIcons.reply, color: theme.colorScheme.primary),
       ),
       child: Padding(
         padding: EdgeInsets.only(
           top: 4,
-          bottom: message.reactions != null && message.reactions!.isNotEmpty ? 24 : 4,
+          bottom: message.reactions != null && message.reactions!.isNotEmpty
+              ? 24
+              : 4,
           left: isOwn ? 0 : 8,
           right: isOwn ? 8 : 0,
         ),
         child: Consumer(
           builder: (context, ref, child) {
-             // [FIX] Fetch profile data at the top level of the bubble
-             final profileAsync = ref.watch(userProfileByIdProvider(message.senderId));
-             final profile = profileAsync.value;
+            // [FIX] Fetch profile data at the top level of the bubble
+            final profileAsync = ref.watch(
+              userProfileByIdProvider(message.senderId),
+            );
+            final profile = profileAsync.value;
 
             return Row(
-              mainAxisAlignment: isOwn ? MainAxisAlignment.end : MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start, // [FIX] Align avatar to top
+              mainAxisAlignment: isOwn
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start, // [FIX] Align avatar to top
               children: [
                 // Avatar for incoming messages (only in group chats, not DMs)
                 // Now uses fetched profile data
                 if (!isOwn && showAvatar) ...[
-                   _buildAvatar(context, theme, profile),
-                   const SizedBox(width: 8),
+                  _buildAvatar(context, theme, profile),
+                  const SizedBox(width: 8),
                 ],
-                
+
                 Flexible(
                   child: Container(
                     constraints: BoxConstraints(
@@ -122,315 +128,457 @@ class MessageBubble extends ConsumerWidget {
                               onLongPress: onLongPress,
                               child: Stack(
                                 children: [
-                                    AnimatedContainer(
+                                  AnimatedContainer(
                                     duration: const Duration(milliseconds: 300),
-                                    padding: EdgeInsets.zero, // [FIX] Ensure full bleed for media
-                                    clipBehavior: Clip.antiAlias, // Clip children to border radius
+                                    padding: EdgeInsets
+                                        .zero, // [FIX] Ensure full bleed for media
+                                    clipBehavior: Clip
+                                        .antiAlias, // Clip children to border radius
                                     decoration: BoxDecoration(
                                       color: isHighlighted
-                                          ? theme.colorScheme.primary.withOpacity(0.4)
+                                          ? theme.colorScheme.primary
+                                                .withOpacity(0.4)
                                           : (isOwn
-                                              ? theme.colorScheme.primary 
-                                              : theme.cardColor),
+                                                ? theme.colorScheme.primary
+                                                : theme.cardColor),
                                       borderRadius: BorderRadius.only(
                                         topLeft: const Radius.circular(16),
                                         topRight: const Radius.circular(16),
-                                        bottomLeft: Radius.circular(isOwn ? 16 : 4),
-                                        bottomRight: Radius.circular(isOwn ? 4 : 16),
+                                        bottomLeft: Radius.circular(
+                                          isOwn ? 16 : 4,
+                                        ),
+                                        bottomRight: Radius.circular(
+                                          isOwn ? 4 : 16,
+                                        ),
                                       ),
                                       border: isHighlighted
-                                          ? Border.all(color: theme.colorScheme.primary, width: 1)
+                                          ? Border.all(
+                                              color: theme.colorScheme.primary,
+                                              width: 1,
+                                            )
                                           : null,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min, // Ensure it hugs content
-                                        children: [
-                                          // [FIX] Name and Flag INSIDE the bubble, above content
-                                          if (!isOwn && showAvatar) ...[
-                                             _buildNameAndFlag(context, theme, profile),
-                                          ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize
+                                          .min, // Ensure it hugs content
+                                      children: [
+                                        // [FIX] Name and Flag INSIDE the bubble, above content
+                                        if (!isOwn && showAvatar) ...[
+                                          _buildNameAndFlag(
+                                            context,
+                                            theme,
+                                            profile,
+                                          ),
+                                        ],
 
-                                      // Forwarded indicator
-                                      if (message.forwarded == true)
+                                        // Forwarded indicator
+                                        if (message.forwarded == true)
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              12,
+                                              8,
+                                              12,
+                                              4,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  LucideIcons.cornerUpRight,
+                                                  size: 12,
+                                                  color: isOwn
+                                                      ? theme
+                                                            .colorScheme
+                                                            .onPrimary
+                                                            .withValues(
+                                                              alpha: 0.7,
+                                                            )
+                                                      : theme
+                                                            .colorScheme
+                                                            .onSurfaceVariant,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Forwarded',
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: isOwn
+                                                            ? theme
+                                                                  .colorScheme
+                                                                  .onPrimary
+                                                                  .withValues(
+                                                                    alpha: 0.7,
+                                                                  )
+                                                            : theme
+                                                                  .colorScheme
+                                                                  .onSurfaceVariant,
+                                                        fontStyle:
+                                                            FontStyle.italic,
+                                                        fontSize: 11,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
+                                        // Reply preview
+                                        if (repliedMessage != null)
+                                          GestureDetector(
+                                            onTap: () => onReplyTap?.call(
+                                              repliedMessage!.id,
+                                            ),
+                                            child: Container(
+                                              margin: const EdgeInsets.fromLTRB(
+                                                12,
+                                                8,
+                                                12,
+                                                4,
+                                              ),
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: isOwn
+                                                    ? theme
+                                                          .colorScheme
+                                                          .onPrimary
+                                                          .withValues(
+                                                            alpha: 0.15,
+                                                          )
+                                                    : theme.colorScheme.primary
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          ),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: IntrinsicHeight(
+                                                child: Row(
+                                                  children: [
+                                                    // Vertical bar
+                                                    Container(
+                                                      width: 3,
+                                                      decoration: BoxDecoration(
+                                                        color: theme
+                                                            .colorScheme
+                                                            .primary,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              2,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            repliedMessage!
+                                                                .senderName,
+                                                            style: theme
+                                                                .textTheme
+                                                                .bodySmall
+                                                                ?.copyWith(
+                                                                  color: isOwn
+                                                                      ? theme
+                                                                            .colorScheme
+                                                                            .onPrimary
+                                                                      : theme
+                                                                            .colorScheme
+                                                                            .primary,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 2,
+                                                          ),
+                                                          _buildReplyContentSnippet(
+                                                            theme,
+                                                            repliedMessage!,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    // Optional small image thumbnail
+                                                    if (repliedMessage!
+                                                            .imageUrl !=
+                                                        null) ...[
+                                                      const SizedBox(width: 8),
+                                                      ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              4,
+                                                            ),
+                                                        child: Image.network(
+                                                          repliedMessage!
+                                                              .imageUrl!,
+                                                          width: 30,
+                                                          height: 30,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (
+                                                                context,
+                                                                error,
+                                                                stackTrace,
+                                                              ) => const Icon(
+                                                                LucideIcons
+                                                                    .image,
+                                                                size: 16,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                        // Content
+                                        _buildMessageContent(context),
+                                        const SizedBox(height: 4),
+
+                                        // Footer (Time, Edits, Status)
                                         Padding(
-                                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                                          padding: const EdgeInsets.fromLTRB(
+                                            12,
+                                            0,
+                                            12,
+                                            8,
+                                          ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Icon(
-                                                LucideIcons.cornerUpRight,
-                                                size: 12,
-                                                color: isOwn
-                                                    ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                                                    : theme.colorScheme.onSurfaceVariant,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'Forwarded',
-                                                style: theme.textTheme.bodySmall?.copyWith(
-                                                  color: isOwn
-                                                      ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                                                      : theme.colorScheme.onSurfaceVariant,
-                                                  fontStyle: FontStyle.italic,
-                                                  fontSize: 11,
+                                              if (message.edited == true) ...[
+                                                Text(
+                                                  'edited',
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: isOwn
+                                                            ? theme
+                                                                  .colorScheme
+                                                                  .onPrimary
+                                                                  .withValues(
+                                                                    alpha: 0.7,
+                                                                  )
+                                                            : theme
+                                                                  .colorScheme
+                                                                  .onSurfaceVariant,
+                                                        fontSize: 10,
+                                                        fontStyle:
+                                                            FontStyle.italic,
+                                                      ),
                                                 ),
+                                                const SizedBox(width: 4),
+                                              ],
+                                              Text(
+                                                _formatTime(message.timestamp),
+                                                style: theme.textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      color: isOwn
+                                                          ? theme
+                                                                .colorScheme
+                                                                .onPrimary
+                                                                .withValues(
+                                                                  alpha: 0.7,
+                                                                )
+                                                          : theme
+                                                                .colorScheme
+                                                                .onSurfaceVariant,
+                                                      fontSize: 11,
+                                                    ),
                                               ),
+                                              if (isOwn &&
+                                                  message.status != null) ...[
+                                                const SizedBox(width: 4),
+                                                _buildStatusIcon(
+                                                  context,
+                                                  message.status!,
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ),
-                                      
-                                      // Reply preview
-                                      if (repliedMessage != null)
-                                        GestureDetector(
-                                          onTap: () => onReplyTap?.call(repliedMessage!.id),
-                                          child: Container(
-                                            margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: isOwn
-                                                  ? theme.colorScheme.onPrimary.withValues(alpha: 0.15)
-                                                  : theme.colorScheme.primary.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: IntrinsicHeight(
-                                              child: Row(
-                                                children: [
-                                                  // Vertical bar
-                                                  Container(
-                                                    width: 3,
-                                                    decoration: BoxDecoration(
-                                                      color: theme.colorScheme.primary,
-                                                      borderRadius: BorderRadius.circular(2),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text(
-                                                          repliedMessage!.senderName,
-                                                          style: theme.textTheme.bodySmall?.copyWith(
-                                                            color: isOwn 
-                                                                ? theme.colorScheme.onPrimary 
-                                                                : theme.colorScheme.primary,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 2),
-                                                        _buildReplyContentSnippet(theme, repliedMessage!),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  // Optional small image thumbnail
-                                                  if (repliedMessage!.imageUrl != null) ...[
-                                                    const SizedBox(width: 8),
-                                                    ClipRRect(
-                                                      borderRadius: BorderRadius.circular(4),
-                                                      child: Image.network(
-                                                        repliedMessage!.imageUrl!,
-                                                        width: 30,
-                                                        height: 30,
-                                                        fit: BoxFit.cover,
-                                                        errorBuilder: (context, error, stackTrace) => const Icon(LucideIcons.image, size: 16),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        
-                                      // Content
-                                      _buildMessageContent(context),
-                                      const SizedBox(height: 4),
-                                      
-                                      // Footer (Time, Edits, Status)
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (message.edited == true) ...[
-                                            Text(
-                                              'edited',
-                                              style: theme.textTheme.bodySmall?.copyWith(
-                                                color: isOwn
-                                                    ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                                                    : theme.colorScheme.onSurfaceVariant,
-                                                fontSize: 10,
-                                                fontStyle: FontStyle.italic,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                          ],
-                                          Text(
-                                            _formatTime(message.timestamp),
-                                            style: theme.textTheme.bodySmall?.copyWith(
-                                              color: isOwn
-                                                  ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                                                  : theme.colorScheme.onSurfaceVariant,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                          if (isOwn && message.status != null) ...[
-                                            const SizedBox(width: 4),
-                                            _buildStatusIcon(context, message.status!),
-                                          ],
-                                        ],
-                                      ),
+                                      ],
                                     ),
-                                    ],
                                   ),
-                                ),
-                                
-                                // Loading Overlay
-                                if (message.status == 'sending')
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      ignoring: false, // Catch touches
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.3),
-                                          borderRadius: BorderRadius.only(
-                                            topLeft: const Radius.circular(16),
-                                            topRight: const Radius.circular(16),
-                                            bottomLeft: Radius.circular(isOwn ? 16 : 4),
-                                            bottomRight: Radius.circular(isOwn ? 4 : 16),
+
+                                  // Loading Overlay
+                                  if (message.status == 'sending')
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        ignoring: false, // Catch touches
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(
+                                              0.3,
+                                            ),
+                                            borderRadius: BorderRadius.only(
+                                              topLeft: const Radius.circular(
+                                                16,
+                                              ),
+                                              topRight: const Radius.circular(
+                                                16,
+                                              ),
+                                              bottomLeft: Radius.circular(
+                                                isOwn ? 16 : 4,
+                                              ),
+                                              bottomRight: Radius.circular(
+                                                isOwn ? 4 : 16,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 3, 
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          alignment: Alignment.center,
+                                          child: const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 3,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      
-                      // Reactions Display
-                      if (message.reactions != null && message.reactions!.isNotEmpty)
-                        _buildReactions(theme),
-                        
-                      // Retry Button
-                      if (isOwn && message.status == 'error' && onRetry != null)
-                        _buildRetryButton(),
-                    ],
+                          ],
+                        ),
+
+                        // Reactions Display
+                        if (message.reactions != null &&
+                            message.reactions!.isNotEmpty)
+                          _buildReactions(theme),
+
+                        // Retry Button
+                        if (isOwn &&
+                            message.status == 'error' &&
+                            onRetry != null)
+                          _buildRetryButton(),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        }),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
   // [FIX] Helper to build name and flag inside bubble
-  Widget _buildNameAndFlag(BuildContext context, ThemeData theme, dynamic profile) {
-      final countryCode = profile?.currentLocation?.countryCode 
-          ?? profile?.hostCountryCode 
-          ?? profile?.hostLocation.countryCode;
-      
-      final flag = _getCountryFlag(countryCode);
-      final displayName = profile?.fullName ?? senderName ?? 'Unknown';
+  Widget _buildNameAndFlag(
+    BuildContext context,
+    ThemeData theme,
+    dynamic profile,
+  ) {
+    final countryCode =
+        profile?.currentLocation?.countryCode ??
+        profile?.hostCountryCode ??
+        profile?.hostLocation.countryCode;
 
-      return GestureDetector(
-        onTap: () {
-          context.push('/profile/${message.senderId}');
-        },
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.transparent, // [FIX] Made transparent as requested
-            borderRadius: const BorderRadius.only(
-               topLeft: Radius.circular(16), // Match bubble radius
-               topRight: Radius.circular(16),
-            ), 
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), // [FIX] Adjusted padding
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (flag.isNotEmpty) ...[
-                Text(
-                  flag,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(width: 4),
-              ],
-              // Use Flexible to prevent overflow
-              Flexible(
-                child: Text(
-                  displayName,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: isOwn 
-                        ? theme.colorScheme.onPrimary 
-                        : theme.colorScheme.primary, 
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+    final flag = _getCountryFlag(countryCode);
+    final displayName = profile?.fullName ?? senderName ?? 'Unknown';
+
+    return GestureDetector(
+      onTap: () {
+        context.push('/profile/${message.senderId}');
+      },
+      child: Container(
+        // [FIX] Removed width: double.infinity to allow bubble to hug content
+        decoration: const BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
           ),
         ),
-      );
+        padding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 6,
+        ), // [FIX] Adjusted padding
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (flag.isNotEmpty) ...[
+              Text(flag, style: const TextStyle(fontSize: 14)),
+              const SizedBox(width: 4),
+            ],
+            // Use Flexible to prevent overflow
+            Flexible(
+              child: Text(
+                displayName,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: isOwn
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildAvatar(BuildContext context, ThemeData theme, dynamic profile) {
-      final imageUrl = profile?.profileImage ?? message.senderImage;
-      if (imageUrl == null) return const SizedBox(width: 32, height: 32);
+    final imageUrl = profile?.profileImage ?? message.senderImage;
+    if (imageUrl == null) return const SizedBox(width: 32, height: 32);
 
-      return GestureDetector(
-        onTap: () {
-          context.push('/profile/${message.senderId}');
-        },
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: NetworkImage(imageUrl),
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              onBackgroundImageError: (exception, stackTrace) {},
-              child: null,
-            ),
-            if (message.adminImage != null)
-              Positioned(
-                bottom: -2,
-                right: -2,
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.surface,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundImage: NetworkImage(message.adminImage!),
-                    backgroundColor: theme.colorScheme.primaryContainer,
-                    onBackgroundImageError: (exception, stackTrace) {},
+    return GestureDetector(
+      onTap: () {
+        context.push('/profile/${message.senderId}');
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundImage: NetworkImage(imageUrl),
+            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            onBackgroundImageError: (exception, stackTrace) {},
+            child: null,
+          ),
+          if (message.adminImage != null)
+            Positioned(
+              bottom: -2,
+              right: -2,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: theme.colorScheme.surface,
+                    width: 1.5,
                   ),
                 ),
+                child: CircleAvatar(
+                  radius: 8,
+                  backgroundImage: NetworkImage(message.adminImage!),
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  onBackgroundImageError: (exception, stackTrace) {},
+                ),
               ),
-          ],
-        ),
-      );
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMessageContent(BuildContext context) {
@@ -449,9 +597,15 @@ class MessageBubble extends ConsumerWidget {
       case 'dsp_transfer': // [NEW]
         return DSPTransferMessageContent(message: message, isOwn: isOwn);
       case 'money-transfer':
-        return TextMessageContent(message: message, isOwn: isOwn); // Placeholder
+        return TextMessageContent(
+          message: message,
+          isOwn: isOwn,
+        ); // Placeholder
       case 'system':
-        return TextMessageContent(message: message, isOwn: isOwn); // Placeholder
+        return TextMessageContent(
+          message: message,
+          isOwn: isOwn,
+        ); // Placeholder
       default:
         return TextMessageContent(message: message, isOwn: isOwn);
     }
@@ -460,8 +614,10 @@ class MessageBubble extends ConsumerWidget {
   Widget _buildStatusIcon(BuildContext context, String status) {
     final theme = Theme.of(context);
     IconData icon;
-    Color color = isOwn ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant;
-    
+    Color color = isOwn
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSurfaceVariant;
+
     switch (status) {
       case 'sending':
         icon = LucideIcons.clock;
@@ -486,63 +642,66 @@ class MessageBubble extends ConsumerWidget {
 
     return Icon(icon, size: 12, color: color.withOpacity(0.8));
   }
-  
+
   Widget _buildDeletedMessage(ThemeData theme) {
-     return Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-           color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-           borderRadius: BorderRadius.circular(8),
-           border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
-        ),
-        child: Row(
-           mainAxisSize: MainAxisSize.min,
-           children: [
-              Icon(LucideIcons.trash2, size: 14, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(width: 8),
-              Text('This message was deleted', style: TextStyle(fontStyle: FontStyle.italic, color: theme.colorScheme.onSurfaceVariant, fontSize: 12)),
-           ],
-        ),
-     );
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            LucideIcons.trash2,
+            size: 14,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'This message was deleted',
+            style: TextStyle(
+              fontStyle: FontStyle.italic,
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildReactions(ThemeData theme) {
-      return Positioned(
-        bottom: -20,
-        right: isOwn ? null : 0, 
-        left: isOwn ? 0 : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.colorScheme.surface, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 2,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: message.reactions!.map((r) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Text(
-                   '${r.emoji} ${showAvatar ? r.userIds.length : (r.userIds.length > 1 ? r.userIds.length : '')}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface,
-                      fontSize: 12,
-                    ),
-                ),
-              );
-            }).toList(),
-          ),
+    return Positioned(
+      bottom: -20,
+      right: isOwn ? null : 0,
+      left: isOwn ? 0 : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
-      );
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: message.reactions!.map((r) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                '${r.emoji} ${showAvatar ? r.userIds.length : (r.userIds.length > 1 ? r.userIds.length : '')}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                  fontSize: 12,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
   }
 
   Widget _buildRetryButton() {
@@ -603,9 +762,11 @@ class MessageBubble extends ConsumerWidget {
       children: [
         if (mediaIcon != null) ...[
           Icon(
-            mediaIcon, 
-            size: 10, 
-            color: isOwn ? theme.colorScheme.onPrimary.withValues(alpha: 0.7) : theme.colorScheme.onSurfaceVariant
+            mediaIcon,
+            size: 10,
+            color: isOwn
+                ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
+                : theme.colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 4),
         ],

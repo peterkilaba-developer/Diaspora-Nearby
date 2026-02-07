@@ -8,12 +8,13 @@ import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/models/event_data.dart';
-import 'package:diaspora_nearby/providers/global_search_provider.dart';
-import 'package:diaspora_nearby/providers/view_mode_provider.dart';
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
-import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
+import 'package:diaspora_nearby/features/events/models/event_data.dart';
+import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
+import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
+
 
 class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
@@ -76,16 +77,18 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     // View Mode from localized provider
     final viewMode = ref.watch(eventsViewModeProvider);
     final isGlobalViewMode = viewMode == ViewMode.global;
-    
+
     // User Home Country Code
     final userHomeCountryCode = userProfile?.homeCountryCode;
 
     // Repo Logic:
     // 1. Home View: isGlobal=false, homeCountryCode=userHomeCountryCode
     // 2. Global View: isGlobal=true, homeCountryCode=null (Fetch all, filter locally to EXCLUDE home)
-    
+
     final bool repoIsGlobal = isGlobalViewMode;
-    final String? repoCountryCode = isGlobalViewMode ? null : userHomeCountryCode;
+    final String? repoCountryCode = isGlobalViewMode
+        ? null
+        : userHomeCountryCode;
 
     if (user == null) {
       return const Center(child: CircularProgressIndicator());
@@ -93,12 +96,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
+
       // AppBar is handled by ScaffoldWithNavBar, so we just build the body.
       // IF this screen is nested in ScaffoldWithNavBar, it provides the AppBar logic.
       // However, if we need custom AppBar behavior inside the tab, we might need nested Navigator or just body content.
       // Based on `ScaffoldWithNavBar` analysis, it has a global AppBar that reflects `currentScreen == 'events'`.
-      // It sets `showSearchField: true` for Chats, etc. 
-      // User requested "app bar with search bar" for Events too. 
+      // It sets `showSearchField: true` for Chats, etc.
+      // User requested "app bar with search bar" for Events too.
       // In `ScaffoldWithNavBar`, `showSearchField: currentScreen != 'events'` was present in previous code? No, let's verify.
       // In `ScaffoldWithNavBar.dart` viewed earlier: `showSearchField: currentScreen != 'events'` at line 127.
       // This disables search for Events screen in the MAIN app bar.
@@ -112,7 +116,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       // Wait, if `ScaffoldWithNavBar` has `showSearchField: currentScreen != 'events'`, then currently there is NO search bar for events.
       // I WILL NEED TO UPDATE `ScaffoldWithNavBar` to remove that restriction.
       // For now, I will build the body assuming the search term comes from `globalSearchProvider`.
-      
       body: StreamBuilder<List<Event>>(
         stream: eventRepo.getEvents(
           isGlobal: repoIsGlobal,
@@ -132,17 +135,17 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
           // Filter Logic
           final filteredEvents = allEvents.where((event) {
-            
             // 1. View Mode Strict Filtering
             if (isGlobalViewMode) {
-               // Global View: Show all events (unfiltered)
-               // Previously we excluded local events, but user wants unfiltered.
+              // Global View: Show all events (unfiltered)
+              // Previously we excluded local events, but user wants unfiltered.
             } else {
-               // Home View: is already filtered by Repo to only match homeCountryCode.
-               // Double check just in case repo returns stray data?
-               if (userHomeCountryCode != null && event.homeCountryCode != userHomeCountryCode) {
-                 return false;
-               }
+              // Home View: is already filtered by Repo to only match homeCountryCode.
+              // Double check just in case repo returns stray data?
+              if (userHomeCountryCode != null &&
+                  event.homeCountryCode != userHomeCountryCode) {
+                return false;
+              }
             }
 
             // 2. Search Filter
@@ -159,17 +162,22 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(LucideIcons.calendar, size: 64, color: Theme.of(context).disabledColor),
+                  Icon(
+                    LucideIcons.calendar,
+                    size: 64,
+                    color: Theme.of(context).disabledColor,
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                      searchQuery.isNotEmpty
-                          ? 'No events match "$searchQuery".'
-                          : (isGlobalViewMode 
-                              ? 'No global community events found.' 
-                              : (userHomeCountryCode != null 
-                                  ? 'No community events found for $userHomeCountryCode.' 
-                                  : 'No local community events found.')),
-                      style: TextStyle(color: Theme.of(context).hintColor)),
+                    searchQuery.isNotEmpty
+                        ? 'No events match "$searchQuery".'
+                        : (isGlobalViewMode
+                              ? 'No global community events found.'
+                              : (userHomeCountryCode != null
+                                    ? 'No community events found for $userHomeCountryCode.'
+                                    : 'No local community events found.')),
+                    style: TextStyle(color: Theme.of(context).hintColor),
+                  ),
                 ],
               ),
             );
@@ -185,10 +193,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final event = filteredEvents[index];
-                final isAttending = event.attendees?.contains(user.uid) ?? false;
-                final isInterested = event.interested?.contains(user.uid) ?? false;
+                final isAttending =
+                    event.attendees?.contains(user.uid) ?? false;
+                final isInterested =
+                    event.interested?.contains(user.uid) ?? false;
                 final isCreator = event.creatorId == user.uid;
-                
+
                 return EventCard(
                   event: event,
                   isAttending: isAttending,
@@ -197,15 +207,38 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   userLocation: _currentPosition,
                   searchQuery: searchQuery, // Pass the search query
                   onEditTap: () {
-                     context.push('/events/edit/${event.id}', extra: event);
+                    context.push('/events/edit/${event.id}', extra: event);
                   },
                   onInterestToggle: () async {
                     try {
                       final shouldAdd = !isInterested;
-                      await eventRepo.toggleInterest(event.id, user.uid, shouldAdd);
+                      await eventRepo.toggleInterest(
+                        event.id,
+                        user.uid,
+                        shouldAdd,
+                      );
+
+                      // [NEW] Track Interest
+                      if (shouldAdd) {
+                        // Only reward for showing interest, not removing
+                        ref
+                            .read(pointsServiceProvider)
+                            .trackExplorationReward(
+                              user.uid,
+                              'action_event_interest',
+                            )
+                            .then((rewarded) {
+                          if (rewarded && mounted) {
+                            showExplorationRewardToast(context, message: 'Interested in Event');
+                          }
+                        });
+                      }
+
                       setState(() {});
                     } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
                     }
                   },
                 );
@@ -217,6 +250,3 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     );
   }
 }
-
-
-

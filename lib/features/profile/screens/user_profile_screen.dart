@@ -17,7 +17,7 @@ import 'package:diaspora_nearby/models/location.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
-import 'package:diaspora_nearby/models/community_data.dart' as comm_model;
+import 'package:diaspora_nearby/features/community/models/community_data.dart' as comm_model;
 import 'package:diaspora_nearby/models/event_data.dart' as event_model;
 import 'package:diaspora_nearby/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';

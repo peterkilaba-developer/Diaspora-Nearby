@@ -28,6 +28,16 @@
         "onlineStatus": {
             ".read": "auth != null",
             ".write": "auth != null"
+        },
+        "lastRead": {
+            "$userId": {
+                ".read": "auth != null && auth.uid == $userId",
+                ".write": "auth != null && auth.uid == $userId"
+            }
+        },
+        "discoverableChats": {
+            ".read": "auth != null",
+            ".write": "auth != null"
         }
     }
 }

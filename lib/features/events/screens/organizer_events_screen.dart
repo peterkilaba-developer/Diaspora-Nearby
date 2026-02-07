@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:diaspora_nearby/features/shared/widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:diaspora_nearby/models/event_data.dart';
+import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 
 class OrganizerEventsScreen extends StatelessWidget {
@@ -34,20 +33,20 @@ class OrganizerEventsList extends ConsumerWidget {
     }
 
     final eventRepo = ref.watch(eventRepositoryProvider);
-    
+
     return StreamBuilder<List<Event>>(
       stream: eventRepo.getEvents(
-          isGlobal: true, 
-          userCommunityMemberships: [],
-          currentUserId: user.uid,
-          homeCountryCode: null
+        isGlobal: true,
+        userCommunityMemberships: [],
+        currentUserId: user.uid,
+        homeCountryCode: null,
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         final events = snapshot.data ?? [];
-        
+
         final myEvents = events.where((e) => e.creatorId == user.uid).toList();
 
         if (myEvents.isEmpty) {
@@ -61,19 +60,19 @@ class OrganizerEventsList extends ConsumerWidget {
           itemBuilder: (context, index) {
             final event = myEvents[index];
             return EventCard(
-              event: event, 
+              event: event,
               isAttending: true,
               isCreator: true, // [NEW] Enable Edit Button
               onTap: () {
-                 // Navigate to detail
-                 context.push('/events/${event.id}', extra: event);
+                // Navigate to detail
+                context.push('/events/${event.id}', extra: event);
               },
               onEditTap: () {
-                 // User requested "edit or republish... as new event"
-                 // For now, we allow editing the EXISTING event. 
-                 // If they want to "republish as new", we might need a separate "Clone" action later.
-                 // But editing the date of an ended event effectively republishes it.
-                 context.push('/events/edit/${event.id}', extra: event);
+                // User requested "edit or republish... as new event"
+                // For now, we allow editing the EXISTING event.
+                // If they want to "republish as new", we might need a separate "Clone" action later.
+                // But editing the date of an ended event effectively republishes it.
+                context.push('/events/edit/${event.id}', extra: event);
               },
             );
           },
@@ -82,6 +81,3 @@ class OrganizerEventsList extends ConsumerWidget {
     );
   }
 }
-
-
-

@@ -5,13 +5,14 @@ import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
-import 'package:diaspora_nearby/features/chat/providers/chat_identity_provider.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/organization/widgets/organization_chat_preview.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:diaspora_nearby/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 
 class OrganizationDetailScreen extends ConsumerStatefulWidget {
   final String orgId;
@@ -24,16 +25,18 @@ class OrganizationDetailScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<OrganizationDetailScreen> createState() => _OrganizationDetailScreenState();
+  ConsumerState<OrganizationDetailScreen> createState() =>
+      _OrganizationDetailScreenState();
 }
 
-class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScreen> {
+class _OrganizationDetailScreenState
+    extends ConsumerState<OrganizationDetailScreen> {
   Map<String, dynamic>? _orgData;
   ProfileData? _superAdminProfile;
   bool _isLoading = true;
   bool _isFollowing = false;
   bool _isFollowLoading = false;
-  
+
   // User location for navigation
   double? _userLat;
   double? _userLng;
@@ -46,11 +49,12 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
     _loadUserLocation();
   }
 
-  Future<void> _loadData() async {
-    if (_orgData != null && _orgData!['id'] == widget.orgId) {
-       setState(() => _isLoading = false);
+  Future<void> _loadData({bool force = false}) async {
+    if (!force && _orgData != null && _orgData!['id'] == widget.orgId) {
+      setState(() => _isLoading = false);
+      return;
     }
-    
+
     try {
       final repo = ref.read(organizationRepositoryProvider);
       final data = await repo.getOrganization(widget.orgId);
@@ -60,16 +64,18 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
           _isLoading = false;
         });
         _checkIfFollowing();
-        
+
         // Fetch Super Admin Profile
         if (data != null && data['superAdminId'] != null) {
           try {
-            final profile = await ref.read(profileRepositoryProvider).getUserProfile(data['superAdminId']);
+            final profile = await ref
+                .read(profileRepositoryProvider)
+                .getUserProfile(data['superAdminId']);
             if (mounted) {
-               setState(() => _superAdminProfile = profile);
+              setState(() => _superAdminProfile = profile);
             }
-          } catch(e) {
-             debugPrint('Error fetching super admin: $e');
+          } catch (e) {
+            debugPrint('Error fetching super admin: $e');
           }
         }
       }
@@ -84,35 +90,44 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
     if (chatId != null) {
       context.push('/chats/$chatId');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat not available')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Chat not available')));
     }
   }
 
   Future<void> _checkIfFollowing() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null || _orgData == null) return;
-    
-    // Check if user is in followers list of org (if we had real-time stream)
-    // Or check if userChats contains the org chat ID
-    // For now, let's check the local copy of org data if we can trust it? 
-    // No, `followers` might not be in the cached view unless we fetched it.
-    
-    // Better: Check Firestore 'followers' array
+
     final followers = List<String>.from(_orgData!['followers'] ?? []);
     if (followers.contains(user.uid)) {
-       if (mounted) setState(() => _isFollowing = true);
+      if (mounted) setState(() => _isFollowing = true);
+      return;
+    }
+
+    // Fallback: Check RTDB userChats
+    try {
+      final chatId = _orgData!['chatId'] as String?;
+      if (chatId != null) {
+        final userChatRef = FirebaseDatabase.instance.ref('userChats/${user.uid}/$chatId');
+        final snapshot = await userChatRef.get();
+        if (snapshot.exists) {
+           if (mounted) setState(() => _isFollowing = true);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking RTDB sequence: $e');
     }
   }
 
   Future<void> _toggleFollow() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
-    
+
     setState(() => _isFollowLoading = true);
     final repo = ref.read(organizationRepositoryProvider);
-    
+
     try {
       if (_isFollowing) {
         await repo.unfollowOrganization(widget.orgId, user.uid);
@@ -121,11 +136,14 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
         await repo.followOrganization(widget.orgId, user.uid);
         if (mounted) setState(() => _isFollowing = true);
       }
+      
+      // Force reload to verify state
+      await _loadData(force: true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isFollowLoading = false);
@@ -134,9 +152,12 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
 
   void _launchUrl(String? url) async {
     if (url == null || url.isEmpty) return;
-    
+
     Uri uri;
-    if (url.startsWith('http') || url.startsWith('https') || url.startsWith('tel') || url.startsWith('mailto')) {
+    if (url.startsWith('http') ||
+        url.startsWith('https') ||
+        url.startsWith('tel') ||
+        url.startsWith('mailto')) {
       uri = Uri.parse(url);
     } else {
       // Default to https for websites without scheme
@@ -150,7 +171,7 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
         // Some devices might not report canLaunchUrl properly for tel:
         // Try launching anyway if it's a tel link
         if (url.startsWith('tel')) {
-           await launchUrl(uri);
+          await launchUrl(uri);
         }
       }
     } catch (e) {
@@ -161,13 +182,13 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
   Future<void> _loadUserLocation() async {
     try {
       final userProfile = ref.read(userProfileProvider).value;
-      
-      if (userProfile?.hostLocation?.geometry?.location != null) {
+
+      if (userProfile?.hostLocation.geometry?.location != null) {
         if (mounted) {
-           setState(() {
-              _userLat = userProfile!.hostLocation!.geometry!.location.lat;
-              _userLng = userProfile.hostLocation!.geometry!.location.lng;
-           });
+          setState(() {
+            _userLat = userProfile!.hostLocation.geometry!.location.lat;
+            _userLng = userProfile.hostLocation.geometry!.location.lng;
+          });
         }
       }
     } catch (e) {
@@ -177,23 +198,24 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
 
   Future<void> _openDirections() async {
     if (_orgData == null) return;
-    
+
     final location = _orgData!['location'] as Map<String, dynamic>?;
     if (location == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location coordinates not available')),
-        );
-        return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location coordinates not available')),
+      );
+      return;
     }
 
     final lat = location['lat'];
     final lng = location['lng'];
-    
+
     if (lat == null || lng == null) return;
 
     String url;
     if (_userLat != null && _userLng != null) {
-      url = 'https://www.google.com/maps/dir/?api=1&origin=$_userLat,$_userLng&destination=$lat,$lng&travelmode=driving';
+      url =
+          'https://www.google.com/maps/dir/?api=1&origin=$_userLat,$_userLng&destination=$lat,$lng&travelmode=driving';
     } else {
       url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
     }
@@ -203,9 +225,9 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not open maps')));
       }
     }
   }
@@ -233,10 +255,11 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
     final city = _orgData!['city'] as String?;
     final state = _orgData!['state'] as String?;
     final country = _orgData!['country'] as String?;
-    
+
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.uid;
-    final isAdmin = (_orgData!['admins'] as List?)?.contains(currentUserId) == true || 
-                    _orgData!['superAdminId'] == currentUserId;
+    final isAdmin =
+        (_orgData!['admins'] as List?)?.contains(currentUserId) == true ||
+        _orgData!['superAdminId'] == currentUserId;
 
     return Scaffold(
       body: CustomScrollView(
@@ -262,11 +285,15 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
                     child: CircleAvatar(
                       radius: 50,
                       backgroundColor: Colors.white,
-                      backgroundImage: (logoUrl != null && logoUrl.isNotEmpty) 
-                          ? NetworkImage(logoUrl) 
+                      backgroundImage: (logoUrl != null && logoUrl.isNotEmpty)
+                          ? NetworkImage(logoUrl)
                           : null,
                       child: (logoUrl == null || logoUrl.isEmpty)
-                          ? Icon(LucideIcons.building2, size: 40, color: theme.colorScheme.primary)
+                          ? Icon(
+                              LucideIcons.building2,
+                              size: 40,
+                              color: theme.colorScheme.primary,
+                            )
                           : null,
                     ),
                   ),
@@ -276,128 +303,163 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), // Added bottom padding
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                100,
+              ), // Added bottom padding
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   // Title and Type
-                   Row(
-                     children: [
-                       Expanded(
-                         child: Column(
-                           crossAxisAlignment: CrossAxisAlignment.start,
-                           children: [
-                             Text(
-                               name,
-                               style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                             ),
-                             const SizedBox(height: 4),
-                             Text(
-                               type,
-                               style: theme.textTheme.titleMedium?.copyWith(
-                                 color: theme.colorScheme.primary,
-                                 fontWeight: FontWeight.w600,
-                               ),
-                             ),
-                           ],
-                         ),
-                       ),
-                     ],
-                   ),
-                   const SizedBox(height: 24),
+                  // Title and Type
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              type,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
-                   // Action Buttons Row
-                   Row(
-                     children: [
-                       // Follow Button
-                       Expanded(
-                         child: OutlinedButton.icon(
-                           onPressed: _isFollowLoading ? null : _toggleFollow,
-                           icon: _isFollowLoading 
-                               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                               : Icon(_isFollowing ? LucideIcons.check : LucideIcons.plus),
-                           label: Text(_isFollowing ? 'Following' : 'Follow'),
-                           style: OutlinedButton.styleFrom(
-                             minimumSize: const Size(double.infinity, 54),
-                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                           ),
-                         ),
-                       ),
-                       const SizedBox(width: 12),
-                       // Message Button
-                       Expanded(
-                         child: FilledButton.icon(
-                           onPressed: _openChat,
-                           icon: const Icon(LucideIcons.messageCircle),
-                           label: const Text('Message'),
-                           style: FilledButton.styleFrom(
-                             minimumSize: const Size(double.infinity, 54),
-                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                           ),
-                         ),
-                       ),
-                     ],
-                   ),
-                   const SizedBox(height: 24),
+                  // Action Buttons Row
+                  Row(
+                    children: [
+                      // Follow Button
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isFollowLoading ? null : _toggleFollow,
+                          icon: _isFollowLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  _isFollowing
+                                      ? LucideIcons.check
+                                      : LucideIcons.plus,
+                                ),
+                          label: Text(_isFollowing ? 'Following' : 'Follow'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 54),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Message Button
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _openChat,
+                          icon: const Icon(LucideIcons.messageCircle),
+                          label: const Text('Message'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 54),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
-                   // [NEW] Congratulatory Message
-                   // Embedded Chat Preview (Visible to all if chatId exists)
-                   if (_orgData!['chatId'] != null)
-                     Padding(
-                       padding: const EdgeInsets.only(bottom: 24.0),
-                       child: OrganizationChatPreview(
-                         chatId: _orgData!['chatId'],
-                         title: 'Organization Board',
-                       ),
-                     ),
+                  // [NEW] Congratulatory Message
+                  // Embedded Chat Preview (Visible to all if chatId exists)
+                  if (_orgData!['chatId'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24.0),
+                      child: OrganizationChatPreview(
+                        chatId: _orgData!['chatId'],
+                        title: 'Organization Board',
+                      ),
+                    ),
 
-                   // [NEW] Super Admin Card
-                   if (_superAdminProfile != null) ...[
-                      const Text('Leadership', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      _buildSuperAdminCard(theme),
-                      const SizedBox(height: 32),
-                   ],
+                  // [NEW] Super Admin Card
+                  if (_superAdminProfile != null) ...[
+                    const Text(
+                      'Leadership',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSuperAdminCard(theme),
+                    const SizedBox(height: 32),
+                  ],
 
-                   // Info Cards
-                   const Text('About', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 12),
-                   Text(
-                     description.isNotEmpty ? description : 'No description available.',
-                     style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-                   ),
-                   const SizedBox(height: 32),
+                  // Info Cards
+                  const Text(
+                    'About',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    description.isNotEmpty
+                        ? description
+                        : 'No description available.',
+                    style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                  ),
+                  const SizedBox(height: 32),
 
-                   const Text('Contact & Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 12),
-                   
-                   if (city != null)
-                     _buildInfoTile(
-                        LucideIcons.mapPin, 
-                        'Location', 
-                        [
-                          city,
-                          if (state != null) state,
-                          if (country != null) country,
-                        ].join(', '),
-                        onTap: () => _openDirections(),
-                     ),
-                   
-                   if (website != null && website.isNotEmpty)
-                     _buildInfoTile(
-                        LucideIcons.globe, 
-                        'Website', 
-                        website,
-                        onTap: () => _launchUrl(website)
-                     ),
-                   
-                   if (phone != null && phone.isNotEmpty)
-                     _buildInfoTile(
-                        LucideIcons.phone, 
-                        'Phone', 
-                        phone,
-                        onTap: () => _launchUrl('tel:$phone')
-                     ),
+                  const Text(
+                    'Contact & Location',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (city != null)
+                    _buildInfoTile(
+                      LucideIcons.mapPin,
+                      'Location',
+                      [
+                        city,
+                        if (state != null) state,
+                        if (country != null) country,
+                      ].join(', '),
+                      onTap: () => _openDirections(),
+                    ),
+
+                  if (website != null && website.isNotEmpty)
+                    _buildInfoTile(
+                      LucideIcons.globe,
+                      'Website',
+                      website,
+                      onTap: () => _launchUrl(website),
+                    ),
+
+                  if (phone != null && phone.isNotEmpty)
+                    _buildInfoTile(
+                      LucideIcons.phone,
+                      'Phone',
+                      phone,
+                      onTap: () => _launchUrl('tel:$phone'),
+                    ),
                 ],
               ),
             ),
@@ -407,7 +469,12 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String label, String value, {VoidCallback? onTap}) {
+  Widget _buildInfoTile(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+  }) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -430,111 +497,137 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey)),
-                    Text(value, style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: onTap != null ? theme.colorScheme.primary : null,
-                    )),
+                    Text(
+                      label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      value,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: onTap != null ? theme.colorScheme.primary : null,
+                      ),
+                    ),
                   ],
                 ),
               ),
               if (onTap != null)
-                Icon(LucideIcons.externalLink, size: 14, color: theme.colorScheme.primary),
+                Icon(
+                  LucideIcons.externalLink,
+                  size: 14,
+                  color: theme.colorScheme.primary,
+                ),
             ],
           ),
         ),
       ),
     );
   }
+
   Widget _buildSuperAdminCard(ThemeData theme) {
     if (_superAdminProfile == null) return const SizedBox.shrink();
 
     // Determine flag (Home Country)
     String flag = '';
     if (_superAdminProfile!.homeCountryCode != null) {
-       final country = country_data.getCountryByCode(_superAdminProfile!.homeCountryCode!);
-       if (country != null) flag = country.flag;
+      final country = country_data.getCountryByCode(
+        _superAdminProfile!.homeCountryCode!,
+      );
+      if (country != null) flag = country.flag;
     }
 
     // Determine Title
     String title = 'Super Admin';
     if (_orgData != null && _orgData!['adminTitles'] is Map) {
-       final titles = _orgData!['adminTitles'];
-       if (titles != null && titles[_superAdminProfile!.uid] != null) {
-          title = titles[_superAdminProfile!.uid];
-       }
+      final titles = _orgData!['adminTitles'];
+      if (titles != null && titles[_superAdminProfile!.uid] != null) {
+        title = titles[_superAdminProfile!.uid];
+      }
     }
 
     return Card(
       elevation: 0,
-       margin: EdgeInsets.zero,
+      margin: EdgeInsets.zero,
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-           context.push('/profile/${_superAdminProfile!.uid}');
+          context.push('/profile/${_superAdminProfile!.uid}');
         },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8), 
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
-               // Avatar
-               CircleAvatar(
-                 radius: 28,
-                 backgroundColor: Colors.grey.shade200,
-                 backgroundImage: _superAdminProfile!.profileImage.isNotEmpty
-                     ? CachedNetworkImageProvider(_superAdminProfile!.profileImage)
-                     : null,
-                 child: _superAdminProfile!.profileImage.isEmpty
-                     ? Text(
-                         _superAdminProfile!.firstName.isNotEmpty ? _superAdminProfile!.firstName[0].toUpperCase() : '?',
-                         style: TextStyle(
-                           fontSize: 20,
-                           fontWeight: FontWeight.bold,
-                           color: theme.colorScheme.primary,
-                         ),
-                       )
-                     : null,
-               ),
-               const SizedBox(width: 12),
-               // Info
-               Expanded(
-                 child: Column(
-                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                      // Name + Flag
-                      Row(
-                        children: [
-                           if (flag.isNotEmpty)
-                             Padding(
-                               padding: const EdgeInsets.only(right: 6),
-                               child: Text(flag, style: const TextStyle(fontSize: 16)),
-                             ),
-                           Flexible(
-                             child: Text(
-                               '${_superAdminProfile!.firstName} ${_superAdminProfile!.lastName}',
-                               style: theme.textTheme.titleMedium?.copyWith(
-                                 fontWeight: FontWeight.w600,
-                               ),
-                               maxLines: 1,
-                               overflow: TextOverflow.ellipsis,
-                             ),
-                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      // Title
-                      Text(
-                        title,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                           color: theme.colorScheme.onSurfaceVariant,
+              // Avatar
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.grey.shade200,
+                backgroundImage: _superAdminProfile!.profileImage.isNotEmpty
+                    ? CachedNetworkImageProvider(
+                        _superAdminProfile!.profileImage,
+                      )
+                    : null,
+                child: _superAdminProfile!.profileImage.isEmpty
+                    ? Text(
+                        _superAdminProfile!.firstName.isNotEmpty
+                            ? _superAdminProfile!.firstName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
                         ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Name + Flag
+                    Row(
+                      children: [
+                        if (flag.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Text(
+                              flag,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        Flexible(
+                          child: Text(
+                            '${_superAdminProfile!.firstName} ${_superAdminProfile!.lastName}',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // Title
+                    Text(
+                      title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                   ],
-                 ),
-               ),
-               // Chevron
-               Icon(LucideIcons.chevronRight, size: 20, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                    ),
+                  ],
+                ),
+              ),
+              // Chevron
+              Icon(
+                LucideIcons.chevronRight,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+              ),
             ],
           ),
         ),
@@ -542,4 +635,3 @@ class _OrganizationDetailScreenState extends ConsumerState<OrganizationDetailScr
     );
   }
 }
-

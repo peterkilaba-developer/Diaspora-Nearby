@@ -24,10 +24,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.fileName,
-          style: const TextStyle(fontSize: 16),
-        ),
+        title: Text(widget.fileName, style: const TextStyle(fontSize: 16)),
         leading: IconButton(
           icon: const Icon(LucideIcons.x),
           onPressed: () => Navigator.pop(context),
@@ -36,14 +33,16 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
           IconButton(
             icon: const Icon(LucideIcons.zoomIn),
             onPressed: () {
-              _pdfViewerController.zoomLevel = _pdfViewerController.zoomLevel + 0.5;
+              _pdfViewerController.zoomLevel =
+                  _pdfViewerController.zoomLevel + 0.5;
             },
           ),
           IconButton(
             icon: const Icon(LucideIcons.zoomOut),
             onPressed: () {
               if (_pdfViewerController.zoomLevel > 1) {
-                _pdfViewerController.zoomLevel = _pdfViewerController.zoomLevel - 0.5;
+                _pdfViewerController.zoomLevel =
+                    _pdfViewerController.zoomLevel - 0.5;
               }
             },
           ),

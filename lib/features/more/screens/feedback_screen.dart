@@ -6,6 +6,8 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
+
 
 class FeedbackScreen extends ConsumerStatefulWidget {
   const FeedbackScreen({super.key});
@@ -42,29 +44,37 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       if (mounted) {
         // [NEW] Award 10 DSP for first feedback
         if (user != null) {
-          final rewarded = await ref.read(pointsServiceProvider).trackExplorationReward(user.uid, 'action_feedback_submitted', points: 10);
+          final rewarded = await ref
+              .read(pointsServiceProvider)
+              .trackExplorationReward(
+                user.uid,
+                'action_feedback_submitted',
+                points: 10,
+              );
           if (rewarded && mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text('🎉 +10 DSP Earned for your feedback!'), backgroundColor: Colors.green),
-             );
+            showExplorationRewardToast(
+              context,
+              message: 'Feedback Submitted',
+              points: 10,
+            );
           } else {
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text('Thank you for your feedback!')),
-             );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Thank you for your feedback!')),
+            );
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Thank you for your feedback!')),
           );
         }
-        
+
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending feedback: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error sending feedback: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -74,7 +84,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Send Feedback'),
@@ -92,69 +102,91 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                     const Text(
-                       'We value your feedback!',
-                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                     ),
-                     const SizedBox(height: 8),
-                     Text(
-                       'Help us improve Diaspora Nearby by sharing your thoughts, suggestions, or reporting issues.',
-                       style: TextStyle(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7)),
-                     ),
-                     // [NEW] Reward Info
-                     const SizedBox(height: 12),
-                     Container(
-                       padding: const EdgeInsets.all(12),
-                       decoration: BoxDecoration(
-                         color: Colors.green.withOpacity(0.1),
-                         borderRadius: BorderRadius.circular(8),
-                         border: Border.all(color: Colors.green.withOpacity(0.3)),
-                       ),
-                       child: Row(
-                         children: [
-                           const Icon(LucideIcons.sparkles, color: Colors.green, size: 20),
-                           const SizedBox(width: 8),
-                           Expanded(
-                             child: Text(
-                               'Earn 10 DSP for your first feedback submission!',
-                               style: TextStyle(
-                                 color: Colors.green.shade700,
-                                 fontWeight: FontWeight.w600,
-                                 fontSize: 13,
-                               ),
-                             ),
-                           ),
-                         ],
-                       ),
-                     ),
+                    const Text(
+                      'We value your feedback!',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Help us improve Diaspora Nearby by sharing your thoughts, suggestions, or reporting issues.',
+                      style: TextStyle(
+                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
+                          0.7,
+                        ),
+                      ),
+                    ),
+                    // [NEW] Reward Info
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD700).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFFFD700).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            LucideIcons.sparkles,
+                            color: Color(0xFFFFD700),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Earn 10 DSP for your first feedback submission!',
+                              style: TextStyle(
+                                color: Colors.orange.shade300,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
-                     const SizedBox(height: 24),
-                     TextField(
-                       controller: _contentController,
-                       maxLines: 8,
-                       textCapitalization: TextCapitalization.sentences,
-                       decoration: InputDecoration(
-                         hintText: 'Type your feedback here...',
-                         border: OutlineInputBorder(
-                           borderRadius: BorderRadius.circular(12),
-                         ),
-                         filled: true,
-                         fillColor: theme.colorScheme.surface,
-                       ),
-                     ),
-                     const SizedBox(height: 24),
-                     ElevatedButton(
-                       onPressed: _isSubmitting ? null : _submitFeedback,
-                       style: ElevatedButton.styleFrom(
-                         padding: const EdgeInsets.symmetric(vertical: 16),
-                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                         backgroundColor: theme.colorScheme.primary,
-                         foregroundColor: theme.colorScheme.onPrimary,
-                       ),
-                       child: _isSubmitting 
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _contentController,
+                      maxLines: 8,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: 'Type your feedback here...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: theme.colorScheme.surface,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: _isSubmitting ? null : _submitFeedback,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                           : const Text('Submit Feedback'),
-                     ),
+                    ),
                   ],
                 ),
               ),

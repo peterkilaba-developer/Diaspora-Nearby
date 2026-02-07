@@ -21,8 +21,46 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true; // [DEBUG] Allow public read for listing during reset
       allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        isOwner(userId) || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'trustScore', 
+          'isIdentityVerified', 
+          'blockedByCount', 
+          'vouchedByCount'
+        ])
+      );
       allow delete: if true; // [DEBUG] Allow PUBLIC deletion for reset from Login Screen
+      
+      // [NEW] Relationships Subcollection
+      // Allow READ for any authenticated user to see shared connections
+      // Write remains owner-only
+      match /relationships/{relationshipId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // [NEW] Relationship Requests Collection
+    match /relationship_requests/{requestId} {
+      // Allow reading if you are the sender OR the receiver
+      allow read: if isAuthenticated() && (
+        resource.data.toUserId == request.auth.uid || 
+        resource.data.fromUserId == request.auth.uid
+      );
+      // Create only if you are the sender
+      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+      // Update status (accept/reject) or cancel
+      allow update: if isAuthenticated() && (
+        resource.data.toUserId == request.auth.uid ||
+        resource.data.fromUserId == request.auth.uid
+      );
+    }
+    
+    // --- Chats Collection ---
+    match /chats/{chatId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
     
     // --- Communities Collection ---
@@ -38,6 +76,12 @@ service cloud.firestore {
       allow update: if isAuthenticated(); 
       allow create: if isAuthenticated(); // Allow creation of new communities
       allow delete: if true; // [DEBUG] Allow PUBLIC deletion
+
+      // [FIX] Allow access to treasury sub-collection
+      match /treasury/{document=**} {
+        allow read: if true;
+        allow write: if isAuthenticated();
+      }
     }
     
     // --- Events Collection ---
@@ -64,48 +108,137 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if true;
       allow create: if isAuthenticated();
-      allow update: if isOrgAdmin(orgId);
+      // Allow admins to update anything
+      // Allow any authenticated user to update ONLY the followers list
+      allow update: if isOrgAdmin(orgId) || (
+        isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers'])
+      );
       allow delete: if true; // [DEBUG]
     }
+    
     
     // --- Radio Station Health ---
-    match /radio_station_health/{id} {
-      allow read: if true;
-      allow write: if false; // System only
-      allow delete: if true; // [DEBUG] Allow radio deletion
+    match /radio_station_health/{stationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated(); // Allow users to report success/failure
+      allow delete: if true; // [DEBUG]
+    }
+    
+    // --- User Radio Data ---
+    match /users/{userId}/radio_history/{stationId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    match /users/{userId}/radio_favorites/{stationId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
     }
 
     // --- DSP Points System ---
     
-    // --- DSP Points System ---
-    
-    // User Points: Explicitly check auth uid matches doc id
+    // User Points
     match /user_points/{userId} {
-      allow read: if true; // [DEBUG]
-      allow write: if request.auth != null; // [TEMPORARY] Allow transfers
-      allow delete: if true; // [DEBUG]
+      allow read, write: if request.auth != null;
     }
 
-    // Points Transactions: Check data ownership
+    // Points Transactions
     match /points_transactions/{transactionId} {
-      allow read: if true; // [DEBUG]
-      // allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null; // [TEMPORARY] Allow transfers
+      allow read, write: if request.auth != null;
     }
 
-    // Referral Codes: Read all, create/update own
+    // Referral Codes
     match /referral_codes/{code} {
-      allow read: if true; // [DEBUG]
-      // allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null; // Allow updating usage counts
-      allow delete: if true; // [DEBUG]
+      allow read, write: if request.auth != null;
+    }
+
+    // System Stats
+    match /system_stats/{statId} {
+      allow read, write: if request.auth != null;
     }
 
     // --- Feedback ---
     match /feedback/{feedbackId} {
       allow create: if isAuthenticated();
       allow read: if false; // Only admins/system needs to read
+    }
+
+    // --- Bereavement Fund ---
+    match /bereavement_memberships/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+
+    match /bereavement_claims/{claimId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // --- Trust & Verification ---
+    match /trust_ratings/{ratingId} {
+      allow read: if isAuthenticated();
+      // Allow creation/update if the authenticating user is the one leaving the rating
+      allow create, update: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+    }
+
+    match /field_verifications/{verificationId} {
+      allow read: if isAuthenticated();
+      // Allow creation if the authenticating user is the verifier
+      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+    }
+
+    match /vouches/{vouchId} {
+       allow read: if isAuthenticated();
+       // Allow write (create/update) for the voucher
+       allow write: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+    }
+
+    match /trust_data/{userId} {
+       allow read: if isAuthenticated();
+       // [TEMPORARY] Allow any authenticated user to update trust data
+       // This is required because trust score recalculation currently happens client-side 
+       // and can be triggered by other users (e.g., after rating/vouching).
+       // TODO: Move trust score calculation to a Cloud Function for security.
+       allow write: if isAuthenticated(); 
+    }
+
+    match /interest_registrations/{registrationId} {
+      allow read, write: if isAuthenticated() && registrationId.matches('^' + request.auth.uid + '_.*');
+    }
+
+    // --- Governance ---
+    match /governance/{unitId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /governance_votes/{voteId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+         (request.resource.data.voterId == request.auth.uid || resource.data.voterId == request.auth.uid);
+    }
+
+    // --- Trust & Verification (Additional Collections) ---
+    match /qr_exchanges/{exchangeId} {
+      allow read: if isAuthenticated();
+      // Allow write if the authenticating user is either the 'from' or 'to' user 
+      // primarily to support repeated scans and double-writes.
+      allow write: if isAuthenticated() && (
+        request.resource.data.fromUid == request.auth.uid || 
+        request.resource.data.toUid == request.auth.uid
+      );
+    }
+
+    match /check_ins/{checkInId} {
+      allow read: if isAuthenticated();
+      // Allow write (create/update) for the user who is checking in
+      allow write: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
     }
 
     // Default deny for all other collections

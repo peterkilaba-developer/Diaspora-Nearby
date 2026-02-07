@@ -9,7 +9,7 @@ import 'package:syncfusion_pdfviewer_web/src/pdfjs.dart';
 
 class SyncfusionFlutterPdfViewerPlugin extends PdfViewerPlatform {
   final Settings _settings = Settings(scale: 1.0);
-  Map<String, PdfJsDoc?> _documentRepo = Map<String, PdfJsDoc?>();
+  final Map<String, PdfJsDoc?> _documentRepo = <String, PdfJsDoc?>{};
 
   /// Registers this class as the default instance of [PdfViewerPlatform].
   static void registerWith(Registrar registrar) {
@@ -38,7 +38,7 @@ class SyncfusionFlutterPdfViewerPlugin extends PdfViewerPlatform {
   @override
   Future<Int32List?> getPagesHeight(String documentID) async {
     int pageCount = _documentRepo[documentID]?.numPages ?? 0;
-    Int32List pagesHeight = new Int32List(pageCount);
+    Int32List pagesHeight = Int32List(pageCount);
     for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
       PdfJsPage page =
           await (_documentRepo[documentID]!.getPage(pageNumber)).toDart;
@@ -52,7 +52,7 @@ class SyncfusionFlutterPdfViewerPlugin extends PdfViewerPlatform {
   @override
   Future<Int32List?> getPagesWidth(String documentID) async {
     int pageCount = _documentRepo[documentID]?.numPages ?? 0;
-    Int32List pagesWidth = new Int32List(pageCount);
+    Int32List pagesWidth = Int32List(pageCount);
     for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
       PdfJsPage page =
           await (_documentRepo[documentID]!.getPage(pageNumber)).toDart;
@@ -80,6 +80,7 @@ class SyncfusionFlutterPdfViewerPlugin extends PdfViewerPlatform {
   }
 
   /// Gets the image's bytes information of the specified portion of the page.
+  @override
   Future<Uint8List?> getTileImage(
     int pageNumber,
     double scale,
@@ -149,9 +150,9 @@ class SyncfusionFlutterPdfViewerPlugin extends PdfViewerPlatform {
     String documentID,
   ) async {
     final web.HTMLCanvasElement canvas = web.HTMLCanvasElement();
-    final _viewport = page.getViewport(_settings);
+    final viewport0 = page.getViewport(_settings);
     viewport = page.getViewport(
-      Settings()..scale = (fullWidth / _viewport.width),
+      Settings()..scale = (fullWidth / viewport0.width),
     );
 
     canvas

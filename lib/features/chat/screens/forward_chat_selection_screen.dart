@@ -3,19 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'dart:ui'; // Import for ImageFilter
-import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
-import 'package:diaspora_nearby/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_card.dart';
 import 'package:diaspora_nearby/features/chat/screens/chats_list_screen.dart'; // Import for provider
+import 'package:diaspora_nearby/features/chat/models/message.dart'; // [NEW]
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart'; // [NEW]
 
 class ForwardChatSelectionScreen extends ConsumerStatefulWidget {
-  const ForwardChatSelectionScreen({super.key});
+  final Message message; // [NEW]
+  const ForwardChatSelectionScreen({
+    super.key, 
+    required this.message, // [NEW]
+  });
 
   @override
-  ConsumerState<ForwardChatSelectionScreen> createState() => _ForwardChatSelectionScreenState();
+  ConsumerState<ForwardChatSelectionScreen> createState() =>
+      _ForwardChatSelectionScreenState();
 }
 
-class _ForwardChatSelectionScreenState extends ConsumerState<ForwardChatSelectionScreen> {
+class _ForwardChatSelectionScreenState
+    extends ConsumerState<ForwardChatSelectionScreen> {
   final Set<String> _selectedChatIds = {};
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -35,7 +41,8 @@ class _ForwardChatSelectionScreenState extends ConsumerState<ForwardChatSelectio
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      extendBodyBehindAppBar: true, // Enable content behind app bar for glass effect
+      extendBodyBehindAppBar:
+          true, // Enable content behind app bar for glass effect
       appBar: AppBar(
         backgroundColor: Colors.transparent, // Transparent for glass effect
         elevation: 0,
@@ -45,7 +52,9 @@ class _ForwardChatSelectionScreenState extends ConsumerState<ForwardChatSelectio
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              color: theme.colorScheme.surface.withOpacity(0.8), // Semi-transparent background
+              color: theme.colorScheme.surface.withOpacity(
+                0.8,
+              ), // Semi-transparent background
             ),
           ),
         ),
@@ -77,7 +86,10 @@ class _ForwardChatSelectionScreenState extends ConsumerState<ForwardChatSelectio
                 hintText: 'Search chats...',
                 hintStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                 prefixIcon: const Icon(LucideIcons.search, size: 20),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none, // Remove visible border
@@ -88,10 +100,13 @@ class _ForwardChatSelectionScreenState extends ConsumerState<ForwardChatSelectio
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: greenColor.withOpacity(0.5)), // Subtle focus
+                  borderSide: BorderSide(
+                    color: greenColor.withOpacity(0.5),
+                  ), // Subtle focus
                 ),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                fillColor: theme.colorScheme.surfaceContainerHighest
+                    .withOpacity(0.3),
               ),
             ),
           ),
@@ -104,134 +119,180 @@ class _ForwardChatSelectionScreenState extends ConsumerState<ForwardChatSelectio
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, stack) => Center(child: Text('Error: $error')),
             data: (chats) {
-                 final filteredChats = _searchQuery.isEmpty
-                    ? chats
-                    : chats.where((chat) {
-                        return chat.name.toLowerCase().contains(_searchQuery.toLowerCase());
-                      }).toList();
+              final filteredChats = _searchQuery.isEmpty
+                  ? chats
+                  : chats.where((chat) {
+                      return chat.name.toLowerCase().contains(
+                        _searchQuery.toLowerCase(),
+                      );
+                    }).toList();
 
-                if (filteredChats.isEmpty) {
-                  return Center(child: Text('No chats found'));
-                }
+              if (filteredChats.isEmpty) {
+                return const Center(child: Text('No chats found'));
+              }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.only(top: 120, left: 8, right: 8, bottom: 120), // Increased bottom padding for floating bar
-                  itemCount: filteredChats.length,
-                  itemBuilder: (context, index) {
-                    final chat = filteredChats[index];
-                    final isSelected = _selectedChatIds.contains(chat.id);
+              return ListView.builder(
+                padding: const EdgeInsets.only(
+                  top: 120,
+                  left: 8,
+                  right: 8,
+                  bottom: 120,
+                ), // Increased bottom padding for floating bar
+                itemCount: filteredChats.length,
+                itemBuilder: (context, index) {
+                  final chat = filteredChats[index];
+                  final isSelected = _selectedChatIds.contains(chat.id);
 
-                    return GestureDetector(
-                      onTap: () {
-                         setState(() {
-                           if (isSelected) {
-                             _selectedChatIds.remove(chat.id);
-                           } else {
-                             _selectedChatIds.add(chat.id);
-                           }
-                         });
-                      },
-                      child: Stack(
-                        children: [
-                          // Base Chat Card (pixel perfect reuse)
-                          AbsorbPointer( // Absorb tap so GestureDetector above handles it
-                            child: ChatCard(
-                              chat: chat,
-                              searchQuery: _searchQuery.isNotEmpty ? _searchQuery : null,
-                              onTap: () {}, // Handled by parent
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _selectedChatIds.remove(chat.id);
+                        } else {
+                          _selectedChatIds.add(chat.id);
+                        }
+                      });
+                    },
+                    child: Stack(
+                      children: [
+                        // Base Chat Card (pixel perfect reuse)
+                        AbsorbPointer(
+                          // Absorb tap so GestureDetector above handles it
+                          child: ChatCard(
+                            chat: chat,
+                            searchQuery: _searchQuery.isNotEmpty
+                                ? _searchQuery
+                                : null,
+                            onTap: () {}, // Handled by parent
+                          ),
+                        ),
+
+                        // Selection Overlay
+                        if (isSelected)
+                          Positioned.fill(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                vertical: 4,
+                              ), // Match ChatCard margin if any?
+                              decoration: BoxDecoration(
+                                color: greenColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(
+                                  12,
+                                ), // Match typical card radius
+                                border: Border.all(color: greenColor, width: 2),
+                              ),
                             ),
                           ),
-                          
-                          // Selection Overlay
-                          if (isSelected) 
-                             Positioned.fill(
-                               child: Container(
-                                 margin: const EdgeInsets.symmetric(vertical: 4), // Match ChatCard margin if any?
-                                 decoration: BoxDecoration(
-                                    color: greenColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12), // Match typical card radius
-                                    border: Border.all(color: greenColor, width: 2),
-                                 ),
-                               ),
-                             ),
 
-                           // Checkmark Badge
-                           Positioned(
-                              right: 16,
-                              bottom: 18, // Aligned with bottom row (last message) to avoid timestamp overlap
-                              child: Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isSelected ? greenColor : Colors.transparent,
-                                  border: Border.all(
-                                    color: isSelected ? greenColor : theme.colorScheme.outline.withOpacity(0.3),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: isSelected
-                                    ? const Icon(LucideIcons.check, size: 16, color: Colors.white)
-                                    : null,
+                        // Checkmark Badge
+                        Positioned(
+                          right: 16,
+                          bottom:
+                              18, // Aligned with bottom row (last message) to avoid timestamp overlap
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected
+                                  ? greenColor
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected
+                                    ? greenColor
+                                    : theme.colorScheme.outline.withOpacity(
+                                        0.3,
+                                      ),
+                                width: 2,
                               ),
-                           ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              }
-            ),
-          
+                            ),
+                            child: isSelected
+                                ? const Icon(
+                                    LucideIcons.check,
+                                    size: 16,
+                                    color: Colors.white,
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+
           // Sticky Bottom Bar
           if (_selectedChatIds.isNotEmpty)
-             Positioned(
-               bottom: 0,
-               left: 0,
-               right: 0,
-               child: ClipRRect(
-                 child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      color: theme.colorScheme.surface.withOpacity(0.8), 
-                      child: SafeArea(
-                        top: false, // Ensure top doesn't add padding if keyboard moves it?
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                context.pop(_selectedChatIds.toList());
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: greenColor,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: Text(
-                                'Forward to ${_selectedChatIds.length} chat${_selectedChatIds.length > 1 ? 's' : ''}',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    color: theme.colorScheme.surface.withOpacity(0.8),
+                    child: SafeArea(
+                      top:
+                          false, // Ensure top doesn't add padding if keyboard moves it?
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final chatRepo = ref.read(chatRepositoryProvider);
+                              final chats = _selectedChatIds.toList();
+                              
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Forwarding message...')),
+                              );
+
+                              // Forward to all selected chats
+                              for (final chatId in chats) {
+                                await chatRepo.sendTextMessage(
+                                  chatId,
+                                  widget.message.content,
+                                  type: widget.message.type, // Preserve type
+                                  metadata: widget.message.metadata, // Preserve metadata
+                                );
+                              }
+
+                              if (context.mounted) {
+                                context.pop(); // Close screen
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Forwarded to ${chats.length} chats')),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                               backgroundColor: greenColor,
+                               foregroundColor: Colors.white,
+                               padding: const EdgeInsets.symmetric(vertical: 16),
+                               shape: RoundedRectangleBorder(
+                                 borderRadius: BorderRadius.circular(12),
+                               ),
+                               elevation: 0,
+                             ),
+                            child: Text(
+                              'Forward to ${_selectedChatIds.length} chat${_selectedChatIds.length > 1 ? 's' : ''}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                 ),
-               ),
-             ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
-
-

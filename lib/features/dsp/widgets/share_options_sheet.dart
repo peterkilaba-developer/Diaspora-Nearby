@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
@@ -15,11 +14,15 @@ class ShareOptionsSheet extends StatelessWidget {
     required this.homeCountry,
   });
 
-  void _showPlatformSelector(BuildContext context, String messageSubject, String messageBody) {
+  void _showPlatformSelector(
+    BuildContext context,
+    String messageSubject,
+    String messageBody,
+  ) {
     // Construct the link
     final String link = 'https://diasporanearby.com/invite?code=$referralCode';
     final String whatsappMessage = '$messageBody\n\nSign up here: $link';
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -35,10 +38,7 @@ class ShareOptionsSheet extends StatelessWidget {
             children: [
               const Text(
                 'Share via',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
               Row(
@@ -47,14 +47,15 @@ class ShareOptionsSheet extends StatelessWidget {
                   _buildPlatformButton(
                     context,
                     label: 'WhatsApp',
-                    icon: LucideIcons.messageCircle, // Using generic icon as Lucide doesn't have brand icons
+                    icon: LucideIcons
+                        .messageCircle, // Using generic icon as Lucide doesn't have brand icons
                     color: Colors.green,
                     onTap: () => _launchWhatsApp(context, whatsappMessage),
                   ),
                   _buildPlatformButton(
                     context,
                     label: 'Facebook',
-                    icon: LucideIcons.facebook, 
+                    icon: LucideIcons.facebook,
                     color: Colors.blue,
                     onTap: () => _launchFacebook(context, link),
                   ),
@@ -90,10 +91,7 @@ class ShareOptionsSheet extends StatelessWidget {
             child: Icon(icon, color: color, size: 32),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -102,21 +100,25 @@ class ShareOptionsSheet extends StatelessWidget {
   Future<void> _launchWhatsApp(BuildContext context, String message) async {
     Navigator.pop(context); // Close selector
     // Use externalApplication mode to force open the app
-    final url = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(message)}');
+    final url = Uri.parse(
+      'whatsapp://send?text=${Uri.encodeComponent(message)}',
+    );
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
         // Fallback to web whatsapp if app not installed or fails
-        final webUrl = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+        final webUrl = Uri.parse(
+          'https://wa.me/?text=${Uri.encodeComponent(message)}',
+        );
         if (await canLaunchUrl(webUrl)) {
-             await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
         } else {
-           if (context.mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text('Could not launch WhatsApp')),
-             );
-           }
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not launch WhatsApp')),
+            );
+          }
         }
       }
     } catch (e) {
@@ -127,16 +129,18 @@ class ShareOptionsSheet extends StatelessWidget {
   Future<void> _launchFacebook(BuildContext context, String link) async {
     Navigator.pop(context); // Close selector
     // Facebook sharing usually only takes the URL.
-    final url = Uri.parse('https://www.facebook.com/sharer/sharer.php?u=${Uri.encodeComponent(link)}');
+    final url = Uri.parse(
+      'https://www.facebook.com/sharer/sharer.php?u=${Uri.encodeComponent(link)}',
+    );
     try {
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
         if (context.mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('Could not launch Facebook')),
-           );
-         }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not launch Facebook')),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error launching Facebook: $e');
@@ -161,10 +165,7 @@ class ShareOptionsSheet extends StatelessWidget {
             children: [
               const Text(
                 'Share Invitation',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               IconButton(
                 onPressed: () => context.pop(),
@@ -175,13 +176,10 @@ class ShareOptionsSheet extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Choose how you want to connect:',
-            style: TextStyle(
-              color: Theme.of(context).hintColor,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Theme.of(context).hintColor, fontSize: 14),
           ),
           const SizedBox(height: 20),
-          
+
           // Grid of 4 options
           GridView.count(
             crossAxisCount: 2,
@@ -258,10 +256,7 @@ class ShareOptionsSheet extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.accent.withOpacity(0.3),
-            width: 1,
-          ),
+          border: Border.all(color: AppTheme.accent.withOpacity(0.3), width: 1),
           boxShadow: [
             BoxShadow(
               color: AppTheme.accent.withOpacity(0.05),
@@ -279,20 +274,13 @@ class ShareOptionsSheet extends StatelessWidget {
                 color: AppTheme.accent.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                icon,
-                color: AppTheme.accent,
-                size: 24,
-              ),
+              child: Icon(icon, color: AppTheme.accent, size: 24),
             ),
             const SizedBox(height: 12),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(

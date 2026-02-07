@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:diaspora_nearby/models/message.dart';
+import 'package:diaspora_nearby/features/chat/models/message.dart';
 
 class PendingMessagesNotifier extends Notifier<Map<String, List<Message>>> {
   @override
@@ -10,7 +10,7 @@ class PendingMessagesNotifier extends Notifier<Map<String, List<Message>>> {
   void addMessage(String chatId, Message message) {
     final current = state;
     final messages = current[chatId] ?? [];
-    
+
     state = {
       ...current,
       chatId: [...messages, message],
@@ -27,26 +27,26 @@ class PendingMessagesNotifier extends Notifier<Map<String, List<Message>>> {
       newState.remove(chatId);
       state = newState;
     } else {
-      state = {
-        ...current,
-        chatId: messages,
-      };
+      state = {...current, chatId: messages};
     }
   }
 
   void updateMessageStatus(String chatId, String tempId, String status) {
     final current = state;
     if (!current.containsKey(chatId)) return;
-    
+
     final messages = current[chatId]!.map((m) {
       if (m.id == tempId) {
-         return m.copyWith(status: status);
+        return m.copyWith(status: status);
       }
       return m;
     }).toList();
-    
-    state = { ...current, chatId: messages };
+
+    state = {...current, chatId: messages};
   }
 }
 
-final pendingMessagesProvider = NotifierProvider<PendingMessagesNotifier, Map<String, List<Message>>>(PendingMessagesNotifier.new);
+final pendingMessagesProvider =
+    NotifierProvider<PendingMessagesNotifier, Map<String, List<Message>>>(
+      PendingMessagesNotifier.new,
+    );
