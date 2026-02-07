@@ -19,7 +19,8 @@ class SkeletonLoader extends StatefulWidget {
   State<SkeletonLoader> createState() => _SkeletonLoaderState();
 }
 
-class _SkeletonLoaderState extends State<SkeletonLoader> with SingleTickerProviderStateMixin {
+class _SkeletonLoaderState extends State<SkeletonLoader>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -45,8 +46,12 @@ class _SkeletonLoaderState extends State<SkeletonLoader> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFE0E0E0);
-    final highlightColor = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
+    final baseColor = isDark
+        ? const Color(0xFF1A1A1A)
+        : const Color(0xFFE0E0E0);
+    final highlightColor = isDark
+        ? const Color(0xFF2A2A2A)
+        : const Color(0xFFF5F5F5);
 
     return AnimatedBuilder(
       animation: _animation,
@@ -267,4 +272,3 @@ class SkeletonList extends StatelessWidget {
     );
   }
 }
-

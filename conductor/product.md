@@ -14,13 +14,15 @@ To be the premier social network for connecting individuals with their diaspora 
 
 ### 1. Authentication & Onboarding
 *   Phone Number Authentication (SMS with Autofill)
-*   Profile Creation: Define Home Country (Origin) and Host Country/City (Residence).
+*   Profile Creation: Define Home Country (Origin), Host Country/City (Residence), and Path (Past Locations).
 *   Automatic Community Assignment based on location.
 
-### 2. Networking (Nearby)
-*   **Communities:** View and join diaspora communities.
-*   **Radio:** Stream radio stations from home countries.
-*   **People:** Discover other users nearby (with privacy controls).
+### 2. Networking ($DSP Economy)
+*   **Proof of Activity (PoA):** Earn DSP for messaging, connecting, and contributing value.
+*   **Proof of Community Trust (PoCT):** Reputation-based verification levels (Level 0-3).
+*   **Trust Score:** Dynamic scoring based on identity, activity, and reputation.
+*   **Vouching:** Peer-to-peer trust signals with associated risk/reward.
+*   **Leaderboards:** National competition for Treasury tokenization milestones.
 
 ### 3. Communication (Chat)
 *   **Direct Messaging:** 1-on-1 chats with other users.
@@ -29,14 +31,25 @@ To be the premier social network for connecting individuals with their diaspora 
 *   **Multimedia Support:** Send Text, Photos, Videos, Audio, Documents, and Location.
 *   **Optimized Performance:** Instant messaging with optimistic UI and local caching/offline support.
 
-### 4. Organizations & Businesses
+### 4. Governance (Pillars & Residents)
+*   **Council of Community Pillars:** Voting on community-led projects and treasury allocation.
+*   **Status Tiers**: 6-Tier Trust System (0-100 Range: Low, Basic, Medium, Standard, High).
+*   **TGE Milestones**: 10-Epoch model starting at 10,000 DSP Genesis Gate. TGE Efficiency determined by 10-step decile scale.
+
+### 5. Organizations & Businesses
 *   **Directory:** Browse organizations relevant to the diaspora.
 *   **Management:** Register and manage organizations (Admins).
-*   **Verification:** Admin invitation and verification flows.
+*   **Vetting:** Physical verification and community-driven validation.
 
-### 5. Events
+### 6. Events
 *   Discover and create community events.
 *   Event-based group chats.
+*   Verify Check-in (Proof of Physical Presence).
 
-### 6. Admin Dashboard
+### 7. The Justice System (Safety)
+*   **Penalties:** Automatic DSP deductions for rejection, blocks, and reported spam.
+*   **Moderation:** Community-led flagging and Pillar-level oversight.
+*   **Bereavement Fund:** Community-funded support protocol.
+
+### 8. Admin Dashboard
 *   Tools for overseeing app activity and managing reported content/users.

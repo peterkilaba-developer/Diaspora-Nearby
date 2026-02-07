@@ -126,6 +126,7 @@
       deferredPrompt = e;
       // Optionally, send a message to Flutter that install is available
       console.log('PWA: Install prompt available');
+      window.dispatchEvent(new Event('pwa-install-changed'));
     });
 
     window.addEventListener('appinstalled', (evt) => {
@@ -142,7 +143,13 @@
       const { outcome } = await deferredPrompt.userChoice;
       console.log(`PWA: User response to the install prompt: ${outcome}`);
       deferredPrompt = null;
+      // Dispatch event to update UI
+      window.dispatchEvent(new Event('pwa-install-changed'));
       return outcome === 'accepted';
+    };
+
+    window.isInstallPromptAvailable = function () {
+      return !!deferredPrompt;
     };
   </script>
 </body>

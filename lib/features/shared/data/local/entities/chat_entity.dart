@@ -11,35 +11,40 @@ class ChatEntity {
 
   @Index()
   String? communityId;
-  
+
   String? homeCountryCode;
   String? hostCountryCode;
   String? locationType;
-  
+
   @Index()
   late String type; // 'community' | 'direct' | 'group' | 'event'
-  
+
   late String name;
   String? photoUrl;
-  
+
   // ProfileImage is complex, store as JSON for now
   String? profileImageJson;
 
   List<String>? participants;
   List<String>? admins;
   String? createdBy;
-  
+
   LastMessageEntity? lastMessage;
-  
+
   @Index()
   late int createdAt;
-  
+
   @Index()
   late int updatedAt;
-  
+
   String? eventId;
   int? memberCount;
   String? flag;
+
+  String? description; // [NEW] Added description field
+  
+  // Cache for messages (JSON List of Maps) - Replaces LocalCacheService
+  String? cachedMessagesJson;
 
   // Local preferences
   bool isPinned = false;
@@ -50,6 +55,7 @@ class ChatEntity {
 
 @embedded
 class LastMessageEntity {
+  String? id; // [NEW] Added ID
   String? content;
   int? timestamp;
   String? senderId;

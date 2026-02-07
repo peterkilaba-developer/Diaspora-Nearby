@@ -21,7 +21,7 @@ class SplashScreen extends StatelessWidget {
               height: 128,
             ),
             const SizedBox(height: 24),
-            Text(
+            const Text(
               'Diaspora Nearby',
               style: TextStyle(
                 fontSize: 24,
@@ -30,14 +30,10 @@ class SplashScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            CircularProgressIndicator(
-              color: AppTheme.accent,
-            ),
+            const CircularProgressIndicator(color: AppTheme.accent),
           ],
         ),
       ),
     );
   }
 }
-
-

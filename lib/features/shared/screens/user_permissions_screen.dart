@@ -4,17 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/services/background_location_service.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class UserPermissionsScreen extends ConsumerStatefulWidget {
   const UserPermissionsScreen({super.key});
 
   @override
-  ConsumerState<UserPermissionsScreen> createState() => _UserPermissionsScreenState();
+  ConsumerState<UserPermissionsScreen> createState() =>
+      _UserPermissionsScreenState();
 }
 
-class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> with WidgetsBindingObserver {
+class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
+    with WidgetsBindingObserver {
   bool _locationGranted = false;
   bool _notificationGranted = false;
   bool _backgroundLocationGranted = false;
@@ -45,9 +46,11 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
     try {
       final locationStatus = await Permission.location.status;
       final notificationStatus = await Permission.notification.status;
-      
-      debugPrint('Permission Check - Location: $locationStatus, Notification: $notificationStatus');
-      
+
+      debugPrint(
+        'Permission Check - Location: $locationStatus, Notification: $notificationStatus',
+      );
+
       // Check background location - handle legacy/new Android versions gracefully
       bool backgroundLocationGranted = false;
       try {
@@ -58,9 +61,13 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
 
       if (mounted) {
         setState(() {
-          _locationGranted = kIsWeb ? true : (locationStatus.isGranted || locationStatus.isLimited);
+          _locationGranted = kIsWeb
+              ? true
+              : (locationStatus.isGranted || locationStatus.isLimited);
           _notificationGranted = kIsWeb ? true : notificationStatus.isGranted;
-          _backgroundLocationGranted = kIsWeb ? true : backgroundLocationGranted;
+          _backgroundLocationGranted = kIsWeb
+              ? true
+              : backgroundLocationGranted;
         });
       }
     } catch (e) {
@@ -79,9 +86,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
     } catch (e) {
       debugPrint('Error requesting location: $e');
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Error requesting permission: $e')),
-         );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error requesting permission: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -111,19 +118,18 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
         final status = await Permission.location.request();
         if (!status.isGranted) return;
       }
-      
+
       final status = await Permission.locationAlways.request();
       if (status.isPermanentlyDenied) {
         await openAppSettings();
       }
-     
+
       // We don't need to auto-proceed here immediately if we are going to settings,
       // the resume handler will take care of updating the UI.
       await _checkPermissions();
-      
     } catch (e) {
-       debugPrint('Error requesting background location: $e');
-       // Don't crash, just log
+      debugPrint('Error requesting background location: $e');
+      // Don't crash, just log
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -132,7 +138,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
   Future<void> _proceedToNextScreen() async {
     try {
       // Double check all required permissions
-      if (_locationGranted && _notificationGranted && _backgroundLocationGranted) {
+      if (_locationGranted &&
+          _notificationGranted &&
+          _backgroundLocationGranted) {
         // Proceed to home.
         // We delegate starting the background service to HomeScreen to avoid
         // Android 12+ ForegroundServiceStartNotAllowedException on resume.
@@ -151,12 +159,18 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
   }
 
   void _continue() {
-    final canContinue = kIsWeb || (_locationGranted && _notificationGranted && _backgroundLocationGranted);
+    final canContinue =
+        kIsWeb ||
+        (_locationGranted &&
+            _notificationGranted &&
+            _backgroundLocationGranted);
     if (canContinue) {
       _proceedToNextScreen();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All permissions are required to continue.')),
+        const SnackBar(
+          content: Text('All permissions are required to continue.'),
+        ),
       );
     }
   }
@@ -169,16 +183,23 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 24),
-                    const Icon(LucideIcons.shieldCheck, size: 64, color: Color(0xFF9CAF88)),
+                    Icon(
+                      LucideIcons.shieldCheck,
+                      size: 64,
+                      color: Theme.of(context).primaryColor,
+                    ),
                     const SizedBox(height: 24),
                     const Text(
                       'Permissions Required',
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
@@ -188,60 +209,72 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
                       style: TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                     const SizedBox(height: 32),
-              
+
                     // Notification Permission (First)
                     _buildPermissionItem(
                       title: 'Notifications',
-                      description: 'Stay updated with chat messages and alerts.',
+                      description:
+                          'Stay updated with chat messages and alerts.',
                       icon: LucideIcons.bell,
                       isGranted: _notificationGranted,
                       onPressed: _requestNotifications,
                     ),
-              
+
                     const SizedBox(height: 16),
-              
+
                     // Location Permission (Second - Requires Notifications)
                     _buildPermissionItem(
                       title: 'Location Service',
-                      description: "Required to show nearby. Click on 'While using the app'.",
+                      description:
+                          "Required to show nearby. Click on 'While using the app'.",
                       icon: LucideIcons.mapPin,
                       isGranted: _locationGranted,
                       onPressed: _requestLocation,
-                      isDisabled: !_notificationGranted, // Disabled until Notif granted
+                      isDisabled:
+                          !_notificationGranted, // Disabled until Notif granted
                     ),
-              
+
                     const SizedBox(height: 16),
-              
+
                     // Background Location Permission (Third - Requires Location)
                     if (!kIsWeb)
                       _buildPermissionItem(
                         title: 'Background Location',
-                        description: "Required for alerts. Click on 'Allow all the time' in settings.",
+                        description:
+                            "Required for alerts. Click on 'Allow all the time' in settings.",
                         icon: LucideIcons.map,
                         isGranted: _backgroundLocationGranted,
                         onPressed: _requestBackgroundLocation,
-                        isDisabled: !_locationGranted, // Disabled until Location granted
+                        isDisabled:
+                            !_locationGranted, // Disabled until Location granted
                       ),
-              
+
                     if (kIsWeb)
                       const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                         child: Text(
                           'Note: Background location and app-alerts are managed by your browser settings on the web.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ),
-                    
+
                     const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
-            
+
             // Sticky Continue Button
             Container(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
                 boxShadow: [
@@ -255,16 +288,23 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (kIsWeb || (_locationGranted && _notificationGranted && _backgroundLocationGranted)) 
-                      ? _continue 
+                  onPressed:
+                      (kIsWeb ||
+                          (_locationGranted &&
+                              _notificationGranted &&
+                              _backgroundLocationGranted))
+                      ? _continue
                       : null,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: const Color(0xFF9CAF88),
+                    backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: Colors.grey.shade300,
                   ),
-                  child: const Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Continue',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ),
@@ -290,12 +330,14 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
           onTap: isDisabled || isGranted ? null : onPressed,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             decoration: BoxDecoration(
               color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isGranted ? const Color(0xFF9CAF88) : Colors.grey.shade300,
+                color: isGranted
+                    ? Theme.of(context).primaryColor
+                    : Colors.grey.shade300,
                 width: isGranted ? 2 : 1,
               ),
               boxShadow: [
@@ -311,12 +353,14 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isGranted ? const Color(0xFF9CAF88).withOpacity(0.1) : Colors.grey.shade100,
+                    color: isGranted
+                        ? Theme.of(context).primaryColor.withOpacity(0.1)
+                        : Colors.grey.shade100,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
-                    color: isGranted ? const Color(0xFF9CAF88) : Colors.grey,
+                    color: isGranted ? Theme.of(context).primaryColor : Colors.grey,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -326,18 +370,24 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen> w
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         description,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 if (isGranted)
-                  const Icon(LucideIcons.checkCircle2, color: Color(0xFF9CAF88))
+                  Icon(LucideIcons.checkCircle2, color: Theme.of(context).primaryColor)
                 else
                   TextButton(
                     onPressed: isDisabled ? null : onPressed,

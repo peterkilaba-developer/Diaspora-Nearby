@@ -9,6 +9,8 @@
 - **Events & Organizations**: Discover and participate in diaspora-led events and organizations.
 - **Background Notifications**: Get notified when someone from your home country is nearby.
 - **Global Search**: Search for communities and users across the globe.
+- **$DSP Economy**: Earn Diaspora Social Points through **Proof of Activity (PoA)** and **Proof of Community Trust (PoCT)**.
+- **National Pride**: Compete on the **Global Country Leaderboard**. Your individual activity triggers a **10% Collective Tribute** to your Home Country Treasury.
 
 ## 🛠️ Technical Stack
 

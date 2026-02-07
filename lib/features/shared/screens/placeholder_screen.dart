@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -19,7 +19,7 @@ class PlaceholderScreen extends StatelessWidget {
       appBar: AppBar(title: Text(title)),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

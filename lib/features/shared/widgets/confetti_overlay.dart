@@ -3,7 +3,8 @@ import 'package:confetti/confetti.dart';
 import 'dart:math';
 
 // Global Key to access the overlay state from anywhere
-final GlobalKey<ConfettiOverlayState> confettiOverlayKey = GlobalKey<ConfettiOverlayState>();
+final GlobalKey<ConfettiOverlayState> confettiOverlayKey =
+    GlobalKey<ConfettiOverlayState>();
 
 class ConfettiOverlay extends StatefulWidget {
   final Widget child;
@@ -20,7 +21,9 @@ class ConfettiOverlayState extends State<ConfettiOverlay> {
   @override
   void initState() {
     super.initState();
-    _controllerCenter = ConfettiController(duration: const Duration(seconds: 3));
+    _controllerCenter = ConfettiController(
+      duration: const Duration(milliseconds: 500),
+    );
   }
 
   @override
@@ -38,23 +41,25 @@ class ConfettiOverlayState extends State<ConfettiOverlay> {
     return Stack(
       children: [
         widget.child,
-        Align(
-          alignment: Alignment.topCenter,
-          child: ConfettiWidget(
-            confettiController: _controllerCenter,
-            blastDirection: pi / 2, // down
-            maxBlastForce: 5,
-            minBlastForce: 2,
-            emissionFrequency: 0.05,
-            numberOfParticles: 20,
-            gravity: 0.2,
-            colors: const [
-              Colors.green,
-              Colors.blue,
-              Colors.pink,
-              Colors.orange,
-              Colors.purple,
-            ],
+        IgnorePointer(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _controllerCenter,
+              blastDirection: pi / 2, // down
+              maxBlastForce: 3, // [SUBTLE] Reduced from 5
+              minBlastForce: 1, // [SUBTLE] Reduced from 2
+              emissionFrequency: 0.05,
+              numberOfParticles: 5, // [SUBTLE] Reduced from 20
+              gravity: 0.3, // [SUBTLE] Increased gravity for faster fall
+              colors: const [
+                Colors.green,
+                Colors.blue,
+                Colors.pink,
+                Colors.orange,
+                Colors.purple,
+              ],
+            ),
           ),
         ),
       ],

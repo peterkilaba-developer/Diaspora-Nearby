@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 /// A simple themed surface container (formerly glassmorphic).
 /// Uses the theme's card color for a clean, flat design.
@@ -31,10 +32,10 @@ class GlassContainer extends StatelessWidget {
 
     final surfaceColor = color ?? theme.cardColor;
     Widget container = Container(
-      padding: padding ?? const EdgeInsets.all(16),
+      padding: padding ?? const EdgeInsets.all(AppTheme.cardHorizontalPadding), // 8px padding
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: borderRadius ?? BorderRadius.circular(16),
+        borderRadius: borderRadius ?? BorderRadius.circular(AppTheme.standardBorderRadius), // 16px radius
       ),
       child: child,
     );
@@ -48,4 +49,3 @@ class GlassContainer extends StatelessWidget {
     return container;
   }
 }
-

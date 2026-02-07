@@ -1,5 +1,7 @@
 # Development Workflow
 
+*   **Source of Truth:** The files in the `conductor/` directory represent the current state and mission of the project. **Step 0 of every task is to read these files.**
+
 ## Standard Commands
 
 ### Running the App
@@ -44,5 +46,14 @@ Code is organized by feature in `lib/features/`. Each feature folder typically c
 *   **Repository Restoration:** If modifying `ChatRepository`, ensure strict adherence to the existing multi-part structure or be careful not to introduce encoding errors.
 
 ## Context Maintenance
-*   Update `tracks.md` when starting or completing a major module.
-*   Update `tech-stack.md` if adding new dependencies.
+*   **Mandatory Review:** Before any implementation or refactor, verify that the proposed changes do not conflict with `product.md` or `tech-stack.md`.
+*   **Continuous Updates:** Update `tracks.md` when starting or completing a major module. Update `tech-stack.md` if adding or removing dependencies.
+*   **AI Protocol:** AI assistants MUST read the `conductor/` directory at the start of every session to ensure they are using the correct references and conventions.
+
+## Current Task Status: Community Chat Integration
+- [x] **Community Chat Integration**
+    - [x] Add "Create Community Group" link to community chat "More menu".
+    - [x] Add "Create Community Event" link to community chat "More menu".
+    - [x] Add "Create Community Org/Business" link.
+    - [x] Enable "Public Group" option for community groups.
+    - [x] Context-aware creation flows (pass `communityId`).

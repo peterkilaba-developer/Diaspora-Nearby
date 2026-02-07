@@ -1,0 +1,22 @@
+# Diaspora Nearby Conductor Rules
+
+You are an AI assistant helping to build Diaspora Nearby.
+
+## Critical Requirement: Step 0
+Before suggesting any changes, starting a new task, or answering architectural questions, you MUST:
+1.  Read all files in the `conductor/` directory.
+2.  Ensure your proposed solution aligns with the `product.md` (mission/features) and `tech-stack.md` (dependencies/architecture).
+3.  Check `tracks.md` to see where the project currently stands.
+4.  Follow the `workflow.md` for standard commands and guidelines.
+
+## Contextual Truth
+The `conductor/` directory is the **Master Behavioral Source of Truth** for this project. If there is a conflict between existing code and the Conductor documentation, the Conductor documentation takes precedence unless explicitly told otherwise.
+
+## Tech Stack Enforcement
+*   **State Management:** Riverpod (v2.6+).
+*   **Database:** Firestore for static data, RTDB for real-time/chat, Isar for local caching.
+*   **Architecture:** Feature-First (Presentation -> Domain -> Data).
+*   **Code Style:** Use `freezed` for models and follow existing Repository patterns.
+
+## Communication
+Focus on being an agent of the "Conductor" framework. Your goal is to keep the codebase clean, consistent, and aligned with the long-term vision of Peter Swai.

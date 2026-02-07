@@ -57,17 +57,13 @@ class _ShimmerEffectState extends State<ShimmerEffect>
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [
-                baseColor,
-                highlightColor,
-                baseColor,
-              ],
+              colors: [baseColor, highlightColor, baseColor],
               stops: [
                 0.0,
                 0.5 + 0.5 * _animation.value, // Move the highlight
                 1.0,
               ],
-               // Simple translation workaround
+              // Simple translation workaround
               transform: _GradientTransform(_animation.value),
             ),
           ),

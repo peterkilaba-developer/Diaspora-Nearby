@@ -10,31 +10,35 @@
 *   **Refinement:** Fixed scroll behavior, media reloading issues, and unread counts.
 
 ### 2. User Profile & Onboarding
-*   **Status:** Stable
-*   **Features:** Phone Auth, Profile Creation, Hometown/Host-town selection.
-*   **Refinement:** Country list restoration, "Years in Host Country" calculation.
+*   **Status:** Stable / Refined
+*   **Features:** Phone Auth, Profile Creation, Hometown/Host-town/Path selection, QR generation.
+*   **Refinement:** Unified `UserProfileForm`, Profile Completeness tracking, Identity Levels 1-3.
 
-### 3. Organization Management
-*   **Status:** Functional MVP
-*   **Features:** Registration, Admin Invitation, Switching Organizations, Editing Details.
+### 3. DSP Economy & Trust System (PoA/PoCT)
+*   **Status:** Refined Model Implementation
+*   **Features:** Points earning (messaging, referrals, shares, streaks), 6-Tier Trust Score (0-100) with 5 normalized factors (20 pts each).
+*   **Refinement:** Constant 1.0x rewards, Genesis Gate (10,000 DSP), TGE Efficiency tiers (10-step decile scale: 10% per 10 points).
+
+### 4. Community Governance & Treasuries
+*   **Status:** Functional Framework
+*   **Features:** Home Country & Continent Treasuries (10% Share), Collective Milestone triggers at 1 Million DSP earned by community members.
 
 ## 🚧 Active Tracks
 
-### 1. Maintenance & Stability
-*   **Focus:** Resolving compilation errors and ensuring type safety across the repository.
-*   **Recent Actions:** `ChatRepository` restoration, Import fixes, strict typing enforcement.
+### 1. Integration & Polish
+*   **Focus:** Bridging the Governance UI with Chat (Pillar Elections menu), refining QR scanning UX, and ensuring cross-feature consistency.
+*   **Recent Actions:** `UserProfileForm` consolidation, Election menu integration in chat.
 
-### 2. UI/UX Polish
-*   **Focus:** Enhancing visual consistency (Cards vs Lists), Animations, and Empty States.
+### 2. Maintenance & Performance
+*   **Focus:** Local caching optimization with Isar, Firebase Performance monitoring, and strict typing enforcement.
 
 ## 📅 Planned / Future Tracks
 
-### 1. Advanced Notifications
-*   **Goal:** Deep integration of Push Notifications for chat and community alerts.
-*   **Status:** Pending full implementation (Infrastructure exists).
+### 1. Advanced Notifications & Proximity
+*   **Goal:** Deep integration of Push Notifications for chat and proximity-based community alerts.
 
-### 2. Search & Discovery
-*   **Goal:** Unified search for People, Communities, and Organizations.
+### 2. Search & Discovery 2.0
+*   **Goal:** Geofenced search for People, Communities, and Organizations using `geoflutterfire_plus`.
 
-### 3. Event Management
-*   **Goal:** complete Event creation, editing, and ticketing flows.
+### 3. DFDI & Global Marketplace
+*   **Goal:** Diaspora Foreign Direct Investment (DFDI) portal and P2P service marketplace.

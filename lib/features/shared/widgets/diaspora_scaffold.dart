@@ -40,7 +40,7 @@ class _DiasporaScaffoldState extends State<DiasporaScaffold> {
         // For safe nav, let's go to /profile-setup if logic missing or just /profile if redirect works.
         // Let's assume /profile endpoint redirects to user id or is the list.
         // Actually router often has /profile pointing to self.
-        context.go('/profile/me'); 
+        context.go('/profile/me');
         break;
     }
   }
@@ -65,15 +65,9 @@ class _DiasporaScaffoldState extends State<DiasporaScaffold> {
             icon: Icon(LucideIcons.messageCircle),
             label: 'Chats',
           ),
-          NavigationDestination(
-            icon: Icon(LucideIcons.user),
-            label: 'Profile',
-          ),
+          NavigationDestination(icon: Icon(LucideIcons.user), label: 'Profile'),
         ],
       ),
     );
   }
 }
-
-
-

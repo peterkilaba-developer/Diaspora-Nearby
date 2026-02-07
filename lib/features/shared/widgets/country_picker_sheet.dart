@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 
@@ -189,4 +189,3 @@ class _CountryPickerSheetState extends State<CountryPickerSheet>
     );
   }
 }
-

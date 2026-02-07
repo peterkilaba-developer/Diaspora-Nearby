@@ -13,9 +13,9 @@ extension GetEventEntityCollection on Isar {
   IsarCollection<EventEntity> get eventEntitys => this.collection();
 }
 
-final EventEntitySchema = CollectionSchema(
+const EventEntitySchema = CollectionSchema(
   name: r'EventEntity',
-  id: int.parse('-1764225715171335918'),
+  id: -1764225715171335918,
   properties: {
     r'attendeeCount': PropertySchema(
       id: 0,
@@ -177,28 +177,33 @@ final EventEntitySchema = CollectionSchema(
       name: r'title',
       type: IsarType.string,
     ),
-    r'venueAddress': PropertySchema(
+    r'updatedAt': PropertySchema(
       id: 32,
+      name: r'updatedAt',
+      type: IsarType.string,
+    ),
+    r'venueAddress': PropertySchema(
+      id: 33,
       name: r'venueAddress',
       type: IsarType.string,
     ),
     r'venueCity': PropertySchema(
-      id: 33,
+      id: 34,
       name: r'venueCity',
       type: IsarType.string,
     ),
     r'venueCountry': PropertySchema(
-      id: 34,
+      id: 35,
       name: r'venueCountry',
       type: IsarType.string,
     ),
     r'venueName': PropertySchema(
-      id: 35,
+      id: 36,
       name: r'venueName',
       type: IsarType.string,
     ),
     r'venueState': PropertySchema(
-      id: 36,
+      id: 37,
       name: r'venueState',
       type: IsarType.string,
     )
@@ -210,7 +215,7 @@ final EventEntitySchema = CollectionSchema(
   idName: r'id',
   indexes: {
     r'firestoreId': IndexSchema(
-      id: int.parse('1863077355534729001'),
+      id: 1863077355534729001,
       name: r'firestoreId',
       unique: true,
       replace: true,
@@ -223,7 +228,7 @@ final EventEntitySchema = CollectionSchema(
       ],
     ),
     r'startDate': IndexSchema(
-      id: int.parse('7723980484494730382'),
+      id: 7723980484494730382,
       name: r'startDate',
       unique: false,
       replace: false,
@@ -236,7 +241,7 @@ final EventEntitySchema = CollectionSchema(
       ],
     ),
     r'homeCountry': IndexSchema(
-      id: int.parse('-4646192370841681343'),
+      id: -4646192370841681343,
       name: r'homeCountry',
       unique: false,
       replace: false,
@@ -249,7 +254,7 @@ final EventEntitySchema = CollectionSchema(
       ],
     ),
     r'hostCountry': IndexSchema(
-      id: int.parse('-4079897427768623529'),
+      id: -4079897427768623529,
       name: r'hostCountry',
       unique: false,
       replace: false,
@@ -262,7 +267,7 @@ final EventEntitySchema = CollectionSchema(
       ],
     ),
     r'createdAt': IndexSchema(
-      id: int.parse('-3433535483987302584'),
+      id: -3433535483987302584,
       name: r'createdAt',
       unique: false,
       replace: false,
@@ -424,6 +429,12 @@ int _eventEntityEstimateSize(
   }
   bytesCount += 3 + object.title.length * 3;
   {
+    final value = object.updatedAt;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.venueAddress;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -494,11 +505,12 @@ void _eventEntitySerialize(
   writer.writeString(offsets[29], object.status);
   writer.writeDouble(offsets[30], object.ticketPrice);
   writer.writeString(offsets[31], object.title);
-  writer.writeString(offsets[32], object.venueAddress);
-  writer.writeString(offsets[33], object.venueCity);
-  writer.writeString(offsets[34], object.venueCountry);
-  writer.writeString(offsets[35], object.venueName);
-  writer.writeString(offsets[36], object.venueState);
+  writer.writeString(offsets[32], object.updatedAt);
+  writer.writeString(offsets[33], object.venueAddress);
+  writer.writeString(offsets[34], object.venueCity);
+  writer.writeString(offsets[35], object.venueCountry);
+  writer.writeString(offsets[36], object.venueName);
+  writer.writeString(offsets[37], object.venueState);
 }
 
 EventEntity _eventEntityDeserialize(
@@ -541,11 +553,12 @@ EventEntity _eventEntityDeserialize(
   object.status = reader.readStringOrNull(offsets[29]);
   object.ticketPrice = reader.readDoubleOrNull(offsets[30]);
   object.title = reader.readString(offsets[31]);
-  object.venueAddress = reader.readStringOrNull(offsets[32]);
-  object.venueCity = reader.readStringOrNull(offsets[33]);
-  object.venueCountry = reader.readStringOrNull(offsets[34]);
-  object.venueName = reader.readStringOrNull(offsets[35]);
-  object.venueState = reader.readStringOrNull(offsets[36]);
+  object.updatedAt = reader.readStringOrNull(offsets[32]);
+  object.venueAddress = reader.readStringOrNull(offsets[33]);
+  object.venueCity = reader.readStringOrNull(offsets[34]);
+  object.venueCountry = reader.readStringOrNull(offsets[35]);
+  object.venueName = reader.readStringOrNull(offsets[36]);
+  object.venueState = reader.readStringOrNull(offsets[37]);
   return object;
 }
 
@@ -629,6 +642,8 @@ P _eventEntityDeserializeProp<P>(
     case 35:
       return (reader.readStringOrNull(offset)) as P;
     case 36:
+      return (reader.readStringOrNull(offset)) as P;
+    case 37:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -5663,6 +5678,160 @@ extension EventEntityQueryFilter
   }
 
   QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'updatedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'updatedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'updatedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'updatedAt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'updatedAt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'updatedAt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'updatedAt',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
+      updatedAtIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'updatedAt',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterFilterCondition>
       venueAddressIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -6798,6 +6967,18 @@ extension EventEntityQuerySortBy
     });
   }
 
+  QueryBuilder<EventEntity, EventEntity, QAfterSortBy> sortByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterSortBy> sortByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<EventEntity, EventEntity, QAfterSortBy> sortByVenueAddress() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'venueAddress', Sort.asc);
@@ -7232,6 +7413,18 @@ extension EventEntityQuerySortThenBy
     });
   }
 
+  QueryBuilder<EventEntity, EventEntity, QAfterSortBy> thenByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<EventEntity, EventEntity, QAfterSortBy> thenByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<EventEntity, EventEntity, QAfterSortBy> thenByVenueAddress() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'venueAddress', Sort.asc);
@@ -7517,6 +7710,13 @@ extension EventEntityQueryWhereDistinct
     });
   }
 
+  QueryBuilder<EventEntity, EventEntity, QDistinct> distinctByUpdatedAt(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'updatedAt', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<EventEntity, EventEntity, QDistinct> distinctByVenueAddress(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -7758,6 +7958,12 @@ extension EventEntityQueryProperty
   QueryBuilder<EventEntity, String, QQueryOperations> titleProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'title');
+    });
+  }
+
+  QueryBuilder<EventEntity, String?, QQueryOperations> updatedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'updatedAt');
     });
   }
 

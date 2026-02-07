@@ -12,7 +12,7 @@ class ErrorScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -28,23 +28,31 @@ class ErrorScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                message ?? 'An unexpected error occurred during initialization.',
+                message ??
+                    'An unexpected error occurred during initialization.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
                 ),
               ),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () {
-                   // Navigate to splash/root to retry
-                   context.go('/');
+                  // Navigate to splash/root to retry
+                  context.go('/');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text('Retry'),
               ),

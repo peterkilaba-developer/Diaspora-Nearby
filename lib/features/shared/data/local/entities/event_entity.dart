@@ -11,13 +11,13 @@ class EventEntity {
 
   late String title;
   late String description;
-  
+
   @Index()
   late String startDate;
   late String startTime;
   String? endDate;
   String? endTime;
-  
+
   late String location;
   late String category;
   String? imageUrl;
@@ -27,40 +27,40 @@ class EventEntity {
   int? attendeeCount;
   List<String>? interested;
   List<String>? invitedUserIds;
-  
+
   bool? isPaid;
   double? ticketPrice;
-  
+
   String? chatId;
-  
+
   @Index()
   String? homeCountry;
   @Index()
   String? hostCountry;
   String? hostCity;
   String? hostState;
-  
+
   String? homeCountryCode;
   String? hostCountryCode;
-  
+
   String? attendingPermission;
   int? maxAttendees;
-  
+
   @Index()
   String? createdAt;
   String? updatedAt;
-  
+
   String? venueName;
   String? venueAddress;
   String? venueCity;
   String? venueState;
   String? venueCountry;
-  
+
   String? status;
-  
+
   double? latitude;
   double? longitude;
-  
+
   String? organizationId;
   String? organizationName;
 }
