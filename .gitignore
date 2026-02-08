@@ -1,3 +1,8 @@
+# Analysis output files
+analysis_*.txt
+*_analysis.txt
+final_build_check.txt
+
 # Miscellaneous
 *.class
 *.log
