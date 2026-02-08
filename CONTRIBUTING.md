@@ -6,6 +6,20 @@ Thank you for your interest in contributing to Diaspora Nearby! We welcome all c
 
 Please be respectful and professional in all interactions within this project.
 
+## Project Source of Truth: Conductor
+
+> **⚠️ IMPORTANT**: Before contributing, review the [`conductor/`](conductor/) directory.
+
+The conductor system is our project's **authoritative source of truth**:
+- **[CONDUCTOR.md](conductor/CONDUCTOR.md)** - Approved changes & core instructions
+- **[product.md](conductor/product.md)** - Product vision & features
+- **[tech-stack.md](conductor/tech-stack.md)** - Technology inventory
+- **[tracks.md](conductor/tracks.md)** - Development progress
+- **[workflow.md](conductor/workflow.md)** - Development guidelines
+
+**Key Principle**: Always refer to the codebase and conductor files for current logic. Other markdown documentation may be outdated.
+
+
 ## How to Contribute
 
 ### Reporting Bugs
