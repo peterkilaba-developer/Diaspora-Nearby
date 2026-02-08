@@ -64,6 +64,19 @@ git push origin feature/your-feature-name
 1. Run `flutter analyze` (must pass)
 2. Run `flutter test` (all tests must pass)
 3. Use `dart format .` for code formatting
+4. Write tests for new features (see [Testing Guide](test/README.md))
+
+### Testing Requirements
+
+All new code should include appropriate tests:
+- **Services & Repositories** - Unit tests required
+- **Widgets** - Widget tests for complex components
+- **New Features** - Integration tests for critical flows
+
+See our comprehensive [Testing Guide](test/README.md) for:
+- How to write unit, widget, and integration tests
+- Using test utilities and mocks
+- Best practices and examples
 
 ## Development Setup
 
