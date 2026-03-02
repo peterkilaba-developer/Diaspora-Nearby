@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
+import 'package:diaspora_nearby/features/shared/utils/app_snackbar.dart';
+import 'package:diaspora_nearby/features/shared/utils/loading_mixin.dart';
 
 class TrustSliderWidget extends ConsumerStatefulWidget {
   final String targetUserId;
@@ -20,9 +22,9 @@ class TrustSliderWidget extends ConsumerStatefulWidget {
   ConsumerState<TrustSliderWidget> createState() => _TrustSliderWidgetState();
 }
 
-class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
+class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
+    with ConsumerLoadingMixin {
   late double _currentValue;
-  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -47,19 +49,14 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
       case TrustLevel.highTrust:
         return AppTheme.accent;
     }
-    return AppTheme.error;
   }
 
   String _getLabel(double value) {
     return TrustLevelExtension.fromScore(value).displayName;
   }
 
-  Future<void> _submitRating() async {
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
+  Future<void> _submitRating() => withLoading(
+    () async {
       await ref
           .read(trustServiceProvider)
           .rateUser(
@@ -67,21 +64,12 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
             toUserId: widget.targetUserId,
             score: _currentValue,
           );
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Trust rating updated')));
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
-    }
-  }
+      if (mounted) AppSnackbar.success(context, 'Trust rating updated');
+    },
+    onError: (e, _) {
+      if (mounted) AppSnackbar.error(context, 'Error: $e');
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -118,8 +106,8 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
               data: SliderTheme.of(context).copyWith(
                 activeTrackColor: color,
                 thumbColor: color,
-                inactiveTrackColor: color.withOpacity(0.2),
-                overlayColor: color.withOpacity(0.1),
+                inactiveTrackColor: color.withValues(alpha: 0.2),
+                overlayColor: color.withValues(alpha: 0.1),
                 trackHeight: 8.0,
                 thumbShape: const RoundSliderThumbShape(
                   enabledThumbRadius: 12.0,
@@ -148,7 +136,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
                 },
               ),
             ),
-            if (_isSubmitting)
+            if (isLoading)
               const Center(child: LinearProgressIndicator(minHeight: 2))
             else
               Center(
