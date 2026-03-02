@@ -367,105 +367,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
 
 
-  // ─── Category Ribbon ────────────────────────────────────────────────────
-  Widget _buildCategoryRibbon(ThemeData theme, bool isDark) {
-    final categories = _selectedType == 'service'
-        ? MarketplaceCategory.serviceCategories
-        : _selectedType == 'product'
-            ? MarketplaceCategory.productCategories
-            : _selectedType == 'job'
-                ? MarketplaceCategory.jobCategories
-                : [
-                    ...MarketplaceCategory.productCategories,
-                    ...MarketplaceCategory.jobCategories,
-                    ...MarketplaceCategory.serviceCategories,
-                  ];
-
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        itemCount: categories.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return _buildCategoryChip(
-              icon: LucideIcons.layoutGrid,
-              label: 'All',
-              isSelected: _selectedCategory == null,
-              onTap: () => setState(() => _selectedCategory = null),
-              theme: theme,
-              isDark: isDark,
-            );
-          }
-          final cat = categories[index - 1];
-          return _buildCategoryChip(
-            icon: categoryIcon(cat),
-            label: MarketplaceCategory.displayName(cat),
-            isSelected: _selectedCategory == cat,
-            onTap: () => setState(() => _selectedCategory = cat),
-            theme: theme,
-            isDark: isDark,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCategoryChip({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required ThemeData theme,
-    required bool isDark,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-              : isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : Colors.black.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? AppTheme.accent.withOpacity(0.4)
-                : isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.black.withOpacity(0.06),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: 14,
-                color: isSelected
-                    ? AppTheme.accent
-                    : theme.colorScheme.onSurface.withOpacity(0.45)),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected
-                    ? AppTheme.accent
-                    : theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ─── Host / Home Country Toggle ─────────────────────────────────────────
 
 
@@ -596,7 +497,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             onTap: _resetAllFilters,
             child: Text('Clear all',
                 style: TextStyle(
-                    fontSize: 11, color: AppTheme.accent.withOpacity(0.8))),
+                    fontSize: 11, color: AppTheme.accent.withValues(alpha: 0.8))),
           ),
         ],
       ),
@@ -612,7 +513,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.accent.withOpacity(isDark ? 0.15 : 0.08),
+        color: AppTheme.accent.withValues(alpha: isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -629,7 +530,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           GestureDetector(
             onTap: onRemove,
             child:
-                Icon(LucideIcons.x, size: 12, color: AppTheme.accent.withOpacity(0.6)),
+                Icon(LucideIcons.x, size: 12, color: AppTheme.accent.withValues(alpha: 0.6)),
           ),
         ],
       ),
@@ -657,7 +558,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(LucideIcons.alertCircle,
-                      size: 40, color: theme.colorScheme.error.withOpacity(0.5)),
+                      size: 40, color: theme.colorScheme.error.withValues(alpha: 0.5)),
                   const SizedBox(height: 12),
                   Text('Error loading listings',
                       style: TextStyle(
@@ -765,8 +666,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
-                ? Colors.white.withOpacity(0.06)
-                : Colors.black.withOpacity(0.06),
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.06),
           ),
         ),
         child: Row(
@@ -846,30 +747,30 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       ? CachedNetworkImage(
                           imageUrl: listing.images.first,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(
-                            color: AppTheme.accent.withOpacity(0.05),
+                          placeholder: (_, _) => Container(
+                            color: AppTheme.accent.withValues(alpha: 0.05),
                             child: Center(
                               child: Icon(LucideIcons.car,
                                   size: 40,
-                                  color: AppTheme.accent.withOpacity(0.3)),
+                                  color: AppTheme.accent.withValues(alpha: 0.3)),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => Container(
-                            color: AppTheme.accent.withOpacity(0.05),
+                          errorWidget: (_, _, ___) => Container(
+                            color: AppTheme.accent.withValues(alpha: 0.05),
                             child: Center(
                               child: Icon(LucideIcons.car,
                                   size: 40,
-                                  color: AppTheme.accent.withOpacity(0.3)),
+                                  color: AppTheme.accent.withValues(alpha: 0.3)),
                             ),
                           ),
                         )
                       : Container(
-                          color: AppTheme.accent.withOpacity(
+                          color: AppTheme.accent.withValues(alpha: 
                               isDark ? 0.08 : 0.05),
                           child: Center(
                             child: Icon(LucideIcons.car,
                                 size: 40,
-                                color: AppTheme.accent.withOpacity(0.3)),
+                                color: AppTheme.accent.withValues(alpha: 0.3)),
                           ),
                         ),
                   // Gradient overlay
@@ -882,7 +783,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.65),
+                            Colors.black.withValues(alpha: 0.65),
                           ],
                         ),
                       ),
@@ -899,7 +800,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
+                            color: Colors.black.withValues(alpha: 0.25),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -928,7 +829,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.55),
+                        color: Colors.black.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
@@ -936,14 +837,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                         children: [
                           Icon(LucideIcons.car,
                               size: 10,
-                              color: Colors.white.withOpacity(0.9)),
+                              color: Colors.white.withValues(alpha: 0.9)),
                           const SizedBox(width: 4),
                           Text(
                             'For Sale',
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                             ),
                           ),
                         ],
@@ -982,7 +883,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                         Icon(LucideIcons.mapPin,
                             size: 12,
                             color: theme.colorScheme.onSurface
-                                .withOpacity(0.4)),
+                                .withValues(alpha: 0.4)),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -992,7 +893,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               color: theme.colorScheme.onSurface
-                                  .withOpacity(0.5),
+                                  .withValues(alpha: 0.5),
                             ),
                           ),
                         ),
@@ -1030,7 +931,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: conditionColor(listing.condition!)
-                            .withOpacity(0.12),
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1054,7 +955,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                         fontSize: 12,
                         height: 1.4,
                         color:
-                            theme.colorScheme.onSurface.withOpacity(0.55),
+                            theme.colorScheme.onSurface.withValues(alpha: 0.55),
                       ),
                     ),
                   ],
@@ -1077,7 +978,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 children: [
                   CircleAvatar(
                     radius: 10,
-                    backgroundColor: marketplaceSageGreen.withOpacity(0.1),
+                    backgroundColor: marketplaceSageGreen.withValues(alpha: 0.1),
                     child: const Icon(LucideIcons.user,
                         size: 10, color: marketplaceSageGreen),
                   ),
@@ -1090,7 +991,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
@@ -1122,13 +1023,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       children: [
         Icon(icon,
             size: 14,
-            color: theme.colorScheme.onSurface.withOpacity(0.45)),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.45)),
         const SizedBox(width: 4),
         Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: theme.colorScheme.onSurface.withOpacity(0.65),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
           ),
         ),
       ],
@@ -1156,13 +1057,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: theme.hintColor.withOpacity(0.06),
+              color: theme.hintColor.withValues(alpha: 0.06),
               shape: BoxShape.circle,
             ),
             child: Icon(
               isSearch ? LucideIcons.searchX : LucideIcons.store,
               size: 32,
-              color: theme.hintColor.withOpacity(0.3),
+              color: theme.hintColor.withValues(alpha: 0.3),
             ),
           ),
           const SizedBox(height: 16),
@@ -1181,7 +1082,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 : 'Be the first to sell in your community!',
             style: TextStyle(
               fontSize: 13,
-              color: theme.hintColor.withOpacity(0.6),
+              color: theme.hintColor.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -1218,7 +1119,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             // ── Derived state ──
             final hasChosenType = tempType != 'all';
             final showCategory = hasChosenType;
-            final isProductType = tempType == 'product' || tempType == 'all';
 
             // Categories based on type
             final categories = tempType == 'service'
@@ -1310,24 +1210,24 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             InputDecoration dropdownDeco(String hint) => InputDecoration(
                   hintText: hint,
                   hintStyle: TextStyle(
-                      color: theme.hintColor.withOpacity(0.6), fontSize: 13),
+                      color: theme.hintColor.withValues(alpha: 0.6), fontSize: 13),
                   filled: true,
                   fillColor: isDark
-                      ? Colors.white.withOpacity(0.04)
-                      : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                         color: isDark
-                            ? Colors.white.withOpacity(0.08)
-                            : Colors.black.withOpacity(0.06)),
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.06)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide(
                         color: isDark
-                            ? Colors.white.withOpacity(0.08)
-                            : Colors.black.withOpacity(0.06)),
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.06)),
                   ),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1339,7 +1239,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppTheme.accent.withOpacity(isDark ? 0.15 : 0.08),
+                  color: AppTheme.accent.withValues(alpha: isDark ? 0.15 : 0.08),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -1357,7 +1257,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       onTap: onRemove,
                       child: Icon(LucideIcons.x,
                           size: 11,
-                          color: AppTheme.accent.withOpacity(0.6)),
+                          color: AppTheme.accent.withValues(alpha: 0.6)),
                     ),
                   ],
                 ),
@@ -1381,7 +1281,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           width: 36,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: theme.hintColor.withOpacity(0.2),
+                            color: theme.hintColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -2112,17 +2012,17 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+              ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
               : isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : Colors.black.withOpacity(0.03),
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
-                ? AppTheme.accent.withOpacity(0.5)
+                ? AppTheme.accent.withValues(alpha: 0.5)
                 : isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.black.withOpacity(0.06),
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.06),
           ),
         ),
         child: Row(
@@ -2150,8 +2050,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   // ─── Helpers ────────────────────────────────────────────────────────────
   void _handleMenuAction(String value, {dynamic profile}) async {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     switch (value) {
 
       case 'saved':

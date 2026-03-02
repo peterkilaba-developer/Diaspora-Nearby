@@ -124,16 +124,6 @@ class _ShareChatSelectionScreenState
                 );
               }
               break;
-            default:
-              // Fallback
-              String content = file.path;
-              if (content.isNotEmpty) {
-                await messagingService.sendTextMessage(
-                  chatId,
-                  content,
-                  metadata: metadata,
-                );
-              }
           }
         }
       }
@@ -175,7 +165,7 @@ class _ShareChatSelectionScreenState
         flexibleSpace: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(color: theme.colorScheme.surface.withOpacity(0.8)),
+            child: Container(color: theme.colorScheme.surface.withValues(alpha: 0.8)),
           ),
         ),
         title: _isSelectionMode
@@ -225,7 +215,7 @@ class _ShareChatSelectionScreenState
                 ),
                 filled: true,
                 fillColor: theme.colorScheme.surfaceContainerHighest
-                    .withOpacity(0.3),
+                    .withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -301,7 +291,7 @@ class _ShareChatSelectionScreenState
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               decoration: BoxDecoration(
-                                color: greenColor.withOpacity(0.1),
+                                color: greenColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: greenColor, width: 2),
                               ),
@@ -324,7 +314,7 @@ class _ShareChatSelectionScreenState
                                 border: Border.all(
                                   color: isSelected
                                       ? greenColor
-                                      : theme.colorScheme.outline.withOpacity(
+                                      : theme.colorScheme.outline.withValues(alpha: 
                                           0.5,
                                         ),
                                   width: 2,
@@ -356,7 +346,7 @@ class _ShareChatSelectionScreenState
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                   child: Container(
-                    color: theme.colorScheme.surface.withOpacity(0.8),
+                    color: theme.colorScheme.surface.withValues(alpha: 0.8),
                     child: SafeArea(
                       top: false,
                       child: Padding(

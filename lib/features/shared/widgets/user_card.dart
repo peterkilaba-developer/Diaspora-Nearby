@@ -113,12 +113,6 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     }
   }
 
-  String _formatDistanceImperial(double km) {
-    double miles = km * 0.621371;
-    double feet = km * 3280.84;
-    return miles >= 1 ? '${miles.round()} mi' : '${feet.round()} ft';
-  }
-
   String _formatDistanceMetric(double km) {
     // Return whole numbers for cleaner UI and to save space. Minimum 1km.
     final value = km < 1 ? 1 : km.round();
@@ -138,7 +132,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
   void _showFullScreenImage(BuildContext context) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.9), // Darker background
+      barrierColor: Colors.black.withValues(alpha: 0.9), // Darker background
       builder: (context) => Stack(
         children: [
           // Close button (positioned safely)
@@ -212,15 +206,10 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
       case TrustLevel.highTrust:
         return AppTheme.accent;
     }
-    return AppTheme.error;
   }
 
   Widget _buildTrustBadge(TrustData? trust) {
     if (trust == null) return const SizedBox.shrink();
-
-    final theme = Theme.of(context);
-    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
-    final isMe = widget.user.uid == currentUserId;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -385,13 +374,13 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                               ? Image.network(
                                                   widget.localImage!.path,
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) =>
+                                                  errorBuilder: (_, _, ___) =>
                                                       _buildInitials(theme),
                                                 )
                                               : Image.file(
                                                   File(widget.localImage!.path),
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) =>
+                                                  errorBuilder: (_, _, ___) =>
                                                       _buildInitials(theme),
                                                 ))
                                         : (widget
@@ -411,10 +400,10 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                             errorWidget: (context, url, error) {
                                               // Debug print using the error object
                                               if (kDebugMode) {
-                                                print(
+                                                debugPrint(
                                                   'UserCardView Image Error for ${widget.user.uid}: $error',
                                                 );
-                                                print(
+                                                debugPrint(
                                                   'URL: ${widget.user.profileImage}',
                                                 );
                                               }
@@ -535,7 +524,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                             trustAsync.when(
                               data: (trust) => _buildTrustBadge(trust),
                               loading: () => const SizedBox.shrink(),
-                              error: (_, __) => const SizedBox.shrink(),
+                              error: (_, _) => const SizedBox.shrink(),
                             ),
                             if (widget.titleSuffix != null)
                               Padding(
@@ -791,7 +780,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   Container(
                                     width: 1,
                                     height: 12,
-                                    color: theme.hintColor.withOpacity(0.2),
+                                    color: theme.hintColor.withValues(alpha: 0.2),
                                   ),
                                   const SizedBox(width: 8),
                                   Flexible(

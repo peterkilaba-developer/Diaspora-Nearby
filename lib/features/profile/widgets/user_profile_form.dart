@@ -516,7 +516,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     }
 
     // [NEW] Check for 10-field milestone
-    await points.trackProfileCompletion(uid, profile);
+    await points.trackProfileCompletion(uid);
   }
 
   void _onSearchChanged(String input) async {
@@ -939,7 +939,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.7),
+          color: Colors.black.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Row(
@@ -982,7 +982,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
                   radius: 50,
                   backgroundColor: Theme.of(
                     context,
-                  ).primaryColor.withOpacity(0.1),
+                  ).primaryColor.withValues(alpha: 0.1),
                   backgroundImage: _newProfileImage != null
                       ? FileImage(File(_newProfileImage!.path)) as ImageProvider
                       : (widget.initialProfile.profileImage.isNotEmpty
@@ -1015,7 +1015,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+          color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
           letterSpacing: 1.0,
         ),
       ),
@@ -1038,7 +1038,6 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     int maxLines = 1,
     String? Function(String?)? validator,
   }) {
-    final bool isHighlighted = _activeHighlights.contains(label);
     if (label == 'Education' && _noSchool) return const SizedBox.shrink();
 
     return TextFormField(

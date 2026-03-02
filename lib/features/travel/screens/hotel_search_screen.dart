@@ -561,16 +561,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   }
 
   Widget _buildSearchForm() {
-    final theme = Theme.of(context);
-    final inputDecoration = InputDecoration(
-      filled: true,
-      fillColor: AppTheme.elevationColor(context, 2),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -660,7 +650,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool showAppBarSearch = !_showSearchForm;
-    final viewerCountryCode = ref.read(userProfileProvider).valueOrNull?.hostCountryCode;
+
 
     // Total results = peer hotels + optional header + API hotels + optional header
     final hasPeer = _peerHotels.isNotEmpty;

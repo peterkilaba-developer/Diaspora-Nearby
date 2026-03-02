@@ -357,8 +357,8 @@ class _OrganizationManagementScreenState
                       ),
                       decoration: BoxDecoration(
                         color: (org['status'] == 'active')
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: (org['status'] == 'active')
@@ -712,7 +712,7 @@ class _OrganizationManagementScreenState
                           onPressed: () async {
                             if (friend.uid != null) {
                               await _inviteAdminById(orgId, friend);
-                              if (mounted) Navigator.pop(context);
+                              if (context.mounted) Navigator.pop(context);
                             }
                           },
                         ),
@@ -727,9 +727,11 @@ class _OrganizationManagementScreenState
       );
     } catch (e) {
       if (mounted) Navigator.pop(context); // Close loading
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error loading contacts: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading contacts: $e')));
+      }
     }
   }
 
@@ -769,7 +771,7 @@ class _OrganizationManagementScreenState
         }
       }
 
-      ref.refresh(userOrganizationsProvider);
+      ref.invalidate(userOrganizationsProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -778,12 +780,14 @@ class _OrganizationManagementScreenState
         ).showSnackBar(const SnackBar(content: Text('Invitation sent!')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to invite: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to invite: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -807,7 +811,7 @@ class _OrganizationManagementScreenState
           ).showSnackBar(const SnackBar(content: Text('Invitation declined.')));
         }
       }
-      ref.refresh(userOrganizationsProvider);
+      ref.invalidate(userOrganizationsProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -822,7 +826,7 @@ class _OrganizationManagementScreenState
       await ref
           .read(organizationRepositoryProvider)
           .declineInvite(orgId, userId); // Same as declining
-      ref.refresh(userOrganizationsProvider);
+      ref.invalidate(userOrganizationsProvider);
     } catch (e) {
       // error
     }
@@ -857,7 +861,7 @@ class _OrganizationManagementScreenState
         await ref
             .read(organizationRepositoryProvider)
             .removeAdmin(orgId, adminId);
-        ref.refresh(userOrganizationsProvider);
+        ref.invalidate(userOrganizationsProvider);
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -1010,7 +1014,7 @@ class _OrganizationManagementScreenState
                               await ref
                                   .read(organizationRepositoryProvider)
                                   .addChatMember(org['id'], userId);
-                              if (mounted) {
+                              if (context.mounted) {
                                 Navigator.pop(context);
                                 setState(() {});
                                 ScaffoldMessenger.of(context).showSnackBar(

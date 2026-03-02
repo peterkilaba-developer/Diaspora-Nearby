@@ -315,7 +315,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 
           // Remaining sections with horizontal padding
           Padding(
-            padding: EdgeInsets.symmetric(
+            padding: const EdgeInsets.symmetric(
               horizontal: AppTheme.pageHorizontalPadding,
             ).copyWith(bottom: 48),
             child: Column(
@@ -404,7 +404,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 AppTheme.accentDark.withValues(alpha: 0.85),
               ],
             ),
-            borderRadius: BorderRadius.only(
+            borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(AppTheme.standardBorderRadius),
               bottomRight: Radius.circular(AppTheme.standardBorderRadius),
             ),
@@ -518,10 +518,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     );
                   },
                   loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
                 loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
               ),
             ],
           ),
@@ -546,7 +546,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   loading: () =>
                       _buildStatCard('Fiat GDP', '—', LucideIcons.dollarSign),
-                  error: (_, __) =>
+                  error: (_, _) =>
                       _buildStatCard('Fiat GDP', '—', LucideIcons.dollarSign),
                 ),
               ),
@@ -561,7 +561,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   loading: () =>
                       _buildStatCard('DSP Supply', '—', LucideIcons.coins),
-                  error: (_, __) =>
+                  error: (_, _) =>
                       _buildStatCard('DSP Supply', '—', LucideIcons.coins),
                 ),
               ),
@@ -576,7 +576,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   loading: () =>
                       _buildStatCard('Network', '—', LucideIcons.users),
-                  error: (_, __) =>
+                  error: (_, _) =>
                       _buildStatCard('Network', '—', LucideIcons.users),
                 ),
               ),
@@ -1050,7 +1050,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             );
           },
           loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         );
       },
     );
@@ -1527,11 +1527,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       padding: const EdgeInsets.all(20),
       // White background with slight opacity to blend with Hero gradient
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1594,8 +1594,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   label: const Text('MetaMask'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withOpacity(0.5)),
-                    backgroundColor: Colors.white.withOpacity(0.05),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
                   ),
                 ),
               ),
@@ -1608,8 +1608,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   label: const Text('Base'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withOpacity(0.5)),
-                    backgroundColor: Colors.white.withOpacity(0.05),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
+                    backgroundColor: Colors.white.withValues(alpha: 0.05),
                   ),
                 ),
               ),
@@ -1622,10 +1622,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 // Using app logo orange for the input container
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.orange.withOpacity(0.5),
+                  color: Colors.orange.withValues(alpha: 0.5),
                   width: 2,
                 ),
               ),
@@ -1677,12 +1677,12 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              // Removed the black background (Colors.black.withOpacity(0.2))
+              // Removed the black background (Colors.black.withValues(alpha: 0.2))
               // and replaced it with a subtle white transparent bg.
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: Text(
                 _walletController.text,
@@ -1812,7 +1812,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
+                        color: color.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -1872,7 +1872,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 class _GovernanceUnitCard extends ConsumerWidget {
   final String unitId;
   final String? communityId;
-  final String? homeCountryCode;
   final String defaultTitle;
   final String subtitle;
   final IconData icon;
@@ -1882,7 +1881,6 @@ class _GovernanceUnitCard extends ConsumerWidget {
   const _GovernanceUnitCard({
     required this.unitId,
     this.communityId,
-    this.homeCountryCode,
     required this.defaultTitle,
     required this.subtitle,
     required this.icon,
@@ -1896,15 +1894,11 @@ class _GovernanceUnitCard extends ConsumerWidget {
         .watch(governanceRepositoryProvider)
         .watchGovernanceUnit(unitId);
 
-    // [SYSTEM RESERVES] Fallback to system stats for specific units
-    final treasuryAsync = ref.watch(systemTreasuryProvider);
+    // [SYSTEM RESERVES] System stats available via systemTreasuryProvider if needed
 
-    // Prioritize homeCountryCode provider if available
-    final communityAsync = homeCountryCode != null
-        ? ref.watch(homeCountryCommunityProvider(homeCountryCode!))
-        : (communityId != null
-              ? ref.watch(communityProvider(communityId!))
-              : const AsyncValue<Community?>.data(null));
+    final communityAsync = communityId != null
+        ? ref.watch(communityProvider(communityId!))
+        : const AsyncValue<Community?>.data(null);
 
     return StreamBuilder<GovernanceUnit?>(
       stream: unitAsync,
@@ -1999,9 +1993,9 @@ class _GovernanceUnitCard extends ConsumerWidget {
                                     color: Colors.orange,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
+                                  const Text(
                                     '$balance \$DIASPORA',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 13,
                                       color: Colors.orange,

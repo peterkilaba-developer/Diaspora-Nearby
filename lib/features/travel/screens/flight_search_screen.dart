@@ -444,10 +444,10 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       hintText: hint,
-      prefixIcon: Icon(icon, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+      prefixIcon: Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
       suffixIcon: controller.text.isNotEmpty
           ? IconButton(
-              icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+              icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
               onPressed: () => setState(() {
                 controller.clear();
                 if (isOrigin) {
@@ -486,7 +486,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -500,7 +500,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                 final airport = suggestions[index];
                 return ListTile(
                   dense: true,
-                  leading: Icon(LucideIcons.plane, size: 16, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  leading: Icon(LucideIcons.plane, size: 16, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                   title: Text(
                     '${airport.iataCode} - ${airport.name}',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -509,7 +509,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                   ),
                   subtitle: Text(
                     '${airport.municipality}, ${airport.isoCountry}',
-                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                   ),
                   onTap: () => _selectAirport(airport, isOrigin: isOrigin),
                 );
@@ -629,7 +629,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                 onTap: () => _pickDate(_departDateController, isDeparture: true),
                 decoration: inputDecoration.copyWith(
                   hintText: 'Depart',
-                  prefixIcon: Icon(LucideIcons.calendarDays, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  prefixIcon: Icon(LucideIcons.calendarDays, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                 ),
                 style: const TextStyle(fontSize: 13),
               ),
@@ -643,7 +643,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                   onTap: () => _pickDate(_returnDateController, isDeparture: false),
                   decoration: inputDecoration.copyWith(
                     hintText: 'Return',
-                    prefixIcon: Icon(LucideIcons.calendarCheck, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                    prefixIcon: Icon(LucideIcons.calendarCheck, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                   ),
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -696,7 +696,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                     icon: Icon(
                       LucideIcons.refreshCw,
                       size: 18,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                     onPressed: _autoSearchMultiDay,
                     tooltip: 'Refresh flights',
@@ -709,7 +709,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                   Icon(
                     LucideIcons.mapPin,
                     size: 14,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -718,7 +718,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                           ? '${_resolvedOriginAirport!.municipality} → ${_resolvedDestAirport!.municipality}'
                           : 'One-way flights',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
@@ -741,7 +741,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                     Text(
                       'Checking $_autoSearchDaysLoaded of $_autoSearchDaysTotal days...',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                   ],
@@ -753,7 +753,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                       ? 'No flights found for the next $_autoSearchDaysTotal days'
                       : 'Showing best flights for next $_autoSearchDaysTotal days • One way',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
               ],
@@ -787,7 +787,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                         size: 16,
                         color: isCheapest
                             ? Colors.green
-                            : theme.colorScheme.onSurface.withOpacity(0.5),
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -807,7 +807,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.15),
+                            color: Colors.green.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Text(
@@ -860,7 +860,6 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final bool hasAutoResults = _autoSearchComplete && _dateGroupedOffers.isNotEmpty;
     final bool showAppBarSearch = (!_showSearchForm && _flightOffers.isNotEmpty) || hasAutoResults;
 

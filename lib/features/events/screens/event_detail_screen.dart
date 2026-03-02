@@ -49,7 +49,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final eventRepo = ref.watch(eventRepositoryProvider);
     final theme = Theme.of(context);
 
     final asyncEvent = ref.watch(eventDetailsProvider(widget.eventId));
@@ -379,7 +378,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                 height: 40,
                                 child: Center(child: LinearProgressIndicator()),
                               ),
-                              error: (_, __) => const SizedBox.shrink(),
+                              error: (_, _) => const SizedBox.shrink(),
                             );
                           }
 
@@ -480,7 +479,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                               height: 40,
                               child: Center(child: LinearProgressIndicator()),
                             ),
-                            error: (_, __) => const SizedBox.shrink(),
+                            error: (_, _) => const SizedBox.shrink(),
                           );
                         },
                       ),
@@ -831,7 +830,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ref.read(authRepositoryProvider).currentUser?.uid;
 
     // DEBUG LOG
-    print(
+    debugPrint(
       'DEBUG: StickyBar Build - Loading: $_isRsvpLoading, UserId: $currentUserId, AsyncLoading: ${userAsync.isLoading}',
     );
 
@@ -839,7 +838,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isFull =
         event.maxAttendees != null &&
         (event.attendeeCount ?? 0) >= event.maxAttendees!;
-    final isPast = DateTime.parse(event.startDate).isBefore(DateTime.now());
+
 
     // Chat Navigation Logic
     // We navigate to the specific chat based on event.chatId
@@ -926,7 +925,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             ref.read(authRepositoryProvider).currentUser?.uid;
 
                         if (uid == null) {
-                          print('DEBUG: User ID is null in onPressed');
+                          debugPrint('DEBUG: User ID is null in onPressed');
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Please log in to RSVP.'),
@@ -943,19 +942,21 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         }
 
                         // Force refresh and WAIT for new data
-                        print('RSVP: Refreshing data...');
-                        await ref.refresh(
+                        debugPrint('RSVP: Refreshing data...');
+                        final _ = await ref.refresh(
                           eventDetailsProvider(event.id).future,
                         );
-                        print('RSVP: Data refreshed.');
+                        debugPrint('RSVP: Data refreshed.');
 
                         if (mounted) setState(() => _isRsvpLoading = false);
                       } catch (e) {
-                        print('RSVP Error: $e');
+                        debugPrint('RSVP Error: $e');
                         if (mounted) setState(() => _isRsvpLoading = false);
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
                       }
                     },
               style: FilledButton.styleFrom(

@@ -41,7 +41,7 @@ class LeaderSelectionScreen extends ConsumerStatefulWidget {
 
 class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
   bool _isSubmitting = false;
-  bool _isSeedingMock = false;
+  final bool _isSeedingMock = false;
   List<UserPoints>? _cachedQualified;
   Future<List<UserPoints>>? _qualifiedFuture;
 
@@ -313,7 +313,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               return _buildHeaderContent(unit, profile, community: community);
             },
             loading: () => _buildHeaderContent(unit, profile, isLoading: true),
-            error: (_, __) => _buildHeaderContent(unit, profile),
+            error: (_, _) => _buildHeaderContent(unit, profile),
           );
         },
       );
@@ -1683,11 +1683,11 @@ class _QualifiedCandidateTile extends ConsumerWidget {
             );
           },
           loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
         );
       },
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -1997,7 +1997,7 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
         );
       },
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -2143,7 +2143,7 @@ class _ElectionProgressRow extends ConsumerWidget {
           ),
         ),
       ),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
