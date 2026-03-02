@@ -46,7 +46,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   // Location data from Google Places
   double? _selectedLat;
   double? _selectedLng;
-  String? _selectedPlaceId;
   String _selectedPlaceDescription = '';
 
   // Store dates in API format (YYYY-MM-DD)
@@ -94,40 +93,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
     super.dispose();
   }
 
-  Future<void> _autoPopulateDestination() async {
-    final userId = ref.read(authRepositoryProvider).currentUser?.uid;
-    if (userId == null) return;
 
-    final profileData = await ref.read(profileRepositoryProvider).getUserProfile(userId);
-    if (profileData == null) return;
-
-    // Use home country for contextual empty state
-    if (profileData.homeCountry != null && mounted) {
-      setState(() {
-        _homeCountry = profileData.homeCountry;
-      });
-    }
-
-    // Auto-populate with home city location
-    if (profileData.homeLocation.geometry?.location != null) {
-      final lat = profileData.homeLocation.geometry!.location.lat;
-      final lng = profileData.homeLocation.geometry!.location.lng;
-      final homeCity = profileData.homeLocation.city;
-      final homeCountry = profileData.homeLocation.country;
-
-      if (mounted) {
-        setState(() {
-          _selectedLat = lat;
-          _selectedLng = lng;
-          _selectedPlaceDescription = [
-            ?homeCity,
-            ?homeCountry,
-          ].join(', ');
-          _destController.text = _selectedPlaceDescription;
-        });
-      }
-    }
-  }
 
   /// Auto-loads hotels near the user's current location on screen open.
   /// Falls back to home location if current location is unavailable.
@@ -271,7 +237,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
           ? prediction.fullText
           : '${prediction.primaryText}, ${prediction.secondaryText}';
       _selectedPlaceDescription = _destController.text;
-      _selectedPlaceId = prediction.placeId;
       _placeSuggestions = [];
       _showPlaceSuggestions = false;
       _searchCity = prediction.primaryText;
@@ -391,7 +356,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       _checkOutDateApi = '';
       _selectedLat = null;
       _selectedLng = null;
-      _selectedPlaceId = null;
       _selectedPlaceDescription = '';
       _placeSuggestions = [];
       _showPlaceSuggestions = false;
@@ -474,7 +438,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       hintText: 'Where? (city, neighborhood, address)',
-      prefixIcon: Icon(LucideIcons.mapPin, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+      prefixIcon: Icon(LucideIcons.mapPin, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
       suffixIcon: _isLoadingSuggestions
           ? const Padding(
               padding: EdgeInsets.all(12),
@@ -485,12 +449,11 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
             )
           : _destController.text.isNotEmpty
               ? IconButton(
-                  icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                   onPressed: () => setState(() {
                     _destController.clear();
                     _selectedLat = null;
                     _selectedLng = null;
-                    _selectedPlaceId = null;
                     _selectedPlaceDescription = '';
                     _placeSuggestions = [];
                     _showPlaceSuggestions = false;
@@ -540,7 +503,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -574,7 +537,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                 return ListTile(
                   dense: true,
                   leading: Icon(icon, size: 16,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                   title: Text(
                     prediction.primaryText,
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -585,7 +548,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                       ? Text(
                           prediction.secondaryText,
                           style: TextStyle(fontSize: 11,
-                              color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                         )
                       : null,
                   onTap: () => _selectPlace(prediction),
@@ -668,7 +631,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface.withOpacity(0.7),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               letterSpacing: 0.3,
             ),
           ),
@@ -676,7 +639,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
             decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(0.12),
+              color: AppTheme.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(

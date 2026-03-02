@@ -47,9 +47,9 @@ class UserProfileView extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppTheme.error.withOpacity(0.1),
+        color: AppTheme.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.error.withOpacity(0.5)),
+        border: Border.all(color: AppTheme.error.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
@@ -221,7 +221,7 @@ class UserProfileView extends ConsumerWidget {
                                 vertical: 16,
                               ),
                               decoration: BoxDecoration(
-                                color: trustColor.withOpacity(0.1),
+                                color: trustColor.withValues(alpha: 0.1),
                                 borderRadius: const BorderRadius.vertical(
                                   bottom: Radius.circular(
                                     AppTheme.standardBorderRadius,
@@ -244,7 +244,7 @@ class UserProfileView extends ConsumerWidget {
                                           strokeWidth: 4,
                                           valueColor:
                                               AlwaysStoppedAnimation<Color>(
-                                                trustColor.withOpacity(0.2),
+                                                trustColor.withValues(alpha: 0.2),
                                               ),
                                         ),
                                         // Progress Indicator
@@ -292,7 +292,7 @@ class UserProfileView extends ConsumerWidget {
                                             Text(
                                               'Balance',
                                               style: TextStyle(
-                                                color: trustColor.withOpacity(
+                                                color: trustColor.withValues(alpha: 
                                                   0.8,
                                                 ),
                                                 fontSize: 12,
@@ -345,7 +345,7 @@ class UserProfileView extends ConsumerWidget {
                                                   'Active: $daysActive days',
                                                   style: TextStyle(
                                                     color: trustColor
-                                                        .withOpacity(0.8),
+                                                        .withValues(alpha: 0.8),
                                                     fontSize: 11,
                                                     fontStyle: FontStyle.italic,
                                                   ),
@@ -363,7 +363,7 @@ class UserProfileView extends ConsumerWidget {
                             );
                           },
                           loading: () => const SizedBox.shrink(),
-                          error: (_, __) => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
                         );
                       },
                     ),
@@ -959,7 +959,7 @@ class UserProfileView extends ConsumerWidget {
                       ? Colors.green.shade900
                       : Colors.green.shade100,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   'Verified Business',
@@ -1040,7 +1040,7 @@ class UserProfileView extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(0.05),
+              color: AppTheme.accent.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -1093,7 +1093,7 @@ class UserProfileView extends ConsumerWidget {
                       loading: () => const Center(
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      error: (_, __) => const SizedBox.shrink(),
+                      error: (_, _) => const SizedBox.shrink(),
                     ),
                 if (info.locationAddress != null)
                   Padding(
@@ -1210,7 +1210,7 @@ class UserProfileView extends ConsumerWidget {
       backgroundColor: isOutline
           ? Theme.of(
               context,
-            ).colorScheme.surfaceContainerHighest.withOpacity(0.5)
+            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
           : null,
       side: BorderSide.none,
     );
@@ -1272,101 +1272,6 @@ class UserProfileView extends ConsumerWidget {
     );
   }
 
-  Widget _buildEconomyCard(
-    BuildContext context, {
-    required IconData icon,
-    String? imagePath, // [NEW] Optional image
-    Color? imageColor, // [NEW] Optional color filter for image
-    required String title,
-    required String description,
-    required Color color,
-    required VoidCallback onTap,
-    bool isComingSoon = false,
-    Widget? trailing,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-        decoration: AppTheme.cardDecoration(context).copyWith(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: imagePath != null
-                      ? const EdgeInsets.all(10)
-                      : const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: imagePath != null
-                        ? (imageColor != null
-                              ? imageColor.withOpacity(0.2)
-                              : Colors.transparent)
-                        : color.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: imagePath != null
-                      ? Image.asset(
-                          imagePath,
-                          width: 24,
-                          height: 24,
-                          fit: BoxFit.contain,
-                          color: imageColor,
-                        )
-                      : Icon(icon, color: color, size: 24),
-                ),
-                if (isComingSoon)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.grey.shade800
-                          : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      'Coming Soon',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
-                      ),
-                    ),
-                  )
-                else ?trailing,
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).hintColor,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSectionHeader(
     BuildContext context,
     String title, {
@@ -1395,67 +1300,6 @@ class UserProfileView extends ConsumerWidget {
       ),
     );
   }
-
-  Widget _buildMenuItem(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14,
-                    ),
-                  ),
-                  if (subtitle.isNotEmpty)
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.textTheme.bodySmall?.color?.withOpacity(
-                          0.6,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Icon(
-              LucideIcons.chevronRight,
-              size: 14,
-              color: theme.iconTheme.color?.withOpacity(0.3),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
 
 
   // [NEW] Relationship Section Builder
@@ -1528,7 +1372,7 @@ class UserProfileView extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.06),
+            color: theme.colorScheme.primary.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -1546,7 +1390,7 @@ class UserProfileView extends ConsumerWidget {
                 (req) => Card(
                   elevation: 0,
                   color: theme.colorScheme.surfaceContainerHighest
-                      .withOpacity(0.5),
+                      .withValues(alpha: 0.5),
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -1558,7 +1402,7 @@ class UserProfileView extends ConsumerWidget {
                             CircleAvatar(
                               radius: 22,
                               backgroundColor:
-                                  theme.colorScheme.primary.withOpacity(0.15),
+                                  theme.colorScheme.primary.withValues(alpha: 0.15),
                               backgroundImage:
                                   req.toUserPhoto != null &&
                                           req.toUserPhoto!.isNotEmpty
@@ -1618,7 +1462,7 @@ class UserProfileView extends ConsumerWidget {
                                   foregroundColor: Colors.orange,
                                   disabledForegroundColor: Colors.orange,
                                   side: BorderSide(
-                                    color: Colors.orange.withOpacity(0.4),
+                                    color: Colors.orange.withValues(alpha: 0.4),
                                   ),
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 8),
@@ -1641,7 +1485,7 @@ class UserProfileView extends ConsumerWidget {
                                   foregroundColor: theme.colorScheme.error,
                                   side: BorderSide(
                                     color: theme.colorScheme.error
-                                        .withOpacity(0.5),
+                                        .withValues(alpha: 0.5),
                                   ),
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 8),
@@ -1770,7 +1614,7 @@ class UserProfileView extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.08),
+            color: Colors.orange.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -1788,7 +1632,7 @@ class UserProfileView extends ConsumerWidget {
                 (req) => Card(
                   elevation: 0,
                   color: theme.colorScheme.surfaceContainerHighest
-                      .withOpacity(0.5),
+                      .withValues(alpha: 0.5),
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: Column(
@@ -1799,7 +1643,7 @@ class UserProfileView extends ConsumerWidget {
                             CircleAvatar(
                               radius: 22,
                               backgroundColor:
-                                  Colors.orange.withOpacity(0.15),
+                                  Colors.orange.withValues(alpha: 0.15),
                               backgroundImage:
                                   req.fromUserPhoto != null &&
                                           req.fromUserPhoto!.isNotEmpty
@@ -1877,7 +1721,7 @@ class UserProfileView extends ConsumerWidget {
                                       theme.colorScheme.error,
                                   side: BorderSide(
                                     color: theme.colorScheme.error
-                                        .withOpacity(0.5),
+                                        .withValues(alpha: 0.5),
                                   ),
                                   padding: const EdgeInsets.symmetric(
                                       vertical: 8),
@@ -2130,45 +1974,47 @@ class UserProfileView extends ConsumerWidget {
             if (data['status'] == 'pending') {
               final req = RelationshipRequest.fromMap(data);
               // Show the same card but in dialog
-              showDialog(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: const Text('Review Relationship Request'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${req.fromUserName} wants to add you as ${req.relationshipType}',
-                      ),
-                      const SizedBox(height: 16),
-                      // Could reuse card logic or buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(c);
-                              _handleRejectRequest(context, ref, req);
-                            },
-                            child: const Text(
-                              'Reject',
-                              style: TextStyle(color: Colors.red),
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('Review Relationship Request'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${req.fromUserName} wants to add you as ${req.relationshipType}',
+                        ),
+                        const SizedBox(height: 16),
+                        // Could reuse card logic or buttons
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(c);
+                                _handleRejectRequest(context, ref, req);
+                              },
+                              child: const Text(
+                                'Reject',
+                                style: TextStyle(color: Colors.red),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(c);
-                              _handleAcceptRequest(context, ref, req);
-                            },
-                            child: const Text('Accept'),
-                          ),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(c);
+                                _handleAcceptRequest(context, ref, req);
+                              },
+                              child: const Text('Accept'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
+                );
+              }
             }
           }
         });

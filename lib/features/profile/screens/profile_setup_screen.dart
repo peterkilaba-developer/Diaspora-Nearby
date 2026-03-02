@@ -59,7 +59,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   // UI State
   bool _isSubmitting = false;
-  bool _isRequestingLocation = false;
   bool _showCurrentLocationName = true;
 
   // Places Search
@@ -70,8 +69,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   // Focus tracking for hiding decorations
   final _homeFocusNode = FocusNode();
   final _hostFocusNode = FocusNode();
-  bool _isHomeFocused = false;
-  bool _isHostFocused = false;
 
   // Address Components (for accurate parsing)
   List<AddressComponent>? _homeComponents;
@@ -82,14 +79,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     super.initState();
     // Request location permission at start
     _requestLocationPermission();
-
-    // Track focus for hiding decorations
-    _homeFocusNode.addListener(() {
-      setState(() => _isHomeFocused = _homeFocusNode.hasFocus);
-    });
-    _hostFocusNode.addListener(() {
-      setState(() => _isHostFocused = _hostFocusNode.hasFocus);
-    });
 
     // Track name changes for button visibility
     _firstNameController.addListener(_onNameChanged);
@@ -129,7 +118,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   /// Request location permission for distance calculations
   Future<void> _requestLocationPermission() async {
-    setState(() => _isRequestingLocation = true);
 
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -176,7 +164,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           permission == LocationPermission.always) {
         // Get current position
         final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+          ),
         );
 
         debugPrint(
@@ -229,7 +219,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     } catch (e) {
       debugPrint('Location error: $e');
     } finally {
-      if (mounted) setState(() => _isRequestingLocation = false);
+      // cleanup complete
     }
   }
 
@@ -321,7 +311,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         debugPrint('Using cached location for verification');
       } else {
         final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+          ),
         );
         currentLat = position.latitude;
         currentLng = position.longitude;
@@ -616,16 +608,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         // Let's do it after we have setup the user but BEFORE navigation.
         // We will store it to trigger the dialog.
 
-        if (referrerId != null && mounted) {
+        if (referrerId != null) {
+          if (!context.mounted) return;
           // Fetch referrer name for the modal
           final referrerProfile = await ref
               .read(profileRepositoryProvider)
               .getUserProfile(referrerId);
           if (referrerProfile != null) {
+            if (!context.mounted) return;
             final referrerName = referrerProfile.fullName;
 
             // Trigger Modal
             await showModalBottomSheet(
+              // ignore: use_build_context_synchronously
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
@@ -633,7 +628,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               isDismissible:
                   false, // Force selection? Or allow skip? User request says "we automatically show...".
               // Let's allow dismiss but it's strongly encouraged.
-              builder: (context) => RelationshipSelectionModal(
+              builder: (sheetContext) => RelationshipSelectionModal(
                 otherUserId: referrerId!,
                 otherUserName: referrerName,
                 // [UPDATED] Allow all relationship types (including Friends) as requested.
@@ -688,9 +683,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       // Mark as returning user for future sessions (so next time they go to Chats)
       await ref.read(sessionServiceProvider).setReturningUser(true);
 
-      if (mounted) {
-        if (newCommunityNames.isNotEmpty) {
+      if (!context.mounted) return;
+      if (newCommunityNames.isNotEmpty) {
           await showDialog(
+            // ignore: use_build_context_synchronously
             context: context,
             builder: (ctx) => Dialog(
               shape: RoundedRectangleBorder(
@@ -703,7 +699,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.7,
                 ),
                 child: SingleChildScrollView(
                   child: Column(
@@ -713,8 +709,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer.withOpacity(0.3),
+                          ctx,
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -792,14 +788,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                                     );
                               }
                               shareUrl = '$shareUrl/invite?code=$code';
-                                                        } catch (e) {
+                                                    } catch (e) {
                               debugPrint('Error getting referral code: $e');
                             }
                           }
 
-                          await Share.share(
-                            'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
-                            subject: 'Diaspora Nearby',
+                          await SharePlus.instance.share(
+                            ShareParams(
+                              text: 'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
+                              subject: 'Diaspora Nearby',
+                            ),
                           );
 
                           // Award DSP for sharing
@@ -855,8 +853,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         // Clear pending referral code on success
         ref.read(pendingReferralCodeProvider.notifier).state = null;
 
-        context.go('/nearby'); // First time users land on Nearby to explore
-      }
+        if (context.mounted) {
+          // ignore: use_build_context_synchronously
+          context.go('/nearby'); // First time users land on Nearby to explore
+        }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -973,102 +973,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               setState(() => _showCurrentLocationName = v),
           referralCodeController: _referralCodeController, // [NEW]
         );
-    }
-  }
-
-  Future<bool> _verifyHostLocation() async {
-    // 0. Preliminary check
-    if (_hostLocation == null) return false;
-    final targetCountryCode = _hostLocation!.countryCode;
-    if (targetCountryCode == null) {
-      return true; // Can't verify if no code, let pass or strict? Let pass for now.
-    }
-
-    setState(() => _isRequestingLocation = true);
-
-    try {
-      // 1. Check/Request Permission
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showErrorDialog(
-            'Location Permission Required',
-            'We need your location to verify you are physically in ${_hostLocation!.country}.',
-          );
-          return false;
-        }
-      }
-      if (permission == LocationPermission.deniedForever) {
-        _showErrorDialog(
-          'Location Permission Required',
-          'Please enable location permissions in settings to verify you are physically in ${_hostLocation!.country}.',
-        );
-        return false;
-      }
-
-      // 2. Get Current Position
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      );
-
-      // 3. Reverse Geocode to get Country Code
-      // We accept `geocoding` package usage here or use our places service wrapper if available for consistency.
-      // Since we don't have `geocoding` imported yet, we should use the existing `_requestLocationPermission` logic
-      // which uses `googlePlacesServiceProvider.reverseGeocode`.
-
-      final places = ref.read(googlePlacesServiceProvider);
-      final locationData = await places.reverseGeocode(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (locationData == null) {
-        _showErrorDialog(
-          'Verification Failed',
-          'Could not determine your current location. Please try again.',
-        );
-        return false;
-      }
-
-      final currentCountryCode = locationData['countryCode'] as String?;
-
-      // 4. Compare
-      if (currentCountryCode == null) {
-        _showErrorDialog(
-          'Verification Warning',
-          'Could not determine your current country code.',
-        );
-        return false; // Fail safe
-      }
-
-      final normalizedTarget = targetCountryCode
-          .toUpperCase()
-          .replaceAll(RegExp(r'[^A-Z]'), '')
-          .substring(0, 2);
-      final normalizedCurrent = currentCountryCode
-          .toUpperCase()
-          .replaceAll(RegExp(r'[^A-Z]'), '')
-          .substring(0, 2);
-
-      if (normalizedCurrent != normalizedTarget) {
-        _showErrorDialog(
-          'Verification Failed',
-          'You must be physically located in ${_hostLocation!.country ?? "the target country"} to select it as your host location.\n\nDetected: $currentCountryCode, Target: $targetCountryCode',
-        );
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      debugPrint('Verification error: $e');
-      _showErrorDialog(
-        'Verification Error',
-        'An error occurred while verifying your location: $e',
-      );
-      return false;
-    } finally {
-      if (mounted) setState(() => _isRequestingLocation = false);
     }
   }
 

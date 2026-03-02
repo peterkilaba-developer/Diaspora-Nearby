@@ -160,7 +160,7 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
                         .map(
                           (p) => ListTile(
                             title: Text(p.primaryText),
-                            subtitle: Text(p.secondaryText ?? ''),
+                            subtitle: Text(p.secondaryText),
                             onTap: () => _selectPlace(p.placeId),
                           ),
                         )

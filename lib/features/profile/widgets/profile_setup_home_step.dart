@@ -119,7 +119,7 @@ class ProfileSetupHomeStep extends StatelessWidget {
               color: Colors.grey,
             ),
             title: Text(prediction.primaryText),
-            subtitle: Text(prediction.secondaryText ?? ''),
+            subtitle: Text(prediction.secondaryText),
             onTap: () => onSelectPlace(prediction.placeId),
           );
         },

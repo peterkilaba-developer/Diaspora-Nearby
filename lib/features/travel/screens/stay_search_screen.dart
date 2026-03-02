@@ -366,7 +366,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                   onTap: _clearFilters,
                   child: Text('Clear all',
                     style: TextStyle(fontSize: 11,
-                        color: AppTheme.accent.withOpacity(0.8))),
+                        color: AppTheme.accent.withValues(alpha: 0.8))),
                 ),
               ),
           ],
@@ -382,66 +382,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
       _minBeds > 0 ||
       _guests > 1 ||
       _selectedAmenities.isNotEmpty;
-
-  Widget _searchField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    ValueChanged<String>? onChanged,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.elevationColor(context, 2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
-          prefixIcon: Icon(icon, size: 16, color: AppTheme.accent),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          isDense: true,
-        ),
-      ),
-    );
-  }
-
-  Widget _dateTapField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppTheme.elevationColor(context, 2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(children: [
-          Icon(icon, size: 16, color: AppTheme.accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              controller.text.isNotEmpty ? controller.text : hint,
-              style: TextStyle(
-                fontSize: 12,
-                color: controller.text.isNotEmpty
-                    ? Theme.of(context).colorScheme.onSurface
-                    : Theme.of(context).hintColor,
-              ),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
 
   Future<void> _pickDate({required bool isCheckIn}) async {
     final now = DateTime.now();
@@ -483,16 +423,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 
-  Widget _guestsStepper(ThemeData theme, bool isDark) {
-    return TravelStepper(
-      label: 'Guests',
-      icon: LucideIcons.users,
-      value: _guests,
-      min: 1,
-      max: 20,
-      onChanged: (v) => setState(() => _guests = v),
-    );
-  }
 
   Widget _buildAdvancedFilters(ThemeData theme, bool isDark) {
     return Column(
@@ -501,7 +431,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
         // Property type chips
         Text('Property type',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6, runSpacing: 6,
@@ -513,17 +443,17 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withOpacity(0.4) : Colors.transparent,
+                    color: sel ? AppTheme.accent.withValues(alpha: 0.4) : Colors.transparent,
                   ),
                 ),
                 child: Text(t, style: TextStyle(
                   fontSize: 11,
                   fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 )),
               ),
             );
@@ -535,7 +465,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
         Row(children: [
           Text('Price range',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
           const Spacer(),
           if (_priceFilterActive)
             Text('\$${_priceRange.start.round()} – \$${_priceRange.end.round()}',
@@ -546,7 +476,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
           values: _priceRange,
           min: 0, max: 500, divisions: 50,
           activeColor: AppTheme.accent,
-          inactiveColor: AppTheme.accent.withOpacity(0.15),
+          inactiveColor: AppTheme.accent.withValues(alpha: 0.15),
           onChanged: (v) => setState(() {
             _priceRange = v;
             _priceFilterActive = true;
@@ -567,7 +497,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
         const SizedBox(height: 12),
         Text('Amenities',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6, runSpacing: 6,
@@ -582,17 +512,17 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withOpacity(0.4) : Colors.transparent,
+                    color: sel ? AppTheme.accent.withValues(alpha: 0.4) : Colors.transparent,
                   ),
                 ),
                 child: Text(a, style: TextStyle(
                   fontSize: 11,
                   fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 )),
               ),
             );
@@ -618,7 +548,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(LucideIcons.alertCircle, size: 40,
-                color: theme.colorScheme.error.withOpacity(0.5)),
+                color: theme.colorScheme.error.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
             Text('Error loading stays', style: TextStyle(
                 color: theme.colorScheme.error, fontSize: 14)),
@@ -640,7 +570,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.only(top: 8, bottom: 80),
         itemCount: listings.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (_, i) => PeerListingCard(
           listing: listings[i],
           placeholderIcon: LucideIcons.home,
@@ -659,11 +589,11 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(LucideIcons.home, size: 48,
-              color: AppTheme.accent.withOpacity(0.3)),
+              color: AppTheme.accent.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text('No stays found',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6))),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
           const SizedBox(height: 8),
           Text(
             _hasActiveSearchFilters
@@ -671,7 +601,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                 : 'No stays are listed yet. Be the first to list!',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12,
-                color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
           ),
         ]),
       ),

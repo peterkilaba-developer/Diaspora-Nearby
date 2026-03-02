@@ -109,8 +109,10 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 5),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 5),
+        ),
       );
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -258,8 +260,10 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                     (permission == LocationPermission.whileInUse ||
                         permission == LocationPermission.always)) {
                   final position = await Geolocator.getCurrentPosition(
-                    desiredAccuracy: LocationAccuracy.medium,
-                    timeLimit: const Duration(seconds: 2),
+                    locationSettings: const LocationSettings(
+                      accuracy: LocationAccuracy.medium,
+                      timeLimit: Duration(seconds: 2),
+                    ),
                   );
                   final placemarks = await placemarkFromCoordinates(
                     position.latitude,
@@ -582,7 +586,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         spreadRadius: 2,
                       ),
@@ -604,7 +608,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  _currentProfile.fullName ?? 'User',
+                  _currentProfile.fullName,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -632,7 +636,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppTheme.accent.withOpacity(0.2),
+                          color: AppTheme.accent.withValues(alpha: 0.2),
                           width: 2,
                         ),
                       ),

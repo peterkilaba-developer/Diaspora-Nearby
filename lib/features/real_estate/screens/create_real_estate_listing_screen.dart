@@ -79,7 +79,6 @@ class _CreateRealEstateListingScreenState
 
   // GPS Survey
   LandSurveyResult? _surveyResult;
-  bool get _hasSurvey => _surveyResult != null || widget.existing != null;
   String? _surveyCountry;
   String? _surveyCountryCode;
   int _aerialViewMode = 0; // 0 = Property, 1 = Neighborhood
@@ -255,58 +254,6 @@ class _CreateRealEstateListingScreenState
       _sizeC.text = result.areaSqm.toStringAsFixed(0);
       _sizeUnit = 'm\u00B2';
     });
-  }
-
-  void _showTitleOverrideDialog(ThemeData theme) {
-    final controller = TextEditingController(text: _titleC.text);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Custom Title', style: TextStyle(fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Leave empty to use auto-generated title',
-              style: TextStyle(fontSize: 12, color: theme.hintColor),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: _generateTitle(),
-                hintStyle: TextStyle(
-                    fontSize: 13, color: theme.hintColor.withOpacity(0.5)),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              style: const TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => _titleC.clear());
-              Navigator.pop(ctx);
-            },
-            child: const Text('Reset to Auto',
-                style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() => _titleC.text = controller.text.trim());
-              Navigator.pop(ctx);
-            },
-            child: const Text('Apply',
-                style: TextStyle(color: AppTheme.accent)),
-          ),
-        ],
-      ),
-    );
   }
 
   // ─── Photo Picking ──────────────────────────────────────────────────
@@ -607,7 +554,7 @@ class _CreateRealEstateListingScreenState
                   color: AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppTheme.accent.withOpacity(0.3),
+                    color: AppTheme.accent.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -626,7 +573,7 @@ class _CreateRealEstateListingScreenState
                             )),
                         const Spacer(),
                         Icon(LucideIcons.lock, size: 12,
-                            color: theme.hintColor.withOpacity(0.4)),
+                            color: theme.hintColor.withValues(alpha: 0.4)),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -693,7 +640,7 @@ class _CreateRealEstateListingScreenState
                   color: AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: theme.colorScheme.onSurface.withOpacity(0.1),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
                   ),
                 ),
                 child: Row(
@@ -729,7 +676,7 @@ class _CreateRealEstateListingScreenState
                       ),
                     ),
                     Icon(LucideIcons.lock, size: 14,
-                        color: theme.hintColor.withOpacity(0.4)),
+                        color: theme.hintColor.withValues(alpha: 0.4)),
                   ],
                 ),
               ),
@@ -777,7 +724,7 @@ class _CreateRealEstateListingScreenState
       if (_isUploading)
         Positioned.fill(
           child: Container(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             child: Center(
               child: Container(
                 padding: const EdgeInsets.all(28),
@@ -805,7 +752,7 @@ class _CreateRealEstateListingScreenState
                       '$_uploadedCount / ${_selectedImages.length}',
                       style: TextStyle(
                         fontSize: 13,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                   ],
@@ -843,12 +790,12 @@ class _CreateRealEstateListingScreenState
                     const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
-                        ? AppTheme.accent.withOpacity(0.5)
+                        ? AppTheme.accent.withValues(alpha: 0.5)
                         : Colors.transparent,
                     width: 1.5,
                   ),
@@ -860,7 +807,7 @@ class _CreateRealEstateListingScreenState
                       size: 22,
                       color: isSelected
                           ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withOpacity(0.4),
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -871,7 +818,7 @@ class _CreateRealEstateListingScreenState
                             isSelected ? FontWeight.w700 : FontWeight.w500,
                         color: isSelected
                             ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withOpacity(0.6),
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
                   ],
@@ -1146,7 +1093,7 @@ class _CreateRealEstateListingScreenState
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: totalPhotos + (totalPhotos < maxPhotos ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
                 // Add button at the end
                 if (i == totalPhotos) {
@@ -1196,15 +1143,15 @@ class _CreateRealEstateListingScreenState
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppTheme.accent.withOpacity(0.4),
+            color: AppTheme.accent.withValues(alpha: 0.4),
             style: BorderStyle.solid,
           ),
         ),
-        child: Column(
+        child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(LucideIcons.plus, size: 24, color: AppTheme.accent),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text('Add',
                 style: TextStyle(
                     fontSize: 11,
@@ -1231,7 +1178,7 @@ class _CreateRealEstateListingScreenState
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
+                color: Colors.black.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
               child: const Icon(LucideIcons.x, size: 14, color: Colors.white),
@@ -1252,13 +1199,13 @@ class _CreateRealEstateListingScreenState
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: AppTheme.accent.withOpacity(0.3),
+            color: AppTheme.accent.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
           children: [
             Icon(LucideIcons.camera, size: 32,
-                color: AppTheme.accent.withOpacity(0.7)),
+                color: AppTheme.accent.withValues(alpha: 0.7)),
             const SizedBox(height: 8),
             Text(
               _category == 'house'
@@ -1267,7 +1214,7 @@ class _CreateRealEstateListingScreenState
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 4),
@@ -1295,7 +1242,7 @@ class _CreateRealEstateListingScreenState
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1,
-          color: theme.colorScheme.onSurface.withOpacity(0.4),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
         ),
       ),
     );
@@ -1359,7 +1306,7 @@ class _CreateRealEstateListingScreenState
             label,
             style: TextStyle(
               fontSize: 10,
-              color: theme.colorScheme.onSurface.withOpacity(0.4),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
             ),
           ),
           DropdownButton<String>(
@@ -1398,7 +1345,7 @@ class _CreateRealEstateListingScreenState
             style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
@@ -1412,12 +1359,12 @@ class _CreateRealEstateListingScreenState
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: sel
-                        ? AppTheme.accent.withOpacity(0.4)
+                        ? AppTheme.accent.withValues(alpha: 0.4)
                         : Colors.transparent,
                   ),
                 ),
@@ -1427,7 +1374,7 @@ class _CreateRealEstateListingScreenState
                       fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
                       color: sel
                           ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withOpacity(0.6),
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     )),
               ),
             );
@@ -1452,7 +1399,7 @@ class _CreateRealEstateListingScreenState
             style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
@@ -1466,12 +1413,12 @@ class _CreateRealEstateListingScreenState
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: sel
-                        ? AppTheme.accent.withOpacity(0.4)
+                        ? AppTheme.accent.withValues(alpha: 0.4)
                         : Colors.transparent,
                   ),
                 ),
@@ -1481,7 +1428,7 @@ class _CreateRealEstateListingScreenState
                       fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
                       color: sel
                           ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withOpacity(0.6),
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     )),
               ),
             );
@@ -1503,20 +1450,23 @@ class _CreateRealEstateListingScreenState
       child: Row(
         children: [
           Icon(icon, size: 16,
-              color: theme.colorScheme.onSurface.withOpacity(0.4)),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(label,
                 style: TextStyle(
                   fontSize: 13,
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 )),
           ),
           Transform.scale(
             scale: 0.8,
             child: Switch.adaptive(
               value: value,
-              activeColor: AppTheme.accent,
+              activeTrackColor: AppTheme.accent,
+              thumbColor: WidgetStateProperty.resolveWith((states) =>
+                states.contains(WidgetState.selected) ? Colors.white : null,
+              ),
               onChanged: onChanged,
             ),
           ),
@@ -1544,7 +1494,7 @@ class _CreateRealEstateListingScreenState
           Text(label,
               style: TextStyle(
                 fontSize: 13,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               )),
           const Spacer(),
           _stepperButton(
@@ -1588,7 +1538,7 @@ class _CreateRealEstateListingScreenState
               : Theme.of(context)
                   .colorScheme
                   .onSurface
-                  .withOpacity(0.2),
+                  .withValues(alpha: 0.2),
         ),
       ),
     );
@@ -1612,10 +1562,10 @@ class _CreateRealEstateListingScreenState
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppTheme.accent.withOpacity(0.1), AppTheme.accent.withOpacity(0.05)],
+            colors: [AppTheme.accent.withValues(alpha: 0.1), AppTheme.accent.withValues(alpha: 0.05)],
           ),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.accent.withOpacity(0.3)),
+          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -1623,14 +1573,14 @@ class _CreateRealEstateListingScreenState
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppTheme.accent.withOpacity(0.15),
+                color: AppTheme.accent.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(LucideIcons.mapPin, color: AppTheme.accent, size: 22),
+              child: const Icon(LucideIcons.mapPin, color: AppTheme.accent, size: 22),
             ),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               'Start GPS Land Survey',
               style: TextStyle(
                 fontSize: 15,
@@ -1644,14 +1594,14 @@ class _CreateRealEstateListingScreenState
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: theme.colorScheme.error.withOpacity(0.08),
+                color: theme.colorScheme.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -1683,7 +1633,7 @@ class _CreateRealEstateListingScreenState
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green.withOpacity(0.3)),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1709,7 +1659,7 @@ class _CreateRealEstateListingScreenState
                     _applySurveyResult(result);
                   }
                 },
-                child: Text('Redo Survey',
+                child: const Text('Redo Survey',
                     style: TextStyle(
                       fontSize: 11,
                       color: AppTheme.accent,
@@ -1769,7 +1719,7 @@ class _CreateRealEstateListingScreenState
                             color: isDark
                                 ? Colors.grey.shade900
                                 : Colors.grey.shade200,
-                            child: Center(
+                            child: const Center(
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: AppTheme.accent,
@@ -1777,7 +1727,7 @@ class _CreateRealEstateListingScreenState
                             ),
                           );
                         },
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, ___) => Container(
                           color: isDark
                               ? Colors.grey.shade900
                               : Colors.grey.shade200,
@@ -1817,7 +1767,7 @@ class _CreateRealEstateListingScreenState
                             Text('Tap to open in Maps',
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: Colors.white.withOpacity(0.8),
+                                  color: Colors.white.withValues(alpha: 0.8),
                                 )),
                           ],
                         ),
@@ -1839,12 +1789,12 @@ class _CreateRealEstateListingScreenState
                           children: [
                             Icon(LucideIcons.zoomIn,
                                 size: 10,
-                                color: Colors.white.withOpacity(0.7)),
+                                color: Colors.white.withValues(alpha: 0.7)),
                             const SizedBox(width: 3),
                             Text('Pinch to zoom',
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                 )),
                           ],
                         ),
@@ -1887,13 +1837,13 @@ class _CreateRealEstateListingScreenState
                 Row(
                   children: [
                     Icon(LucideIcons.navigation, size: 14,
-                        color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                     const SizedBox(width: 4),
                     Text('${r.boundaryPoints.length} corners',
                         style: TextStyle(
                           fontSize: 12,
                           color:
-                              theme.colorScheme.onSurface.withOpacity(0.5),
+                              theme.colorScheme.onSurface.withValues(alpha: 0.5),
                         )),
                   ],
                 ),
@@ -1904,13 +1854,13 @@ class _CreateRealEstateListingScreenState
           Row(
             children: [
               Icon(LucideIcons.lock, size: 12,
-                  color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
               const SizedBox(width: 6),
               Text(
                 'Location is locked from GPS coordinates',
                 style: TextStyle(
                   fontSize: 10,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
               ),
             ],
@@ -1931,7 +1881,7 @@ class _CreateRealEstateListingScreenState
             child: Text(label,
                 style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
           ),
           Expanded(
             child: Text(value,
@@ -1951,7 +1901,7 @@ class _CreateRealEstateListingScreenState
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-            color: theme.colorScheme.onSurface.withOpacity(0.1)),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1965,7 +1915,7 @@ class _CreateRealEstateListingScreenState
                 size: 16,
                 color: l.locationVerified == true
                     ? Colors.green.shade500
-                    : theme.colorScheme.onSurface.withOpacity(0.5),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
               const SizedBox(width: 8),
               Text(
@@ -1982,7 +1932,7 @@ class _CreateRealEstateListingScreenState
               ),
               const Spacer(),
               Icon(LucideIcons.lock, size: 14,
-                  color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
             ],
           ),
           const SizedBox(height: 10),
@@ -2011,13 +1961,13 @@ class _CreateRealEstateListingScreenState
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: selected
-              ? AppTheme.accent.withOpacity(0.15)
+              ? AppTheme.accent.withValues(alpha: 0.15)
               : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
                 ? AppTheme.accent
-                : theme.colorScheme.onSurface.withOpacity(0.15),
+                : theme.colorScheme.onSurface.withValues(alpha: 0.15),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -2028,7 +1978,7 @@ class _CreateRealEstateListingScreenState
                 size: 13,
                 color: selected
                     ? AppTheme.accent
-                    : theme.colorScheme.onSurface.withOpacity(0.5)),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.5)),
             const SizedBox(width: 5),
             Text(label,
                 style: TextStyle(
@@ -2036,7 +1986,7 @@ class _CreateRealEstateListingScreenState
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   color: selected
                       ? AppTheme.accent
-                      : theme.colorScheme.onSurface.withOpacity(0.6),
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 )),
           ],
         ),

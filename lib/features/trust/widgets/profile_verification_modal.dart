@@ -346,9 +346,8 @@ class _ProfileVerificationModalState
   Widget _buildPhotoVerificationCard(ProfileData user) {
     final theme = Theme.of(context);
     final label = 'Profile Photo';
-    final state = _fieldVerifications[label];
 
-    // Re-using color logic logic mostly, but specific layout
+    // Re-using color logic mostly, but specific layout
 
     return Container(
       padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
@@ -417,7 +416,7 @@ class _ProfileVerificationModalState
         padding: const EdgeInsets.symmetric(horizontal: 16),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: AppTheme.success.withOpacity(0.1),
+          color: AppTheme.success.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppTheme.success),
         ),

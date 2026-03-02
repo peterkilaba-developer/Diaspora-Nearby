@@ -137,20 +137,6 @@ class _RelationshipSelectionModalState
     );
   }
 
-  // [UPDATED] Family types that are free
-  static const Set<String> _familyTypes = {
-    'wife', 'husband', 'daughter', 'son', 'mother', 'father',
-    'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
-  };
-
-  bool _isFamilyType(String type) =>
-      _familyTypes.contains(type.toLowerCase());
-
-  bool _isFriendType(String type) =>
-      type.toLowerCase() == 'friend';
-
-  /// All connections earn both users 1,000 DSP
-  bool _isFreeConnection(String type) => true;
 
   Widget _buildItem(
     BuildContext context,
@@ -158,8 +144,6 @@ class _RelationshipSelectionModalState
     ThemeData theme, {
     bool isSpecial = false,
   }) {
-    final isFree = _isFreeConnection(rel);
-    final isFriend = _isFriendType(rel);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
