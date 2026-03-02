@@ -1,3 +1,4 @@
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart'; // [NEW]
@@ -74,60 +75,84 @@ VoidCallback trackExplorationCallback(
             .read(pointsServiceProvider)
             .trackExplorationReward(user.uid, actionId);
         if (rewarded && context.mounted) {
-           showExplorationRewardToast(context);
+          showExplorationRewardToast(context);
         }
       }
     } catch (_) {}
   };
 }
 
-void showExplorationRewardToast(BuildContext context, {String? message, int points = 10}) {
-  ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing to prevent overlap
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Row(
-        children: [
-          // Premium DSP Icon/Circle
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFD700).withOpacity(0.15),
-              shape: BoxShape.circle,
+void showExplorationRewardToast(
+  BuildContext context, {
+  String? message,
+  int points = 10,
+}) {
+  // Trigger Confetti Globally
+  confettiOverlayKey.currentState?.play();
+
+  // Ensure we are mounted and have a ScaffoldMessenger
+  if (!context.mounted) return;
+
+  try {
+    ScaffoldMessenger.of(
+      context,
+    ).clearSnackBars(); // Clear existing to prevent overlap
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            // Premium DSP Icon/Circle
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(
+                  0xFFFFD700,
+                ).withOpacity(0.2), // Gold with opacity
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFFFD700), width: 1),
+              ),
+              child: const Icon(
+                LucideIcons.coins,
+                color: Color(0xFFFFD700),
+                size: 24,
+              ),
             ),
-            child: const Icon(LucideIcons.coins, color: Color(0xFFFFD700), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message ?? 'Bonus Unlocked',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Colors.white,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message ?? 'Exploration Reward!',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                Text(
-                  '+$points DSP Earned!',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
+                  const SizedBox(height: 4),
+                  Text(
+                    '+$points DSP added to your wallet',
+                    style: const TextStyle(fontSize: 14, color: Colors.white70),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF2C2C2C), // Slightly lighter dark grey
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFF3C3C3C), width: 1),
+        ),
+        margin: const EdgeInsets.all(16),
+        elevation: 10,
       ),
-      duration: const Duration(seconds: 3),
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: const Color(0xFF1E1E1E), // Professional Dark Grey
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.all(16),
-      elevation: 8,
-    ),
-  );
+    );
+  } catch (e) {
+    debugPrint('Error showing exploration toast: $e');
+  }
 }

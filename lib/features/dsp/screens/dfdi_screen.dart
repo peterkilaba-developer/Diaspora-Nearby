@@ -5,6 +5,9 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/dsp/repository/interest_repository.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 class DFDIScreen extends ConsumerStatefulWidget {
   const DFDIScreen({super.key});
@@ -21,6 +24,19 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
   void initState() {
     super.initState();
     _checkStatus();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(user.uid, ExplorationAction.dspDfdi);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
   }
 
   Future<void> _checkStatus() async {
@@ -85,7 +101,10 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
       appBar: AppBar(title: const Text('Diaspora Foreign Direct Investments')),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: AppTheme.cardPadding),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+            vertical: AppTheme.cardPadding,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -113,7 +132,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Invest in your home country using Diaspora (\$DSP) across 6 key sectors: Food, Healthcare, Education, Real Estate, Water, and Energy.',
+                'Invest in your home country using Diaspora (\$DIASPORA) across 6 key sectors: Food, Healthcare, Education, Real Estate, Water, and Energy.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),

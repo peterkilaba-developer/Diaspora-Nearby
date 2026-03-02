@@ -3,7 +3,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:diaspora_nearby/main.dart' as app;
 
 /// Basic integration test demonstrating app launch
-/// 
+///
 /// Run with: flutter test integration_test/app_test.dart
 
 void main() {

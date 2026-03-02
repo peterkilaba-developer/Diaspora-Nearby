@@ -169,7 +169,7 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
                 ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 items: widget.yearRange
                     .map((y) => DropdownMenuItem(value: y, child: Text(y)))
                     .toList(),

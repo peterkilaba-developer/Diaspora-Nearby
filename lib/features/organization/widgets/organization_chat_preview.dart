@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrganizationChatPreview extends ConsumerStatefulWidget {
   final String chatId;
@@ -40,7 +41,7 @@ class _OrganizationChatPreviewState
         child: Container(
           width: double.infinity,
           padding: EdgeInsets.zero,
-          color: Theme.of(context).cardColor,
+          decoration: AppTheme.cardDecoration(context),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -211,18 +212,14 @@ class _OrganizationChatPreviewState
     if (currentUserId == null) return false;
 
     try {
-      final snapshot = await FirebaseDatabase.instance
-          .ref('chats/${widget.chatId}/participants')
+      final chatDoc = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
           .get();
-      if (snapshot.exists) {
-        final value = snapshot.value;
-        if (value is List) {
-          final participants = List<String>.from(value);
-          return participants.contains(currentUserId);
-        } else if (value is Map) {
-          final participants = value.values.map((e) => e.toString()).toList();
-          return participants.contains(currentUserId);
-        }
+      if (chatDoc.exists) {
+        final data = chatDoc.data();
+        final participants = List<String>.from(data?['participants'] ?? []);
+        return participants.contains(currentUserId);
       }
     } catch (e) {
       debugPrint('Error checking participant status: $e');

@@ -28,14 +28,16 @@ class GlassContainer extends StatelessWidget {
   @override
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final surfaceColor = color ?? theme.cardColor;
+    final surfaceColor = color ?? AppTheme.cardDecoration(context).color;
     Widget container = Container(
-      padding: padding ?? const EdgeInsets.all(AppTheme.cardHorizontalPadding), // 8px padding
+      padding:
+          padding ??
+          const EdgeInsets.all(AppTheme.cardHorizontalPadding), // 8px padding
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: borderRadius ?? BorderRadius.circular(AppTheme.standardBorderRadius), // 16px radius
+        borderRadius:
+            borderRadius ??
+            BorderRadius.circular(AppTheme.standardBorderRadius), // 16px radius
       ),
       child: child,
     );

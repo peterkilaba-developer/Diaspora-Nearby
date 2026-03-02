@@ -47,11 +47,11 @@ class VerificationAlertModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // Determine the "Theme Color" based on type
     Color alertColor;
     IconData icon;
-    
+
     switch (type) {
       case VerificationAlertType.conflict:
         alertColor = AppTheme.warning;
@@ -81,7 +81,9 @@ class VerificationAlertModal extends StatelessWidget {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding * 3),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.pageHorizontalPadding * 3,
+      ),
       child: Container(
         padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 3),
         decoration: BoxDecoration(
@@ -105,14 +107,10 @@ class VerificationAlertModal extends StatelessWidget {
                 color: alertColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                icon,
-                size: 48,
-                color: alertColor,
-              ),
+              child: Icon(icon, size: 48, color: alertColor),
             ),
             const SizedBox(height: 24),
-            
+
             // Title
             Text(
               title,
@@ -123,7 +121,7 @@ class VerificationAlertModal extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Message
             Text(
               message,
@@ -134,7 +132,7 @@ class VerificationAlertModal extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            
+
             // Action Button
             SizedBox(
               width: double.infinity,
@@ -153,10 +151,7 @@ class VerificationAlertModal extends StatelessWidget {
                 ),
                 child: const Text(
                   'Understood',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ),

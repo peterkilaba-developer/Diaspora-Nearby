@@ -12,7 +12,8 @@ import 'package:diaspora_nearby/features/discovery/providers/global_search_provi
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-
+import 'package:diaspora_nearby/features/hosting/widgets/request_host_dialog.dart'; // [NEW] Hosting
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class CommunitiesScreen extends ConsumerStatefulWidget {
   const CommunitiesScreen({super.key});
@@ -135,7 +136,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.handshake,
+                    LucideIcons.heartHandshake,
                     size: 64,
                     color: Theme.of(context).disabledColor,
                   ),
@@ -162,7 +163,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
             itemCount: filteredItems.length,
             itemBuilder: (context, index) {
               final item = filteredItems[index];
@@ -248,7 +249,7 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
         children: [
           Card(
             margin: EdgeInsets.zero,
-            color: Theme.of(context).cardColor,
+            color: AppTheme.cardDecoration(context).color,
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -282,7 +283,7 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.handshake,
+                                    LucideIcons.heartHandshake,
                                     size: 14,
                                     color: Theme.of(context).hintColor,
                                   ),
@@ -329,10 +330,7 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                     .map(
                       (child) => Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: HierarchyItemWidget(
-                          item: child,
-                          hostDepth: 0,
-                        ),
+                        child: HierarchyItemWidget(item: child, hostDepth: 0),
                       ),
                     )
                     .toList(),
@@ -346,7 +344,7 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
-      color: Theme.of(context).cardColor,
+      color: AppTheme.cardDecoration(context).color,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide.none,
@@ -382,7 +380,7 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
             subtitle: Row(
               children: [
                 Icon(
-                  Icons.handshake,
+                  LucideIcons.heartHandshake,
                   size: 14,
                   color: Theme.of(context).hintColor,
                 ),
@@ -404,53 +402,83 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                       'action_community_members',
                     )
                     .then((rewarded) {
-                  if (rewarded && context.mounted) {
-                    showExplorationRewardToast(context, message: 'Community discovered!');
-                  }
-                });
+                      if (rewarded && context.mounted) {
+                        showExplorationRewardToast(
+                          context,
+                          message: 'Community discovered!',
+                        );
+                      }
+                    });
               }
               _openMembersList(context);
             },
-            trailing: hasChildren
-                ? (isPreExpanded
-                      ? const SizedBox(width: 16)
-                      : IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: Icon(
-                            _isExpanded
-                                ? LucideIcons.chevronDown
-                                : LucideIcons.chevronRight,
-                            color: Theme.of(
-                              context,
-                            ).iconTheme.color?.withValues(alpha: 0.5),
-                          ),
-                          onPressed: () {
-                            // [NEW] Track Expand
-                            if (!_isExpanded) {
-                              final user = ref
-                                  .read(authRepositoryProvider)
-                                  .currentUser;
-                              if (user != null) {
-                                ref
-                                    .read(pointsServiceProvider)
-                                    .trackExplorationReward(
-                                      user.uid,
-                                      'action_community_expand',
-                                    )
-                                    .then((rewarded) {
-                                  if (rewarded && context.mounted) {
-                                    showExplorationRewardToast(context, message: 'Expansion bonus!');
-                                  }
-                                });
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // [NEW] Request Host button — only for city-level communities
+                if (item.type == 'city' || item.type == 'community')
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Request Host',
+                    icon: const Icon(
+                      LucideIcons.plane,
+                      size: 20,
+                      color: AppTheme.accent,
+                    ),
+                    onPressed: () {
+                      RequestHostDialog.show(
+                        context,
+                        communityId: item.id,
+                        communityName: item.name,
+                        communityChatId: 'chat_${item.id}',
+                      );
+                    },
+                  ),
+                if (hasChildren)
+                  (isPreExpanded
+                        ? const SizedBox(width: 16)
+                        : IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: Icon(
+                              _isExpanded
+                                  ? LucideIcons.chevronDown
+                                  : LucideIcons.chevronRight,
+                              color: Theme.of(
+                                context,
+                              ).iconTheme.color?.withValues(alpha: 0.5),
+                            ),
+                            onPressed: () {
+                              // [NEW] Track Expand
+                              if (!_isExpanded) {
+                                final user = ref
+                                    .read(authRepositoryProvider)
+                                    .currentUser;
+                                if (user != null) {
+                                  ref
+                                      .read(pointsServiceProvider)
+                                      .trackExplorationReward(
+                                        user.uid,
+                                        'action_community_expand',
+                                      )
+                                      .then((rewarded) {
+                                        if (rewarded && context.mounted) {
+                                          showExplorationRewardToast(
+                                            context,
+                                            message: 'Expansion bonus!',
+                                          );
+                                        }
+                                      });
+                                }
                               }
-                            }
-                            setState(() {
-                              _isExpanded = !_isExpanded;
-                            });
-                          },
-                        ))
-                : null,
+                              setState(() {
+                                _isExpanded = !_isExpanded;
+                              });
+                            },
+                          )),
+              ],
+            ),
           ),
 
           // Show children if expanded OR if pre-expanded
@@ -462,7 +490,8 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                       padding: EdgeInsets.only(
                         top: 8,
                         // 4px per level, but keep Continent and Country at 0px
-                        left: (child.type == 'continent' ||
+                        left:
+                            (child.type == 'continent' ||
                                 child.type == 'country' ||
                                 child.type == 'global')
                             ? 0

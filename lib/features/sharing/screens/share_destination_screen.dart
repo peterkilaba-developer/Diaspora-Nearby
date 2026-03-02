@@ -8,7 +8,6 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
-
 class ShareDestinationScreen extends ConsumerStatefulWidget {
   final List<SharedMediaFile>? sharedFiles;
   final String? sharedText;
@@ -48,8 +47,8 @@ class _ShareDestinationScreenState
         children: [
           // Preview Section
           Container(
-            padding: EdgeInsets.all(AppTheme.pageHorizontalPadding),
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
             child: Row(
               children: [
                 if (widget.sharedFiles != null &&
@@ -98,7 +97,7 @@ class _ShareDestinationScreenState
           ),
 
           Padding(
-            padding: EdgeInsets.all(AppTheme.pageHorizontalPadding),
+            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             child: TextField(
               controller: _commentController,
               decoration: const InputDecoration(
@@ -111,7 +110,10 @@ class _ShareDestinationScreenState
 
           const Divider(),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.pageHorizontalPadding,
+              vertical: 8,
+            ),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(

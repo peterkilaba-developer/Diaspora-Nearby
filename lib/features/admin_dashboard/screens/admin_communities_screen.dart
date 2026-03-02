@@ -28,13 +28,13 @@ class _AdminCommunitiesScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.elevationColor(context, 0), // Level 0 page bg
       body: Column(
         children: [
           // Header Actions
           Container(
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
-            color: Colors.white,
+            color: AppTheme.elevationColor(context, 1), // Level 1 header
             child: Row(
               children: [
                 Expanded(
@@ -45,7 +45,7 @@ class _AdminCommunitiesScreenState
                       hintText: 'Search communities by name or type...',
                       prefixIcon: const Icon(LucideIcons.search, size: 20),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: AppTheme.elevationColor(context, 2), // Level 2 input
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -136,7 +136,7 @@ class _CommunityCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
       ),
@@ -268,10 +268,13 @@ class _ActionButton extends StatelessWidget {
       icon: Icon(icon, size: 18),
       label: Text(label),
       style: ElevatedButton.styleFrom(
-        backgroundColor: primary ? Colors.blue : Colors.white,
+        backgroundColor: primary ? Colors.blue : AppTheme.elevationColor(context, 1),
         foregroundColor: primary ? Colors.white : Colors.black,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.pageHorizontalPadding,
+          vertical: 8,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: primary

@@ -25,7 +25,8 @@ class UserProfileEditor extends ConsumerStatefulWidget {
 }
 
 class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
-  final GlobalKey<UserProfileFormState> _formKey = GlobalKey<UserProfileFormState>();
+  final GlobalKey<UserProfileFormState> _formKey =
+      GlobalKey<UserProfileFormState>();
   bool _isSaving = false;
 
   @override
@@ -53,7 +54,10 @@ class _UserProfileEditorState extends ConsumerState<UserProfileEditor> {
                 setState(() => _isSaving = true);
                 _formKey.currentState?.submit();
               },
-              child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Save',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
         ],
       ),

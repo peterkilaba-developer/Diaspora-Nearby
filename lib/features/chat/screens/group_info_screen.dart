@@ -12,7 +12,8 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
 import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart'; // [NEW] Shared Providers
 
@@ -46,6 +47,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   String? _currentGroupImage;
   List<String> _adminIds = []; // Track admins separately
   String? _inviterId; // [NEW]
+  bool _isMuted = false; // [NEW] Mute State
 
   // For Batch Editing
   final Set<String> _membersToRemove = {};
@@ -75,22 +77,33 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
       final chat = await chatRepo.getChat(widget.chatId);
 
-      // Check for invitation metadata in RTDB
+      // Check for invitation metadata in Firestore userChats
       String? foundInviterId;
       try {
-        final snapshot = await FirebaseDatabase.instance
-            .ref('userChats/${widget.currentUserId}/${widget.chatId}/lastMessage/metadata')
+        final userChatDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.currentUserId)
+            .collection('userChats')
+            .doc(widget.chatId)
             .get();
-        if (snapshot.exists && snapshot.value != null && snapshot.value is Map) {
-          final data = Map<String, dynamic>.from(snapshot.value as Map);
-          foundInviterId = data['inviterId'] as String?;
+        if (userChatDoc.exists) {
+          final data = userChatDoc.data();
+          final metadata = data?['lastMessage']?['metadata'];
+          if (metadata is Map) {
+            foundInviterId = metadata['inviterId'] as String?;
+          }
+          // Fetch Mute Status
+          if (data?['muted'] == true) {
+            _isMuted = true;
+          } else {
+            _isMuted = false;
+          }
         }
       } catch (e) {
-        debugPrint('Error fetching invitation metadata: $e');
+        debugPrint('Error fetching userChat data: $e');
       }
 
       // [FIX] Force fetch description removed - Schema updated
-
 
       if (mounted) {
         if (chat != null) {
@@ -135,7 +148,8 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             _adminIds = chat.admins ?? [];
             _inviterId = foundInviterId; // [NEW]
 
-            _isAdmin = (chat.admins?.contains(widget.currentUserId) ?? false) ||
+            _isAdmin =
+                (chat.admins?.contains(widget.currentUserId) ?? false) ||
                 (chat.participants.isNotEmpty &&
                     chat.participants.first == widget.currentUserId);
 
@@ -143,12 +157,12 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
           });
         } else {
           // Chat not found or error
-           if (mounted) {
-             setState(() => _isLoading = false);
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text('Error: Chat not found')),
-             );
-           }
+          if (mounted) {
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error: Chat not found')),
+            );
+          }
         }
       }
     } catch (e) {
@@ -178,14 +192,16 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     );
 
     await repo.addGroupMember(widget.chatId, widget.currentUserId);
-    
+
     // [FIX] Manually update local cache so ChatScreen sees updated participant list immediately
     final currentChat = await repo.getChat(widget.chatId);
     if (currentChat != null) {
       final updatedParticipants = List<String>.from(currentChat.participants);
       if (!updatedParticipants.contains(widget.currentUserId)) {
         updatedParticipants.add(widget.currentUserId);
-        final updatedChat = currentChat.copyWith(participants: updatedParticipants);
+        final updatedChat = currentChat.copyWith(
+          participants: updatedParticipants,
+        );
         await repo.updateChatLocally(updatedChat);
       }
     }
@@ -195,44 +211,46 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
     // Optimistically update UI
     if (mounted) {
-       setState(() {
-         // 1. Hide inviter info
-         _inviterId = null;
-       });
+      setState(() {
+        // 1. Hide inviter info
+        _inviterId = null;
+      });
 
-       // 3. Add to members list manually if not present
+      // 3. Add to members list manually if not present
       try {
-        final myProfile = await profileRepo.getUserProfile(widget.currentUserId);
-         if (myProfile != null && mounted) {
-            setState(() {
-              if (!_members.any((m) => m.uid == widget.currentUserId)) {
-                  _members.add(myProfile);
-                  // Resort
-                   _members.sort((a, b) {
-                     // (Copy existing sort logic or simplfied)
-                      // Creator -> Admin -> Others
-                      // We don't have creatorId handy unless we store it.
-                      // But effectively just appending is better than missing.
-                      return 0; 
-                   });
-              }
-              _isLoading = false;
-            });
-            // Reload fully to ensure sort order
-             await _loadGroupData();
-             
-             // [NEW] Send System Message
-             try {
-                final messaging = ref.read(chatMessagingServiceProvider);
-                await messaging.sendTextMessage(
-                  widget.chatId,
-                  '${myProfile.firstName} ${myProfile.lastName} joined the group.',
-                  type: 'system',
-                );
-             } catch (e) {
-                debugPrint('Failed to send system message: $e');
-             }
+        final myProfile = await profileRepo.getUserProfile(
+          widget.currentUserId,
+        );
+        if (myProfile != null && mounted) {
+          setState(() {
+            if (!_members.any((m) => m.uid == widget.currentUserId)) {
+              _members.add(myProfile);
+              // Resort
+              _members.sort((a, b) {
+                // (Copy existing sort logic or simplfied)
+                // Creator -> Admin -> Others
+                // We don't have creatorId handy unless we store it.
+                // But effectively just appending is better than missing.
+                return 0;
+              });
+            }
+            _isLoading = false;
+          });
+          // Reload fully to ensure sort order
+          await _loadGroupData();
+
+          // [NEW] Send System Message
+          try {
+            final messaging = ref.read(chatMessagingServiceProvider);
+            await messaging.sendTextMessage(
+              widget.chatId,
+              '${myProfile.firstName} ${myProfile.lastName} joined the group.',
+              type: 'system',
+            );
+          } catch (e) {
+            debugPrint('Failed to send system message: $e');
           }
+        }
       } catch (e) {
         debugPrint('Error optimistic update: $e');
         await _loadGroupData();
@@ -243,14 +261,14 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   Future<void> _rejectInvitation() async {
     setState(() => _isLoading = true);
     final pointsService = ref.read(pointsServiceProvider);
-    
+
     // +10 DSP to user, -10 DSP to inviter
     await pointsService.awardPoints(
       userId: widget.currentUserId,
       amount: 10,
       reason: 'Rejected Group Invite',
     );
-     if (_inviterId != null) {
+    if (_inviterId != null) {
       await pointsService.deductPoints(
         userId: _inviterId!,
         amount: 10,
@@ -263,22 +281,25 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     await repo.deleteChat(widget.chatId);
 
     if (mounted) {
-       context.go('/chats');
+      context.go('/chats');
     }
   }
-  
+
   // [NEW] Invitation Selection State
   final Set<String> _selectedContactIds = {};
   bool get _isSelectingContacts => _selectedContactIds.isNotEmpty;
 
   // [NEW] Helper to split members
   bool _isMemberAdmin(ProfileData member) {
-    return _adminIds.contains(member.uid) || 
-           (_members.isNotEmpty && _members.first.uid == member.uid && _adminIds.isEmpty);
+    return _adminIds.contains(member.uid) ||
+        (_members.isNotEmpty &&
+            _members.first.uid == member.uid &&
+            _adminIds.isEmpty);
   }
 
   List<ProfileData> get _admins => _members.where(_isMemberAdmin).toList();
-  List<ProfileData> get _regularMembers => _members.where((m) => !_isMemberAdmin(m)).toList();
+  List<ProfileData> get _regularMembers =>
+      _members.where((m) => !_isMemberAdmin(m)).toList();
 
   Future<void> _inviteSelectedMembers() async {
     if (_selectedContactIds.isEmpty) return;
@@ -294,7 +315,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Invitations sent to ${_selectedContactIds.length} users')),
+          SnackBar(
+            content: Text(
+              'Invitations sent to ${_selectedContactIds.length} users',
+            ),
+          ),
         );
         setState(() {
           _selectedContactIds.clear();
@@ -303,11 +328,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       }
     } catch (e) {
       debugPrint('Error inviting members: $e');
-       if (mounted) {
+      if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Failed to invite members: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to invite members: $e')));
       }
     }
   }
@@ -327,7 +352,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       }
 
       // Always update group info when saving changes in edit mode
-      // optimizing by strictly checking against previous values is good but 
+      // optimizing by strictly checking against previous values is good but
       // the previous logic was flawed. Simplest is to just update.
       await repo.updateGroupInfo(
         widget.chatId,
@@ -390,7 +415,6 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     final success = await repo.promoteToAdmin(widget.chatId, userId);
     if (success) _loadGroupData();
   }
-
 
   // Method _addMember removed (unused)
 
@@ -497,7 +521,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             if (_isLoading) const LinearProgressIndicator(minHeight: 2),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
@@ -586,7 +610,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 child: TextField(
                                   controller: _nameController,
                                   textAlign: TextAlign.center,
@@ -612,7 +638,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  Icons.handshake_outlined,
+                                  LucideIcons.heartHandshake,
                                   size: 14,
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
@@ -625,9 +651,8 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                 ),
                               ],
                             ),
-                            
-                          // Invitation Banner Removed explicitly by user request
 
+                          // Invitation Banner Removed explicitly by user request
                         ],
                       ),
                     ),
@@ -666,6 +691,24 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                     ),
 
                     const SizedBox(height: 32),
+
+                    // [NEW] Mute Notifications Switch
+                    SwitchListTile(
+                      value: _isMuted,
+                      onChanged: (value) async {
+                        setState(() => _isMuted = value);
+                        await ref
+                            .read(chatRepositoryProvider)
+                            .toggleMute(widget.chatId, value);
+                      },
+                      title: const Text('Mute Notifications'),
+                      secondary: Icon(
+                        _isMuted ? LucideIcons.bellOff : LucideIcons.bell,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      activeThumbColor: theme.colorScheme.primary,
+                    ),
+
                     // Members Section (Always Show)
                     Align(
                       alignment: Alignment.centerLeft,
@@ -681,14 +724,22 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                       const SizedBox(height: 24),
                     ] else ...[
                       // 1. Admins
-                      ..._buildMembersList(theme, _admins, 'Admins (${_admins.length})'),
-                      
+                      ..._buildMembersList(
+                        theme,
+                        _admins,
+                        'Admins (${_admins.length})',
+                      ),
+
                       // 2. Invite Section (Sandwidth)
                       ..._buildContactsList(theme),
-                      
+
                       // 3. Regular Members
-                      ..._buildMembersList(theme, _regularMembers, 'Group Members (${_regularMembers.length})'),
-                      
+                      ..._buildMembersList(
+                        theme,
+                        _regularMembers,
+                        'Group Members (${_regularMembers.length})',
+                      ),
+
                       const SizedBox(height: 32),
                     ],
                   ],
@@ -716,8 +767,10 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                 ),
                 child: Builder(
                   builder: (context) {
-                    final isMember = _members.any((m) => m.uid == widget.currentUserId);
-                    
+                    final isMember = _members.any(
+                      (m) => m.uid == widget.currentUserId,
+                    );
+
                     // Invitation View
                     if (!isMember) {
                       return Column(
@@ -729,10 +782,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if (_inviterId != null) // Optional: show inviter name if fetched
-                             // We could query inviter name but simplified for now
-                             const SizedBox(height: 8),
-                          
+                          if (_inviterId !=
+                              null) // Optional: show inviter name if fetched
+                            // We could query inviter name but simplified for now
+                            const SizedBox(height: 8),
+
                           Row(
                             children: [
                               Expanded(
@@ -740,7 +794,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                   onPressed: _rejectInvitation,
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: theme.colorScheme.error,
-                                    side: BorderSide(color: theme.colorScheme.error),
+                                    side: BorderSide(
+                                      color: theme.colorScheme.error,
+                                    ),
                                   ),
                                   child: const Text('Reject'),
                                 ),
@@ -750,7 +806,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                 child: FilledButton(
                                   onPressed: _acceptInvitation,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: theme.colorScheme.primary, // Use theme primary
+                                    backgroundColor: theme
+                                        .colorScheme
+                                        .primary, // Use theme primary
                                   ),
                                   child: const Text('Accept'),
                                 ),
@@ -762,14 +820,17 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                     }
 
                     if (_isSelectingContacts) {
-                       return SizedBox(
+                      return SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
                           onPressed: _inviteSelectedMembers,
                           icon: const Icon(LucideIcons.send, size: 18),
-                          label: Text('Invite ${_selectedContactIds.length} People'),
+                          label: Text(
+                            'Invite ${_selectedContactIds.length} People',
+                          ),
                           style: FilledButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary, // Use theme primary
+                            backgroundColor:
+                                theme.colorScheme.primary, // Use theme primary
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -796,9 +857,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         ),
                       ),
                     );
-                  }
+                  },
                 ),
-              )
+              ),
           ],
         ),
       ),
@@ -828,7 +889,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     );
   }
 
-  List<Widget> _buildMembersList(ThemeData theme, List<ProfileData> membersList, String title) {
+  List<Widget> _buildMembersList(
+    ThemeData theme,
+    List<ProfileData> membersList,
+    String title,
+  ) {
     if (membersList.isEmpty) return [];
 
     return [
@@ -846,7 +911,8 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       ),
       ...membersList.map((member) {
         final isMe = member.uid == widget.currentUserId;
-        final isMemberAdmin = _adminIds.contains(member.uid) ||
+        final isMemberAdmin =
+            _adminIds.contains(member.uid) ||
             (_members.indexOf(member) == 0 && _adminIds.isEmpty);
 
         return Padding(
@@ -856,36 +922,38 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
               Expanded(
                 child: GestureDetector(
                   onLongPress: () {
-                     if (_isAdmin && !isMe && !_isEditing) {
-                        if (!isMemberAdmin) {
-                          _promoteToAdmin(member.uid!);
-                        }
-                     }
+                    if (_isAdmin && !isMe && !_isEditing) {
+                      if (!isMemberAdmin) {
+                        _promoteToAdmin(member.uid!);
+                      }
+                    }
                   },
                   onTap: () {
-                     if (_isEditing && !isMe) {
-                        setState(() {
-                          if (_membersToRemove.contains(member.uid)) {
-                            _membersToRemove.remove(member.uid);
-                          } else {
-                            if (member.uid != null) {
-                              _membersToRemove.add(member.uid!);
-                            }
+                    if (_isEditing && !isMe) {
+                      setState(() {
+                        if (_membersToRemove.contains(member.uid)) {
+                          _membersToRemove.remove(member.uid);
+                        } else {
+                          if (member.uid != null) {
+                            _membersToRemove.add(member.uid!);
                           }
-                        });
-                     }
+                        }
+                      });
+                    }
                   },
                   child: Container(
                     decoration: BoxDecoration(
-                      border: (_isEditing && _membersToRemove.contains(member.uid)) 
+                      border:
+                          (_isEditing && _membersToRemove.contains(member.uid))
                           ? Border.all(color: theme.colorScheme.error, width: 2)
                           : null,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.all(4), // Add padding for border
                     child: Opacity(
-                      opacity:
-                          _membersToRemove.contains(member.uid) ? 0.5 : 1.0,
+                      opacity: _membersToRemove.contains(member.uid)
+                          ? 0.5
+                          : 1.0,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -893,8 +961,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                           Builder(
                             builder: (context) {
                               double? distanceKm;
-                              final currentUserProfile =
-                                  ref.watch(userProfileProvider).value;
+                              final currentUserProfile = ref
+                                  .watch(userProfileProvider)
+                                  .value;
                               if (currentUserProfile
                                           ?.currentLocation
                                           ?.geometry
@@ -925,9 +994,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                     context.push('/profile/${member.uid}'),
                                 onChatTap: isMe
                                     ? null
-                                    : () => context
-                                        .push('/chat/direct/${member.uid}'),
-                                isStatic: true, // Disable internal tapping to allow parent GestureDetector
+                                    : () => context.push(
+                                        '/chat/direct/${member.uid}',
+                                      ),
+                                isStatic:
+                                    true, // Disable internal tapping to allow parent GestureDetector
                               );
                             },
                           ),
@@ -977,25 +1048,25 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                     // Start selection mode if not editing
                     if (!_isEditing && !_isSelectingContacts) {
                       setState(() {
-                         if (contact.uid != null) {
-                            _selectedContactIds.add(contact.uid!);
-                         }
+                        if (contact.uid != null) {
+                          _selectedContactIds.add(contact.uid!);
+                        }
                       });
                     }
                   },
                   onTap: () {
-                     if (_isSelectingContacts) {
-                        setState(() {
-                           if (_selectedContactIds.contains(contact.uid)) {
-                              _selectedContactIds.remove(contact.uid);
-                           } else {
-                              if (contact.uid != null) {
-                                 _selectedContactIds.add(contact.uid!);
-                              }
-                           }
-                        });
-                        return;
-                     }
+                    if (_isSelectingContacts) {
+                      setState(() {
+                        if (_selectedContactIds.contains(contact.uid)) {
+                          _selectedContactIds.remove(contact.uid);
+                        } else {
+                          if (contact.uid != null) {
+                            _selectedContactIds.add(contact.uid!);
+                          }
+                        }
+                      });
+                      return;
+                    }
 
                     if (_isEditing) {
                       setState(() {
@@ -1012,10 +1083,15 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      border: ((_isEditing && _membersToAdd.contains(contact.uid)) ||
-                              (_isSelectingContacts && _selectedContactIds.contains(contact.uid)))
+                      border:
+                          ((_isEditing &&
+                                  _membersToAdd.contains(contact.uid)) ||
+                              (_isSelectingContacts &&
+                                  _selectedContactIds.contains(contact.uid)))
                           ? Border.all(
-                              color: theme.colorScheme.primary, // [FIX] Use theme primary
+                              color: theme
+                                  .colorScheme
+                                  .primary, // [FIX] Use theme primary
                               width: 2,
                             )
                           : null,
@@ -1024,8 +1100,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                     child: Builder(
                       builder: (context) {
                         double? distanceKm;
-                        final currentUserProfile =
-                            ref.watch(userProfileProvider).value;
+                        final currentUserProfile = ref
+                            .watch(userProfileProvider)
+                            .value;
                         if (currentUserProfile
                                     ?.currentLocation
                                     ?.geometry
@@ -1056,7 +1133,8 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                               : () => context.push('/profile/${contact.uid}'),
                           onChatTap: (_isEditing || _isSelectingContacts)
                               ? null
-                              : () => context.push('/chat/direct/${contact.uid}'),
+                              : () =>
+                                    context.push('/chat/direct/${contact.uid}'),
                           isStatic: _isEditing || _isSelectingContacts,
                         );
                       },

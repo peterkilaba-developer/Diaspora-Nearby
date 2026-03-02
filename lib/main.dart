@@ -44,38 +44,42 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     String msgContent = (data['content'] ?? data['body'] ?? '') as String;
     String? senderName = data['senderName']?.toString();
     // Default title is sender name, can be overridden (e.g. for System messages)
-    title = (senderName?.trim().isNotEmpty ?? false) ? senderName : 'New Message';
+    title = (senderName?.trim().isNotEmpty ?? false)
+        ? senderName
+        : 'New Message';
 
     if (msgType != null) {
       switch (msgType) {
         case 'audio':
-          body = msgContent.isEmpty ? '🎤 Voice message' : '🎤 $msgContent';
+          body = msgContent.isEmpty ? 'Voice message' : msgContent;
           break;
         case 'audio_file':
-          body = msgContent.isEmpty ? '🎵 Audio file' : '🎵 $msgContent';
+          body = msgContent.isEmpty ? 'Audio file' : msgContent;
           break;
         case 'image':
-          body = msgContent.isEmpty ? '📷 Photo' : '📷 $msgContent';
+          body = msgContent.isEmpty ? 'Photo' : msgContent;
           break;
         case 'video':
-          body = msgContent.isEmpty ? '🎥 Video' : '🎥 $msgContent';
+          body = msgContent.isEmpty ? 'Video' : msgContent;
           break;
         case 'location':
-          if (msgContent.isEmpty || msgContent == 'Location' || msgContent == '📍 Location') {
-            body = '📍 Location';
+          if (msgContent.isEmpty ||
+              msgContent == 'Location' ||
+              msgContent == 'Location') {
+            body = 'Location';
           } else {
-            body = '📍 $msgContent';
+            body = msgContent;
           }
           break;
         case 'document':
-          body = msgContent.isEmpty ? '📄 Document' : '📄 $msgContent';
+          body = msgContent.isEmpty ? 'Document' : msgContent;
           break;
         case 'dsp_transfer':
           title = 'Diaspora Nearby';
-          body = '🪙 Transfer';
+          body = 'Transfer';
           break;
         case 'money-transfer':
-          body = '💵 Money transfer';
+          body = 'Money transfer';
           break;
         case 'relationship_request':
           title = 'New Relationship Request';
@@ -91,7 +95,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       }
     }
 
-    if (body == null || body!.trim().isEmpty) {
+    if (body == null || body.trim().isEmpty) {
       body = msgContent.trim().isNotEmpty ? msgContent : 'Sent a message';
     }
 

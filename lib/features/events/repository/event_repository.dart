@@ -3,18 +3,19 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:math' as math;
+import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:firebase_database/firebase_database.dart' hide Query;
+
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:diaspora_nearby/features/events/repository/event_local_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) {
   return EventRepository(
@@ -45,28 +46,23 @@ final joinedEventsProvider = StreamProvider.family<List<Event>, String>((
   return ref.watch(eventRepositoryProvider).getJoinedEvents(userId);
 });
 
-enum VerificationResult {
-  success,
-  invalidCode,
-  alreadyCheckedIn,
-  error,
-}
+enum VerificationResult { success, invalidCode, alreadyCheckedIn, error }
 
 class EventRepository {
   final cf.FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
   final Ref _ref;
-  final FirebaseDatabase _rtdb = FirebaseDatabase.instance;
+
   final EventLocalService _localService;
 
   // Cache for geocoding results
   final Map<String, Map<String, double>> _geocodingCache = {};
 
   EventRepository(this._firestore, this._storage, this._ref)
-      : _localService = EventLocalService();
+    : _localService = EventLocalService();
   // isGlobal: false -> Show only events where creator's homeCountryCode matches current user's
   // ============================================
-  // FETCHING & STREAMS (Isar Implementation)
+  // FETCHING & STREAMS
   // ============================================
 
   Stream<List<Event>> getEvents({
@@ -86,8 +82,8 @@ class EventRepository {
     // 2. Watch Local DB (Native)
     // On Web, we fall back to Firestore logic above if kIsWeb check was passed
     if (kIsWeb) {
-       // WEB: Direct Firestore watch with basic filtering
-       return _firestore
+      // WEB: Direct Firestore watch with basic filtering
+      return _firestore
           .collection('events')
           .where('status', isEqualTo: 'published')
           .snapshots()
@@ -102,8 +98,9 @@ class EventRepository {
                 "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
 
             return events.where((event) {
-              // Future events only
-              if (event.startDate.compareTo(todayStr) < 0) return false;
+              // Show events until midnight after they end
+              final effectiveEndDate = (event.endDate != null && event.endDate!.isNotEmpty) ? event.endDate! : event.startDate;
+              if (effectiveEndDate.compareTo(todayStr) < 0) return false;
 
               // Visibility Logic (Reproduced from mobile logic)
               final permission = event.attendingPermission;
@@ -127,49 +124,49 @@ class EventRepository {
     }
 
     return _localService.watchFutureEvents().asyncMap((events) async {
-          final filteredEvents = events.where((event) {
-            // Visibility Logic (Reproduced from original)
-            final permission = event.attendingPermission;
-            final creatorId = event.creatorId;
+      final filteredEvents = events.where((event) {
+        // Visibility Logic (Reproduced from original)
+        final permission = event.attendingPermission;
+        final creatorId = event.creatorId;
 
-            // 1. Creator always sees their event
-            if (creatorId == currentUserId) return true;
+        // 1. Creator always sees their event
+        if (creatorId == currentUserId) return true;
 
-            // 1.5 Must be published for others
-            if (event.status != 'published') return false;
+        // 1.5 Must be published for others
+        if (event.status != 'published') return false;
 
-            // 2. Global/Public
-            if (permission == null ||
-                permission == 'global' ||
-                permission == 'all') {
-              return true;
-            }
+        // 2. Global/Public
+        if (permission == null ||
+            permission == 'global' ||
+            permission == 'all') {
+          return true;
+        }
 
-            // 2.1 Country Filter (If not global view)
-            if (!isGlobal && homeCountryCode != null) {
-               if (event.homeCountryCode != homeCountryCode) return false;
-            }
+        // 2.1 Country Filter (If not global view)
+        if (!isGlobal && homeCountryCode != null) {
+          if (event.homeCountryCode != homeCountryCode) return false;
+        }
 
-            // 3. Private
-            if (permission == 'private') {
-              return event.invitedUserIds?.contains(currentUserId) ?? false;
-            }
+        // 3. Private
+        if (permission == 'private') {
+          return event.invitedUserIds?.contains(currentUserId) ?? false;
+        }
 
-            // 4. Community Membership
-            return userCommunityMemberships.contains(permission);
-          }).toList();
+        // 4. Community Membership
+        return userCommunityMemberships.contains(permission);
+      }).toList();
 
-          // Sort by Start Date
-          filteredEvents.sort((a, b) => a.startDate.compareTo(b.startDate));
+      // Sort by Start Date
+      filteredEvents.sort((a, b) => a.startDate.compareTo(b.startDate));
 
-          // Enrich with Distance (Client-side, uses Geolocator)
-          try {
-            final position = await Geolocator.getCurrentPosition();
-            return await _addDistancesToEvents(filteredEvents, position);
-          } catch (e) {
-            return filteredEvents;
-          }
-        });
+      // Enrich with Distance (Client-side, uses Geolocator)
+      try {
+        final position = await Geolocator.getCurrentPosition();
+        return await _addDistancesToEvents(filteredEvents, position);
+      } catch (e) {
+        return filteredEvents;
+      }
+    });
   }
 
   Future<void> _syncEvents({
@@ -189,7 +186,7 @@ class EventRepository {
       if (!isGlobal && homeCountryCode != null) {
         query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
       }
-      
+
       // [OPTIMIZATION] Limit to 50 events for scalability
       query = query.limit(50);
 
@@ -212,7 +209,6 @@ class EventRepository {
       debugPrint('Error syncing events: $e');
     }
   }
-
 
   // Enrich events with creator profiles
   Future<List<Event>> _enrichEvents(List<Event> events) async {
@@ -273,7 +269,7 @@ class EventRepository {
 
       // Calculate Distance if we have coordinates
       if (lat != null && lng != null) {
-        event.distance = _calculateHaversineDistance(
+        event.distance = GeoUtils.haversine(
           userLocation.latitude,
           userLocation.longitude,
           lat,
@@ -333,31 +329,7 @@ class EventRepository {
     return null;
   }
 
-  // Haversine Distance Formula
-  double _calculateHaversineDistance(
-    double lat1,
-    double lng1,
-    double lat2,
-    double lng2,
-  ) {
-    const R = 6371.0; // Earth radius in km
-    final dLat = _degToRad(lat2 - lat1);
-    final dLng = _degToRad(lng2 - lng1);
 
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degToRad(lat1)) *
-            math.cos(_degToRad(lat2)) *
-            math.sin(dLng / 2) *
-            math.sin(dLng / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return R * c;
-  }
-
-  double _degToRad(double deg) {
-    return deg * (math.pi / 180);
-  }
 
   // Fetch Single Event by ID
   Future<Event?> getEvent(String eventId, {bool force = false}) async {
@@ -391,12 +363,11 @@ class EventRepository {
       // Calculate Distance (Optional for details, but good for cache)
       try {
         final position = await Geolocator.getCurrentPosition();
-        final withDistance = await _addDistancesToEvents(
-          [finalEvent],
-          position,
-        );
+        final withDistance = await _addDistancesToEvents([
+          finalEvent,
+        ], position);
         final enrichedWithDist = withDistance.first;
-        
+
         // Save to Isar
         await _localService.saveEvent(enrichedWithDist);
         return enrichedWithDist;
@@ -453,15 +424,15 @@ class EventRepository {
       eventData['attendeeCount'] = 1;
       eventData['createdAt'] = DateTime.now().toIso8601String();
 
-      // 1. Immediately Cache
+
+
       // 1. Immediately Cache
       final eventDataWithId = Event.fromJson(eventData);
       await _localService.saveEvent(eventDataWithId);
-      
+
       // 2. Save to Firestore
       await _firestore.collection('events').doc(event.id).set(eventData);
 
-      // Create Event Chat (RTDB style to match React)
       await _createEventChat(
         event.id,
         event.title,
@@ -472,11 +443,12 @@ class EventRepository {
 
       return event.id;
     } catch (e) {
+      debugPrint('Error creating event: $e');
       rethrow;
     }
   }
 
-  // Create Event Chat in RTDB and Firestore (Hybrid)
+  // Create Event Chat in Firestore
   Future<void> _createEventChat(
     String eventId,
     String title,
@@ -485,9 +457,18 @@ class EventRepository {
     List<String>? invitedUserIds,
   ) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    final chatId = 'event_$eventId'; // Deterministic ID
 
-    // 1. Create chat in RTDB (for messages)
+    final allParticipants = <String>[creatorId];
+    if (invitedUserIds != null && invitedUserIds.isNotEmpty) {
+      for (final uid in invitedUserIds) {
+        if (!allParticipants.contains(uid)) allParticipants.add(uid);
+      }
+    }
+
+    // 1. Create chat document in Firestore
     final chatData = {
+      'id': chatId,
       'type': 'event',
       'eventId': eventId,
       'name': title,
@@ -495,78 +476,78 @@ class EventRepository {
       'createdAt': now,
       'updatedAt': now,
       'createdBy': creatorId,
-      'memberCount': 1,
-      'participants': [creatorId],
+      'memberCount': allParticipants.length,
+      'participants': allParticipants,
     };
 
-    final chatId = 'event_$eventId'; // Deterministic ID for existing events
+    await _firestore.collection('chats').doc(chatId).set(chatData);
 
-    await _rtdb.ref('chats/$chatId').set(chatData);
-
-    // 2. Add creator to chat
-    await _addUserToEventChat(chatId, creatorId, title);
-
-    // 3. Add Invited Users (if Private)
-    if (invitedUserIds != null && invitedUserIds.isNotEmpty) {
-      for (final userId in invitedUserIds) {
-        await _addUserToEventChat(chatId, userId, title);
-      }
-
-      // Update member count
-      await _rtdb
-          .ref('chats/$chatId/memberCount')
-          .set(1 + invitedUserIds.length);
+    // 2. Add all participants to their userChats subcollection
+    final batch = _firestore.batch();
+    for (final userId in allParticipants) {
+      final userChatRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId);
+      batch.set(userChatRef, {
+        'chatId': chatId,
+        'updatedAt': now,
+      });
     }
+    await batch.commit();
 
-    // 4. Update Event with chatId
+    // 3. Update Event with chatId
     await _firestore.collection('events').doc(eventId).update({
       'chatId': chatId,
     });
   }
 
-  // Helper to add user to event chat
+  // Helper to add user to event chat (Firestore)
   Future<void> _addUserToEventChat(
     String chatId,
     String userId,
     String chatName,
   ) async {
-    final updates = <String, dynamic>{'userChats/$userId/$chatId': true};
-    await _rtdb.ref().update(updates);
+    final now = DateTime.now().millisecondsSinceEpoch;
 
-    // Also ensure they are in the participants list of the chat itself
-    // This is critical for the Isar query `.participantsElementEqualTo(uid)` to work
-    final chatParticipantsRef = _rtdb.ref('chats/$chatId/participants');
-    final snapshot = await chatParticipantsRef.get();
-    if (snapshot.exists) {
-      final currentList = List<String>.from(snapshot.value as List? ?? []);
-      if (!currentList.contains(userId)) {
-        currentList.add(userId);
-        await chatParticipantsRef.set(currentList);
-      }
-    } else {
-      // Create if missing
-      await chatParticipantsRef.set([userId]);
-    }
+    // 1. Add to userChats subcollection
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('userChats')
+        .doc(chatId)
+        .set({'chatId': chatId, 'updatedAt': now}, cf.SetOptions(merge: true));
+
+    // 2. Add to participants array in chat document
+    await _firestore.collection('chats').doc(chatId).update({
+      'participants': cf.FieldValue.arrayUnion([userId]),
+    });
   }
 
-  // Helper to remove user from event chat
+  // Helper to remove user from event chat (Firestore)
   Future<void> _removeUserFromEventChat(String chatId, String userId) async {
-    await _rtdb.ref('userChats/$userId/$chatId').remove();
+    // 1. Remove from userChats subcollection
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('userChats')
+        .doc(chatId)
+        .delete();
 
-    // Remove from participants list
-    final chatParticipantsRef = _rtdb.ref('chats/$chatId/participants');
-    final snapshot = await chatParticipantsRef.get();
-    if (snapshot.exists) {
-      final currentList = List<String>.from(snapshot.value as List? ?? []);
-      if (currentList.contains(userId)) {
-        currentList.remove(userId);
-        await chatParticipantsRef.set(currentList);
-      }
-    }
+    // 2. Remove from participants array in chat document
+    await _firestore.collection('chats').doc(chatId).update({
+      'participants': cf.FieldValue.arrayRemove([userId]),
+    });
   }
 
-  // Join Event (RSVP)
+  // Attend Event (RSVP)
   Future<void> joinEvent(String eventId, String userId) async {
+    // 0. Fetch event to check if it's paid
+    final eventDoc = await _firestore.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) throw Exception('Event not found');
+    final event = Event.fromJson(eventDoc.data()!);
+
     // 1. Update Firestore atomically
     await _firestore.collection('events').doc(eventId).update({
       'attendees': cf.FieldValue.arrayUnion([userId]),
@@ -579,6 +560,26 @@ class EventRepository {
       await trustRepo.incrementJoinedEventsCount(userId);
     } catch (e) {
       debugPrint('Error updating trustJoinedEvents: $e');
+    }
+
+    // 1.2 Record fiat GDP for paid events
+    if (event.isPaid == true &&
+        event.ticketPrice != null &&
+        event.ticketPrice! > 0) {
+      try {
+        await _ref.read(pointsServiceProvider).recordFiatGdp(
+              amount: event.ticketPrice!,
+              countryCode: event.hostCountryCode,
+              activityType: 'event_ticket_purchase',
+              metadata: {
+                'eventId': eventId,
+                'attendeeId': userId,
+                'creatorId': event.creatorId,
+              },
+            );
+      } catch (e) {
+        debugPrint('⚠️ [GDP] Record event ticket GDP error: $e');
+      }
     }
 
     // 2. Get Event to find chatId
@@ -654,7 +655,9 @@ class EventRepository {
     try {
       // 1. Verify Code Format
       if (!code.startsWith('attendance:$eventId:')) {
-        debugPrint('❌ Attendance Verification Failed: Invalid Code Format or Event ID Mismatch');
+        debugPrint(
+          '❌ Attendance Verification Failed: Invalid Code Format or Event ID Mismatch',
+        );
         return VerificationResult.invalidCode;
       }
 
@@ -665,7 +668,8 @@ class EventRepository {
         final confirmed = List<String>.from(data?['confirmedAttendees'] ?? []);
         if (confirmed.contains(userId)) {
           debugPrint('⚠️ User already checked in.');
-          return VerificationResult.alreadyCheckedIn; // Prevent duplicate check-in
+          return VerificationResult
+              .alreadyCheckedIn; // Prevent duplicate check-in
         }
       }
 
@@ -678,7 +682,7 @@ class EventRepository {
       // 4. Trigger Physical Presence Check-In via TrustService
       // This awards DSP and updates Trust Score
       final trustService = _ref.read(trustServiceProvider);
-      
+
       // We perform the check-in with a placeholder location for now.
       // In a more advanced implementation, we would verify the user's location matches the event's venue.
       await trustService.performCheckIn(
@@ -688,7 +692,7 @@ class EventRepository {
         lat: 0.0,
         lng: 0.0,
       );
-      
+
       return VerificationResult.success;
     } catch (e) {
       debugPrint('Error verifying/marking attendance: $e');
@@ -779,10 +783,12 @@ class EventRepository {
         final imageUrl = await ref.getDownloadURL();
         data['imageUrl'] = imageUrl;
 
-        // Also update chat image in RTDB if exists
+        // Also update chat image in Firestore if exists
         final chatId = event.chatId;
         if (chatId != null) {
-          await _rtdb.ref('chats/$chatId/photoUrl').set(imageUrl);
+          await _firestore.collection('chats').doc(chatId).update({
+            'photoUrl': imageUrl,
+          });
         }
       }
 
@@ -799,11 +805,21 @@ class EventRepository {
         }
       }
 
+      // Ensure paid fields are explicitly set (not reliant on toJson nullability)
+      data['isPaid'] = event.isPaid ?? false;
+      if (event.isPaid == true && event.ticketPrice != null) {
+        data['ticketPrice'] = event.ticketPrice;
+      } else {
+        data['ticketPrice'] = cf.FieldValue.delete();
+      }
+
       await _firestore.collection('events').doc(event.id).update(data);
 
-      // Update Chat Name if title changed
+      // Update Chat Name in Firestore if title changed
       if (event.chatId != null) {
-        await _rtdb.ref('chats/${event.chatId}/name').set(event.title);
+        await _firestore.collection('chats').doc(event.chatId).update({
+          'name': event.title,
+        });
       }
     } catch (e) {
       rethrow;
@@ -833,15 +849,24 @@ class EventRepository {
         }
       }
 
-      // 4. Delete Chat (RTDB)
+      // 4. Delete Chat (Firestore)
       if (chatId != null) {
-        // Remove chat node
-        await _rtdb.ref('chats/$chatId').remove();
+        // Remove chat document
+        await _firestore.collection('chats').doc(chatId).delete();
 
+        // Remove from all attendees' userChats
         final attendees = List<String>.from(data['attendees'] ?? []);
+        final batch = _firestore.batch();
         for (var userId in attendees) {
-          await _rtdb.ref('userChats/$userId/$chatId').remove();
+          batch.delete(
+            _firestore
+                .collection('users')
+                .doc(userId)
+                .collection('userChats')
+                .doc(chatId),
+          );
         }
+        await batch.commit();
       }
     } catch (e) {
       rethrow;

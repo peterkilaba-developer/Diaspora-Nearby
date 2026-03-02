@@ -66,12 +66,18 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             _phoneController.text = remainingNumber!;
           });
           debugPrint(
-            'âœ… Auto-filled phone: ${bestMatch.dialCode} $remainingNumber',
+            '✅ Auto-filled phone: ${bestMatch.dialCode} $remainingNumber',
           );
+
+          // Auto-submit for "One Tap" experience
+          // Use a small delay to ensure state and UI are ready
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) _submit();
+          });
         } else {
           // Fallback: Just set the text if we can't parse country
           // But usually 'hint' returns E.164 format
-          debugPrint('âš ï¸ Could not parse country from: $mobileNumber');
+          debugPrint('⚠️ Could not parse country from: $mobileNumber');
         }
       }
     } catch (e) {

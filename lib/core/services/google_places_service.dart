@@ -274,9 +274,9 @@ class GooglePlacesService {
       final state = place.administrativeArea;
 
       final formattedAddress = [
-        if (city != null) city,
-        if (state != null) state,
-        if (country != null) country,
+        ?city,
+        ?state,
+        ?country,
       ].join(', ');
 
       return {

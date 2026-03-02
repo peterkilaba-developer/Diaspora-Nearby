@@ -12,8 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
-import 'package:diaspora_nearby/features/shared/services/content_share_service.dart'; // [NEW]
+import 'package:diaspora_nearby/features/events/widgets/share_event_dialog.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_venue_card.dart';
+
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
   final String eventId;
@@ -27,6 +29,9 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 
 class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   bool _isRsvpLoading = false;
+
+
+
 
   void _openDirections(String location) async {
     final query = Uri.encodeComponent(location);
@@ -185,9 +190,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         size: 20,
                       ),
                       onPressed: () {
-                        ref
-                            .read(contentShareServiceProvider)
-                            .shareEvent(context, event);
+                        showDialog(
+                          context: context,
+                          builder: (_) => ShareEventDialog(event: event),
+                        );
                       },
                     ),
                   ),
@@ -653,21 +659,23 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
                       // [NEW] Calculate distance for details page
                       FutureBuilder<Position?>(
-                        future: Geolocator.getLastKnownPosition(), // Use fast last known
+                        future:
+                            Geolocator.getLastKnownPosition(), // Use fast last known
                         builder: (context, snapshot) {
                           if (snapshot.hasData &&
                               event.distance == null &&
                               event.latitude != null &&
                               event.longitude != null) {
-                             event.distance = Geolocator.distanceBetween(
-                                snapshot.data!.latitude,
-                                snapshot.data!.longitude,
-                                event.latitude!,
-                                event.longitude!,
-                              ) /
-                              1000;
+                            event.distance =
+                                Geolocator.distanceBetween(
+                                  snapshot.data!.latitude,
+                                  snapshot.data!.longitude,
+                                  event.latitude!,
+                                  event.longitude!,
+                                ) /
+                                1000;
                           }
-                          
+
                           return EventVenueCard(
                             event: event,
                             showDirections: true,
@@ -712,21 +720,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   child: Container(
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          theme.colorScheme.primary.withOpacity(
-                                            0.05,
-                                          ),
-                                          theme.colorScheme.secondary
-                                              .withOpacity(0.05),
-                                        ],
-                                      ),
+                                    decoration: AppTheme.cardDecoration(context).copyWith(
                                       borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: theme.colorScheme.primary
-                                            .withOpacity(0.1),
-                                      ),
                                     ),
                                     child: Column(
                                       crossAxisAlignment:
@@ -804,7 +799,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   Widget? _buildQrFab(BuildContext context, Event event, ThemeData theme) {
     final userAsync = ref.watch(authStateProvider);
-    final currentUserId = userAsync.value?.uid ??
+    final currentUserId =
+        userAsync.value?.uid ??
         ref.read(authRepositoryProvider).currentUser?.uid;
 
     final isAttending = event.attendees?.contains(currentUserId) ?? false;
@@ -816,10 +812,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       onPressed: () {
         context.push(
           '/events/qr/${event.id}',
-          extra: {
-            'title': event.title,
-            'isCreator': isCreator,
-          },
+          extra: {'title': event.title, 'isCreator': isCreator},
         );
       },
       tooltip: isCreator ? 'Organizer Code' : 'Check In',
@@ -877,14 +870,24 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                event.isPaid == true ? '\$${event.ticketPrice}' : 'Free',
+                event.isPaid == true && (event.ticketPrice ?? 0) > 0
+                    ? '\$${event.ticketPrice!.toStringAsFixed(0)}'
+                    : 'Free Entry',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
+                  color: event.isPaid == true && (event.ticketPrice ?? 0) > 0
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.primary,
                 ),
               ),
               Text(
-                event.isPaid == true ? 'per person' : 'entry',
-                style: theme.textTheme.bodySmall,
+                event.isPaid == true && (event.ticketPrice ?? 0) > 0
+                    ? 'Ticket Price'
+                    : 'No ticket required',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
               ),
             ],
           ),
@@ -985,9 +988,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               label: Text(
                 isAttending
                     ? 'Going'
-                    : (isFull
-                          ? 'Sold Out'
-                          : (event.isPaid == true ? 'Buy Ticket' : 'RSVP Now')),
+                    : (isFull ? 'Sold Out' : 'Attend Event'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

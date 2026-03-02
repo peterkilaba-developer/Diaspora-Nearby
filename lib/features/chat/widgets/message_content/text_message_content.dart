@@ -179,32 +179,37 @@ class _TextMessageContentState extends State<TextMessageContent> {
           RichText(text: TextSpan(children: spans)),
           if (firstUrl != null) ...[
             const SizedBox(height: 8),
-            AnyLinkPreview(
-              link: firstUrl,
-              displayDirection: UIDirection.uiDirectionVertical,
-              showMultimedia: true,
-              bodyMaxLines: 2,
-              bodyTextOverflow: TextOverflow.ellipsis,
-              titleStyle:
-                  theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ) ??
-                  const TextStyle(fontWeight: FontWeight.bold),
-              bodyStyle:
-                  theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12),
-              errorWidget: const SizedBox.shrink(), // Hide if preview fails
-              cache: const Duration(days: 7),
-              backgroundColor: theme.colorScheme.surfaceContainerHighest
-                  .withOpacity(0.3),
-              borderRadius: 8,
-              removeElevation: true,
-              boxShadow: const [],
-              onTap: () async {
-                final uri = Uri.parse(firstUrl!);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
-              },
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: AnyLinkPreview(
+                link: firstUrl,
+                displayDirection: UIDirection.uiDirectionVertical,
+                showMultimedia: true,
+                bodyMaxLines: 2,
+                bodyTextOverflow: TextOverflow.ellipsis,
+                titleStyle:
+                    theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ) ??
+                    const TextStyle(fontWeight: FontWeight.bold),
+                bodyStyle:
+                    theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12),
+                errorWidget: const SizedBox.shrink(),
+                errorTitle: '',
+                errorBody: '',
+                cache: const Duration(days: 7),
+                backgroundColor: theme.colorScheme.surfaceContainerHighest
+                    .withOpacity(0.3),
+                borderRadius: 8,
+                removeElevation: true,
+                boxShadow: const [],
+                onTap: () async {
+                  final uri = Uri.parse(firstUrl!);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+              ),
             ),
           ],
         ],

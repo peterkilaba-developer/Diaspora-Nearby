@@ -2,7 +2,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mockito/mockito.dart';
 
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
@@ -12,7 +11,6 @@ import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
-import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
 

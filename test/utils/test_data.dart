@@ -1,9 +1,10 @@
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
-import 'package:diaspora_nearby/features/dsp/models/point_record.dart';
+import 'package:diaspora_nearby/features/dsp/models/points_transaction.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
+import 'package:diaspora_nearby/features/shared/models/location.dart';
 
 /// Test data generators for consistent test fixtures
 class TestData {
@@ -16,19 +17,30 @@ class TestData {
   static const String communityId1 = 'community_test_1';
   static const String communityId2 = 'community_test_2';
 
+  static const UserLocation mockLocation = UserLocation(
+    formattedAddress: '123 Test St, Test City, TS',
+    placeId: 'test_place_id',
+    city: 'Test City',
+    country: 'Test Country',
+    countryCode: 'TS',
+  );
+
   /// Generate a test ProfileData
   static ProfileData createProfile({
     String? userId,
-    String? displayName,
-    bool isVerified = false,
+    String? firstName,
+    String? lastName,
   }) {
     return ProfileData(
-      userId: userId ?? userId1,
-      displayName: displayName ?? 'Test User',
+      uid: userId ?? userId1,
+      firstName: firstName ?? 'Test',
+      lastName: lastName ?? 'User',
+      phone: '+1234567890',
+      profileImage: 'https://example.com/photo.jpg',
+      homeLocation: mockLocation,
+      hostLocation: mockLocation,
       bio: 'Test bio',
-      photoUrl: 'https://example.com/photo.jpg',
-      interests: ['tech', 'music', 'sports'],
-      isVerified: isVerified,
+      interests: ['tech'],
       createdAt: DateTime(2024, 1, 1),
     );
   }
@@ -37,30 +49,25 @@ class TestData {
   static CommunityData createCommunity({
     String? id,
     String? name,
-    CommunityType type = CommunityType.city,
-    String? parentId,
   }) {
     return CommunityData(
       id: id ?? communityId1,
       name: name ?? 'Test Community',
-      type: type,
-      parentId: parentId,
-      childIds: [],
-      memberCount: 10,
-      createdAt: DateTime(2024, 1, 1),
+      profileImage: 'https://example.com/community.jpg',
     );
   }
 
-  /// Generate a test PointRecord
-  static PointRecord createPointRecord({
+  /// Generate a test PointsTransaction
+  static PointsTransaction createTransaction({
     String? userId,
-    String activityType = 'message_sent',
-    int points = 1,
+    String action = 'message_sent',
+    int points = 10,
   }) {
-    return PointRecord(
-      id: 'point_test_1',
+    return PointsTransaction(
+      id: 'trans_test_1',
       userId: userId ?? userId1,
-      activityType: activityType,
+      type: 'earn',
+      action: action,
       points: points,
       timestamp: DateTime.now(),
     );
@@ -68,16 +75,13 @@ class TestData {
 
   /// Generate a test TrustData
   static TrustData createTrustData({
-    String? userId1,
-    String? userId2,
-    TrustLevel level = TrustLevel.known,
+    String? userId,
   }) {
     return TrustData(
-      id: 'trust_test_1',
-      userId1: userId1 ?? TestData.userId1,
-      userId2: userId2 ?? TestData.userId2,
-      level: level,
-      createdAt: DateTime(2024, 1, 1),
+      uid: userId ?? userId1,
+      trustScore: 50.0,
+      level: TrustLevel.mediumTrust,
+      lastUpdated: DateTime(2024, 1, 1),
     );
   }
 
@@ -88,9 +92,11 @@ class TestData {
   }) {
     return Chat(
       id: id ?? 'chat_test_1',
+      type: 'direct',
+      name: 'Test Chat',
       participants: participants ?? [userId1, userId2],
-      unreadCounts: {userId1: 0, userId2: 0},
-      createdAt: DateTime(2024, 1, 1),
+      createdAt: DateTime(2024, 1, 1).millisecondsSinceEpoch,
+      updatedAt: DateTime(2024, 1, 1).millisecondsSinceEpoch,
     );
   }
 
@@ -99,16 +105,15 @@ class TestData {
     String? chatId,
     String? senderId,
     String content = 'Test message',
-    MessageType type = MessageType.text,
   }) {
     return Message(
       id: 'message_test_1',
       chatId: chatId ?? 'chat_test_1',
       senderId: senderId ?? userId1,
+      senderName: 'Test Sender',
       content: content,
-      type: type,
-      timestamp: DateTime.now(),
-      isRead: false,
+      type: 'text',
+      timestamp: DateTime.now().millisecondsSinceEpoch,
     );
   }
 }

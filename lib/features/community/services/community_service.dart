@@ -1,16 +1,16 @@
-import 'package:cloud_firestore/cloud_firestore.dart' as cf;
-import 'package:firebase_database/firebase_database.dart' as rtdb;
+﻿import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // [NEW]
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
-import 'package:diaspora_nearby/core/utils/location_utils.dart' as location_utils;
+import 'package:diaspora_nearby/core/utils/location_utils.dart'
+    as location_utils;
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
-import 'package:diaspora_nearby/features/community/services/community_local_service.dart';
 
 final communityServiceProvider = Provider<CommunityService>((ref) {
   return CommunityService();
@@ -19,33 +19,37 @@ final communityServiceProvider = Provider<CommunityService>((ref) {
 /// CommunityService handles community and chat creation during user registration.
 class CommunityService {
   final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
-  final rtdb.FirebaseDatabase _rtdb = rtdb.FirebaseDatabase.instance;
+
 
   /// Searches for communities matching the query string (e.g., country name).
   Future<List<Community>> searchCommunities(String query) async {
     try {
       final snapshot = await _firestore
           .collection('communities')
-          .where('location.country', isEqualTo: query) // More precise than name if possible
+          .where(
+            'location.country',
+            isEqualTo: query,
+          ) // More precise than name if possible
           .get();
-      
-      // Fallback to name search if country search yields nothing? 
+
+      // Fallback to name search if country search yields nothing?
       // User passes 'Nigeria', assume it's country name.
       if (snapshot.docs.isNotEmpty) {
-         return snapshot.docs.map((doc) => Community.fromJson(doc.data()..['id'] = doc.id)).toList();
+        return snapshot.docs
+            .map((doc) => Community.fromJson(doc.data()..['id'] = doc.id))
+            .toList();
       }
 
       // Try name search
       final nameSnapshot = await _firestore
           .collection('communities')
           .where('name', isGreaterThanOrEqualTo: query)
-          .where('name', isLessThan: query + 'z')
+          .where('name', isLessThan: '${query}z')
           .get();
-          
+
       return nameSnapshot.docs
           .map((doc) => Community.fromJson(doc.data()..['id'] = doc.id))
           .toList();
-
     } catch (e) {
       print('Error searching communities: $e');
       return [];
@@ -358,7 +362,7 @@ class CommunityService {
         'totalMembers': 1,
         'isPrivate': false,
         'chatId': 'chat_$communityId',
-        'walletAddress': _generateMockWalletAddress(), // [NEW] Auto-generate wallet
+        'walletAddress': null, // [UPDATED] Removed mock wallet generation
         'profileImage': '',
         'flag': '',
         'images': [],
@@ -383,13 +387,19 @@ class CommunityService {
         onFirstMember(communityName);
       }
 
-      // [FIX] Add chat to userChats index for the creator/joiner
+      // Add chat to userChats index for the creator/joiner
       final chatId = 'chat_$communityId';
-      await _rtdb.ref('userChats/$userId/$chatId').set({
+      final chatNow = DateTime.now().millisecondsSinceEpoch;
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId)
+          .set({
         'chatId': chatId,
-        'lastRead': rtdb.ServerValue.timestamp,
-        'addedAt': rtdb.ServerValue.timestamp,
-      });
+        'lastRead': chatNow,
+        'addedAt': chatNow,
+      }, cf.SetOptions(merge: true));
     } else {
       // Add member to existing community
       final existingData = docSnapshot.data() as Map<String, dynamic>;
@@ -407,62 +417,38 @@ class CommunityService {
 
       // Get the chatId from the community
       final chatId = existingData['chatId'] as String? ?? 'chat_$communityId';
-      final chatRef = _rtdb.ref('chats/$chatId');
-      final chatSnapshot = await chatRef.get();
+      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
 
-      if (chatSnapshot.exists) {
+      if (chatDoc.exists) {
         // Chat exists, add user to participants if not already there
-        final chatData = chatSnapshot.value as Map<dynamic, dynamic>;
+        final chatData = chatDoc.data() ?? {};
         final participants = List<String>.from(chatData['participants'] ?? []);
 
         if (!participants.contains(userId)) {
-          // Transaction to update participants and increment count safely
-          await chatRef.runTransaction((mutableData) {
-            if (mutableData == null) return rtdb.Transaction.success(null);
-
-            Map<String, dynamic> data;
-            if (mutableData is Map) {
-              data = Map<String, dynamic>.from(mutableData);
-            } else {
-              return rtdb.Transaction.success(mutableData);
-            }
-
-            // Update participants
-            List<String> currentParticipants = [];
-            if (data['participants'] is List) {
-              currentParticipants = List<String>.from(data['participants']);
-            }
-
-            if (!currentParticipants.contains(userId)) {
-              currentParticipants.add(userId);
-              data['participants'] = currentParticipants;
-
-              // Increment member count
-              int currentCount = data['memberCount'] is int
-                  ? data['memberCount']
-                  : currentParticipants.length;
-              data['memberCount'] =
-                  currentCount; // The list length is the truth
-            }
-
-            data['updatedAt'] = rtdb.ServerValue.timestamp;
-            return rtdb.Transaction.success(data);
+          // Use Firestore arrayUnion for atomic participant addition
+          await _firestore.collection('chats').doc(chatId).update({
+            'participants': cf.FieldValue.arrayUnion([userId]),
+            'memberCount': cf.FieldValue.increment(1),
+            'updatedAt': DateTime.now().millisecondsSinceEpoch,
           });
 
-          // [NEW] Announce to Community (triggers Notification)
-          // Only if strictly NEW to the chat
+          // Announce to Community (triggers Notification)
           if (userName != null && userName.isNotEmpty) {
             try {
               final now = DateTime.now().millisecondsSinceEpoch;
-              final messageRef = chatRef.child('messages').push();
+              final messageRef = _firestore
+                  .collection('chats')
+                  .doc(chatId)
+                  .collection('messages')
+                  .doc();
 
               final systemMessage = {
-                'id': messageRef.key,
+                'id': messageRef.id,
                 'chatId': chatId,
                 'senderId': userId,
                 'senderName': userName,
                 'content': 'joined the community',
-                'type': 'system', // or 'join_event'
+                'type': 'system',
                 'timestamp': now,
                 'status': 'sent',
               };
@@ -478,37 +464,48 @@ class CommunityService {
                 'type': 'system',
                 'status': 'sent',
               };
-              await chatRef.child('lastMessage').set(lastMsg);
-              await chatRef.child('updatedAt').set(now);
+              await _firestore.collection('chats').doc(chatId).update({
+                'lastMessage': lastMsg,
+                'updatedAt': now,
+              });
 
-              // Fan-out to ALL participants (including self, though self logic handles below)
-              final allTargetIds = List<String>.from(
-                participants,
-              ); // Use snapshot participants (others)
-              allTargetIds.add(userId); // Add self to be sure
+              // Fan-out to ALL participants' userChats
+              final allTargetIds = List<String>.from(participants);
+              allTargetIds.add(userId);
 
-              final Map<String, dynamic> updates = {};
+              final batch = _firestore.batch();
               for (final pid in allTargetIds) {
-                updates['userChats/$pid/$chatId/lastMessage'] = lastMsg;
-                updates['userChats/$pid/$chatId/updatedAt'] = now;
-                // Don't overwrite other fields like addedAt/lastRead
+                final userChatRef = _firestore
+                    .collection('users')
+                    .doc(pid)
+                    .collection('userChats')
+                    .doc(chatId);
+                batch.set(userChatRef, {
+                  'lastMessage': lastMsg,
+                  'updatedAt': now,
+                }, cf.SetOptions(merge: true));
               }
-              await _rtdb.ref().update(updates);
+              await batch.commit();
 
-              debugPrint('ðŸ”” Announced new member $userName to $chatId');
+              debugPrint('Announced new member $userName to $chatId');
             } catch (e) {
               debugPrint('Error announcing new member: $e');
             }
           }
         }
 
-        // Add chat to user's userChats index (Backup if fan-out missed or logic above skipped)
-        await _rtdb.ref('userChats/$userId/$chatId').update({
-          // Use update to not wipe lastMessage if fan-out wrote it
+        // Add chat to user's userChats index
+        final nowTs = DateTime.now().millisecondsSinceEpoch;
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('userChats')
+            .doc(chatId)
+            .set({
           'chatId': chatId,
-          'lastRead': rtdb.ServerValue.timestamp,
-          'addedAt': rtdb.ServerValue.timestamp,
-        });
+          'lastRead': nowTs,
+          'addedAt': nowTs,
+        }, cf.SetOptions(merge: true));
       } else {
         // Chat doesn't exist - create it now
         await _createChat(
@@ -524,21 +521,28 @@ class CommunityService {
 
         // Add chat to userChats index for ALL members
         final allMemberIds = [userId, ...existingMemberIds];
+        final batchWrite = _firestore.batch();
+        final batchNow = DateTime.now().millisecondsSinceEpoch;
         for (final memberId in allMemberIds) {
-          await _rtdb.ref('userChats/$memberId/$chatId').set({
+          final userChatRef = _firestore
+              .collection('users')
+              .doc(memberId)
+              .collection('userChats')
+              .doc(chatId);
+          batchWrite.set(userChatRef, {
             'chatId': chatId,
-            'lastRead': rtdb.ServerValue.timestamp,
-            'addedAt': rtdb.ServerValue.timestamp,
-          });
+            'lastRead': batchNow,
+            'addedAt': batchNow,
+          }, cf.SetOptions(merge: true));
         }
+        await batchWrite.commit();
       }
     }
 
     return communityId;
   }
 
-  /// Creates a chat in RTDB for a community.
-  /// Matches React's `createCommunityChat()` function.
+  /// Creates a chat in Firestore for a community.
   Future<void> _createChat({
     required String communityId,
     required String communityName,
@@ -550,23 +554,23 @@ class CommunityService {
     String? continent,
   }) async {
     final chatId = 'chat_$communityId';
-    final chatRef = _rtdb.ref('chats/$chatId');
+    final chatRef = _firestore.collection('chats').doc(chatId);
 
     final snapshot = await chatRef.get();
     if (snapshot.exists) {
       return; // Chat already exists
     }
 
-    // Chat name is the same as community name (with Community suffix)
+    // Chat name is the same as community name
     final String chatName = communityName;
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     await chatRef.set({
       'id': chatId,
       'communityId': communityId,
       'type': 'community', // CRITICAL: must be 'community' not communityType
       'name': chatName,
-      'locationType':
-          locationType, // CRITICAL: Determines avatar color (home vs host)
+      'locationType': locationType, // CRITICAL: Determines avatar color (home vs host)
       'homeCountryCode': homeCountryCode,
       'hostCountryCode': hostCountryCode,
       'participants': initialParticipants,
@@ -576,8 +580,8 @@ class CommunityService {
           ? initialParticipants.first
           : 'system',
       'lastMessage': null,
-      'createdAt': rtdb.ServerValue.timestamp,
-      'updatedAt': rtdb.ServerValue.timestamp,
+      'createdAt': now,
+      'updatedAt': now,
     });
   }
 
@@ -601,7 +605,7 @@ class CommunityService {
         // Delete Chat
         final chatId = data['chatId'] as String?;
         if (chatId != null) {
-          await _rtdb.ref('chats/$chatId').remove();
+          await _firestore.collection('chats').doc(chatId).delete();
         }
 
         debugPrint('Pruned empty community: ${doc.id}');
@@ -614,7 +618,7 @@ class CommunityService {
     if (gbDoc.exists) {
       await gbRef.delete();
       // And its chat
-      await _rtdb.ref('chats/chat_home_country_GB').remove();
+      await _firestore.collection('chats').doc('chat_home_country_GB').delete();
     }
   }
 
@@ -640,9 +644,9 @@ class CommunityService {
 
     // [NEW] Call Cloud Function for Firestore collections
     try {
-      final functions = FirebaseFunctions.instance;
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final callable = functions.httpsCallable('hardResetDatabase');
-      
+
       final result = await callable.call<Map<String, dynamic>>({
         'resetTargets': resetTargets,
         'currentUserId': currentUserId,
@@ -673,16 +677,13 @@ class CommunityService {
           succeeded.add(target);
         }
       } catch (e) {
-        failed.add(
-          '$target: ${e.toString().split(']').last.trim()}',
-        );
+        failed.add('$target: ${e.toString().split(']').last.trim()}');
       }
     }
 
     // [REMOVED] Client-side Firestore deletion - now handled by Cloud Function
     // [REMOVED] Client-side RTDB deletion - now handled by Cloud Function
     // [REMOVED] Client-side Storage deletion - now handled by Cloud Function
-
 
     // 4. Clear Local Preferences
     // Only verify preferences if explicitly requested or part of user cleanup
@@ -732,8 +733,7 @@ class CommunityService {
     }
   }
 
-  /// Batch updates userChats index for all community chats.
-  /// Matches React's `batchUpdateUserChatsIndex()` function.
+  /// Batch updates userChats index for all community chats (Firestore).
   Future<void> _batchUpdateUserChatsIndex(
     String userId,
     List<String> chatIds,
@@ -741,18 +741,22 @@ class CommunityService {
     if (chatIds.isEmpty) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    final Map<String, dynamic> updates = {};
+    final batch = _firestore.batch();
 
     for (final chatId in chatIds) {
-      updates['userChats/$userId/$chatId'] = {
+      final userChatRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId);
+      batch.set(userChatRef, {
         'chatId': chatId,
         'lastRead': now,
         'addedAt': now,
-      };
+      }, cf.SetOptions(merge: true));
     }
 
-    // Atomic multi-path update
-    await _rtdb.ref().update(updates);
+    await batch.commit();
   }
   // ... existing methods ...
 
@@ -810,20 +814,23 @@ class CommunityService {
     // 3. Send Message to each target
     final now = DateTime.now().millisecondsSinceEpoch;
     final content =
-        'ðŸ•¯ï¸ Bereavement Announcement\n\nIt is with a heavy heart that I announce the passing of my $relationship, $deceasedName.\n\nWe appreciate the community\'s support during this difficult time.';
+        'Ã°Å¸â€¢Â¯Ã¯Â¸Â Bereavement Announcement\n\nIt is with a heavy heart that I announce the passing of my $relationship, $deceasedName.\n\nWe appreciate the community\'s support during this difficult time.';
 
     for (final chatId in targetChatIds) {
       try {
-        final messageRef = _rtdb.ref('chats/$chatId/messages').push();
-        final messageId = messageRef.key;
+        final messageRef = _firestore
+            .collection('chats')
+            .doc(chatId)
+            .collection('messages')
+            .doc();
 
         final messageData = {
-          'id': messageId,
+          'id': messageRef.id,
           'chatId': chatId,
           'senderId': userId,
           'senderName': userName,
           'content': content,
-          'type': 'text', // Standard text for now, could be 'announcement'
+          'type': 'text',
           'timestamp': now,
           'status': 'sent',
           'metadata': {
@@ -837,7 +844,7 @@ class CommunityService {
 
         // Update Last Message
         final lastMsg = {
-          'content': 'ðŸ•¯ï¸ Bereavement Announcement: $deceasedName',
+          'content': 'Bereavement Announcement: $deceasedName',
           'timestamp': now,
           'senderId': userId,
           'senderName': userName,
@@ -845,10 +852,11 @@ class CommunityService {
           'status': 'sent',
         };
 
-        await _rtdb.ref('chats/$chatId').update({
+        await _firestore.collection('chats').doc(chatId).update({
           'lastMessage': lastMsg,
           'updatedAt': now,
         });
+
 
         // We rely on Cloud Functions or client-side fan-out if needed for unread counts.
         // For Community chats, usually the listener handles it.
@@ -859,13 +867,5 @@ class CommunityService {
         debugPrint('Error broadcasting to $chatId: $e');
       }
     }
-  }
-  // [NEW] Helper to generate a realistic-looking mock wallet address
-  String _generateMockWalletAddress() {
-    // Generates a random hex string resembling an ETH/Polygon address
-    // In production, this would be an actual wallet generation or assignment via API
-    final random = DateTime.now().millisecondsSinceEpoch;
-    final suffix = (random % 100000).toString().padLeft(5, '0');
-    return '0x${random.toRadixString(16)}...$suffix';
   }
 }

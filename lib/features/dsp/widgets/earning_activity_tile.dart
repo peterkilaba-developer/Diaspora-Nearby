@@ -32,17 +32,7 @@ class EarningActivityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppTheme.cardDecoration(context),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -59,8 +49,8 @@ class EarningActivityTile extends StatelessWidget {
                     color: isCompleted
                         ? AppTheme.accent.withOpacity(0.1)
                         : (progress != null && progress! > 0)
-                            ? iconColor.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.05),
+                        ? iconColor.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.05),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -68,8 +58,8 @@ class EarningActivityTile extends StatelessWidget {
                     color: isCompleted
                         ? AppTheme.accent
                         : (progress != null && progress! > 0)
-                            ? iconColor
-                            : Colors.grey,
+                        ? iconColor
+                        : Colors.grey,
                     size: 24,
                   ),
                 ),
@@ -86,14 +76,13 @@ class EarningActivityTile extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                           color: isCompleted
-                              ? Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.color
-                                  ?.withOpacity(0.7)
+                              ? Theme.of(
+                                  context,
+                                ).textTheme.bodyLarge?.color?.withOpacity(0.7)
                               : null,
-                          decoration:
-                              isCompleted ? TextDecoration.lineThrough : null,
+                          decoration: isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -101,7 +90,9 @@ class EarningActivityTile extends StatelessWidget {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.accent.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(4),
@@ -120,7 +111,9 @@ class EarningActivityTile extends StatelessWidget {
                             const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.green.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4),

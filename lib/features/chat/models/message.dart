@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:json_annotation/json_annotation.dart';
 
 part 'message.g.dart';
@@ -13,6 +14,20 @@ class MessageReaction {
   factory MessageReaction.fromJson(Map<String, dynamic> json) =>
       _$MessageReactionFromJson(json);
   Map<String, dynamic> toJson() => _$MessageReactionToJson(this);
+
+  /// Create from Firestore map
+  factory MessageReaction.fromFirestore(Map<String, dynamic> data) {
+    return MessageReaction(
+      emoji: data['emoji'] as String? ?? '',
+      userIds: (data['userIds'] as List<dynamic>?)?.cast<String>() ?? [],
+    );
+  }
+
+  /// Convert to Firestore-compatible map
+  Map<String, dynamic> toFirestore() => {
+    'emoji': emoji,
+    'userIds': userIds,
+  };
 }
 
 /// Location data for location messages
@@ -35,6 +50,26 @@ class MessageLocation {
   factory MessageLocation.fromJson(Map<String, dynamic> json) =>
       _$MessageLocationFromJson(json);
   Map<String, dynamic> toJson() => _$MessageLocationToJson(this);
+
+  /// Create from Firestore data
+  factory MessageLocation.fromFirestore(Map<String, dynamic> data) {
+    return MessageLocation(
+      lat: (data['lat'] as num?)?.toDouble() ?? 0.0,
+      lng: (data['lng'] as num?)?.toDouble() ?? 0.0,
+      address: data['address'] as String? ?? '',
+      placeName: data['placeName'] as String?,
+      placeType: data['placeType'] as String?,
+    );
+  }
+
+  /// Convert to Firestore-compatible map
+  Map<String, dynamic> toFirestore() => {
+    'lat': lat,
+    'lng': lng,
+    'address': address,
+    if (placeName != null) 'placeName': placeName,
+    if (placeType != null) 'placeType': placeType,
+  };
 
   /// Create from RTDB with null-safe parsing
   factory MessageLocation.fromRTDB(Map<String, dynamic> data) {
@@ -86,6 +121,36 @@ class MoneyTransfer {
   factory MoneyTransfer.fromJson(Map<String, dynamic> json) =>
       _$MoneyTransferFromJson(json);
   Map<String, dynamic> toJson() => _$MoneyTransferToJson(this);
+
+  /// Create from Firestore data
+  factory MoneyTransfer.fromFirestore(Map<String, dynamic> data) {
+    return MoneyTransfer(
+      amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
+      currency: data['currency'] as String? ?? '',
+      currencySymbol: data['currencySymbol'] as String? ?? '',
+      convertedAmount: (data['convertedAmount'] as num?)?.toDouble() ?? 0.0,
+      convertedCurrency: data['convertedCurrency'] as String? ?? '',
+      convertedCurrencySymbol: data['convertedCurrencySymbol'] as String? ?? '',
+      exchangeRate: (data['exchangeRate'] as num?)?.toDouble() ?? 0.0,
+      senderCountryCode: data['senderCountryCode'] as String? ?? '',
+      recipientCountryCode: data['recipientCountryCode'] as String? ?? '',
+      status: data['status'] as String? ?? 'pending',
+    );
+  }
+
+  /// Convert to Firestore-compatible map
+  Map<String, dynamic> toFirestore() => {
+    'amount': amount,
+    'currency': currency,
+    'currencySymbol': currencySymbol,
+    'convertedAmount': convertedAmount,
+    'convertedCurrency': convertedCurrency,
+    'convertedCurrencySymbol': convertedCurrencySymbol,
+    'exchangeRate': exchangeRate,
+    'senderCountryCode': senderCountryCode,
+    'recipientCountryCode': recipientCountryCode,
+    'status': status,
+  };
 
   /// Create from RTDB with null-safe parsing
   factory MoneyTransfer.fromRTDB(Map<String, dynamic> data) {
@@ -216,6 +281,138 @@ class Message {
   factory Message.fromJson(Map<String, dynamic> json) =>
       _$MessageFromJson(json);
   Map<String, dynamic> toJson() => _$MessageToJson(this);
+
+  /// Create from Firestore document snapshot (messages subcollection)
+  factory Message.fromFirestore(String chatId, DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return Message.fromFirestoreData(doc.id, chatId, data);
+  }
+
+  /// Create from Firestore data map
+  factory Message.fromFirestoreData(
+    String id,
+    String chatId,
+    Map<String, dynamic> data,
+  ) {
+    // Parse timestamp safely
+    int? parseTimestamp(dynamic value) {
+      if (value == null) return null;
+      if (value is Timestamp) return value.millisecondsSinceEpoch;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    // Parse reactions from Firestore array-of-maps format
+    List<MessageReaction>? reactions;
+    if (data['reactions'] != null && data['reactions'] is List) {
+      reactions = (data['reactions'] as List<dynamic>)
+          .map((r) => MessageReaction.fromFirestore(
+                Map<String, dynamic>.from(r as Map),
+              ))
+          .toList();
+    }
+
+    return Message(
+      id: id,
+      chatId: chatId,
+      senderId: data['senderId'] as String? ?? '',
+      senderName: data['senderName'] as String? ?? 'Unknown',
+      senderImage: data['senderImage'] as String?,
+      senderHostCountryCode: data['senderHostCountryCode'] as String?,
+      senderHomeCountryCode: data['senderHomeCountryCode'] as String?,
+      content: data['content'] as String? ?? '',
+      type: data['type'] as String? ?? 'text',
+      timestamp: parseTimestamp(data['timestamp']) ?? 0,
+      status: data['status'] as String?,
+      moneyTransfer: data['moneyTransfer'] != null
+          ? MoneyTransfer.fromFirestore(
+              Map<String, dynamic>.from(data['moneyTransfer'] as Map),
+            )
+          : null,
+      edited: data['edited'] as bool?,
+      editedAt: parseTimestamp(data['editedAt']),
+      replyTo: data['replyTo'] as String?,
+      mentions: (data['mentions'] as List<dynamic>?)?.cast<String>(),
+      imageUrl: data['imageUrl'] as String?,
+      location: data['location'] != null
+          ? MessageLocation.fromFirestore(
+              Map<String, dynamic>.from(data['location'] as Map),
+            )
+          : null,
+      documentUrl: data['documentUrl'] as String?,
+      documentName: data['documentName'] as String?,
+      documentSize: (data['documentSize'] as num?)?.toInt(),
+      audioDuration: (data['audioDuration'] as num?)?.toInt(),
+      reactions: reactions,
+      starred: (data['starred'] as Map<String, dynamic>?)?.map(
+        (k, v) => MapEntry(k, v as bool),
+      ),
+      deletedFor: (data['deletedFor'] as List<dynamic>?)?.cast<String>(),
+      deletedForEveryone: data['deletedForEveryone'] as bool?,
+      forwarded: data['forwarded'] as bool?,
+      forwardCount: (data['forwardCount'] as num?)?.toInt(),
+      originalSenderId: data['originalSenderId'] as String?,
+      originalSenderName: data['originalSenderName'] as String?,
+      originalSenderImage: data['originalSenderImage'] as String?,
+      originalSenderHostCountryCode:
+          data['originalSenderHostCountryCode'] as String?,
+      originalSenderHomeCountryCode:
+          data['originalSenderHomeCountryCode'] as String?,
+      originalTimestamp: parseTimestamp(data['originalTimestamp']),
+      pinned: (data['pinned'] as Map<String, dynamic>?)?.map(
+        (k, v) => MapEntry(k, v as bool),
+      ),
+      adminId: data['adminId'] as String?,
+      adminImage: data['adminImage'] as String?,
+      richContent: data['richContent'] as String?,
+      metadata: (data['metadata'] is Map)
+          ? Map<String, dynamic>.from(data['metadata'] as Map)
+          : null,
+    );
+  }
+
+  /// Convert to Firestore-compatible map (for messages subcollection)
+  Map<String, dynamic> toFirestore() => {
+    'senderId': senderId,
+    'senderName': senderName,
+    if (senderImage != null) 'senderImage': senderImage,
+    if (senderHostCountryCode != null) 'senderHostCountryCode': senderHostCountryCode,
+    if (senderHomeCountryCode != null) 'senderHomeCountryCode': senderHomeCountryCode,
+    'content': content,
+    'type': type,
+    'timestamp': timestamp,
+    if (status != null) 'status': status,
+    if (moneyTransfer != null) 'moneyTransfer': moneyTransfer!.toFirestore(),
+    if (edited != null) 'edited': edited,
+    if (editedAt != null) 'editedAt': editedAt,
+    if (replyTo != null) 'replyTo': replyTo,
+    if (mentions != null) 'mentions': mentions,
+    if (imageUrl != null) 'imageUrl': imageUrl,
+    if (location != null) 'location': location!.toFirestore(),
+    if (documentUrl != null) 'documentUrl': documentUrl,
+    if (documentName != null) 'documentName': documentName,
+    if (documentSize != null) 'documentSize': documentSize,
+    if (audioDuration != null) 'audioDuration': audioDuration,
+    if (reactions != null) 'reactions': reactions!.map((r) => r.toFirestore()).toList(),
+    if (starred != null) 'starred': starred,
+    if (deletedFor != null) 'deletedFor': deletedFor,
+    if (deletedForEveryone != null) 'deletedForEveryone': deletedForEveryone,
+    if (forwarded != null) 'forwarded': forwarded,
+    if (forwardCount != null) 'forwardCount': forwardCount,
+    if (originalSenderId != null) 'originalSenderId': originalSenderId,
+    if (originalSenderName != null) 'originalSenderName': originalSenderName,
+    if (originalSenderImage != null) 'originalSenderImage': originalSenderImage,
+    if (originalSenderHostCountryCode != null) 'originalSenderHostCountryCode': originalSenderHostCountryCode,
+    if (originalSenderHomeCountryCode != null) 'originalSenderHomeCountryCode': originalSenderHomeCountryCode,
+    if (originalTimestamp != null) 'originalTimestamp': originalTimestamp,
+    if (pinned != null) 'pinned': pinned,
+    if (adminId != null) 'adminId': adminId,
+    if (adminImage != null) 'adminImage': adminImage,
+    if (richContent != null) 'richContent': richContent,
+    if (metadata != null) 'metadata': metadata,
+  };
 
   /// Create Message from RTDB snapshot
   factory Message.fromRTDB(

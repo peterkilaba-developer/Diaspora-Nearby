@@ -1,0 +1,26 @@
+﻿Alias name: upload
+Creation date: Jan 9, 2026
+Entry type: PrivateKeyEntry
+Certificate chain length: 1
+Certificate[1]:
+Owner: CN=Test User, OU=Dev, O=DiasporaNearby, L=SanFrancisco, ST=CA, C=US
+Issuer: CN=Test User, OU=Dev, O=DiasporaNearby, L=SanFrancisco, ST=CA, C=US
+Serial number: cbf39841e3853dca
+Valid from: Fri Jan 09 15:49:27 CST 2026 until: Tue May 27 16:49:27 CDT 2053
+Certificate fingerprints:
+	 SHA1: 43:01:0E:70:51:4F:38:95:49:90:36:AB:84:EA:E1:E8:C3:95:A8:04
+	 SHA256: 1A:DE:19:94:27:EA:6A:61:96:A3:19:5E:6E:00:2D:74:83:7A:71:B7:F3:01:43:91:6F:41:64:B3:57:96:F2:A5
+Signature algorithm name: SHA384withRSA
+Subject Public Key Algorithm: 2048-bit RSA key
+Version: 3
+
+Extensions: 
+
+#1: ObjectId: 2.5.29.14 Criticality=false
+SubjectKeyIdentifier [
+KeyIdentifier [
+0000: 89 7F 0E 82 9D E6 EA A2   A2 97 06 E5 1A 44 08 66  .............D.f
+0010: 0E 57 C3 81                                        .W..
+]
+]
+

@@ -3,11 +3,13 @@ import 'package:diaspora_nearby/features/admin_dashboard/repository/admin_reposi
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 
-final adminServiceProvider = Provider((ref) => AdminService(
-      ref.read(adminRepositoryProvider),
-      ref.read(trustServiceProvider),
-      ref.read(trustRepositoryProvider),
-    ));
+final adminServiceProvider = Provider(
+  (ref) => AdminService(
+    ref.read(adminRepositoryProvider),
+    ref.read(trustServiceProvider),
+    ref.read(trustRepositoryProvider),
+  ),
+);
 
 class AdminService {
   final AdminRepository _repository;

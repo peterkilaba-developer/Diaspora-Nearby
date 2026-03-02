@@ -64,13 +64,13 @@ class BereavementService {
     final profile = await _profileRepo.getUserProfile(userId);
     final isProfileComplete = profile?.isComplete ?? false;
 
-    // 2. Points Check (>= 10,000)
+    // 2. Points Check (>= 10,000 DSP — 10k Genesis Gate)
     final points = await _pointsRepo.getUserPoints(userId);
-    final hasEnoughPoints = (points?.availablePoints ?? 0) >= 10000;
+    final hasEnoughPoints = (points?.totalPoints ?? 0) >= 10000;
 
     // 3. Trust Check (Verified & Score >= 67)
     final trust = await _trustRepo.getTrustData(userId);
-    final isVerified = trust?.isVerified ?? false; 
+    final isVerified = trust?.isVerified ?? false;
     final hasEnoughTrust = (trust?.trustScore ?? 0) >= 67;
 
     // 4. Relatives Check (>= 2)
@@ -80,7 +80,7 @@ class BereavementService {
         .collection('relationships')
         .where('status', isEqualTo: 'active')
         .get();
-    
+
     final hasEnoughRelatives = relationshipsSnap.docs.length >= 2;
 
     return EligibilityResult(
@@ -111,12 +111,12 @@ class BereavementService {
   Future<List<Relationship>> getQualifiedRelatives(String userId) async {
     try {
       final snap = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('relationships')
-        .where('status', isEqualTo: 'active')
-        .get();
-        
+          .collection('users')
+          .doc(userId)
+          .collection('relationships')
+          .where('status', isEqualTo: 'active')
+          .get();
+
       return snap.docs
           .map((doc) => Relationship.fromMap(doc.data(), doc.id))
           .toList();
@@ -130,7 +130,7 @@ class BereavementService {
     try {
       final chats = await _chatRepo.getUserChats();
       final directChats = chats.where((c) => c.isDirect).toList();
-      
+
       final potentialIds = directChats
           .map((c) => c.getOtherParticipantId(userId))
           .where((id) => id != null && id.isNotEmpty)
@@ -141,20 +141,22 @@ class BereavementService {
       if (potentialIds.isEmpty) return [];
 
       // Fetch profiles
-      final profilesFutures = potentialIds.map((id) => _profileRepo.getUserProfile(id));
+      final profilesFutures = potentialIds.map(
+        (id) => _profileRepo.getUserProfile(id),
+      );
       final profiles = await Future.wait(profilesFutures);
-      
+
       // Filter by Verification (and remove nulls)
       final verifiedProfiles = <ProfileData>[];
       for (final p in profiles) {
         if (p == null || p.uid == null) continue;
-        
+
         final trust = await _trustRepo.getTrustData(p.uid!);
         if (trust != null && trust.isVerified) {
           verifiedProfiles.add(p);
         }
       }
-      
+
       return verifiedProfiles;
     } catch (e) {
       return [];
@@ -169,7 +171,7 @@ class BereavementService {
     required List<String> coveredFamilyMembers,
   }) async {
     // Check if membership already exists? If so, update.
-    
+
     final membership = BereavementMembership(
       userId: userId,
       country: country,
@@ -186,14 +188,17 @@ class BereavementService {
         .collection('bereavement_memberships')
         .doc(userId)
         .set(membership.toMap());
-        
+
     // Logic to notify proxy would go here
   }
 
   // Step 2: Proxy Accepts (Called by Proxy User)
-  Future<void> acceptProxyRequest(String memberUserId, String proxyUserId) async {
+  Future<void> acceptProxyRequest(
+    String memberUserId,
+    String proxyUserId,
+  ) async {
     // Logic to validate proxy user would go here
-    
+
     await _firestore
         .collection('bereavement_memberships')
         .doc(memberUserId)
@@ -202,13 +207,17 @@ class BereavementService {
           'status': MembershipStatus.pending_payment.name,
         });
   }
-  
-  // Step 3: Process Payment (Mocked for now)
+
+  // Step 3: Process Payment
+  // [NOTE] Currently auto-approves as Free Beta Access.
+  // [TODO] Integrate Stripe/M-Pesa payment gateway for production.
   Future<void> completeMembershipPayment(String userId) async {
-     await _firestore.collection('bereavement_memberships').doc(userId).update({
-       'status': MembershipStatus.active.name,
-       'nextPaymentDate': Timestamp.fromDate(DateTime.now().add(const Duration(days: 365))),
-     });
+    await _firestore.collection('bereavement_memberships').doc(userId).update({
+      'status': MembershipStatus.active.name,
+      'nextPaymentDate': Timestamp.fromDate(
+        DateTime.now().add(const Duration(days: 365)),
+      ),
+    });
   }
 
   // --- Claims ---
@@ -250,9 +259,8 @@ class BereavementService {
         .doc(claimId)
         .set(claim.toMap());
   }
-  
-  
+
   // --- Helpers ---
-  Future<ProfileData?> getUserProfile(String uid) => _profileRepo.getUserProfile(uid);
-  
+  Future<ProfileData?> getUserProfile(String uid) =>
+      _profileRepo.getUserProfile(uid);
 }

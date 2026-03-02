@@ -1,137 +1,219 @@
-# Diaspora Nearby: The Master Source of Truth
+# Diaspora Nearby: THE MASTER SOURCE OF TRUTH
 
-Welcome to **Diaspora Nearby**, a social and economic revolution for the global diaspora. This document is the definitive guide to our mission, our mechanics, and our future.
+This document is the definitive, multi-dimensional guide to the **Diaspora Nearby** system. It translates a sophisticated codebase (Flutter/Firebase) into the human language of a global social and economic mission. It is the constitution for the **$DIASPORA** ecosystem. The token is always referred to as **$DIASPORA** (not $DSP).
 
 ---
 
-## 🌍 1. The Founder’s Vision: The Diaspora Revolution
+## 🌎 1. EXECUTIVE VISION: THE DIASPORA REVOLUTION
 *By Peter Swai*
 
-After moving to the United States in 1998, I saw the same gaps in diaspora communities everywhere. Newcomers arrive in a "host country" feeling isolated, learning the hard way because they can’t easily find their own people for guidance.
+**Diaspora Nearby** is not just an app; it is a **Reputation-to-Asset Engine**. It is designed to solve the fundamental isolation and economic fragmentation felt by the **Diaspora**.
 
-**Diaspora Nearby** exists to bridge that gap. 
+### 1.1 The Problem
+- **Digital Fragmentation**: Diaspora communities are scattered across disconnected Silos (WhatsApp groups, Facebook pages, Telegram).
+- **Economic Inefficiency**: Billions in remittances are sent home, but they rarely build sustainable community wealth or infrastructure.
+- **Trust Scarcity**: In a new host country, "who you are" is often lost, forcing you to start your social reputation from zero.
 
-### Our Core Pillars:
-- **The Bridge**: Connect with your people *before* you arrive in a new city or country. Share experiences, find success through community guidance, and build solidarity across different diaspora groups.
-- **Diaspora for Change**: We leave our home countries for many reasons—economic, health, education. This platform empowers us to pool our resources and values to change the very things that made us leave.
-- **The Return Home**: For the millions who dream of returning to their roots, Diaspora Nearby builds the economic and social path to make that dream possible.
-- **Global Inclusivity**: This ecosystem is built for everyone in the global flow—**immigrants, refugees, tourists, international diplomats, expats, traders**, and families sending support home.
-- **Venture & Vision**: We empower diaspora members who are natural risk-takers. Our economy provides the capital to turn ideas into ventures, both in host countries and back home.
-
----
-
-## 🚀 2. Phase 1: Joining the Diaspora (Onboarding)
-
-### A. Your Identity Foundation
-Your profile is your reputation. We prioritize authenticity over surface-level social vanity.
-- **Profile Basics**: Name, Bio, Photo, and Occupation.
-- **No Third-Party Links**: We do not use external social media links (Instagram/Twitter). Your value is built *here*.
-
-### B. The Location Hierarchy
-We track your journey across the world to help others find you.
-1.  **Home Location**: Your roots (Home Country & City).
-2.  **Host Location**: Where you live now (Host Country & City).
-3.  **Past Locations**: A history of where you’ve lived, helping you connect with others who shared those paths.
-4.  **Pre-Arrival Planning**: Set your future destination to start connecting with the local diaspora *before* you even pack your bags.
-
-### C. The Welcome Stake
-Every new verified member starts with **1,000 DSP** to begin their journey in the ecosystem.
+### 1.2 The Solution: The Economic Bridge
+- **The Core Mission**: Fostering global connection while building the economic path for a "Return Home."
+- **Institutionalized Trust**: Verifying human identity through social connectivity and physical presence.
+- **Collective Wealth**: Community funds are used to fund large **Diaspora Direct Investments (DDI)** Projects.
 
 ---
 
-## 🔍 3. Core App Features: The Tools of Connection
+## ⚙️ 2. THE THREE PROTOCOLS (PoI, PoA, PoCT)
+The economy is powered by three interlinking validation protocols.
 
-Beyond the economic engine, the app provides tools to live the Diaspora experience:
+### 2.1 Mechanism 1: Proof of Identity (PoI)
+**Status**: The Gatekeeper.
+Before a user can extract value (TGE), they must prove their humanity and reach the **Genesis Gate of 10,000 $DIASPORA**.
 
-### A. Nearby Discovery
-The heart of our network. Find other users from your home country who are currently near you. 
-- **Filter by Country**: Quickly narrow down your search to your own countrymen.
-- **Verification Badges**: See at a glance who belongs to the green "Trusted" tier.
-- **Proximity Alerts**: Get notified when a new community member settles in your radius.
+- **Level 1: Profile Completeness**: Filling out the core profile fields.
+- **Level 2: Social Entropy (Multi-User Verification)**: 
+    - The system enforces a **"One field per verifier"** constraint.
+    - To be fully verified, exactly **10** unique peers must validate different facets of your life. 
+    - *Why?* This prevents collusive bot-farms from "auto-verifying" each other. Algorithms cannot easily fake the messy, diverse validations of real humans.
+- **Level 3: Physical Presence (The QR Handshake)**: 
+    - A cryptographic handshake performed via QR code when two users meet in person.
+    - This is the "Gold Standard" of identity, awarding the highest trust and point bonuses (10,000 $DIASPORA each).
 
-### B. Diaspora Radio
-Connectivity isn't just about chatting; it's about culture.
-- **Global Stations**: Listen to live radio from your home country, no matter where you are.
-- **Community Broadcasts**: Tune into news and music that keeps you connected to your roots.
+### 2.2 Mechanism 2: Proof of Activity (PoA)
+**Status**: The Engine.
+Users generate points by participating in the social and economic graph.
 
-### C. Organizations & Groups
-Add or join verified community organizations, businesses, and local groups to organize physical meetups and support networks.
+| Activity Category | Action | Reward ($DIASPORA) | Logic |
+| :--- | :--- | :--- | :--- |
+| **Growth** | New Signup | 1,000 | Baseline entry. |
+| **Viral** | Referral (Both) | 1,000 | Rewarding the expansion of the network. |
+| **Social** | Relationship Accepted | 1,000 | Validating the social graph. |
+| **Utility** | Daily Share (In/Out) | 100 | Maintaining daily engagement. |
+| **Chat** | New DM Conversation | 100 | Starting new connections. |
+| **Chat** | Community Post (1/day) | 100 | Community engagement. |
+| **Chat** | Message Sent | 10 | Maintaining family ties. |
+| **Consistency**| Daily Check-in | 100 | Reward for daily app usage. |
+| **Exploration**| Explore Features | 10 | App discovery reward. |
+| **Travel** | Booking (Flight/Stay/Car) | 1,000 | Travel within the Diaspora economy. |
+| **Travel** | Travel Review | 100 | Contributing travel knowledge. |
+| **Travel** | Travel Save (Wishlist) | 10 | Engagement with travel features. |
+| **Identity** | QR Exchange | 1,000 | In-person identity verification. |
+| **Streaks** | 10-Day Sharing Streak | +1,000 | Consistency bonus. |
+| **Streaks** | 100-Day Sharing Streak | +10,000 | Long-term commitment bonus. |
 
----
+### 2.3 Mechanism 3: Proof of Community Trust (PoCT)
+**Status**: The Filter.
+A user's **Trust Score (0-100)** is a mathematical representation of their community standing.
 
-## ⚙️ 4. Phase 2: Building Reputation (PoA & PoCT)
-
-Our economy runs on two engines: **Proof of Activity (PoA)** and **Proof of Community Trust (PoCT)**.
-
-### Earning DSP (Activity)
-You earn in-app points for helping the network grow:
-- **Daily Content Share**: +100 DSP (Inbound or Outbound)
-- **Messaging**: +10 DSP (Stay in touch with family/friends)
-- **New Relationships**: +1,000 DSP (When a connection is accepted)
-- **Host an Event**: +1,000 DSP
-- **Vouch for a Member**: +200 DSP (Verifier reward / Trust contribution)
-
-### The Trust Score Shield (TGE Efficiency)
-- **Constant Rewards**: Base rewards no longer decay. You always earn 100% of the activity value.
-- **TGE Efficiency**: Your **Trust Score (0-100)** determines how much of your earned DSP you can swap for liquid $DIASPORA tokens at TGE. Those with **91+ (High Trust)** swap at 1:1, while lower scores face tiered efficiency reductions. This ensures only high-quality social capital enters the tokenized economy.
-
----
-
-### 🏦 5. Phase 3: The Internal Economy (Pre-TGE)
-
-**Important**: Pre-TGE Diaspora Social Points (DSP) are internal in-app points. They have no value outside the app until the Great Reset.
-
-### P2P Gifting & Solidarity
-- **Gifting**: Send DSP to friends or family as "thank you" gifts for guidance, P2P services, or community support.
-- **The 10% Community Collective Tribute**: For every **1,000,000 DSP** collectively earned by all members of a Home Country, the system mints and deposits **100,000 DSP (10%)** into that **Home Country Treasury**. 
-- **National Pride & Competition**: Individual effort builds personal stake, but collective activity builds national wealth. The **Country Leaderboard** displays the real-time rank of every nation based on their Treasury balance, demonstrating which Diaspora community is the most active and trusted globally.
-- **Marketplace (V1)**: A dedicated space to offer P2P services and receive DSP gifts/donations in return.
-
-### 🏁 The Global Leaderboard: A Race for National Pride
-The Diaspora Nearby experience is anchored in the **Home Country Leaderboard**. This isn't just about points; it's a measure of **Collective Proof of Trust (CPoCT)**. 
-- **Compete for Home**: See your country rise in the rankings as you and your fellow citizens earn together.
-- **Treasury Visibility**: Every country's treasury balance is transparent, showing the world the economic power of your Diaspora.
-- **The 1 Million Goal**: The leaderboard tracks which nations are closest to the **1,000,000 DSP Threshold** required for Treasury Tokenization at TGE.
-
----
-
-## ⚡ 6. Phase 4: The 10-Epoch Economy (TGE)
-
-When the global community reaches the **1 Million Point Milestone**, we trigger the **Epoch 1 Token Generation Event (TGE)**.
-
-1.  **1:1 Swap**: Verified users with a balance of **>= 10,000 DSP** (Genesis Gate) and a **Trust Score >= 51.0** will have their points converted into liquid **$DSP Tokens** at tiered efficiency rates.
-2.  **Treasury Growth**: System Treasuries (Country, Continent, Ecosystem, Liquidity, Founders) grow pro-rata with user activity (50/50 split).
-3.  **The Sovereignty Race**: Epoch 7 marks a community milestone of **1 Trillion DSP**, the "The Great Race" to national sovereign wealth.
-4.  **Long-term Scale**: The economy expands to **Epoch 10**, reaching a total supply cap of **1 Quadrillion (1QD) $DSP**, supporting future AI and Machine-to-Machine economies.
+- **The HTS Ledger (Human Trust System)**:
+    - Points and Score are tracked in a verifiable ledger.
+    - **General Activities**: $DIASPORA and PoCT are awarded in real-time **from the beginning** for general PoA activities (like referrals, chatting, hostings) — achieving +1 PoCT and standard $DIASPORA rates individually per action.
+    - **Connection Milestones (The 10× Rule)**: For the 4 core connection categories (Family, Friends, QR Exchange, and Vouch/Verify combined), you earn 1,000 $DIASPORA **instantly** per connection. However, the +10 PoCT is awarded only in batches at 10× intervals (10, 100, 1000 unique connections).
+    - **Profile Completion (The Genesis Exception)**: The only milestone that delays both $DIASPORA and PoCT is the Profile Completion. It pays nothing until fully complete (10 fields), at which point it releases a 10,000 $DIASPORA lump sum and +10 PoCT at once.
+- **The Genesis Gate**:
+    - Every user must accrue a minimum of **10,000 $DIASPORA** to qualify for their first TGE conversion.
+- **The Decile Efficiency Gate**:
+    - Your score determines your **Swap Rate** at the Token Generation Event.
+    - *Formula*: `Efficiency = (Score / 10).ceil() / 10.0`
+    - A user with a score of 95 gets 100% (1:1), while a user with a score of 51 gets only 60% conversion.
 
 ---
 
-## 💎 7. Phase 5: The $DSP Global Economy (Post-TGE)
+## 🏦 3. ECONOMIC ARCHITECTURE (1:1 EXPANSION)
+We utilize a **Constant-Earning, Variable-Scarcity** model.
 
-After the Great Reset, $DSP becomes the lifeblood of the Diaspora, powering **Foreign Direct Investment (FDI)** and local venture capital.
+### 3.1 The 1:1 Expansion Rule
+For every **1.0 $DIASPORA** earned by a user through PoA, the system mints an additional **1.0 $DIASPORA** in "Matching Supply" for treasuries.
+- **User Reward (50%)**: Direct liquidity for the contributor.
+- **System Match (50%)**: Collective wealth divided into 10 Slots.
 
-### A. Diaspora Foreign Direct Investment (DFDI)
-Home Country Treasuries fund large-scale infrastructure and development projects (minimum **$1 Million USD** per project) in six core sectors:
-- 🌾 **Food & Agriculture**
-- 🏥 **Healthcare**
-- 🎓 **Education**
-- 🏗️ **Real Estate**
-- ⚡ **Energy**
-- 💧 **Water Resources**
+### 3.2 System Match Allocation (10-Slot Rule)
+For every $1 earned by a user, the protocol mints $1 which is distributed as follows:
+- **10% to Founders & Core Team**: Fixed 100% Efficiency.
+- **10% to Investors & Partners**: Strategic liquidity and growth partners.
+- **10% Fixed Burn**: Immediate deflationary pressure.
+- **70% Community Sovereignty**: (7 Slots) Subject to CPoCT efficiency. Any unassigned slot is BURNED.
 
-### B. Venture Capital Abroad
-The community fund provides capital for diaspora-led startups in host countries, ensuring that a lack of traditional financial capital never stops a good idea.
+#### The 7 Community Slots (Tributes)
+1. **Global Community**: Wealth for large-scale catastrophes and emergencies.
+2. **Home Continent**: Large-scale regional infrastructure and DDI.
+3. **Home Country**: National heritage and DDI Projects.
+4. **Home City**: Local community infrastructure and DDI.
+5. **Host Continent**: Growth in the Diaspora's new home.
+6. **Host Country**: Integration and host-nation impact projects.
+7. **Host City**: Immediate neighborhood connectivity and DDI.
 
-### C. Governance: The Wisdom of Pillars
-Strategic funding decisions are governed by the community:
-- **Project Suggestions**: Any **Resident** or **Pillar** can suggest a viable project by creating an investment group chat dedicated to that initiative.
-- **Selection**: Pillars and Residents vote on which project to fund from the Community Treasury.
+*Note: The **State/Province/Region** level is deprecated to maintain a streamlined 7-tier community hierarchy.*
 
-### D. Ecosystem Utility
-- **Bereavement Support**: Instant, community-funded funeral resilience.
-- **Travel Portal**: Book global airline tickets directly with $DSP.
-- **Trade & Logistics**: Pay for cross-border export/import services.
-- **Professional Services**: Pay for immigration lawyers, specialized shops, and community-vetted services.
+### 3.3 The Constant-10 Rule & Overflow
+- **Fixed Infrastructure Burn**: Exactly 10% of every matching expansion is destroyed.
+- **Constant Occupation**: All 10 slots (Founders, Investors, Burn, 7 Communities) are always filled.
+- **Global Overflow**: If a user has not joined a specific regional tier (e.g., Home City), that unit is automatically directed to the **Global Community** treasury. This ensures the 1:1 match is never broken and community wealth is always preserved.
+
+---
+
+## ⚡ 4. THE GREAT RESET: TOKEN GENERATION EVENT (TGE)
+TGE is the "Crystalization" event where off-chain $DIASPORA points become on-chain liquid currency.
+
+### 4.1 Dual-Trigger Evolution
+To ensure the network is robust, TGE only triggers when BOTH metrics are met:
+1. **Supply Milestone**: Cumulative $DIASPORA supply distributed reaches the Epoch's target (e.g., 1,000,000 $DIASPORA for Epoch 1).
+2. **User Milestone**: Required Verified Population reached (e.g., 100 Verified Humans for Epoch 1).
+
+### 4.2 The 10-TGE Event Cycle
+Each Epoch consists of **10 TGE events**.
+- Each event distributes **10%** of the Epoch's total supply target.
+- This creates 10 specific- **Wealth Windows**: TGE events happen in 10% increments of the supply milestone.
+- **System Exemption**: Founders convert at **100% efficiency**, reflecting their fixed commitment to platform infrastructure.
+
+### 4.3 Universal Participation
+- **Universal Inclusion**: Every registered user, regardless of their personal balance or verification status, participates in the TGE conversion once the global triggers are met.
+- This ensures absolute inclusion for the entire Diaspora community while maintaining the integrity of the network expansion.
+
+---
+
+## 📈 5. LONG-TERM SCALING: THE 10 EPOCHS
+The Diaspora economy grows by orders of magnitude (**10x Growth Model**). Each Epoch represents a 10x multiplier in both the verified human population and the corresponding $DIASPORA supply.
+
+### 5.1 Epoch Scaling Overview
+
+| Epoch | Diaspora Population (Verified) | $DIASPORA Supply Target |
+| :--- | :--- | :--- |
+| **1** | 100 | 1,000,000 |
+| **2** | 1,000 (10x) | 10,000,000 (10x) |
+| **3** | 10,000 (10x) | 100,000,000 (10x) |
+| **4** | 100,000 (10x) | 1,000,000,000 (10x) |
+| **5** | 1,000,000 (10x) | 10,000,000,000 (10x) |
+| **6** | 10,000,000 (10x) | 100,000,000,000 (10x) |
+| **7** | 100,000,000 (10x) | 1,000,000,000,000 (10x) |
+| **8** | 1,000,000,000 (10x) | 10,000,000,000,000 (10x) |
+| **9** | 10,000,000,000 (10x) | 100,000,000,000,000 (10x) |
+| **10** | 100,000,000,000 (10x) | 1,000,000,000,000,000 (10x) |
+
+### 5.2 Exhaustive TGE Milestones (10x Growth Logic)
+Within each Epoch, liquidity is released in 10 milestones (TGE 1-10). Each Epoch's population and supply cap are exactly **10x** the previous Epoch's totals.
+
+| Epoch | Milestone (TGE) | Required Population | $DIASPORA Injection (10% Epoch Cap) | Epoch Supply Cap |
+| :--- | :--- | :--- | :--- | :--- |
+| **1** | TGE 1-10 | Every 10 Users | 100,000 | 1,000,000 (Genesis) |
+| **2** | TGE 1-10 | Every 100 Users | 1,000,000 | 10,000,000 (10x prev) |
+| **3** | TGE 1-10 | Every 1,000 Users | 10,000,000 | 100,000,000 (10x prev) |
+| **4** | TGE 1-10 | Every 10,000 Users | 100,000,000 | 1,000,000,000 (10x prev) |
+| **5** | TGE 1-10 | Every 100k Users | 1,000,000,000 | 10,000,000,000 (10x prev) |
+| **6** | TGE 1-10 | Every 1M Users | 10,000,000,000 | 100,000,000,000 (10x prev) |
+| **7** | TGE 1-10 | Every 10M Users | 100,000,000,000 | 1,000,000,000,000 (10x prev) |
+| **8** | TGE 1-10 | Every 100M Users | 1,000,000,000,000 | 10,000,000,000,000 (10x prev) |
+| **9** | TGE 1-10 | Every 1B Users | 10,000,000,000,000 | 100,000,000,000,000 (10x prev) |
+| **10**| TGE 1-10 | Every 10B Users | 100,000,000,000,000 | 1,000,000,000,000,000 (10x prev) |
+
+*Note: Injected supply at each milestone is always 10% of the Epoch's Supply Target. TGE triggers at every 10% interval of the Epoch's Population Target.*
+
+---
+
+## 📈 6. TOKENOMICS VALUATION STRATEGY (Internal GDP)
+Unlike traditional speculative tokens, $DIASPORA's base value is anchored to the real economic activity within the app.
+
+### 6.1 The Valuation Formula
+- **Internal Floor Price**: `Price = (Internal GDP / Circulating Supply) / Velocity_Adjustment`
+- **Internal GDP**: The total cumulative volume (in $DIASPORA) of all transfers, remittances, and trades processed through the protocol.
+- **Public Projection**: To reflect future utility and network effects, the estimated market value is calculated as `Internal Price * 3.5` (Target Multiplier).
+
+### 6.2 Bilateral Corridors
+The system tracks **Corridor Strength** between host and home countries (e.g., UK-Tanzania).
+- **Demand Pressure**: High-volume corridors increase the local valuation for those specific communities, reflecting a "Remittance Hub" premium.
+- **Network Resilience**: Diversified corridors reduce volatility by spreading demand across multiple global economic paths.
+
+---
+
+## 🧊 7. VALUE SINKS (Deflationary Pressure)
+$DIASPORA is permanently removed from circulation through **community-driven penalties** and **protocol-level burns**. The economy is **frictionless** — no fees are charged for economic activities like marketplace listings, event creation, business registration, or hosting.
+
+### 7.1 Frictionless Economy
+All in-app economic activities are **completely free of DSP fees**:
+- **Marketplace**: No seller gate, listing, buy, apply, or hire fees
+- **Events**: No event listing or attendance fees
+- **Business**: No organization creation or product listing fees
+- **Hosting**: No traveler daily fees — hosting is free
+
+This design decision reflects the principle that **spending money to spend more money is not appealing**. The economy grows through activity, not taxation.
+
+### 7.2 Community-Driven Penalties
+| Penalty | Cost ($DIASPORA) | Trigger |
+| :--- | :--- | :--- |
+| **Spam Report** | -100 | Per report |
+| **Chat Ad Penalty** | -1,000 | 10 unique reports |
+| **Relationship Rejection** | -1,000 | Rejected request |
+| **Event No-Show** | -1,000 | Confirmed absence |
+| **Misinformation** | -1,000 | Community flagged |
+| **Fake Verification** | -1,000 | False identity claim |
+| **Vouching Bad Actor** | -1,000 | Backed a fraudster |
+| **Unresponsive Liaison** | -100 | Failed community duties |
+| **Deceptive Org** | -10,000 | Fraudulent business |
+| **Confirmed Fraud** | -10,000 | Proven fraud |
+
+### 7.3 Protocol Burns
+- **10% Fixed Expansion Burn**: 10% of every 1:1 system match is permanently destroyed.
+- **Unassigned Slot Burn**: Community slots without members are burned.
+- **Unclaimed TGE Burn**: Tokens below gates (user < 10,000 or community < 1,000,000) are burned on-chain.
+- **PoCT Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
 
 ---
 

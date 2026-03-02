@@ -62,7 +62,9 @@ class AuthController extends Notifier<bool> {
           );
         },
         codeAutoRetrievalTimeout: (verificationId) {
-          debugPrint('Phone Auth: codeAutoRetrievalTimeout. ID: $verificationId');
+          debugPrint(
+            'Phone Auth: codeAutoRetrievalTimeout. ID: $verificationId',
+          );
           // Do not set state = false here necessarily, as user might still be typing
         },
       );

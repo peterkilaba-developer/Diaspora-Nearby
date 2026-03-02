@@ -25,14 +25,12 @@ final communityHierarchyProvider =
 class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
   @override
   Future<List<HierarchyItem>> build() async {
-
     final mode = ref.watch(communitiesViewModeProvider);
     final user = ref.read(authStateProvider).value;
     final searchQuery = ref.watch(globalSearchProvider);
 
     // Watch search
     if (user == null) {
-
       return [];
     }
 
@@ -62,7 +60,6 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         // Fallback if null for global build
       } else {
         if (userHomeCountryCode == null) {
-
           return [];
         }
         return _buildMyCommunityHierarchy(userHomeCountryCode);
@@ -87,7 +84,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     if (isGlobal) {
       final snapshot = await firestore.collection('communities').get();
       communities = snapshot.docs
-          .map((d) => _safeParseCommunity(d.id, d.data(), userHomeCode: userHomeCode))
+          .map(
+            (d) =>
+                _safeParseCommunity(d.id, d.data(), userHomeCode: userHomeCode),
+          )
           .whereType<Community>()
           .toList();
     } else {
@@ -99,7 +99,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           .where('homeCountryCode', isEqualTo: userHomeCode)
           .get();
       communities = snapshot.docs
-          .map((d) => _safeParseCommunity(d.id, d.data(), userHomeCode: userHomeCode))
+          .map(
+            (d) =>
+                _safeParseCommunity(d.id, d.data(), userHomeCode: userHomeCode),
+          )
           .whereType<Community>()
           .toList();
     }
@@ -171,13 +174,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
   Future<List<HierarchyItem>> _buildMyCommunityHierarchy(
     String userHomeCode,
   ) async {
-
     final firestore = FirebaseFirestore.instance;
 
     // 1. Fetch relevant communities
     // REVERT: Fetch ALL communities for this home code, then filter in memory.
     // This avoids "Missing Index" errors and handles missing/null locationType fields gracefully.
-
 
     // Query A: All communities belonging to this Home Country
     final homeCountrySnapshot = await firestore
@@ -197,7 +198,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     // - Host Communities (locationType == 'host') matching homeCode
     // - The Global Community
     // - Home Continents (for grouping)
-    
+
     final relevantCommunities = <Community>[];
 
     // Add User's Home-Related Communities (Host nodes)
@@ -206,7 +207,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       final locType = data['locationType'] as String? ?? 'host';
 
       if (locType == 'host' || locType == 'past' || locType == 'home') {
-        final community = _safeParseCommunity(doc.id, data, userHomeCode: userHomeCode);
+        final community = _safeParseCommunity(
+          doc.id,
+          data,
+          userHomeCode: userHomeCode,
+        );
         if (community != null) {
           relevantCommunities.add(community);
         }
@@ -216,7 +221,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     // Add Global & Continents
     for (var doc in globalSnapshot.docs) {
       if (!relevantCommunities.any((c) => c.id == doc.id)) {
-        final community = _safeParseCommunity(doc.id, doc.data(), userHomeCode: userHomeCode);
+        final community = _safeParseCommunity(
+          doc.id,
+          doc.data(),
+          userHomeCode: userHomeCode,
+        );
         if (community != null) relevantCommunities.add(community);
       }
     }
@@ -316,7 +325,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
             id: 'chat_host_continent_$continentSlug',
           ),
           type: 'continent',
-          locationType: 'home',
+          locationType: 'host',
 
           homeCountryCode: userHomeCode,
           flag: null, // Continents generally don't have flags, handled by utils
@@ -381,7 +390,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       final countryName = getCountryName(userHomeCode);
       // Try to find a continent for this country to ensure it groups correctly
       final syntheticId = 'synthetic_home_$userHomeCode';
-      
+
       homeCountryItems.add(
         HierarchyItem(
           id: syntheticId,
@@ -395,7 +404,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           homeCountryCode: userHomeCode,
           flag: country_data.getCountryByCode(userHomeCode)?.flag ?? '',
           // No location map available, but that's fine for display
-          totalMembers: finalHostChildren.fold(0, (acc, c) => acc + c.totalMembers),
+          totalMembers: finalHostChildren.fold(
+            0,
+            (acc, c) => acc + c.totalMembers,
+          ),
           isExpandable: true,
           initiallyExpanded: true,
           children: finalHostChildren,
@@ -407,8 +419,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     final processedHomeCountryIds = <String>{};
 
     for (var continent in homeContinents) {
-      final continentDisplayName =
-          continent.name.toLowerCase().replaceAll(' community', '').trim();
+      final continentDisplayName = continent.name
+          .toLowerCase()
+          .replaceAll(' community', '')
+          .trim();
 
       // Find which home countries belong to this home continent
       final continentCountries = <HierarchyItem>[];
@@ -455,7 +469,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       }
     }
 
-
+    // Identify orphan home countries (not matching any home continent)
+    final orphanHomeCountries = homeCountryItems
+        .where((c) => !processedHomeCountryIds.contains(c.id))
+        .toList();
 
     // 7. Stats Calculation (from built hierarchy for accuracy)
     final hostCountrySet = <String>{};
@@ -483,6 +500,14 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       (acc, c) => acc + c.totalMembers,
     );
 
+    // Sort orphans
+    orphanHomeCountries.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
+
+    // Combine for final children
+    final hierarchyChildren = [...continentHierarchy, ...orphanHomeCountries];
+
     return [
       HierarchyItem(
         id: globalCommunity.id,
@@ -495,8 +520,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         locationType: 'global',
         homeCountryCode: userHomeCode,
         totalMembers: totalMembers,
-        isExpandable: false, // [FIX] flattened hierarchy for default view
-        children: finalHostChildren, // [FIX] direct host locations, no home country wrapper
+        isExpandable: hierarchyChildren.isNotEmpty,
+        initiallyExpanded: true,
+        children:
+            hierarchyChildren, // [FIX] Updated to show Home Continent/Country hierarchy
         globalStats: GlobalStats(
           totalMembers: totalMembers,
           continents: hostContinentItems.length,
@@ -588,10 +615,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
 
             flag: state.flag,
             profileImage: state.profileImage != null
-                ? ChatProfileImage(
-                    type: 'network',
-                    value: state.profileImage!,
-                  )
+                ? ChatProfileImage(type: 'network', value: state.profileImage!)
                 : null,
             location: state.location,
             totalMembers: stateTotalMembers,
@@ -677,10 +701,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           hostCountryCode: countryCode,
           flag: country.flag,
           profileImage: country.profileImage != null
-              ? ChatProfileImage(
-                  type: 'network',
-                  value: country.profileImage!,
-                )
+              ? ChatProfileImage(type: 'network', value: country.profileImage!)
               : null,
           location: country.location,
           totalMembers: countryTotalMembers,
@@ -710,7 +731,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
 
     // Parse
     final allCommunities = snapshot.docs
-        .map((d) => _safeParseCommunity(d.id, d.data(), userHomeCode: userHomeCode))
+        .map(
+          (d) =>
+              _safeParseCommunity(d.id, d.data(), userHomeCode: userHomeCode),
+        )
         .whereType<Community>()
         .toList();
 
@@ -1064,18 +1088,25 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       orphansByHomeCode.forEach((hCode, myOrphans) {
         final countryName = getCountryName(hCode);
         final syntheticId = 'synthetic_global_home_$hCode';
-        
+
         // Build the sub-hierarchy for these orphans (Host Country -> State -> City)
-        final myHostStates = hostStates.where((s) => s.homeCountryCode == hCode).toList();
-        final myHostCities = hostCities.where((c) => c.homeCountryCode == hCode).toList();
-        
+        final myHostStates = hostStates
+            .where((s) => s.homeCountryCode == hCode)
+            .toList();
+        final myHostCities = hostCities
+            .where((c) => c.homeCountryCode == hCode)
+            .toList();
+
         final flatHostCountryItems = _buildHostCountryTree(
-             myOrphans, // These are the host countries
-             myHostStates, 
-             myHostCities
+          myOrphans, // These are the host countries
+          myHostStates,
+          myHostCities,
         );
 
-        final totalMembers = flatHostCountryItems.fold(0, (acc, c) => acc + c.totalMembers);
+        final totalMembers = flatHostCountryItems.fold(
+          0,
+          (acc, c) => acc + c.totalMembers,
+        );
 
         homeCountryItems.add(
           HierarchyItem(
@@ -1096,9 +1127,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           ),
         );
       });
-      
+
       // Re-sort to include new items
-      homeCountryItems.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      homeCountryItems.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
     }
 
     // 6. Group Home Countries under Home Continents
@@ -1128,14 +1161,15 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       );
 
       // Try to find matching homeContinent from DB for metadata (image/flag/etc)
-      final continentDisplayName =
-          continent.displayName.toLowerCase().replaceAll(' community', '').trim();
+      final continentDisplayName = continent.displayName
+          .toLowerCase()
+          .replaceAll(' community', '')
+          .trim();
       final dbContinent = homeContinents.cast<Community?>().firstWhere(
-            (c) =>
-                normalizeName(c?.name ?? '') ==
-                normalizeName(continentDisplayName),
-            orElse: () => null,
-          );
+        (c) =>
+            normalizeName(c?.name ?? '') == normalizeName(continentDisplayName),
+        orElse: () => null,
+      );
 
       final continentName = CommunityChatUtils.generateCommunityNameFromParts(
         name: dbContinent?.name ?? continent.displayName,
@@ -1145,7 +1179,9 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
 
       continentHierarchy.add(
         HierarchyItem(
-          id: dbContinent?.id ?? 'synthetic_cont_${continent.name.toLowerCase()}',
+          id:
+              dbContinent?.id ??
+              'synthetic_cont_${continent.name.toLowerCase()}',
           name: continentName,
           type: 'continent',
           locationType: 'home',
@@ -1259,18 +1295,24 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     return hierarchy;
   }
 
-  Community? _safeParseCommunity(String id, Map<String, dynamic> data, {String? userHomeCode}) {
+  Community? _safeParseCommunity(
+    String id,
+    Map<String, dynamic> data, {
+    String? userHomeCode,
+  }) {
     try {
       final type = data['type'] as String?;
       final hCode = data['homeCountryCode'] as String?;
       final hostCode = data['hostCountryCode'] as String?;
-      
+
       // Smart Default for locationType
       // If missing in DB, infer from relationship to userHomeCode
       String defLocType = 'host';
       if (type == 'global' || type == 'continent') {
         defLocType = 'home';
-      } else if (userHomeCode != null && hCode == userHomeCode && (hostCode == null || hostCode.isEmpty)) {
+      } else if (userHomeCode != null &&
+          hCode == userHomeCode &&
+          (hostCode == null || hostCode.isEmpty)) {
         // It matches my home country and has no host country -> It's my HOME
         defLocType = 'home';
       }
@@ -1291,7 +1333,8 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         totalMembers: (data['totalMembers'] as num?)?.toInt(),
         isPrivate: data['isPrivate'] as bool? ?? false,
         location: data['location'] as Map<String, dynamic>?,
-        profileImage: (data['profileImage'] as String?)?.isEmpty == true ||
+        profileImage:
+            (data['profileImage'] as String?)?.isEmpty == true ||
                 data['profileImage'] == 'users'
             ? null
             : data['profileImage'] as String?,

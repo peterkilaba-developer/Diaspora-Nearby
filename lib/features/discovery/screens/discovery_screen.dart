@@ -9,6 +9,9 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 // Providers
 
@@ -89,20 +92,41 @@ final nearbyUsersStreamProvider = StreamProvider.autoDispose<List<ProfileData>>(
   );
 });
 
-class DiscoveryScreen extends ConsumerWidget {
+class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DiscoveryScreen> createState() => _DiscoveryScreenState();
+}
+
+class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(user.uid, ExplorationAction.discoveryExplore);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final nearbyUsersAsync = ref.watch(nearbyUsersStreamProvider);
     final userProfileAsync = ref.watch(userProfileProvider);
-    final homeCountry = userProfileAsync.value?.homeCountry ?? 'your home country';
+    final homeCountry =
+        userProfileAsync.value?.homeCountry ?? 'your home country';
 
     return Column(
       children: [
-        // Header / Info (Optional, kept minimal per request)
-        // We could add a simple "People Nearby" text if needed, but per request just auto-list.
-
         // Results List
         Expanded(
           child: nearbyUsersAsync.when(
@@ -118,7 +142,9 @@ class DiscoveryScreen extends ConsumerWidget {
                         color: Colors.grey,
                       ),
                       const SizedBox(height: 16),
-                      Text('There are not other community member from $homeCountry Nearby'),
+                      Text(
+                        'There are no other community members from $homeCountry nearby',
+                      ),
                       const SizedBox(height: 8),
                       TextButton(
                         onPressed: () {

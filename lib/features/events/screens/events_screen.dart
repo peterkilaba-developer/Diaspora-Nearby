@@ -15,7 +15,6 @@ import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 
-
 class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
 
@@ -228,10 +227,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               'action_event_interest',
                             )
                             .then((rewarded) {
-                          if (rewarded && mounted) {
-                            showExplorationRewardToast(context, message: 'Interested in Event');
-                          }
-                        });
+                              if (rewarded && mounted) {
+                                showExplorationRewardToast(
+                                  context,
+                                  message: 'Interested in Event',
+                                );
+                              }
+                            });
                       }
 
                       setState(() {});

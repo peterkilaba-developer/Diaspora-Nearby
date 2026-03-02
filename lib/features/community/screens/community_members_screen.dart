@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/core/data/countries.dart'; // [NEW] For getCountryByCode
 import 'package:go_router/go_router.dart';
@@ -12,12 +11,11 @@ import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; 
-import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; 
-import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
+// [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-
-
+import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart'; // [NEW]
 
 class CommunityMembersScreen extends ConsumerStatefulWidget {
   final String communityId;
@@ -94,6 +92,19 @@ class _CommunityMembersScreenState
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(LucideIcons.share2, size: 20),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) =>
+                    ShareCommunityDialog(community: widget.community),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
 
       body: SafeArea(
@@ -205,42 +216,12 @@ class _CommunityMembersScreenState
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () async {
-                            final user = ref.read(authRepositoryProvider).currentUser;
-                            if (user == null) return;
-
-                            String shareUrl = 'https://www.diasporanearby.com';
-                            
-                            try {
-                              // 1. Try to get existing code
-                              String? code = await ref.read(pointsRepositoryProvider).getReferralCode(user.uid);
-                              
-                              // 2. If no code, try to generate one
-                              if (code == null) {
-                                final userProfile = ref.read(userProfileProvider).value;
-                                if (userProfile != null) {
-                                  // Default to US if country code is missing, consistent with ShareInviteScreen
-                                  final countryCode = userProfile.homeCountryCode ?? 'US';  
-                                  code = await ref.read(pointsRepositoryProvider).generateReferralCode(
-                                    user.uid, 
-                                    userProfile.firstName, 
-                                    countryCode
-                                  );
-                                }
-                              }
-
-                              // 3. Append code if we have it
-                              if (code != null) {
-                                shareUrl = '$shareUrl/invite?code=$code';
-                              }
-                            } catch (e) {
-                              debugPrint('Error getting referral code: $e');
-                              // Fallback to generic URL is already set
-                            }
-
-                            Share.share(
-                              'Join me in the ${widget.community.name} on Diaspora Nearby! \n\n$shareUrl',
-                              subject: 'Diaspora Nearby',
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => ShareCommunityDialog(
+                                community: widget.community,
+                              ),
                             );
                           },
                           style: FilledButton.styleFrom(

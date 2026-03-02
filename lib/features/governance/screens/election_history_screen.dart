@@ -5,8 +5,12 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import '../models/election_result.dart';
 import '../repository/governance_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
-class ElectionHistoryScreen extends ConsumerWidget {
+class ElectionHistoryScreen extends ConsumerStatefulWidget {
   final String unitId;
   final String unitName;
 
@@ -17,20 +21,49 @@ class ElectionHistoryScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ElectionHistoryScreen> createState() =>
+      _ElectionHistoryScreenState();
+}
+
+class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(
+            user.uid,
+            ExplorationAction.governanceElectionHistory,
+          );
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('$unitName History'),
+        title: Text('${widget.unitName} History'),
         backgroundColor: AppTheme.accentDark,
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder<List<ElectionResult>>(
-        future: ref.read(governanceRepositoryProvider).getElectionHistory(unitId),
+        future: ref
+            .read(governanceRepositoryProvider)
+            .getElectionHistory(widget.unitId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           final history = snapshot.data ?? [];
           if (history.isEmpty) {
             return _buildEmptyState();
@@ -54,11 +87,19 @@ class ElectionHistoryScreen extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.history, size: 64, color: Colors.grey.withOpacity(0.5)),
+          Icon(
+            LucideIcons.history,
+            size: 64,
+            color: Colors.grey.withOpacity(0.5),
+          ),
           const SizedBox(height: 16),
           const Text(
             'No History Found',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -103,13 +144,19 @@ class ElectionHistoryScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             const Text(
               'ELECTED SIGNERS',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: result.winners.map((id) => _buildSignerChip(id)).toList(),
+              children: result.winners
+                  .map((id) => _buildSignerChip(id))
+                  .toList(),
             ),
             const SizedBox(height: 16),
             const Divider(),
@@ -147,23 +194,29 @@ class ElectionHistoryScreen extends ConsumerWidget {
     // Show top 3 in the preview
     final sorted = tally.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('TOP CANDIDATES', style: TextStyle(fontSize: 10, color: Colors.grey)),
+        const Text(
+          'TOP CANDIDATES',
+          style: TextStyle(fontSize: 10, color: Colors.grey),
+        ),
         const SizedBox(height: 8),
         ...sorted.take(3).map((e) {
           final total = tally.values.fold(0, (sum, v) => sum + v);
           final percent = total > 0 ? (e.value / total) : 0.0;
-          
+
           return Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Row(
               children: [
                 Expanded(
                   flex: 3,
-                  child: Text('Leader ${e.key.substring(0, 4)}...', style: const TextStyle(fontSize: 12)),
+                  child: Text(
+                    'Leader ${e.key.substring(0, 4)}...',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
                 Expanded(
                   flex: 7,
@@ -178,11 +231,17 @@ class ElectionHistoryScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('${e.value}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  '${e.value}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }

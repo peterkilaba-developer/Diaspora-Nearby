@@ -369,7 +369,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                   Row(
                     children: [
                       Icon(
-                        Icons.handshake_outlined,
+                        LucideIcons.heartHandshake,
                         size: 12,
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

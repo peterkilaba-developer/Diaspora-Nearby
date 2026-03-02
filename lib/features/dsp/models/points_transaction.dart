@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class PointsTransaction {
   final String id;
   final String userId;
@@ -21,11 +23,11 @@ class PointsTransaction {
   factory PointsTransaction.fromMap(Map<String, dynamic> map, String id) {
     return PointsTransaction(
       id: id,
-      userId: map['userId'] as String,
-      type: map['type'] as String,
-      action: map['action'] as String,
-      points: map['points'] as int,
-      timestamp: DateTime.parse(map['timestamp'] as String).toUtc(),
+      userId: map['userId'] as String? ?? '',
+      type: map['type'] as String? ?? 'unknown',
+      action: map['action'] as String? ?? 'unknown',
+      points: (map['points'] as num? ?? 0).toInt(),
+      timestamp: _parseDateTime(map['timestamp']) ?? DateTime.now(),
       metadata: map['metadata'] as Map<String, dynamic>?,
     );
   }
@@ -85,6 +87,10 @@ class PointsTransaction {
         return 'Maintenance Streak Bonus';
       case 'streak_100':
         return 'Legendary Streak Bonus';
+      case 'dsp_transfer_sent':
+        return 'DSP Sent';
+      case 'dsp_transfer_received':
+        return 'DSP Received';
     }
 
     // 3. Fallback: Humanize Snake Case (e.g. 'joined_community' -> 'Joined Community')
@@ -95,5 +101,12 @@ class PointsTransaction {
           return '${word[0].toUpperCase()}${word.substring(1)}';
         })
         .join(' ');
+  }
+
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is String) return DateTime.tryParse(val);
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    return null;
   }
 }

@@ -43,7 +43,7 @@ class _ShimmerEffectState extends State<ShimmerEffect>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final baseColor = theme.colorScheme.surfaceVariant;
+    final baseColor = theme.colorScheme.surfaceContainerHighest;
     final highlightColor = theme.colorScheme.surface;
 
     return AnimatedBuilder(

@@ -8,6 +8,8 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/community/services/community_service.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/router.dart';
 
 final relationshipRepositoryProvider = Provider<RelationshipRepository>((ref) {
   final repo = RelationshipRepository(FirebaseFirestore.instance, ref);
@@ -24,6 +26,26 @@ final userRelationshipsProvider =
       final repository = ref.watch(relationshipRepositoryProvider);
       return repository.getRelationships(userId);
     });
+
+/// The 13 family relationship types that trigger a Family Group Chat.
+const Set<String> kFamilyRelationshipTypes = {
+  'wife',
+  'husband',
+  'daughter',
+  'son',
+  'mother',
+  'father',
+  'sister',
+  'brother',
+  'aunt',
+  'uncle',
+  'nephew',
+  'niece',
+  'cousin',
+};
+
+bool _isFamilyType(String type) =>
+    kFamilyRelationshipTypes.contains(type.toLowerCase());
 
 class RelationshipRepository {
   final FirebaseFirestore _firestore;
@@ -99,10 +121,14 @@ class RelationshipRepository {
           hostCountryCode: profile.hostCountryCode,
           hostCity: profile.hostLocation.city,
         );
-        debugPrint('✅ [RelationshipRepository] Bereavement broadcast sent to communities');
+        debugPrint(
+          '✅ [RelationshipRepository] Bereavement broadcast sent to communities',
+        );
       }
     } catch (e) {
-      debugPrint('❌ [RelationshipRepository] Failed to broadcast bereavement: $e');
+      debugPrint(
+        '❌ [RelationshipRepository] Failed to broadcast bereavement: $e',
+      );
     }
   }
 
@@ -159,11 +185,14 @@ class RelationshipRepository {
     required String fromUserId,
     required String fromUserName,
     required String fromUserFlag,
+    String? fromUserPhoto,
     required String toUserId,
     required String toUserName,
+    String? toUserPhoto,
     required String relationshipType,
   }) async {
     try {
+      // [UPDATED] No fee charged on send. Fee is charged on acceptance.
       debugPrint(
         '🔔 [RelationshipRepository] Sending request from $fromUserId to $toUserId ($relationshipType)',
       );
@@ -173,8 +202,10 @@ class RelationshipRepository {
         fromUserId: fromUserId,
         fromUserName: fromUserName,
         fromUserFlag: fromUserFlag,
+        fromUserPhoto: fromUserPhoto,
         toUserId: toUserId,
         toUserName: toUserName,
+        toUserPhoto: toUserPhoto,
         relationshipType: relationshipType,
         timestamp: DateTime.now(),
         status: 'pending',
@@ -201,6 +232,33 @@ class RelationshipRepository {
               .map((doc) => RelationshipRequest.fromMap(doc.data()))
               .toList(),
         );
+  }
+
+  // [NEW] Stream Sent Requests
+  Stream<List<RelationshipRequest>> getSentRequests(String userId) {
+    return _firestore
+        .collection('relationship_requests')
+        .where('fromUserId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => RelationshipRequest.fromMap(doc.data()))
+              .toList(),
+        );
+  }
+
+  // [NEW] Cancel a Sent Request
+  Future<void> cancelSentRequest(RelationshipRequest request) async {
+    // Just delete the request document — no fee was charged on send
+    await _firestore
+        .collection('relationship_requests')
+        .doc(request.id)
+        .delete();
+
+    debugPrint(
+      '✅ [RelationshipRepository] Cancelled sent request to ${request.toUserName}',
+    );
   }
 
   // [NEW] Check for Pending Sent Request (for UI updates)
@@ -250,53 +308,77 @@ class RelationshipRepository {
         .where('status', isEqualTo: 'accepted')
         .snapshots()
         .listen((snapshot) async {
-      for (final doc in snapshot.docs) {
-        final request = RelationshipRequest.fromMap(doc.data());
-        // Check if I already have this relationship
-        final existing = await getRelationship(
-          userId: userId,
-          relatedUserId: request.toUserId,
-        );
-        if (existing == null) {
-          debugPrint(
-            '🔄 [RelationshipRepository] Syncing accepted request for ${request.toUserName}',
-          );
-          // Auto-add relationship (Sender -> Receiver)
-          // We need to fetch the receiver's flag/details if strictly needed,
-          // but the request object has user names.
-          // Problem: Request object has 'toUserName' but not 'toUserFlag' explicitly stored in standard model?
-          // Let's check RelationshipRequest model.
-          // It has 'toUserName'. 'toUserFlag' was not in constructor in line 133 but might be missing?
-          // If missing, we might need to fetch profile or accept it without flag temporarily.
-          // Or we update RelationshipRequest to include toUserFlag.
-          // For now, let's assume we can fetch profile or use a placeholder.
-          
-          // Actually, let's check line 133.
-          // It saves 'fromUserFlag'. Does it save 'toUserFlag'?
-          // Line 133: fromUserFlag is there. toUserFlag is NOT param of sendRelationshipRequest.
-          // So we might need to fetch it.
-          
-          // Fetch profile for flag
-           try {
-              // We can't access ProfileRepository easily here without ref circular?
-              // We can just query firestore 'users' collection directly since we have firestore instance.
-              final userDoc = await _firestore.collection('users').doc(request.toUserId).get();
-              final flag = userDoc.data()?['countryFlag'] ?? '🏳️'; // Fallback
-
-              await addRelationship(
-                userId: userId,
-                relatedUserId: request.toUserId,
-                type: request.relationshipType,
-                name: request.toUserName,
-                flag: flag,
+          for (final doc in snapshot.docs) {
+            final docData = doc.data();
+            final request = RelationshipRequest.fromMap(docData);
+            // Check if I already have this relationship
+            final existing = await getRelationship(
+              userId: userId,
+              relatedUserId: request.toUserId,
+            );
+            if (existing == null) {
+              debugPrint(
+                '🔄 [RelationshipRepository] Syncing accepted request for ${request.toUserName}',
               );
-              debugPrint('✅ [RelationshipRepository] Synced relationship with ${request.toUserName}');
-           } catch (e) {
-             debugPrint('❌ [RelationshipRepository] Sync failed: $e');
-           }
-        }
-      }
-    });
+
+              // Fetch profile for flag
+              try {
+                final userDoc = await _firestore
+                    .collection('users')
+                    .doc(request.toUserId)
+                    .get();
+                final flag =
+                    userDoc.data()?['countryFlag'] ?? '🏳️'; // Fallback
+
+                await addRelationship(
+                  userId: userId,
+                  relatedUserId: request.toUserId,
+                  type: request.relationshipType,
+                  name: request.toUserName,
+                  flag: flag,
+                );
+                debugPrint(
+                  '✅ [RelationshipRepository] Synced relationship with ${request.toUserName}',
+                );
+
+                // [NEW] Also join Family Group Chat if applicable (sender side sync)
+                if (_isFamilyType(request.relationshipType)) {
+                  try {
+                    final chatRepo = _ref.read(chatRepositoryProvider);
+                    await chatRepo.createOrJoinFamilyGroupChat(
+                      userId1: userId, // Sender (me)
+                      userId2: request.toUserId, // Receiver
+                    );
+                    debugPrint(
+                      '✅ [RelationshipRepository] Sender joined Family Group Chat after sync',
+                    );
+                  } catch (e) {
+                    debugPrint(
+                      '❌ [RelationshipRepository] Sender family group chat join failed: $e',
+                    );
+                  }
+                }
+
+                // [NEW] Navigate sender to the auto-created DM chat
+                final chatId = docData['chatId'] as String?;
+                if (chatId != null) {
+                  debugPrint(
+                    '🔔 [RelationshipRepository] Navigating sender to DM chat: $chatId',
+                  );
+                  try {
+                    _ref.read(routerProvider).push('/chats/$chatId');
+                  } catch (e) {
+                    debugPrint(
+                      '⚠️ [RelationshipRepository] Could not navigate to chat: $e',
+                    );
+                  }
+                }
+              } catch (e) {
+                debugPrint('❌ [RelationshipRepository] Sync failed: $e');
+              }
+            }
+          }
+        });
   }
 
   // [NEW] Accept Request
@@ -321,9 +403,53 @@ class RelationshipRepository {
 
     // 3. [UPDATED] Do NOT write to Sender's path directly to avoid Permission Denied.
     // The Sender (fromUser) will be updated via 'syncAcceptedSentRequests' listener on their client.
-    debugPrint('ℹ️ [RelationshipRepository] Skipping direct write to sender to avoid permission errors. Sender will sync automatically.');
+    debugPrint(
+      'ℹ️ [RelationshipRepository] Skipping direct write to sender to avoid permission errors. Sender will sync automatically.',
+    );
 
-    // 4. [NEW] Track Rewards (Sender +10, Receiver +10)
+    // 4. [NEW] If a family relationship type, create/join the Family Group Chat
+    if (_isFamilyType(request.relationshipType) ||
+        _isFamilyType(selectedReciprocalType)) {
+      try {
+        final chatRepo = _ref.read(chatRepositoryProvider);
+        await chatRepo.createOrJoinFamilyGroupChat(
+          userId1: request.toUserId, // Receiver (accepter)
+          userId2: request.fromUserId, // Sender
+        );
+        debugPrint(
+          '✅ [RelationshipRepository] Family Group Chat created/joined after accepting ${request.relationshipType}',
+        );
+      } catch (e) {
+        debugPrint(
+          '❌ [RelationshipRepository] Failed to create Family Group Chat: $e',
+        );
+      }
+    }
+
+    // 4b. [NEW] Auto-create a DM chat between the two users on acceptance
+    try {
+      final chatRepo = _ref.read(chatRepositoryProvider);
+      final chat = await chatRepo.createDirectChat(request.fromUserId);
+      if (chat != null) {
+        // Store chatId on the request doc so the sender's sync listener can navigate to it
+        await _firestore
+            .collection('relationship_requests')
+            .doc(request.id)
+            .update({'chatId': chat.id});
+        debugPrint(
+          '✅ [RelationshipRepository] DM Chat auto-created: ${chat.id}',
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '❌ [RelationshipRepository] Failed to auto-create DM chat: $e',
+      );
+    }
+
+    // 5. [SIMPLIFIED] Connection fee removed — all connections are now free.
+    // Both users receive a 1000 DSP reward via trackRelationshipReward below.
+
+    // 6. [SIMPLIFIED] Track Rewards (Sender +1000, Receiver +1000)
     try {
       await _ref
           .read(pointsServiceProvider)
@@ -331,6 +457,7 @@ class RelationshipRepository {
             senderId: request.fromUserId,
             receiverId: request.toUserId,
             status: 'accepted',
+            relationshipType: request.relationshipType,
           );
     } catch (e) {
       debugPrint('Failed to track accept rewards: $e');
@@ -354,6 +481,11 @@ class RelationshipRepository {
                 .toUserId, // Receiver is the one rejecting (current user usually)
             status: 'rejected',
           );
+
+      // HTS Signal: Rejected Connection
+      await _ref
+          .read(trustServiceProvider)
+          .recordActivity(request.fromUserId, HTSActivityType.rejectedVouch);
     } catch (e) {
       debugPrint('Error applying rejection penalty/reward: $e');
     }
@@ -387,6 +519,12 @@ class RelationshipRepository {
         return ['Uncle', 'Aunt'];
       case 'cousin':
         return ['Cousin'];
+      case 'friend':
+        return ['Friend'];
+      case 'business partner':
+        return ['Business Partner'];
+      case 'community member':
+        return ['Community Member'];
       default:
         return ['Relative'];
     }
@@ -411,6 +549,7 @@ class RelationshipRepository {
     }
     return null;
   }
+
   /// Block a user
   Future<void> blockUser({
     required String userId,
@@ -421,37 +560,50 @@ class RelationshipRepository {
       'blockedUsers': FieldValue.arrayUnion([relatedUserId]),
     });
 
-    // 2. [NEW] Increment the 'blockedByCount' of the user being blocked and check for automatic penalty
+    // 2. Use TrustService for automated HTS tracking and penalty
     try {
-      final targetUserRef = _firestore.collection('users').doc(relatedUserId);
-      
-      bool shouldPenalize = false;
-      await _firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(targetUserRef);
-        if (snapshot.exists) {
-          final data = snapshot.data()!;
-          final currentCount = (data['blockedByCount'] as num?)?.toInt() ?? 0;
-          final newCount = currentCount + 1;
-          transaction.update(targetUserRef, {'blockedByCount': newCount});
-          if (newCount == 5) {
-            shouldPenalize = true;
-          }
-        }
-      });
-
-      if (shouldPenalize) {
-        debugPrint('🚨 [RelationshipRepository] User $relatedUserId reached block threshold (5). Triggering automatic Fraud Penalty.');
-        // recordFraudPenalty is proportional (10% or min 5,000 DSP)
-        await _ref.read(pointsServiceProvider).recordFraudPenalty(relatedUserId);
-      }
+      await _ref
+          .read(trustServiceProvider)
+          .recordActivity(relatedUserId, HTSActivityType.blockedBy);
     } catch (e) {
-      debugPrint('❌ [RelationshipRepository] Error updating blockedByCount: $e');
+      debugPrint(
+        '❌ [RelationshipRepository] Error recording blockedBy HTS: $e',
+      );
     }
 
-    // 3. Remove any existing relationship status (optional but cleaner)
+    // 3. Milestone penalty: every 10 unique blockers → deduct 100 DSP + 1 PoCT
+    try {
+      final blockersSnapshot = await _firestore
+          .collection('users')
+          .where('blockedUsers', arrayContains: relatedUserId)
+          .count()
+          .get();
+      final uniqueBlockers = blockersSnapshot.count ?? 0;
+
+      if (uniqueBlockers > 0 && uniqueBlockers % 10 == 0) {
+        final pointsService = _ref.read(pointsServiceProvider);
+        await pointsService.deductPoints(
+          userId: relatedUserId,
+          amount: 100,
+          reason: 'blocked_by_milestone_${uniqueBlockers ~/ 10}',
+        );
+        await pointsService.deductPoints(
+          userId: relatedUserId,
+          amount: 1,
+          reason: 'poct_blocked_by_milestone_${uniqueBlockers ~/ 10}',
+        );
+        debugPrint(
+          '🚨 Block milestone: $uniqueBlockers unique blockers — 100 DSP + 1 PoCT deducted from $relatedUserId',
+        );
+      }
+    } catch (e) {
+      debugPrint('Error checking block milestone: $e');
+    }
+
+    // 4. Remove any existing relationship status (optional but cleaner)
     await deleteRelationship(userId: userId, relatedUserId: relatedUserId);
-    
-    // 4. Refresh local profile to update blocked list UI
+
+    // 5. Refresh local profile to update blocked list UI
     _ref.invalidate(userProfileProvider);
   }
 
@@ -463,7 +615,7 @@ class RelationshipRepository {
     await _firestore.collection('users').doc(userId).update({
       'blockedUsers': FieldValue.arrayRemove([relatedUserId]),
     });
-    
+
     // [NEW] Decrement the 'blockedByCount' of the user being unblocked
     await _firestore.collection('users').doc(relatedUserId).update({
       'blockedByCount': FieldValue.increment(-1),

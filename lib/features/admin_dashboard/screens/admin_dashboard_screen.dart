@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -79,7 +80,7 @@ class AdminDashboardScreen extends StatelessWidget {
             child: Column(
               children: [
                 AppBar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppTheme.elevationColor(context, 1), // Level 1 header
                   elevation: 0,
                   title: Text(
                     _getTitle(location),

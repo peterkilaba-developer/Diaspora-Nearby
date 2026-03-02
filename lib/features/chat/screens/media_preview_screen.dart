@@ -25,7 +25,8 @@ class MediaPreviewScreen extends ConsumerStatefulWidget {
   ConsumerState<MediaPreviewScreen> createState() => _MediaPreviewScreenState();
 }
 
-class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
+class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _captionController = TextEditingController();
   late PageController _pageController;
   int _currentIndex = 0;
@@ -36,11 +37,23 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
     _captionController.text = widget.initialCaption ?? ''; // [NEW] Pre-fill
 
     if (widget.type == 'video' && widget.files.isNotEmpty) {
       _initializeVideo(widget.files.first);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      if (_videoController != null && _videoController!.value.isPlaying) {
+        _videoController!.pause();
+        setState(() => _isPlaying = false);
+      }
     }
   }
 
@@ -63,6 +76,7 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _captionController.dispose();
     _pageController.dispose();
     _videoController?.dispose();
@@ -173,7 +187,7 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen> {
               onSendAudioFile: (_, __) {},
               onSendDocument: (_, __) {},
               // onSendLocation: null, // Optional now
-              onSendDSP: (_, __) {},
+              onSendDSP: (_, __, ___) {},
               onCancelReply: () {},
               showAttachmentButton: false, // Hide attachments
               showAudioRecording: false, // Hide audio

@@ -8,7 +8,6 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 
-
 class FeedbackScreen extends ConsumerStatefulWidget {
   const FeedbackScreen({super.key});
 
@@ -42,22 +41,19 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       });
 
       if (mounted) {
-        // [NEW] Award 10 DSP for first feedback
+        // [NEW] Award 10 DSP for every feedback
         if (user != null) {
-          final rewarded = await ref
+          final success = await ref
               .read(pointsServiceProvider)
-              .trackExplorationReward(
-                user.uid,
-                'action_feedback_submitted',
-                points: 10,
-              );
-          if (rewarded && mounted) {
+              .trackFeedbackReward(user.uid);
+
+          if (success && mounted) {
             showExplorationRewardToast(
               context,
               message: 'Feedback Submitted',
               points: 10,
             );
-          } else {
+          } else if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Thank you for your feedback!')),
             );
@@ -139,7 +135,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Earn 10 DSP for your first feedback submission!',
+                              'Earn 10 DSP for every feedback submission!',
                               style: TextStyle(
                                 color: Colors.orange.shade300,
                                 fontWeight: FontWeight.w600,

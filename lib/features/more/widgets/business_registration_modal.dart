@@ -13,6 +13,8 @@ import 'package:diaspora_nearby/features/shared/models/google_places_models.dart
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
+import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 class BusinessRegistrationModal extends ConsumerStatefulWidget {
   final String? communityId; // [NEW] optional community context
@@ -34,6 +36,7 @@ class _BusinessRegistrationModalState
 
   XFile? _logoImage;
   final ImagePicker _picker = ImagePicker();
+  bool _logoError = false;
 
   // Location state
   List<AutocompletePrediction> _predictions = [];
@@ -68,6 +71,7 @@ class _BusinessRegistrationModalState
     'Political Organization (PO)',
     'Faith Organization (FO)',
     'Non Governmental Organization (NGO)',
+    'Non-Profit Organization (NPO)',
     'Government Organization (GO)',
   ];
 
@@ -130,6 +134,15 @@ class _BusinessRegistrationModalState
       'Executive Director',
       'Country Director',
       'Founder',
+      'Program Director',
+      'Coordinator',
+      'Director',
+    ],
+    'Non-Profit Organization (NPO)': [
+      'Executive Director',
+      'President',
+      'Founder',
+      'Board Chair',
       'Program Director',
       'Coordinator',
       'Director',
@@ -427,29 +440,37 @@ class _BusinessRegistrationModalState
     }
   }
 
+
+
+  void _showError(String title, String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Validate logo first
+    if (_logoImage == null) {
+      setState(() => _logoError = true);
+    }
+    final formValid = _formKey.currentState!.validate();
+    if (_logoImage == null || !formValid) return;
 
     // Check organization limit (Max 2)
     final orgsCount = ref.read(userOrganizationsProvider).value?.length ?? 0;
     if (orgsCount >= 2) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Limit Reached'),
-            content: const Text(
-              'You can only manage a maximum of 2 organizations. Please remove or deactivate an existing one to register a new organization.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      }
+      _showError('Limit Reached', 'You can only manage a maximum of 2 organizations. Please remove or deactivate an existing one to register a new organization.');
       return;
     }
 
@@ -460,6 +481,8 @@ class _BusinessRegistrationModalState
       if (user == null) {
         throw Exception('User not logged in');
       }
+
+
 
       String? logoUrl;
       if (_logoImage != null) {
@@ -484,15 +507,8 @@ class _BusinessRegistrationModalState
           logoUrl = await storageRef.getDownloadURL();
         } catch (e) {
           debugPrint('Logo upload error: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to upload logo: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
           setState(() => _isLoading = false);
+          _showError('Upload Failed', 'Failed to upload logo: $e');
           return;
         }
       }
@@ -501,9 +517,9 @@ class _BusinessRegistrationModalState
       try {
         // Validation for actual address/place
         if (_locationLat == null || _locationLng == null) {
-          throw Exception(
-            'Please select a valid address from the suggestions.',
-          );
+          setState(() => _isLoading = false);
+          _showError('Location Required', 'Please select a valid address from the suggestions.');
+          return;
         }
 
         // Get user's home country code for filtering
@@ -534,15 +550,8 @@ class _BusinessRegistrationModalState
             );
       } catch (e) {
         debugPrint('Registration Submit Error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error creating organization: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
         setState(() => _isLoading = false);
+        _showError('Registration Failed', 'Error creating organization: $e');
         return;
       }
 
@@ -568,14 +577,10 @@ class _BusinessRegistrationModalState
         );
       }
     } catch (e) {
+      debugPrint('Submission error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Submission failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showError('Submission Failed', '$e');
       }
     }
   }
@@ -673,25 +678,36 @@ class _BusinessRegistrationModalState
                     // Logo Picker moved inside scrollable form to avoid overlap
                     Center(
                       child: GestureDetector(
-                        onTap: _pickImage,
+                        onTap: () {
+                          setState(() => _logoError = false);
+                          _pickImage();
+                        },
                         child: Stack(
                           children: [
-                            CircleAvatar(
-                              radius: 40,
-                              backgroundColor: Colors.grey.shade200,
-                              backgroundImage: _logoImage != null
-                                  ? (kIsWeb
-                                        ? NetworkImage(_logoImage!.path)
-                                        : FileImage(File(_logoImage!.path))
-                                              as ImageProvider)
-                                  : null,
-                              child: _logoImage == null
-                                  ? const Icon(
-                                      LucideIcons.image,
-                                      size: 30,
-                                      color: Colors.grey,
-                                    )
-                                  : null,
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: _logoError
+                                    ? Border.all(color: Colors.red, width: 2)
+                                    : null,
+                              ),
+                              child: CircleAvatar(
+                                radius: 40,
+                                backgroundColor: Colors.grey.shade200,
+                                backgroundImage: _logoImage != null
+                                    ? (kIsWeb
+                                          ? NetworkImage(_logoImage!.path)
+                                          : FileImage(File(_logoImage!.path))
+                                                as ImageProvider)
+                                    : null,
+                                child: _logoImage == null
+                                    ? Icon(
+                                        LucideIcons.image,
+                                        size: 30,
+                                        color: _logoError ? Colors.red : Colors.grey,
+                                      )
+                                    : null,
+                              ),
                             ),
                             Positioned(
                               bottom: 0,
@@ -714,10 +730,13 @@ class _BusinessRegistrationModalState
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Center(
+                    Center(
                       child: Text(
-                        'Upload Logo',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                        _logoError ? 'Logo is required *' : 'Upload Logo *',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _logoError ? Colors.red : Colors.grey,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -920,7 +939,7 @@ class _BusinessRegistrationModalState
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: _selectedOrgType,
+                      initialValue: _selectedOrgType,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Organization Type',
@@ -971,7 +990,7 @@ class _BusinessRegistrationModalState
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: _selectedTitle,
+                      initialValue: _selectedTitle,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Your Title',
@@ -992,6 +1011,58 @@ class _BusinessRegistrationModalState
                       validator: (v) => v == null ? 'Required' : null,
                     ),
                     const SizedBox(height: 24),
+
+                    // Community Exclusivity Info Card
+                    if (widget.communityId != null)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer
+                              .withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.primary
+                                .withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              LucideIcons.shield,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Community Exclusive',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'This organization will be exclusively associated with ${ref.read(communityProvider(widget.communityId!)).valueOrNull?.name ?? 'this community'}. Only community members will be able to discover and interact with it.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
 
                     SizedBox(
                       width: double.infinity,

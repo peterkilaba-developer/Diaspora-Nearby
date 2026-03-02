@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,7 +10,7 @@ class AdminOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.elevationColor(context, 0), // Level 0 page bg
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -82,7 +83,7 @@ class AdminOverviewScreen extends ConsumerWidget {
               height: 300,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.elevationColor(context, 1), // Level 1 card
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade200),
               ),
@@ -125,7 +126,7 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [

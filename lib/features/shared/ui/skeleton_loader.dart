@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 /// Skeleton loading widget with shimmer effect for perceived instant loading
 class SkeletonLoader extends StatefulWidget {
@@ -46,12 +47,8 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark
-        ? const Color(0xFF1A1A1A)
-        : const Color(0xFFE0E0E0);
-    final highlightColor = isDark
-        ? const Color(0xFF2A2A2A)
-        : const Color(0xFFF5F5F5);
+    final baseColor = AppTheme.elevationColor(context, 1);
+    final highlightColor = AppTheme.elevationColor(context, 2);
 
     return AnimatedBuilder(
       animation: _animation,
@@ -137,10 +134,9 @@ class EventCardSkeleton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
+          decoration: AppTheme.cardDecoration(context).copyWith(
+            borderRadius: BorderRadius.circular(16),
+          ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -195,8 +191,7 @@ class UserCardSkeleton extends StatelessWidget {
       width: 180,
       height: 240,
       margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+      decoration: AppTheme.cardDecoration(context).copyWith(
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(

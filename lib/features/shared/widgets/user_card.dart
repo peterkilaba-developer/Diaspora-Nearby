@@ -63,14 +63,14 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
   // ... (keep all helper methods same) ...
 
   String _getCountryFlag(String? countryCode) {
-    if (countryCode == null || countryCode.isEmpty) return '📍';
+    if (countryCode == null || countryCode.isEmpty) return '';
     final country = country_data.getCountryByCode(countryCode);
-    return country?.flag ?? '📍';
+    return country?.flag ?? '';
   }
 
   Widget _buildInitials(ThemeData theme) {
     return Container(
-      color: theme.colorScheme.surfaceVariant,
+      color: theme.colorScheme.surfaceContainerHighest,
       alignment: Alignment.center,
       child: Text(
         (widget.user.firstName.isNotEmpty ? widget.user.firstName[0] : '?')
@@ -161,7 +161,9 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
               minScale: 0.5,
               maxScale: 4,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16), // Standardized rounding
+                borderRadius: BorderRadius.circular(
+                  16,
+                ), // Standardized rounding
                 child: Image.network(
                   widget.user.profileImage,
                   fit: BoxFit.contain,
@@ -267,7 +269,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     if (widget.user.currentLocation?.countryCode != null) {
       bottomFlag = _getCountryFlag(widget.user.currentLocation!.countryCode);
     }
-    if (bottomFlag.isEmpty || bottomFlag == '📍') {
+    if (bottomFlag.isEmpty) {
       bottomFlag = hostFlag;
     }
 
@@ -319,13 +321,15 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     return GlassContainer(
       color: widget.backgroundColor,
       borderRadius: widget.borderRadius,
-      margin: EdgeInsets.zero, // 0px margins - parent container controls spacing
+      margin:
+          EdgeInsets.zero, // 0px margins - parent container controls spacing
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.only(
-              left: AppTheme.pageHorizontalPadding, // 8px horizontal padding for card content
+              left: AppTheme
+                  .pageHorizontalPadding, // 8px horizontal padding for card content
               right: AppTheme.pageHorizontalPadding,
               top: 16,
               bottom: 8,
@@ -360,63 +364,73 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                               Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(8),
-                                  border: widget.flaggedFields.contains('Profile Photo')
-                                      ? Border.all(color: AppTheme.error, width: 2)
+                                  border:
+                                      widget.flaggedFields.contains(
+                                        'Profile Photo',
+                                      )
+                                      ? Border.all(
+                                          color: AppTheme.error,
+                                          width: 2,
+                                        )
                                       : null,
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 80,
-                              height: 96,
-                              color: theme.colorScheme.surfaceVariant,
-                              child: widget.localImage != null
-                                  ? (kIsWeb
-                                        ? Image.network(
-                                            widget.localImage!.path,
+                                  child: Container(
+                                    width: 80,
+                                    height: 96,
+                                    color: theme.colorScheme.surfaceContainerHighest,
+                                    child: widget.localImage != null
+                                        ? (kIsWeb
+                                              ? Image.network(
+                                                  widget.localImage!.path,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) =>
+                                                      _buildInitials(theme),
+                                                )
+                                              : Image.file(
+                                                  File(widget.localImage!.path),
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) =>
+                                                      _buildInitials(theme),
+                                                ))
+                                        : (widget
+                                                  .user
+                                                  .profileImage
+                                                  .isNotEmpty &&
+                                              widget.user.profileImage
+                                                  .startsWith('http'))
+                                        ? CachedNetworkImage(
+                                            imageUrl: widget.user.profileImage,
                                             fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                _buildInitials(theme),
+                                            placeholder: (context, url) =>
+                                                const ShimmerEffect(
+                                                  width: 80,
+                                                  height: 96,
+                                                ),
+                                            errorWidget: (context, url, error) {
+                                              // Debug print using the error object
+                                              if (kDebugMode) {
+                                                print(
+                                                  'UserCardView Image Error for ${widget.user.uid}: $error',
+                                                );
+                                                print(
+                                                  'URL: ${widget.user.profileImage}',
+                                                );
+                                              }
+                                              return _buildInitials(theme);
+                                            },
+                                            fadeInDuration: const Duration(
+                                              milliseconds: 300,
+                                            ),
                                           )
-                                        : Image.file(
-                                            File(widget.localImage!.path),
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                _buildInitials(theme),
-                                          ))
-                                  : (widget.user.profileImage.isNotEmpty &&
-                                        widget.user.profileImage.startsWith(
-                                          'http',
-                                        ))
-                                  ? CachedNetworkImage(
-                                      imageUrl: widget.user.profileImage,
-                                      fit: BoxFit.cover,
-                                      placeholder: (context, url) =>
-                                          const ShimmerEffect(
-                                            width: 80,
-                                            height: 96,
-                                          ),
-                                      errorWidget: (context, url, error) {
-                                        // Debug print using the error object
-                                        if (kDebugMode) {
-                                          print(
-                                            'UserCardView Image Error for ${widget.user.uid}: $error',
-                                          );
-                                          print(
-                                            'URL: ${widget.user.profileImage}',
-                                          );
-                                        }
-                                        return _buildInitials(theme);
-                                      },
-                                      fadeInDuration: const Duration(
-                                        milliseconds: 300,
-                                      ),
-                                    )
-                                    : _buildInitials(theme),
+                                        : _buildInitials(theme),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                              if (widget.flaggedFields.contains('Profile Photo'))
+                              if (widget.flaggedFields.contains(
+                                'Profile Photo',
+                              ))
                                 Positioned(
                                   top: -6,
                                   right: -6,
@@ -497,8 +511,12 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                         theme,
                                       ),
                                     ),
-                                    if (widget.flaggedFields.contains('First Name') ||
-                                        widget.flaggedFields.contains('Last Name'))
+                                    if (widget.flaggedFields.contains(
+                                          'First Name',
+                                        ) ||
+                                        widget.flaggedFields.contains(
+                                          'Last Name',
+                                        ))
                                       const Padding(
                                         padding: EdgeInsets.only(left: 6.0),
                                         child: Tooltip(
@@ -583,8 +601,11 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                           children: [
                             Row(
                               children: [
-                                if (homeFlag.isNotEmpty && homeFlag != '📍') ...[
-                                  Text(homeFlag, style: const TextStyle(fontSize: 14)),
+                                if (homeFlag.isNotEmpty) ...[
+                                  Text(
+                                    homeFlag,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
@@ -599,7 +620,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   child: SearchHighlightUtils.highlightText(
                                     isLocal
                                         ? () {
-                                            final loc = widget.user.homeLocation;
+                                            final loc =
+                                                widget.user.homeLocation;
                                             if (loc.city?.isNotEmpty ?? false) {
                                               final state = loc.state;
                                               if (state?.isNotEmpty ?? false) {
@@ -612,7 +634,10 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                             );
                                           }()
                                         : formatFullAddress(
-                                            widget.user.homeLocation.formattedAddress,
+                                            widget
+                                                .user
+                                                .homeLocation
+                                                .formattedAddress,
                                           ),
                                     widget.searchQuery,
                                     theme.textTheme.bodySmall?.copyWith(
@@ -622,7 +647,9 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                     context,
                                   ),
                                 ),
-                                if (widget.flaggedFields.contains('Home Country'))
+                                if (widget.flaggedFields.contains(
+                                  'Home Country',
+                                ))
                                   const Padding(
                                     padding: EdgeInsets.only(left: 4),
                                     child: Icon(
@@ -636,8 +663,11 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                if (hostFlag.isNotEmpty && hostFlag != '📍') ...[
-                                  Text(hostFlag, style: const TextStyle(fontSize: 14)),
+                                if (hostFlag.isNotEmpty) ...[
+                                  Text(
+                                    hostFlag,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
@@ -652,11 +682,13 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   child: SearchHighlightUtils.highlightText(
                                     () {
                                       final loc = widget.user.hostLocation;
-                                      final countryCode = widget.user.hostCountryCode;
+                                      final countryCode =
+                                          widget.user.hostCountryCode;
                                       if (countryCode != null &&
-                                          country_data.hasStateLevelHierarchyFromData(
-                                            countryCode,
-                                          )) {
+                                          country_data
+                                              .hasStateLevelHierarchyFromData(
+                                                countryCode,
+                                              )) {
                                         return formatFullAddress(
                                           loc.formattedAddress,
                                         );
@@ -679,7 +711,9 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                     context,
                                   ),
                                 ),
-                                if (widget.flaggedFields.contains('Host Country'))
+                                if (widget.flaggedFields.contains(
+                                  'Host Country',
+                                ))
                                   const Padding(
                                     padding: EdgeInsets.only(left: 4),
                                     child: Icon(
@@ -711,8 +745,10 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                 }
               },
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.transparent,
                   borderRadius: widget.borderRadius != null
@@ -735,10 +771,11 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                           Expanded(
                             child: Row(
                               children: [
-                                if (bottomFlag.isNotEmpty &&
-                                    bottomFlag != '📍') ...[
-                                  Text(bottomFlag,
-                                      style: const TextStyle(fontSize: 16)),
+                                if (bottomFlag.isNotEmpty) ...[
+                                  Text(
+                                    bottomFlag,
+                                    style: const TextStyle(fontSize: 16),
+                                  ),
                                   const SizedBox(width: 6),
                                 ],
                                 Text(
@@ -761,7 +798,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        if (widget.user
+                                        if (widget
+                                                    .user
                                                     .showCurrentLocationName !=
                                                 false &&
                                             currentCityDisplay != null) ...[
@@ -772,11 +810,13 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                               currentCityDisplay,
                                               style: theme.textTheme.bodySmall
                                                   ?.copyWith(
-                                                fontSize: 12,
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                                decoration: TextDecoration.none,
-                                              ),
+                                                    fontSize: 12,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                                    decoration:
+                                                        TextDecoration.none,
+                                                  ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -862,9 +902,10 @@ class _MovingLogoState extends State<_MovingLogo>
       duration: const Duration(seconds: 2),
       vsync: this,
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.8, end: 1.2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.8,
+      end: 1.2,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

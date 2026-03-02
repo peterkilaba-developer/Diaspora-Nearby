@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/core/data/countries.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-
+import 'package:diaspora_nearby/features/notifications/providers/notification_count_provider.dart';
 
 class DiasporaAppBar extends ConsumerStatefulWidget
     implements PreferredSizeWidget {
@@ -137,7 +138,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
 
                   // Communities Icon
                   IconButton(
-                    icon: const Icon(Icons.handshake, size: 22),
+                    icon: const Icon(LucideIcons.heartHandshake, size: 22),
                     color: widget.currentScreen == 'communities'
                         ? activeColor
                         : inactiveColor,
@@ -152,48 +153,26 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                               'action_appbar_community',
                             )
                             .then((rewarded) {
-                          if (rewarded && mounted) {
-                            showExplorationRewardToast(context, message: 'Community Network Unlocked');
-                          }
-                        });
+                              if (rewarded && mounted) {
+                                showExplorationRewardToast(
+                                  context,
+                                  message: 'Community Network Unlocked',
+                                );
+                              }
+                            });
                       }
-                      context.push('/communities');
+                      context.go('/communities');
                     },
                   ),
 
-                  // Radio Icon
-                  IconButton(
-                    icon: const Icon(Icons.radio, size: 22),
-                    color: widget.currentScreen == 'radio'
-                        ? activeColor
-                        : inactiveColor,
-                    onPressed: () {
-                      // [NEW] Track Exploration
-                      final user = ref.read(authRepositoryProvider).currentUser;
-                      if (user != null) {
-                        ref
-                            .read(pointsServiceProvider)
-                            .trackExplorationReward(
-                              user.uid,
-                              'action_appbar_radio',
-                            )
-                            .then((rewarded) {
-                          if (rewarded && mounted) {
-                            showExplorationRewardToast(context, message: 'Global Radio Discovered');
-                          }
-                        });
-                      }
-                      context.push('/radio');
-                    },
-                  ),
+                  // Notification Bell with Badge
+                  _buildNotificationBell(context, ref),
 
-                  // More Menu (Redirects to Profile)
+                  // More Menu (Redirects to Economy Hub)
                   IconButton(
                     icon: const Icon(LucideIcons.moreVertical, size: 22),
                     onPressed: () {
-                      if (widget.currentScreen != 'profile') {
-                        context.push('/profile');
-                      }
+                      context.push('/economy');
                     },
                   ),
                 ],
@@ -215,6 +194,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                   child: TextField(
                     controller: _controller,
                     focusNode: _focusNode,
+                    autofocus: false, // [FIX] Disable auto-focus
                     onChanged: widget.onSearchChange,
                     decoration: InputDecoration(
                       hintText: _getPlaceholder(isGlobalView),
@@ -321,5 +301,53 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
       default:
         return 'Search...';
     }
+  }
+
+  Widget _buildNotificationBell(BuildContext context, WidgetRef ref) {
+    final pendingAsync = ref.watch(pendingActionCountProvider);
+    final pendingCount = pendingAsync.valueOrNull ?? 0;
+    final unreadAsync = ref.watch(unreadNotificationCountProvider);
+    final unreadCount = unreadAsync.valueOrNull ?? 0;
+
+    // Show the higher of the two counts — pending actions take priority
+    final badgeCount = pendingCount > 0 ? pendingCount : unreadCount;
+    final textColor = Theme.of(context).colorScheme.onPrimary;
+
+    return IconButton(
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(LucideIcons.bell, size: 22),
+          if (badgeCount > 0)
+            Positioned(
+              right: -4,
+              top: -2,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  color: AppTheme.accent,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Text(
+                  badgeCount > 99 ? '99+' : '$badgeCount',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+      onPressed: () {
+        context.push('/notifications');
+      },
+    );
   }
 }

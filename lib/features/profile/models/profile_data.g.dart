@@ -107,6 +107,7 @@ ProfileData _$ProfileDataFromJson(Map<String, dynamic> json) => ProfileData(
           ? null
           : QRConnectionInfo.fromJson(
               json['firstQrConnection'] as Map<String, dynamic>),
+      walletAddress: json['walletAddress'] as String?,
     );
 
 Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
@@ -160,6 +161,7 @@ Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
       'fcmTopics': instance.fcmTopics,
       'showCurrentLocationName': instance.showCurrentLocationName,
       'firstQrConnection': instance.firstQrConnection?.toJson(),
+      'walletAddress': instance.walletAddress,
       'distance': instance.distance,
     };
 

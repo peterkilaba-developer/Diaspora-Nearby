@@ -179,7 +179,8 @@ class _AudioMessagePlayerState extends ConsumerState<AudioMessagePlayer>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center, // Align with play button in middle
+        crossAxisAlignment:
+            CrossAxisAlignment.center, // Align with play button in middle
         children: [
           // Play/Pause Button
           GestureDetector(
@@ -218,9 +219,7 @@ class _AudioMessagePlayerState extends ConsumerState<AudioMessagePlayer>
                   thumbShape: const RoundSliderThumbShape(
                     enabledThumbRadius: 6,
                   ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 0,
-                  ),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
                   activeTrackColor: contentColor,
                   inactiveTrackColor: contentColor.withValues(alpha: 0.3),
                   thumbColor: contentColor,

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -11,6 +10,9 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/widgets/relationship_card.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 class BereavementScreen extends ConsumerStatefulWidget {
   const BereavementScreen({super.key});
@@ -27,6 +29,19 @@ class _BereavementScreenState extends ConsumerState<BereavementScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(user.uid, ExplorationAction.dspBereavement);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
   }
 
   @override
@@ -75,22 +90,12 @@ class _OverviewTab extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppTheme.accent.withOpacity(0.2), Colors.transparent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+            decoration: AppTheme.cardDecoration(context).copyWith(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
             ),
             child: const Column(
               children: [
-                Icon(
-                  LucideIcons.heart,
-                  size: 64,
-                  color: AppTheme.accent,
-                ),
+                Icon(LucideIcons.heart, size: 64, color: AppTheme.accent),
                 SizedBox(height: 16),
                 Text(
                   'Dignity in Repatriation',
@@ -111,13 +116,13 @@ class _OverviewTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
-          
+
           const Text(
             'Community Support Benefits',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          
+
           _buildFeatureItem(
             context,
             icon: LucideIcons.plane,
@@ -138,17 +143,19 @@ class _OverviewTab extends StatelessWidget {
             context,
             icon: LucideIcons.home,
             title: 'Funeral Expenses',
-            description: 'Support for funeral home services and supplies back home.',
+            description:
+                'Support for funeral home services and supplies back home.',
           ),
           const SizedBox(height: 16),
           _buildFeatureItem(
             context,
             icon: LucideIcons.coins,
             title: 'Earn Rewards',
-            description: 'Receive 1,000 DSP annually for contributing to the community fund.',
+            description:
+                'Receive 1,000 DSP annually for contributing to the community fund.',
           ),
           // Add extra padding at the bottom to ensure scrollability
-          const SizedBox(height: 80), 
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -165,11 +172,15 @@ class _OverviewTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: imagePath != null ? EdgeInsets.zero : const EdgeInsets.all(12),
+          padding: imagePath != null
+              ? EdgeInsets.zero
+              : const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: imagePath != null ? Colors.transparent : Theme.of(context).cardColor,
+            color: imagePath != null
+                ? Colors.transparent
+                : AppTheme.cardDecoration(context).color,
             borderRadius: BorderRadius.circular(12),
-             boxShadow: [
+            boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
                 blurRadius: 10,
@@ -177,8 +188,13 @@ class _OverviewTab extends StatelessWidget {
               ),
             ],
           ),
-          child: imagePath != null 
-              ? Image.asset(imagePath, width: 48, height: 48, fit: BoxFit.contain)
+          child: imagePath != null
+              ? Image.asset(
+                  imagePath,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.contain,
+                )
               : Icon(icon, color: AppTheme.accent, size: 24),
         ),
         const SizedBox(width: 16),
@@ -223,19 +239,23 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
   void _showSetupCoverageDialog(EligibilityResult eligibility) async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     // Fetch relatives and potential proxies
     List<Relationship> relatives = [];
     List<ProfileData> potentialProxies = [];
     try {
-      relatives = await ref.read(bereavementServiceProvider).getQualifiedRelatives(user.uid);
-      potentialProxies = await ref.read(bereavementServiceProvider).getPotentialProxies(user.uid);
+      relatives = await ref
+          .read(bereavementServiceProvider)
+          .getQualifiedRelatives(user.uid);
+      potentialProxies = await ref
+          .read(bereavementServiceProvider)
+          .getPotentialProxies(user.uid);
     } catch (_) {}
-    
+
     setState(() => _isLoading = false);
-    
+
     if (!mounted) return;
 
     showDialog(
@@ -243,21 +263,27 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       builder: (context) => _SetupCoverageDialog(
         initialRelatives: relatives,
         potentialProxies: potentialProxies,
-        onConfirm: (proxyId, coveredIds) => _initiateMembership(proxyId, coveredIds),
+        onConfirm: (proxyId, coveredIds) =>
+            _initiateMembership(proxyId, coveredIds),
       ),
     );
   }
 
-  Future<void> _initiateMembership(String proxyId, List<String> coveredIds) async {
+  Future<void> _initiateMembership(
+    String proxyId,
+    List<String> coveredIds,
+  ) async {
     final user = ref.read(authRepositoryProvider).currentUser;
     final profile = ref.read(userProfileProvider).value;
 
     if (user == null || profile == null) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
-      await ref.read(bereavementServiceProvider).requestProxyAndJoin(
+      await ref
+          .read(bereavementServiceProvider)
+          .requestProxyAndJoin(
             userId: user.uid,
             country: profile.homeCountry ?? 'Unknown',
             proxyUserId: proxyId,
@@ -265,37 +291,43 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Proxy request sent! Waiting for acceptance.')),
+          const SnackBar(
+            content: Text('Proxy request sent! Waiting for acceptance.'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-  
+
   Future<void> _processPayment() async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
-    
+
     setState(() => _isLoading = true);
     try {
-       await ref.read(bereavementServiceProvider).completeMembershipPayment(user.uid);
-       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Membership Activated! Welcome to the Fund.')),
-        );
-       }
-    } catch (e) {
+      await ref
+          .read(bereavementServiceProvider)
+          .completeMembershipPayment(user.uid);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Payment Error: $e')),
+          const SnackBar(
+            content: Text('Membership Activated! Welcome to the Fund.'),
+          ),
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Payment Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -321,16 +353,17 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
 
         // Handle States
         if (membership.status == MembershipStatus.pending_proxy) {
-           return _buildStatusPage(
-             icon: LucideIcons.clock,
-             title: 'Waiting for Proxy',
-             description: 'You have sent a request to your chosen proxy. Once they accept, you can proceed to payment.',
-             color: Colors.orange,
-           );
+          return _buildStatusPage(
+            icon: LucideIcons.clock,
+            title: 'Waiting for Proxy',
+            description:
+                'You have sent a request to your chosen proxy. Once they accept, you can proceed to payment.',
+            color: Colors.orange,
+          );
         }
-        
+
         if (membership.status == MembershipStatus.pending_payment) {
-           return _buildPaymentPage(membership);
+          return _buildPaymentPage(membership);
         }
 
         // Active Membership
@@ -353,7 +386,10 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                       '\$${membership.annualContribution.round()}',
                     ),
                     const Divider(),
-                    _buildInfoRow('Home Country', membership.country), // Updated Label
+                    _buildInfoRow(
+                      'Home Country',
+                      membership.country,
+                    ), // Updated Label
                     const Divider(),
                     _buildInfoRow(
                       'Member Since',
@@ -393,13 +429,13 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                   ),
                 ),
               ),
-              
+
               Container(
                 margin: const EdgeInsets.all(16),
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
+                  color: AppTheme.cardDecoration(context).color,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
@@ -411,9 +447,11 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                 ),
                 child: Column(
                   children: [
-                     _buildBeneficiaryItem(
+                    _buildBeneficiaryItem(
                       icon: LucideIcons.shieldAlert,
-                      name: membership.proxyUserId != null ? 'Proxy User (${membership.proxyUserId})' : 'No Proxy',
+                      name: membership.proxyUserId != null
+                          ? 'Proxy User (${membership.proxyUserId})'
+                          : 'No Proxy',
                       relation: 'Designated Proxy',
                       isProxy: true,
                     ),
@@ -421,47 +459,57 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                     if (membership.coveredFamilyMembers.isEmpty)
                       const Padding(
                         padding: EdgeInsets.only(top: 16.0),
-                        child: Text('No supported family members added yet.', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                        child: Text(
+                          'No supported family members added yet.',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
                       )
-                    else 
+                    else
                       FutureBuilder<List<Relationship>>(
-                        future: ref.read(bereavementServiceProvider).getQualifiedRelatives(membership.userId),
+                        future: ref
+                            .read(bereavementServiceProvider)
+                            .getQualifiedRelatives(membership.userId),
                         builder: (context, snapshot) {
-                           // Allow showing cached data or wait
-                           final rels = snapshot.data ?? [];
-                           
-                           return Column(
-                             children: membership.coveredFamilyMembers.map((id) {
-                               String name = 'Unknown Member';
-                               String relation = 'Relative';
-                               
-                               if (id.startsWith('friend_')) {
-                                 name = id.replaceFirst('friend_', '');
-                                 relation = 'Friend';
-                               } else {
-                                  final r = rels.where((k) => k.id == id).firstOrNull;
-                                  if (r != null) {
-                                    name = r.name;
-                                    relation = r.type;
-                                  } else if (id.isNotEmpty) {
-                                     // Fallback
-                                     name = 'Member ($id)';
-                                  }
-                               }
-                               
-                               return _buildBeneficiaryItem(
-                                 icon: LucideIcons.user,
-                                 name: name,
-                                 relation: relation,
-                               );
-                             }).toList(),
-                           );
-                        }
+                          // Allow showing cached data or wait
+                          final rels = snapshot.data ?? [];
+
+                          return Column(
+                            children: membership.coveredFamilyMembers.map((id) {
+                              String name = 'Unknown Member';
+                              String relation = 'Relative';
+
+                              if (id.startsWith('friend_')) {
+                                name = id.replaceFirst('friend_', '');
+                                relation = 'Friend';
+                              } else {
+                                final r = rels
+                                    .where((k) => k.id == id)
+                                    .firstOrNull;
+                                if (r != null) {
+                                  name = r.name;
+                                  relation = r.type;
+                                } else if (id.isNotEmpty) {
+                                  // Fallback
+                                  name = 'Member ($id)';
+                                }
+                              }
+
+                              return _buildBeneficiaryItem(
+                                icon: LucideIcons.user,
+                                name: name,
+                                relation: relation,
+                              );
+                            }).toList(),
+                          );
+                        },
                       ),
                   ],
                 ),
               ),
-              
+
               // Safe Area Spacer
               SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
             ],
@@ -472,70 +520,94 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       error: (e, st) => Center(child: Text('Error: $e')),
     );
   }
-  
+
   Widget _buildPaymentPage(BereavementMembership membership) {
     return Center(
-       child: Padding(
-         padding: const EdgeInsets.all(24.0),
-         child: Column(
-           mainAxisAlignment: MainAxisAlignment.center,
-           children: [
-             const Icon(LucideIcons.creditCard, size: 64, color: AppTheme.accent),
-             const SizedBox(height: 24),
-             const Text(
-               'Ready to Activate',
-               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-             ),
-             const SizedBox(height: 12),
-             const Text(
-               'Your proxy has accepted. Please pay the annual contribution to activate your coverage.',
-               textAlign: TextAlign.center,
-               style: TextStyle(fontSize: 16, color: Colors.grey),
-             ),
-             const SizedBox(height: 32),
-             SizedBox(
-               width: double.infinity,
-               child: FilledButton(
-                 onPressed: _isLoading ? null : _processPayment,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                 child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Pay \$100.00'),
-               ),
-             ),
-           ],
-         ),
-       ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              LucideIcons.creditCard,
+              size: 64,
+              color: AppTheme.accent,
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Ready to Activate',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Your proxy has accepted. Please pay the annual contribution to activate your coverage.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _isLoading ? null : _processPayment,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.accent,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Pay \$100.00'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
-  
-  Widget _buildStatusPage({required IconData icon, required String title, required String description, required Color color}) {
-     return Center(
-       child: Padding(
-         padding: const EdgeInsets.all(32.0),
-         child: Column(
-           mainAxisAlignment: MainAxisAlignment.center,
-           children: [
-             Icon(icon, size: 64, color: color),
-             const SizedBox(height: 24),
-             Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-             const SizedBox(height: 12),
-             Text(description, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, height: 1.5)),
-           ],
-         ),
-       ),
-     );
+
+  Widget _buildStatusPage({
+    required IconData icon,
+    required String title,
+    required String description,
+    required Color color,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 64, color: color),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-  
+
   Widget _buildReadiness(String userId) {
     return FutureBuilder<EligibilityResult>(
       future: ref.read(bereavementServiceProvider).checkEligibility(userId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         final result = snapshot.data!;
-        
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -551,21 +623,37 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 24),
-              
-              _buildChecklistItem('Verified Profile', result.isProfileVerified, 'Complete identity verification.'),
-              _buildChecklistItem('Financial Stake (10,000 DSP)', result.hasEnoughPoints, 'Accumulate more DSP.'),
-              _buildChecklistItem('Community Trust (>67)', result.hasEnoughTrust, 'Increase your Trust Score.'),
-              _buildChecklistItem('Qualified Network', result.hasEnoughRelatives, 'Add at least 2 relatives.'),
-              
+
+              _buildChecklistItem(
+                'Verified Profile',
+                result.isProfileVerified,
+                'Complete identity verification.',
+              ),
+              _buildChecklistItem(
+                'Financial Stake (10,000 DSP)',
+                result.hasEnoughPoints,
+                'Accumulate more DSP.',
+              ),
+              _buildChecklistItem(
+                'Community Trust (>67)',
+                result.hasEnoughTrust,
+                'Increase your Trust Score.',
+              ),
+              _buildChecklistItem(
+                'Qualified Network',
+                result.hasEnoughRelatives,
+                'Add at least 2 relatives.',
+              ),
+
               const SizedBox(height: 24),
               _SuggestedProxiesList(userId: userId),
               const SizedBox(height: 8),
-              
+
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: result.isEligible 
-                      ? () => _showSetupCoverageDialog(result) 
+                  onPressed: result.isEligible
+                      ? () => _showSetupCoverageDialog(result)
                       : null,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -578,9 +666,14 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
               if (!result.isEligible)
                 const Padding(
                   padding: EdgeInsets.only(top: 16),
-                  child: Center(child: Text('Please meet all conditions to proceed.', style: TextStyle(color: Colors.grey))),
+                  child: Center(
+                    child: Text(
+                      'Please meet all conditions to proceed.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
                 ),
-                
+
               SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
             ],
           ),
@@ -588,20 +681,26 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       },
     );
   }
-  
+
   Widget _buildChecklistItem(String title, bool isMet, String helpAction) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isMet ? Colors.green.withOpacity(0.05) : Colors.red.withOpacity(0.05),
+        color: isMet
+            ? Colors.green.withOpacity(0.05)
+            : Colors.red.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isMet ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3)),
+        border: Border.all(
+          color: isMet
+              ? Colors.green.withOpacity(0.3)
+              : Colors.red.withOpacity(0.3),
+        ),
       ),
       child: Row(
         children: [
           Icon(
-            isMet ? LucideIcons.checkCircle : LucideIcons.xCircle, 
+            isMet ? LucideIcons.checkCircle : LucideIcons.xCircle,
             color: isMet ? Colors.green : Colors.red,
           ),
           const SizedBox(width: 16),
@@ -611,12 +710,18 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
                 if (!isMet)
                   Text(
                     helpAction,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                    ),
                   ),
               ],
             ),
@@ -713,23 +818,14 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
             color: AppTheme.accent.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            size: 20,
-            color: AppTheme.accent,
-          ),
+          child: Icon(icon, size: 20, color: AppTheme.accent),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
               Text(
                 relation,
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -780,17 +876,21 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
     if (user == null) return const Center(child: Text('Please log in'));
 
     final membership = ref.watch(membershipStreamProvider(user.uid)).value;
-    final bool canRequest = membership?.status == MembershipStatus.active || membership?.status == MembershipStatus.grace_period;
+    final bool canRequest =
+        membership?.status == MembershipStatus.active ||
+        membership?.status == MembershipStatus.grace_period;
 
     final claimsAsync = ref.watch(claimsStreamProvider(user.uid));
 
     return Scaffold(
-      floatingActionButton: canRequest ? FloatingActionButton.extended(
-        onPressed: _showClaimDialog,
-        icon: const Icon(LucideIcons.heartHandshake),
-        label: const Text('Request Support'),
-        backgroundColor: AppTheme.accent,
-      ) : null,
+      floatingActionButton: canRequest
+          ? FloatingActionButton.extended(
+              onPressed: _showClaimDialog,
+              icon: const Icon(LucideIcons.heartHandshake),
+              label: const Text('Request Support'),
+              backgroundColor: AppTheme.accent,
+            )
+          : null,
       body: claimsAsync.when(
         data: (claims) {
           if (claims.isEmpty) {
@@ -824,17 +924,20 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  tileColor: Theme.of(context).cardColor,
+                  tileColor: AppTheme.cardDecoration(context).color,
                   contentPadding: const EdgeInsets.all(16),
                   title: Text(
                     claim.deceasedName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (value) {
-                       if (value == 'broadcast') {
-                         _showBroadcastDialog(context, claim);
-                       }
+                      if (value == 'broadcast') {
+                        _showBroadcastDialog(context, claim);
+                      }
                     },
                     itemBuilder: (context) => [
                       const PopupMenuItem(
@@ -852,15 +955,15 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                       const SizedBox(height: 4),
-                       // Simplified to show Deceased and Status as requested
-                       Text(
-                         'Passed Away \u2022 ${DateFormat('MMM d').format(claim.dateOfDeath)}',
-                         style: const TextStyle(color: Colors.grey),
-                       ),
-                       const SizedBox(height: 8),
-                       // Progress bar visualization of status
-                       _buildStatusProgress(context, claim.status),
+                      const SizedBox(height: 4),
+                      // Simplified to show Deceased and Status as requested
+                      Text(
+                        'Passed Away \u2022 ${DateFormat('MMM d').format(claim.dateOfDeath)}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      // Progress bar visualization of status
+                      _buildStatusProgress(context, claim.status),
                     ],
                   ),
                 ),
@@ -875,71 +978,103 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
   }
 
   Widget _buildStatusProgress(BuildContext context, ClaimStatus status) {
-     int step = 0;
-     switch (status) {
-       case ClaimStatus.submitted: step = 1; break;
-       case ClaimStatus.under_review: step = 2; break;
-       case ClaimStatus.approved: step = 3; break;
-       case ClaimStatus.paid: step = 4; break;
-       case ClaimStatus.rejected: step = 0; break;
-     }
-     
-     if (status == ClaimStatus.rejected) {
-       return const Text(
-          'Request Rejected - Please contact support',
-          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
-       );
-     }
-     
-     return Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         ClipRRect(
-           borderRadius: BorderRadius.circular(4),
-           child: LinearProgressIndicator(
-             value: step / 4,
-             backgroundColor: Colors.grey.withOpacity(0.2),
-             color: AppTheme.accent,
-             minHeight: 6,
-           ),
-         ),
-         const SizedBox(height: 4),
-         Text( 
-           _getStatusLabel(status),
-           style: const TextStyle(fontSize: 11, color: AppTheme.accent, fontWeight: FontWeight.w600),
-         ),
-       ],
-     );
+    int step = 0;
+    switch (status) {
+      case ClaimStatus.submitted:
+        step = 1;
+        break;
+      case ClaimStatus.under_review:
+        step = 2;
+        break;
+      case ClaimStatus.approved:
+        step = 3;
+        break;
+      case ClaimStatus.paid:
+        step = 4;
+        break;
+      case ClaimStatus.rejected:
+        step = 0;
+        break;
+    }
+
+    if (status == ClaimStatus.rejected) {
+      return const Text(
+        'Request Rejected - Please contact support',
+        style: TextStyle(
+          color: Colors.red,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: step / 4,
+            backgroundColor: Colors.grey.withOpacity(0.2),
+            color: AppTheme.accent,
+            minHeight: 6,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _getStatusLabel(status),
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppTheme.accent,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
-  
+
   String _getStatusLabel(ClaimStatus status) {
-      switch (status) {
-       case ClaimStatus.submitted: return 'Processing Request (25%)';
-       case ClaimStatus.under_review: return 'Under Review (50%)';
-       case ClaimStatus.approved: return 'Approved - Scheduling Transfer (75%)';
-       case ClaimStatus.paid: return 'Funds Transferred (100%)';
-       default: return '';
-     }
+    switch (status) {
+      case ClaimStatus.submitted:
+        return 'Processing Request (25%)';
+      case ClaimStatus.under_review:
+        return 'Under Review (50%)';
+      case ClaimStatus.approved:
+        return 'Approved - Scheduling Transfer (75%)';
+      case ClaimStatus.paid:
+        return 'Funds Transferred (100%)';
+      default:
+        return '';
+    }
   }
 
   void _showBroadcastDialog(BuildContext context, BereavementClaim claim) {
     showDialog(
-       context: context,
-       builder: (context) => AlertDialog(
-         title: const Text('Broadcast Announcement'),
-         content: Text('Notify community members about the passing of ${claim.deceasedName}?'),
-         actions: [
-           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-           FilledButton(
-             onPressed: () {
-               // Call service to broadcast (mock for now)
-               Navigator.pop(context);
-               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement broadcasted to community.')));
-             }, 
-             child: const Text('Broadcast')
-           ),
-         ],
-       ),
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Broadcast Announcement'),
+        content: Text(
+          'Notify community members about the passing of ${claim.deceasedName}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              // Call service to broadcast (mock for now)
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Announcement broadcasted to community.'),
+                ),
+              );
+            },
+            child: const Text('Broadcast'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -953,42 +1088,45 @@ class _SuggestedProxiesList extends ConsumerWidget {
     return FutureBuilder<List<ProfileData>>(
       future: ref.read(bereavementServiceProvider).getPotentialProxies(userId),
       builder: (context, snapshot) {
-         if (!snapshot.hasData || (snapshot.data?.isEmpty ?? true)) return const SizedBox.shrink();
-         
-         return Column(
-           crossAxisAlignment: CrossAxisAlignment.start,
-           children: [
-             const Text("Suggested Proxies (Verified Contacts)", style: TextStyle(fontWeight: FontWeight.bold)),
-             const SizedBox(height: 8),
-             ListView.builder(
-                 shrinkWrap: true,
-                 physics: const NeverScrollableScrollPhysics(),
-                 itemCount: snapshot.data!.length,
-                 itemBuilder: (context, index) {
-                   final p = snapshot.data![index];
-                   // Create a mock relationship object to reuse the card
-                   final mockRel = Relationship(
-                     id: p.uid!,
-                     name: p.firstName,
-                     type: 'Verified Contact',
-                     status: 'active',
-                     createdAt: DateTime.now(),
-                   );
-                   
-                   return RelationshipCard(
-                     relationship: mockRel,
-                     enableActions: false, 
-                   );
-                 }
-               ),
-           ],
-         );
-      }
+        if (!snapshot.hasData || (snapshot.data?.isEmpty ?? true)) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Suggested Proxies (Verified Contacts)",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: snapshot.data!.length,
+              itemBuilder: (context, index) {
+                final p = snapshot.data![index];
+                // Create a mock relationship object to reuse the card
+                final mockRel = Relationship(
+                  id: p.uid!,
+                  name: p.firstName,
+                  type: 'Verified Contact',
+                  status: 'active',
+                  createdAt: DateTime.now(),
+                );
+
+                return RelationshipCard(
+                  relationship: mockRel,
+                  enableActions: false,
+                );
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
-
-
 
 final claimsStreamProvider =
     StreamProvider.family<List<BereavementClaim>, String>((ref, userId) {
@@ -1046,7 +1184,9 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Support request submitted successfully')),
+          const SnackBar(
+            content: Text('Support request submitted successfully'),
+          ),
         );
       }
     } catch (e) {
@@ -1082,12 +1222,14 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
             children: [
               TextFormField(
                 controller: _nameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Deceased Name'),
                 validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _relationController,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   labelText: 'Relationship (e.g. Father/Sister)',
                 ),
@@ -1108,6 +1250,7 @@ class _SubmitClaimDialogState extends ConsumerState<_SubmitClaimDialog> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _descController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   labelText: 'Description / Notes',
                 ),
@@ -1145,7 +1288,7 @@ class _SetupCoverageDialog extends StatefulWidget {
   final List<Relationship> initialRelatives;
   final List<ProfileData> potentialProxies;
   final Function(String proxyId, List<String> coveredIds) onConfirm;
-  
+
   const _SetupCoverageDialog({
     required this.initialRelatives,
     required this.potentialProxies,
@@ -1159,23 +1302,23 @@ class _SetupCoverageDialog extends StatefulWidget {
 class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
   final _proxyController = TextEditingController();
   final _friendController = TextEditingController();
-  
+
   // Track valid state
   bool _isProxyValid = false;
-  
+
   late List<String> _coveredIds;
   late List<String> _displayNames;
-  
+
   @override
   void initState() {
     super.initState();
     _coveredIds = widget.initialRelatives.map((r) => r.id).toList();
     _displayNames = widget.initialRelatives.map((r) => r.name).toList();
-    
+
     _proxyController.addListener(() {
-       setState(() {
-         _isProxyValid = _proxyController.text.trim().isNotEmpty;
-       });
+      setState(() {
+        _isProxyValid = _proxyController.text.trim().isNotEmpty;
+      });
     });
   }
 
@@ -1187,10 +1330,10 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
     // I will mock adding a 'Friend' user ID.
     if (val.isNotEmpty) {
       setState(() {
-         // In real app, we would search user
-         _coveredIds.add('friend_$val'); // Mock ID
-         _displayNames.add('$val (Friend)');
-         _friendController.clear();
+        // In real app, we would search user
+        _coveredIds.add('friend_$val'); // Mock ID
+        _displayNames.add('$val (Friend)');
+        _friendController.clear();
       });
     }
   }
@@ -1205,54 +1348,74 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Supported Family Members', 
+              'Supported Family Members',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             if (_displayNames.isNotEmpty)
-              ..._displayNames.map((name) => Padding(
-                padding: const EdgeInsets.only(bottom: 4.0),
-                child: Row(
-                  children: [
-                    const Icon(LucideIcons.user, size: 16, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    Text(name),
-                    const Spacer(),
-                    const Icon(LucideIcons.check, size: 16, color: Colors.green),
-                  ],
+              ..._displayNames.map(
+                (name) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4.0),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        LucideIcons.user,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(name),
+                      const Spacer(),
+                      const Icon(
+                        LucideIcons.check,
+                        size: 16,
+                        color: Colors.green,
+                      ),
+                    ],
+                  ),
                 ),
-              ))
+              )
             else
-              const Text('No qualified relatives found.', style: TextStyle(color: Colors.grey, fontSize: 13)),
-              
-             if (_displayNames.isEmpty) ...[
-                const SizedBox(height: 12),
-                const Text('Add a close friend for support:', style: TextStyle(fontSize: 12)),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _friendController,
-                        decoration: const InputDecoration(
-                          hintText: 'Friend Name',
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          isDense: true,
+              const Text(
+                'No qualified relatives found.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+
+            if (_displayNames.isEmpty) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Add a close friend for support:',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _friendController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        hintText: 'Friend Name',
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
                         ),
+                        isDense: true,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(LucideIcons.plusCircle),
-                      onPressed: _addFriend,
-                    ),
-                  ],
-                ),
-             ],
-            
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.plusCircle),
+                    onPressed: _addFriend,
+                  ),
+                ],
+              ),
+            ],
+
             const Divider(height: 32),
-            
+
             const Text(
-              'Designated Proxy', 
+              'Designated Proxy',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
@@ -1263,6 +1426,7 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
             const SizedBox(height: 8),
             TextField(
               controller: _proxyController,
+              textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: 'Proxy User ID / Name',
                 border: const OutlineInputBorder(),
@@ -1272,7 +1436,14 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
             ),
             if (widget.potentialProxies.isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Text('Suggestions (Verified Contacts)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+              const Text(
+                'Suggestions (Verified Contacts)',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
               const SizedBox(height: 8),
               SizedBox(
                 height: 150, // Limit height
@@ -1282,28 +1453,29 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
                   itemCount: widget.potentialProxies.length,
                   itemBuilder: (context, index) {
                     final p = widget.potentialProxies[index];
-                     final mockRel = Relationship(
-                        id: p.uid!,
-                        name: p.firstName,
-                        type: 'Verified Contact',
-                        status: 'active',
-                        createdAt: DateTime.now(),
-                      );
-                     
+                    final mockRel = Relationship(
+                      id: p.uid!,
+                      name: p.firstName,
+                      type: 'Verified Contact',
+                      status: 'active',
+                      createdAt: DateTime.now(),
+                    );
+
                     return InkWell(
                       onTap: () {
-                         setState(() {
-                           _proxyController.text = p.uid ?? '';
-                         });
+                        setState(() {
+                          _proxyController.text = p.uid ?? '';
+                        });
                       },
-                      child: IgnorePointer( // Ignore taps on card internal elements, we want to select
+                      child: IgnorePointer(
+                        // Ignore taps on card internal elements, we want to select
                         child: RelationshipCard(
-                           relationship: mockRel,
-                           enableActions: false, 
+                          relationship: mockRel,
+                          enableActions: false,
                         ),
                       ),
                     );
-                  }
+                  },
                 ),
               ),
             ],
@@ -1315,13 +1487,13 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-         FilledButton(
-          onPressed: _isProxyValid 
-             ? () {
-                 widget.onConfirm(_proxyController.text, _coveredIds);
-                 Navigator.pop(context);
-               } 
-             : null,
+        FilledButton(
+          onPressed: _isProxyValid
+              ? () {
+                  widget.onConfirm(_proxyController.text, _coveredIds);
+                  Navigator.pop(context);
+                }
+              : null,
           child: const Text('Join Fund'),
         ),
       ],

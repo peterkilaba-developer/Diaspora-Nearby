@@ -4,18 +4,11 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
-import '../mocks/mock_services.dart';
+import 'mocks.mocks.dart';
 
 /// Mock providers for testing with Riverpod
 /// 
 /// Use these to override real providers in tests:
-/// ```dart
-/// final container = ProviderContainer(
-///   overrides: [
-///     authRepositoryProvider.overrideWithValue(mockAuthRepository),
-///   ],
-/// );
-/// ```
 
 // Mock Auth Repository
 final mockAuthRepository = MockAuthRepository();

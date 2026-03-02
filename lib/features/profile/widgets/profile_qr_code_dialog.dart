@@ -16,17 +16,19 @@ import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/profile/widgets/user_profile_form.dart';
 import 'package:diaspora_nearby/features/profile/widgets/complete_profile_modal.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 class ProfileQRCodeDialog extends ConsumerStatefulWidget {
   final ProfileData profile;
 
-  const ProfileQRCodeDialog({
-    super.key,
-    required this.profile,
-  });
+  const ProfileQRCodeDialog({super.key, required this.profile});
 
   @override
-  ConsumerState<ProfileQRCodeDialog> createState() => _ProfileQRCodeDialogState();
+  ConsumerState<ProfileQRCodeDialog> createState() =>
+      _ProfileQRCodeDialogState();
 }
 
 class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
@@ -52,12 +54,27 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     _startListeningForConnections();
     _preCacheLocation();
     _fetchKnownProfile();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final userId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (userId != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(userId, ExplorationAction.profileQr);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
   }
 
   Future<void> _fetchKnownProfile() async {
     if (_lastConnectionUid != null) {
       try {
-        final profile = await ref.read(profileRepositoryProvider).getUserProfile(_lastConnectionUid!);
+        final profile = await ref
+            .read(profileRepositoryProvider)
+            .getUserProfile(_lastConnectionUid!);
         if (mounted) {
           setState(() {
             _knownConnectionProfile = profile;
@@ -86,7 +103,8 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       if (!serviceEnabled) return;
 
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         return;
       }
 
@@ -122,7 +140,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     final uid = widget.profile.uid;
     if (uid == null) return;
 
-    debugPrint("ProfileQRCodeDialog: Listening for QR exchanges targeting $uid");
+    debugPrint(
+      "ProfileQRCodeDialog: Listening for QR exchanges targeting $uid",
+    );
 
     _qrSubscription = FirebaseFirestore.instance
         .collection('qr_exchanges')
@@ -131,49 +151,54 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
         .limit(1)
         .snapshots()
         .listen((snapshot) async {
-      if (!mounted) return;
-      if (snapshot.docs.isEmpty) return;
+          if (!mounted) return;
+          if (snapshot.docs.isEmpty) return;
 
-      final doc = snapshot.docs.first;
-      final data = doc.data();
-      final fromUid = data['fromUid'] as String;
+          final doc = snapshot.docs.first;
+          final data = doc.data();
+          final fromUid = data['fromUid'] as String;
 
-      debugPrint("ProfileQRCodeDialog: Detected exchange from $fromUid");
+          debugPrint("ProfileQRCodeDialog: Detected exchange from $fromUid");
 
-      // If this is a NEW connection we haven't processed yet
-      if (fromUid != _lastConnectionUid) {
-        _lastConnectionUid = fromUid;
+          // If this is a NEW connection we haven't processed yet
+          if (fromUid != _lastConnectionUid) {
+            _lastConnectionUid = fromUid;
 
-        try {
-          // Fetch the other user's name for the profile update
-          final fromProfile = await ref.read(profileRepositoryProvider).getUserProfile(fromUid);
-          if (!mounted || fromProfile == null) return;
+            try {
+              // Fetch the other user's name for the profile update
+              final fromProfile = await ref
+                  .read(profileRepositoryProvider)
+                  .getUserProfile(fromUid);
+              if (!mounted || fromProfile == null) return;
 
-          // [HANDSHAKE] Now update OUR OWN profile on OUR device
-          await ref.read(profileRepositoryProvider).updateProfileData(uid, {
-            'firstQrConnection': QRConnectionInfo(
-              otherUid: fromUid,
-              otherName: fromProfile.fullName,
-              locationAddress: data['locationAddress'] ?? 'Location Unavailable',
-              timestamp: DateTime.now().toIso8601String(),
-            ).toJson(),
-          });
+              // [HANDSHAKE] Now update OUR OWN profile on OUR device
+              await ref.read(profileRepositoryProvider).updateProfileData(uid, {
+                'firstQrConnection': QRConnectionInfo(
+                  otherUid: fromUid,
+                  otherName: fromProfile.fullName,
+                  locationAddress:
+                      data['locationAddress'] ?? 'Location Unavailable',
+                  timestamp: DateTime.now().toIso8601String(),
+                ).toJson(),
+              });
 
-          debugPrint("ProfileQRCodeDialog: Handshake complete. Navigating...");
+              debugPrint(
+                "ProfileQRCodeDialog: Handshake complete. Navigating...",
+              );
 
-          if (mounted) {
-            context.push('/profile/$fromUid?src=qr');
-            Navigator.pop(context);
+              if (mounted) {
+                context.push('/profile/$fromUid?src=qr');
+                Navigator.pop(context);
+              }
+            } catch (e) {
+              debugPrint("ProfileQRCodeDialog: Error during handshake: $e");
+            }
           }
-        } catch (e) {
-          debugPrint("ProfileQRCodeDialog: Error during handshake: $e");
-        }
-      }
-    });
+        });
   }
 
   String _generateQRData() {
-    return 'https://www.diasporanearby.com/profile/${widget.profile.uid}?src=qr';
+    return 'https://diasporanearby.com/profile/${widget.profile.uid}?src=qr';
   }
 
   Future<void> _handleScan(BarcodeCapture capture) async {
@@ -181,20 +206,21 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     for (final barcode in barcodes) {
       if (barcode.rawValue != null) {
         final rawValue = barcode.rawValue!;
-        
+
         try {
           final uri = Uri.parse(rawValue);
           final host = uri.host.toLowerCase();
           final path = uri.path;
 
           // Support both diasporanearby.com and www.diasporanearby.com
-          final isOurDomain = host == 'diasporanearby.com' || host == 'www.diasporanearby.com';
-          
+          final isOurDomain =
+              host == 'diasporanearby.com' || host == 'www.diasporanearby.com';
+
           if (isOurDomain && path.startsWith('/profile/')) {
             // Extract UID from path segments to ignore query parameters
             // Path segments for "/profile/123" are ["profile", "123"]
             if (uri.pathSegments.length < 2) continue;
-            
+
             final targetUid = uri.pathSegments[1];
             if (targetUid.isEmpty) continue;
 
@@ -203,7 +229,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             if (targetUid == currentUid) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('You cannot scan your own code')),
+                  const SnackBar(
+                    content: Text('You cannot scan your own code'),
+                  ),
                 );
               }
               return;
@@ -221,10 +249,14 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             if (finalAddress == null) {
               try {
                 // Quick check for service and permission
-                bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-                LocationPermission permission = await Geolocator.checkPermission();
-                
-                if (serviceEnabled && (permission == LocationPermission.whileInUse || permission == LocationPermission.always)) {
+                bool serviceEnabled =
+                    await Geolocator.isLocationServiceEnabled();
+                LocationPermission permission =
+                    await Geolocator.checkPermission();
+
+                if (serviceEnabled &&
+                    (permission == LocationPermission.whileInUse ||
+                        permission == LocationPermission.always)) {
                   final position = await Geolocator.getCurrentPosition(
                     desiredAccuracy: LocationAccuracy.medium,
                     timeLimit: const Duration(seconds: 2),
@@ -235,12 +267,16 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                   );
                   if (placemarks.isNotEmpty) {
                     final p = placemarks.first;
-                    finalAddress = [p.locality, p.administrativeArea, p.country]
-                        .where((s) => s != null && s.isNotEmpty)
-                        .join(', ');
+                    finalAddress = [
+                      p.locality,
+                      p.administrativeArea,
+                      p.country,
+                    ].where((s) => s != null && s.isNotEmpty).join(', ');
                   }
                 } else {
-                  debugPrint('QR Scan: Location unavailable (Service: $serviceEnabled, Permission: $permission)');
+                  debugPrint(
+                    'QR Scan: Location unavailable (Service: $serviceEnabled, Permission: $permission)',
+                  );
                 }
               } catch (e) {
                 debugPrint('QR Scan: Location capture failed: $e');
@@ -248,7 +284,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             }
 
             // Perform Exchange
-            debugPrint('QR: Starting exchange from $currentUid to $targetUid with address: $finalAddress');
+            debugPrint(
+              'QR: Starting exchange from $currentUid to $targetUid with address: $finalAddress',
+            );
             await _performExchange(currentUid!, targetUid, finalAddress);
           }
         } catch (e) {
@@ -259,9 +297,15 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     }
   }
 
-  Future<void> _performExchange(String fromUid, String toUid, String? address) async {
+  Future<void> _performExchange(
+    String fromUid,
+    String toUid,
+    String? address,
+  ) async {
     try {
-      final int earnedPoints = await ref.read(trustServiceProvider).performQRExchange(
+      final int earnedPoints = await ref
+          .read(trustServiceProvider)
+          .performQRExchange(
             fromUid: fromUid,
             toUid: toUid,
             locationAddress: address,
@@ -269,7 +313,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
 
       if (mounted) {
         // Fetch target user's name for the success dialog
-        final targetProfile = await ref.read(profileRepositoryProvider).getUserProfile(toUid);
+        final targetProfile = await ref
+            .read(profileRepositoryProvider)
+            .getUserProfile(toUid);
         if (!mounted) return;
 
         // Show Success Dialog
@@ -277,10 +323,16 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
             title: Row(
               children: [
-                const Icon(LucideIcons.checkCircle2, color: Colors.green, size: 28),
+                const Icon(
+                  LucideIcons.checkCircle2,
+                  color: Colors.green,
+                  size: 28,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -306,7 +358,10 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                   if (earnedPoints > 0) ...[
                     const SizedBox(height: 20),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(16),
@@ -314,7 +369,11 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(LucideIcons.coins, color: Colors.amber, size: 24),
+                          const Icon(
+                            LucideIcons.coins,
+                            color: Colors.amber,
+                            size: 24,
+                          ),
                           const SizedBox(width: 12),
                           Text(
                             '${NumberFormat('#,###').format(earnedPoints)} DSP EARNED!',
@@ -336,7 +395,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                 padding: const EdgeInsets.only(bottom: 8.0, right: 8.0),
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     elevation: 0, // Ensure no shadow/border feel
                   ),
                   onPressed: () => Navigator.pop(ctx),
@@ -355,7 +416,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     } on AlreadyConnectedException catch (e) {
       if (!mounted) return;
       try {
-        final profile = await ref.read(profileRepositoryProvider).getUserProfile(e.otherUid);
+        final profile = await ref
+            .read(profileRepositoryProvider)
+            .getUserProfile(e.otherUid);
         if (mounted) {
           setState(() {
             _knownConnectionProfile = profile;
@@ -363,9 +426,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
         }
       } catch (_) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.message)));
           setState(() => _isScanning = true);
           _scannerController.start();
         }
@@ -388,7 +451,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
         // OTHER user profile is incomplete
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('The other user needs to complete their profile first. Missing: ${e.missingFields.join(', ')}'),
+            content: Text(
+              'The other user needs to complete their profile first. Missing: ${e.missingFields.join(', ')}',
+            ),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 5),
           ),
@@ -416,8 +481,10 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
 
   Future<bool?> _showCompleteProfileModal(List<String> missingFields) async {
     // Fetch latest profile data to ensure modal has current state
-    final latestProfile = await ref.read(profileRepositoryProvider).getUserProfile(_currentProfile.uid!);
-    
+    final latestProfile = await ref
+        .read(profileRepositoryProvider)
+        .getUserProfile(_currentProfile.uid!);
+
     if (!mounted) return false;
 
     return showModalBottomSheet<bool>(
@@ -440,249 +507,291 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _isCompletingProfile ? 'Complete Profile' : 'Identity Verification',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_isCompletingProfile) ...[
-              const Text(
-                'Please complete these details to enable identity verification.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-              ),
+    return Dialog.fullscreen(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            _isCompletingProfile ? 'Finish Profile' : 'Identity Verification',
+          ),
+          leading: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(LucideIcons.x),
+          ),
+        ),
+        body: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               const SizedBox(height: 16),
-              Flexible(
-                child: UserProfileForm(
-                  initialProfile: _currentProfile,
-                  highlightFields: _missingFields,
-                  submitLabel: 'Save & Open QR',
-                  showUserCard: false,
-                  onSave: (updated, newImage) async {
-                    try {
-                      String imageUrl = updated.profileImage;
-                      if (newImage != null) {
-                        imageUrl = await ref.read(profileRepositoryProvider).uploadProfileImage(updated.uid!, newImage);
+              if (_isCompletingProfile) ...[
+                const Text(
+                  'Please complete these details to enable identity verification.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: UserProfileForm(
+                    initialProfile: _currentProfile,
+                    highlightFields: _missingFields,
+                    submitLabel: 'Save & Open QR',
+                    showUserCard: false,
+                    isFinishProfile: true,
+                    onSave: (updated, newImage) async {
+                      try {
+                        String imageUrl = updated.profileImage;
+                        if (newImage != null) {
+                          imageUrl = await ref
+                              .read(profileRepositoryProvider)
+                              .uploadProfileImage(updated.uid!, newImage);
+                        }
+
+                        final finalProfile = updated.copyWith(
+                          profileImage: imageUrl,
+                        );
+                        await ref
+                            .read(profileRepositoryProvider)
+                            .saveUserProfile(finalProfile.uid!, finalProfile);
+
+                        if (mounted) {
+                          setState(() {
+                            _currentProfile = finalProfile;
+                            _isCompletingProfile = false;
+                          });
+                        }
+                      } catch (e) {
+                        debugPrint('Error saving profile in QR dialog: $e');
+                        rethrow;
                       }
-                      
-                      final finalProfile = updated.copyWith(profileImage: imageUrl);
-                      await ref.read(profileRepositoryProvider).saveUserProfile(finalProfile.uid!, finalProfile);
-                      
-                      if (mounted) {
-                        setState(() {
-                          _currentProfile = finalProfile;
-                          _isCompletingProfile = false;
-                        });
-                      }
-                    } catch (e) {
-                      debugPrint('Error saving profile in QR dialog: $e');
-                      rethrow;
-                    }
-                  },
-                ),
-              ),
-            ] else if (!_isScanning) ...[
-              const Text(
-                'Show this code to a peer to verify your human identity in person.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: QrImageView(
-                  data: _generateQRData(),
-                  version: QrVersions.auto,
-                  size: 200.0,
-                  eyeStyle: const QrEyeStyle(
-                    eyeShape: QrEyeShape.square,
-                    color: AppTheme.accent,
-                  ),
-                  dataModuleStyle: const QrDataModuleStyle(
-                    dataModuleShape: QrDataModuleShape.square,
-                    color: AppTheme.accent,
+                    },
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                _currentProfile.fullName ?? 'User',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    setState(() => _isScanning = true);
-                    _scannerController.start();
-                  },
-                  icon: const Icon(LucideIcons.camera),
-                  label: const Text('Scan Peer Code'),
+              ] else if (!_isScanning) ...[
+                const Text(
+                  'Show this code to a peer to verify your human identity in person.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
                 ),
-              ),
-            ] else if (_isScanning && _knownConnectionProfile != null) ...[
-              const SizedBox(height: 12),
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.accent.withOpacity(0.2), width: 2),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: QrImageView(
+                    data: _generateQRData(),
+                    version: QrVersions.auto,
+                    size: 200.0,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: AppTheme.accent,
                     ),
-                    child: CircleAvatar(
-                      radius: 60,
-                      backgroundColor: Colors.grey.shade100,
-                      backgroundImage: _knownConnectionProfile!.profileImage.isNotEmpty
-                          ? CachedNetworkImageProvider(_knownConnectionProfile!.profileImage)
-                          : null,
-                      child: _knownConnectionProfile!.profileImage.isEmpty
-                          ? Icon(LucideIcons.user, size: 60, color: Colors.grey.shade400)
-                          : null,
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: AppTheme.accent,
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-                      ],
-                    ),
-                    child: const Icon(LucideIcons.shieldCheck, color: AppTheme.accent, size: 32),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  _currentProfile.fullName ?? 'User',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Identity Verified!',
-                style: TextStyle(
-                  fontSize: 22, 
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'You are connected in-person with',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _knownConnectionProfile!.fullName,
-                style: const TextStyle(
-                  fontSize: 20, 
-                  fontWeight: FontWeight.bold, 
-                  color: AppTheme.accent,
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      setState(() => _isScanning = true);
+                      _scannerController.start();
+                    },
+                    icon: const Icon(LucideIcons.camera),
+                    label: const Text('Scan Peer Code'),
+                  ),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              
-              // Display location if available in their record
-              if (_knownConnectionProfile!.firstQrConnection?.locationAddress != null) ...[
+              ] else if (_isScanning && _knownConnectionProfile != null) ...[
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Stack(
+                  alignment: Alignment.bottomRight,
                   children: [
-                    const Icon(LucideIcons.mapPin, size: 14, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        _knownConnectionProfile!.firstQrConnection!.locationAddress!,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppTheme.accent.withOpacity(0.2),
+                          width: 2,
+                        ),
+                      ),
+                      child: CircleAvatar(
+                        radius: 60,
+                        backgroundColor: Colors.grey.shade100,
+                        backgroundImage:
+                            _knownConnectionProfile!.profileImage.isNotEmpty
+                            ? CachedNetworkImageProvider(
+                                _knownConnectionProfile!.profileImage,
+                              )
+                            : null,
+                        child: _knownConnectionProfile!.profileImage.isEmpty
+                            ? Icon(
+                                LucideIcons.user,
+                                size: 60,
+                                color: Colors.grey.shade400,
+                              )
+                            : null,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        LucideIcons.shieldCheck,
+                        color: AppTheme.accent,
+                        size: 32,
                       ),
                     ),
                   ],
                 ),
-              ],
+                const SizedBox(height: 24),
+                const Text(
+                  'Identity Verified!',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You are connected in-person with',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _knownConnectionProfile!.fullName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.accent,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
 
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                // Display location if available in their record
+                if (_knownConnectionProfile!
+                        .firstQrConnection
+                        ?.locationAddress !=
+                    null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        LucideIcons.mapPin,
+                        size: 14,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          _knownConnectionProfile!
+                              .firstQrConnection!
+                              .locationAddress!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                  onPressed: () {
-                    context.push('/profile/${_knownConnectionProfile!.uid}?src=qr');
-                    Navigator.pop(context);
-                  },
-                  child: const Text('View Profile'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _knownConnectionProfile = null;
-                    _isProcessing = false;
-                  });
-                  _scannerController.start();
-                },
-                icon: const Icon(LucideIcons.camera, size: 18),
-                label: const Text('Scan Another Peer'),
-              ),
-            ] else ...[
-              const Text(
-                'Scan your peer\'s Identity QR Code',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: SizedBox(
-                  height: 300,
+                ],
+
+                const SizedBox(height: 32),
+                SizedBox(
                   width: double.infinity,
-                  child: MobileScanner(
-                    controller: _scannerController,
-                    onDetect: _handleScan,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: () {
+                      context.push(
+                        '/profile/${_knownConnectionProfile!.uid}?src=qr',
+                      );
+                      Navigator.pop(context);
+                    },
+                    child: const Text('View Profile'),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: () {
-                  _scannerController.stop();
-                  setState(() => _isScanning = false);
-                },
-                child: const Text('Back to My Code'),
-              ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _knownConnectionProfile = null;
+                      _isProcessing = false;
+                    });
+                    _scannerController.start();
+                  },
+                  icon: const Icon(LucideIcons.camera, size: 18),
+                  label: const Text('Scan Another Peer'),
+                ),
+              ] else ...[
+                const Text(
+                  'Scan your peer\'s Identity QR Code',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: SizedBox(
+                    height: 300,
+                    width: double.infinity,
+                    child: MobileScanner(
+                      controller: _scannerController,
+                      onDetect: _handleScan,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () {
+                    _scannerController.stop();
+                    setState(() => _isScanning = false);
+                  },
+                  child: const Text('Back to My Code'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

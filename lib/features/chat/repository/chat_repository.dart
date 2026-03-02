@@ -1,31 +1,16 @@
 import 'dart:async';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_local_service.dart';
 
-// Corrected Internal Imports
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-// import 'package:diaspora_nearby/core/services/local_cache_service.dart'; // Deprecated
-// Deprecated
-// import 'package:isar/isar.dart';
-// import 'package:diaspora_nearby/core/services/database_service.dart';
-// import 'package:diaspora_nearby/features/shared/data/local/entities/chat_entity.dart';
-
-// If user_provider is wrong, we'll try to find it or remove if unused.
-// found 'features\chat\providers\chat_identity_provider.dart' but not core.
-// The code uses `ref.read(userProvider)?.uid`. I need to find where `userProvider` is defined.
-// search result showed 'models\profile_data.dart' but not provider.
-// I will comment out userProvider import and usage for now and assume `FirebaseAuth` or passed `uid`.
-// Actually, `ChatRepository` usually takes `Ref`.
-// Let's assume `currentUserId` getter needs to use `FirebaseAuth.instance.currentUser?.uid` if provider missing.
 
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/chat_messaging_service.dart';
@@ -46,7 +31,6 @@ final typingIndicatorsProvider = StreamProvider.family<List<String>, String>((
 
 class ChatRepository {
   final Ref _ref;
-  final FirebaseDatabase _rtdb = FirebaseDatabase.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ChatLocalService _localService;
@@ -55,219 +39,166 @@ class ChatRepository {
   final List<Chat> _chatsCache = [];
   StreamSubscription? _chatsSubscription;
 
-  ChatRepository(this._ref) : _localService = ChatLocalService() {
-    // Persistence moved to main.dart to avoid race conditions
-  }
+  /// Firestore collection references
+  CollectionReference<Map<String, dynamic>> get _chatsCol =>
+      _firestore.collection('chats');
+  CollectionReference<Map<String, dynamic>> _userChatsCol(String uid) =>
+      _firestore.collection('users').doc(uid).collection('userChats');
+  CollectionReference<Map<String, dynamic>> _messagesCol(String chatId) =>
+      _firestore.collection('chats').doc(chatId).collection('messages');
+  CollectionReference<Map<String, dynamic>> _typingCol(String chatId) =>
+      _firestore.collection('chats').doc(chatId).collection('typing');
 
-  // Getter for current user ID
+  ChatRepository(this._ref) : _localService = ChatLocalService();
+
   String? get currentUserId => FirebaseAuth.instance.currentUser?.uid;
 
   void dispose() {
     _chatsController.close();
-    // Duplicate removed
     _chatsSubscription?.cancel();
-    _realtimeSubscription?.cancel(); // [NEW]
+    _realtimeSubscription?.cancel();
   }
 
-  // [NEW] Persistent subscription for Isar sync
   StreamSubscription? _realtimeSubscription;
 
   // ============================================
-  // FETCHING & STREAMS
+  // FETCHING & STREAMS (Firestore Implementation)
   // ============================================
 
-  // ============================================
-  // FETCHING & STREAMS (Isar Implementation)
-  // ============================================
-
+  /// Subscribe to user's chat list via Firestore real-time listeners
   Stream<List<Chat>> subscribeToUserChats() {
     if (currentUserId == null) return const Stream.empty();
     final uid = currentUserId!;
 
-    // 1. Start Sync (Fire and Forget) - Mostly for Isar population
-    // 1. Start Sync (Real-time Listener)
-    // Replaces one-time _syncUserChats with persistent listener
+    // Start Firestore real-time sync → in-memory cache → stream
     _startRealtimeSync(uid);
 
-    // 2. Watch Data Source
-    // WEB: Fallback to RTDB or handle differently if needed
-    // For now, we return empty stream on web if not using local service for watching
-    // But ChatLocalService handles web stub returning empty stream.
-    // However, we might want a real implementation for Web using RTDB listeners?
-    // The original code returned local stream.
-    // Let's rely on _localService.watchUserChats() which returns empty on web.
-    // On Web, we might want to implement a direct RTDB/Firestore watcher here if local db is missing?
-    // Original code: if (_isar == null) ... return Stream.empty();
-    // So effectively Web had empty history list? That seems wrong for a PWA.
-    // But let's replicate original behavior for now (Isar isolation) and fix functionalities later.
-    if (kIsWeb) {
-       // Existing web behavior was "no local persistence", so watching local entities returned nothing.
-       // But we probably want to watch RTDB 'userChats' instead?
-       // For this refactor, I will stick to exact behavior: delegate to service.
-       return _localService.watchUserChats();
-    }
-    return _localService.watchUserChats();
+    // Return broadcast stream (populated by Firestore listener)
+    return _chatsController.stream;
   }
 
-  // [NEW] Real-time Sync (RTDB -> Isar)
-  // [NEW] Real-time Sync (RTDB -> Isar)
+  /// Real-time Sync (Firestore → In-memory cache → StreamController)
   void _startRealtimeSync(String uid) {
-    if (_realtimeSubscription != null) return; // Already listening
+    if (_realtimeSubscription != null) return;
 
-    debugPrint('ðŸ”„ Starting real-time chat sync for $uid');
+    debugPrint('🔄 Starting Firestore real-time chat sync for $uid');
 
-    // [FIX] Initial Sync for fast population
-    // Run this in background to populating cache immediately while listener connects
-    _syncUserChats(uid);
+    // One-time initial sync to populate cache
+    _syncUserChats(uid).then((_) {
+      // Emit initial state after sync completes
+      _chatsController.add(List.from(_chatsCache));
+    });
 
-    final userChatsRef = _rtdb.ref('userChats/$uid');
+    // Listen for changes to the user's chat list
+    _realtimeSubscription = _userChatsCol(uid)
+        .snapshots()
+        .listen((snapshot) async {
+      for (final change in snapshot.docChanges) {
+        final chatId = change.doc.id;
+        final data = change.doc.data() ?? {};
 
-    // Helper to process a single chat update
-    Future<void> processChatUpdate(
-      String chatId,
-      Map<dynamic, dynamic> data,
-    ) async {
-      try {
-        // 1. Check metadata
-        if (data['isDeleted'] == true) {
+        if (change.type == DocumentChangeType.removed) {
+          _chatsCache.removeWhere((c) => c.id == chatId);
           await _localService.deleteChat(chatId);
-          return;
+          continue;
         }
 
-        // 2. Fetch full chat data (fetch fresh to ensure consistency)
-        // Optimization: If we only have unreadCount update, we could just update the entity.
-        // But 'chats/id' might have changed too (lastMessage).
-        final chatSnapshot = await _rtdb.ref('chats/$chatId').get();
-        if (chatSnapshot.exists && chatSnapshot.value is Map) {
-          final chatData = Map<String, dynamic>.from(chatSnapshot.value as Map);
+        // Check soft delete
+        if (data['isDeleted'] == true) {
+          _chatsCache.removeWhere((c) => c.id == chatId);
+          await _localService.deleteChat(chatId);
+          continue;
+        }
 
-          // Merge specifics
-          chatData['pinned'] = data['pinned'];
-          chatData['pinnedBottom'] = data['pinnedBottom'];
-          chatData['muted'] = data['muted'];
-          chatData['unreadCount'] = data['unreadCount'];
+        try {
+          // Fetch full chat document (with self-healing for broken data)
+          final chat = await _fetchAndSaveChat(chatId);
+          if (chat != null) {
+            // Merge user preferences
+            final chatWithPrefs = chat.withUserPreferences(data);
 
-          // Prefer user-specific lastMessage/updatedAt if present
-          if (data['lastMessage'] != null) {
-            chatData['lastMessage'] = data['lastMessage'];
-          }
-          if (data['updatedAt'] != null) {
-            chatData['updatedAt'] = data['updatedAt'];
-          }
+            // Delivery receipt logic
+            _handleDeliveryReceipt(chatWithPrefs, uid);
 
-          // [NEW] Delivery Receipt Logic
-          try {
-            final lastMsg = chatData['lastMessage'];
-            if (lastMsg is Map) {
-              final senderId = lastMsg['senderId'];
-              final status = lastMsg['status'];
-              final msgId = lastMsg['id'];
-
-              // If message is from someone else, and status is 'sent', mark as 'delivered'
-              if (senderId != null &&
-                  senderId != uid &&
-                  status == 'sent' &&
-                  msgId != null &&
-                  msgId.toString().isNotEmpty) {
-                final String mId = msgId.toString();
-                // 1. Update specific message
-                _rtdb
-                    .ref('chats/$chatId/messages/$mId/status')
-                    .set('delivered');
-
-                // 2. Update chat lastMessage (global)
-                _rtdb.ref('chats/$chatId/lastMessage/status').set('delivered');
-
-                // 3. Update Sender's view explicitly
-                _rtdb
-                    .ref('userChats/$senderId/$chatId/lastMessage/status')
-                    .set('delivered');
-              }
+            // Update in-memory cache
+            final existingIdx = _chatsCache.indexWhere((c) => c.id == chatId);
+            if (existingIdx >= 0) {
+              _chatsCache[existingIdx] = chatWithPrefs;
+            } else {
+              _chatsCache.add(chatWithPrefs);
             }
-          } catch (e) {
-            debugPrint('Error handling delivery receipt: $e');
+
+            await _localService.saveChat(chatWithPrefs);
           }
-
-          final chat = Chat.fromRTDB(chatId, chatData);
-          await _localService.saveChat(chat);
+        } catch (e) {
+          debugPrint('Error syncing chat $chatId: $e');
         }
-      } catch (e) {
-        debugPrint('Error syncing chat $chatId: $e');
       }
-    }
 
-    // Listen for CHANGES (Optimized)
-    // We used to listen to onValue (all data), which caused N writes for 1 update.
-    _realtimeSubscription = userChatsRef.onChildChanged.listen((event) {
-      if (event.snapshot.key != null && event.snapshot.value != null) {
-        processChatUpdate(event.snapshot.key!, event.snapshot.value as Map);
-      }
-    });
-    // Listen for ADDITIONS (New chats)
-    // Note: onChildAdded fires for EXISTING initial children too?
-    // Yes, onChildAdded iterates all existing children on connect.
-    // Also listen for ADDED children (new chats)
-    // [FIX] Add safe check for null/type before casting
-    userChatsRef.onChildAdded.listen((event) {
-      if (event.snapshot.key != null && event.snapshot.value is Map) {
-        processChatUpdate(event.snapshot.key!, event.snapshot.value as Map);
-      }
-    });
-
-
-
-    // Listen for REMOVALS
-    userChatsRef.onChildRemoved.listen((event) {
-      if (event.snapshot.key != null) {
-        final chatId = event.snapshot.key!;
-        _localService.deleteChat(chatId);
-      }
+      // Emit updated list after processing all changes
+      _chatsController.add(List.from(_chatsCache));
     });
   }
 
-  // Legacy one-time sync (kept for reference or manual triggers, but _startRealtimeSync covers it)
+  /// Handle delivery receipt: mark incoming 'sent' messages as 'delivered'
+  void _handleDeliveryReceipt(Chat chat, String uid) {
+    try {
+      final lastMsg = chat.lastMessage;
+      if (lastMsg == null) return;
+      if (lastMsg.senderId.isNotEmpty &&
+          lastMsg.senderId != uid &&
+          lastMsg.status == 'sent' &&
+          lastMsg.id.isNotEmpty) {
+        // Update the message status in the subcollection
+        _messagesCol(chat.id).doc(lastMsg.id).set(
+          {'status': 'delivered'},
+          SetOptions(merge: true),
+        );
+        // Update embedded lastMessage status
+        _chatsCol.doc(chat.id).set(
+          {'lastMessage': {'status': 'delivered'}},
+          SetOptions(merge: true),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error handling delivery receipt: $e');
+    }
+  }
+
+  /// One-time sync of all user chats from Firestore
   Future<void> _syncUserChats(String uid) async {
     try {
-      final userChatsRef = _rtdb.ref('userChats/$uid');
-      // One-time fetch to sync current state
-      final snapshot = await userChatsRef.get();
-      if (!snapshot.exists || snapshot.value == null) return;
+      final userChatsSnap = await _userChatsCol(uid).get();
+      if (userChatsSnap.docs.isEmpty) return;
 
-      final data = snapshot.value as Map;
-      final chatIds = data.keys.map((e) => e.toString()).toList();
+      for (final doc in userChatsSnap.docs) {
+        final chatId = doc.id;
+        final data = doc.data();
 
-      for (final chatId in chatIds) {
-        // Fetch latest chat data from RTDB
-        final chatSnapshot = await _rtdb.ref('chats/$chatId').get();
-        if (chatSnapshot.exists) {
-          final chatData = Map<String, dynamic>.from(chatSnapshot.value as Map);
+        // Skip soft-deleted
+        if (data['isDeleted'] == true) {
+          _chatsCache.removeWhere((c) => c.id == chatId);
+          await _localService.deleteChat(chatId);
+          continue;
+        }
 
-          // Merge user specifics
-          final rawSpecifics = data[chatId];
-          if (rawSpecifics is Map) {
-            // [NEW] Check for Soft Delete
-            if (rawSpecifics['isDeleted'] == true) {
-              await _localService.deleteChat(chatId);
-              continue;
-            }
+        try {
+          final chatDoc = await _chatsCol.doc(chatId).get();
+          if (chatDoc.exists) {
+            var chat = Chat.fromFirestore(chatDoc);
+            chat = chat.withUserPreferences(data);
+            await _localService.saveChat(chat);
 
-            chatData['pinned'] = rawSpecifics['pinned'];
-            chatData['pinnedBottom'] = rawSpecifics['pinnedBottom'];
-            // Duplicates removed
-            chatData['muted'] = rawSpecifics['muted'];
-            chatData['unreadCount'] =
-                rawSpecifics['unreadCount']; // [NEW] Merge unread count
-            // Update lastMessage if newer in userChats (common pattern)
-            if (rawSpecifics['lastMessage'] != null) {
-              chatData['lastMessage'] = rawSpecifics['lastMessage'];
-            }
-            if (rawSpecifics['updatedAt'] != null) {
-              chatData['updatedAt'] = rawSpecifics['updatedAt'];
+            // Populate in-memory cache
+            final existingIdx = _chatsCache.indexWhere((c) => c.id == chatId);
+            if (existingIdx >= 0) {
+              _chatsCache[existingIdx] = chat;
+            } else {
+              _chatsCache.add(chat);
             }
           }
-
-          final chat = Chat.fromRTDB(chatId, chatData);
-          await _localService.saveChat(chat);
+        } catch (e) {
+          debugPrint('Error syncing chat $chatId: $e');
         }
       }
     } catch (e) {
@@ -275,9 +206,6 @@ class ChatRepository {
     }
   }
 
-  Future<void> _cacheChatLocally(Chat chat) async {
-    await _localService.saveChat(chat);
-  }
 
   Future<void> _cacheMessagesLocally(
     String chatId,
@@ -287,7 +215,7 @@ class ChatRepository {
   }
 
   // ============================================
-  // MESSAGES STREAM
+  // MESSAGES STREAM (Firestore Subcollection)
   // ============================================
 
   Stream<List<Message>> subscribeToMessages(String chatId) {
@@ -297,36 +225,26 @@ class ChatRepository {
     int clearedAt = 0;
     List<Message> lastMessages = [];
 
-    // 1. Emit cached messages immediately (filtered)
-    // Note: We might optimize by caching 'clearedAt' too, but for now fetch fresh or assume 0 until loaded
-    // To avoid showing cleared messages briefly, we could try to fetch clearedAt first?
-    // But streams are async. Let's just emit.
-
-    // 1. Emit cached messages immediately (filtered)
-    // 1. Emit cached messages immediately (filtered)
-    // Execute async without awaiting to not block stream return
+    // 1. Emit cached messages immediately
     () async {
       try {
         final messages = await _localService.getCachedMessages(chatId);
         messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         lastMessages = messages;
-        if (!controller.isClosed) {
-           controller.add(messages);
-        }
+        if (!controller.isClosed) controller.add(messages);
       } catch (e) {
-        debugPrint('Error reading Isar cached messages: $e');
+        debugPrint('Error reading cached messages: $e');
       }
     }();
 
-    // 2. Listen to ClearedAt timestamp
-    final clearedAtSub = _rtdb
-        .ref('userChats/$currentUserId/$chatId/clearedAt')
-        .onValue
-        .listen((event) {
-          final val = event.snapshot.value;
-          clearedAt = (val is int) ? val : 0;
+    // 2. Listen to clearedAt from Firestore userChats
+    final clearedAtSub = _userChatsCol(currentUserId!)
+        .doc(chatId)
+        .snapshots()
+        .listen((snapshot) {
+          final data = snapshot.data();
+          clearedAt = (data?['clearedAt'] as int?) ?? 0;
 
-          // Re-filter and emit if we have messages
           if (lastMessages.isNotEmpty && !controller.isClosed) {
             controller.add(
               lastMessages.where((m) => m.timestamp > clearedAt).toList(),
@@ -334,49 +252,30 @@ class ChatRepository {
           }
         });
 
-    // 3. Listen to RTDB Messages
-    final messagesRef = _rtdb.ref('chats/$chatId/messages');
-    final query = messagesRef.orderByChild('timestamp').limitToLast(100);
-
-    final subscription = query.onValue.listen((event) {
-      if (!event.snapshot.exists) {
-        lastMessages = [];
-        if (!controller.isClosed) controller.add([]);
-        return;
-      }
-
-      final data = event.snapshot.value as Map;
+    // 3. Listen to Firestore Messages subcollection
+    final subscription = _messagesCol(chatId)
+        .orderBy('timestamp', descending: true)
+        .limit(100)
+        .snapshots()
+        .listen((snapshot) {
       final List<Message> messages = [];
 
-      data.forEach((key, value) {
-        if (value is Map) {
-          try {
-            messages.add(
-              Message.fromRTDB(
-                key.toString(),
-                chatId,
-                Map<String, dynamic>.from(value),
-              ),
-            );
-          } catch (e) {
-            debugPrint('Error parsing message $key: $e');
-          }
+      for (final doc in snapshot.docs) {
+        try {
+          messages.add(Message.fromFirestore(chatId, doc));
+        } catch (e) {
+          debugPrint('Error parsing message ${doc.id}: $e');
         }
-      });
+      }
 
-      // Sort newest first
+      // Already sorted descending by query, but ensure consistency
       messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       lastMessages = messages;
 
       if (!controller.isClosed) {
-        // Filter by clearedAt
-        controller.add(messages.where((m) => m.timestamp > clearedAt).toList());
-
-        // Update cache (cache ALL, filtering is display-side logic typically,
-        // to avoid re-downloading if user un-clears? No, clear is perm for user.
-        // But cache is global? LocalCacheService is local.
-        // We can cache all.
-        // Update cache (cache ALL, filtering is display-side logic)
+        controller.add(
+          messages.where((m) => m.timestamp > clearedAt).toList(),
+        );
         _cacheMessagesLocally(chatId, messages);
       }
     });
@@ -392,46 +291,45 @@ class ChatRepository {
   Future<List<Chat>> getUserChats() async {
     if (currentUserId == null) return [];
 
-    // 1. Return Local Isar Data
+    // 1. Return Local Data
     final localChats = await _localService.getAllChats();
 
     if (localChats.isNotEmpty) {
       final chats = localChats;
-      // Sort: Pinned Top -> Normal -> Pinned Bottom
       chats.sort((a, b) {
         if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-        if (a.isPinnedBottom != b.isPinnedBottom) return a.isPinnedBottom ? 1 : -1;
+        if (a.isPinnedBottom != b.isPinnedBottom) {
+          return a.isPinnedBottom ? 1 : -1;
+        }
         return b.updatedAt.compareTo(a.updatedAt);
       });
       return chats;
     }
 
-    // 2. Fetch Remote if empty (Fallback)
-    // Note: subscription usually handles this, but for one-off calls:
-    final snapshot = await _rtdb.ref('userChats/$currentUserId').get();
-    if (!snapshot.exists || snapshot.value == null || snapshot.value is! Map) return [];
+    // 2. Fetch Remote if empty (Fallback via Firestore)
+    final userChatsSnap = await _userChatsCol(currentUserId!).get();
+    if (userChatsSnap.docs.isEmpty) return [];
 
-    final data = snapshot.value as Map;
     final List<Chat> chats = [];
-    for (final key in data.keys) {
-      // [NEW] Check soft delete
-      if (data[key] is Map && data[key]['isDeleted'] == true) continue;
-
-      final chat = await getChat(key.toString());
+    for (final doc in userChatsSnap.docs) {
+      final data = doc.data();
+      if (data['isDeleted'] == true) continue;
+      final chat = await getChat(doc.id);
       if (chat != null) chats.add(chat);
     }
 
-    // Sort: Pinned Top -> Normal -> Pinned Bottom
     chats.sort((a, b) {
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      if (a.isPinnedBottom != b.isPinnedBottom) return a.isPinnedBottom ? 1 : -1;
+      if (a.isPinnedBottom != b.isPinnedBottom) {
+        return a.isPinnedBottom ? 1 : -1;
+      }
       return b.updatedAt.compareTo(a.updatedAt);
     });
 
     // [NEW] Filter out blocked users
     final profile = _ref.read(userProfileProvider).value;
     final blockedUsers = profile?.blockedUsers ?? [];
-    
+
     if (blockedUsers.isNotEmpty) {
       chats.removeWhere((chat) {
         if (chat.type == 'direct') {
@@ -457,7 +355,7 @@ class ChatRepository {
       _chatsCache.add(chat);
     }
 
-    // 2. Update Isar
+    // 2. Update local cache
     await _localService.saveChat(chat);
   }
 
@@ -466,54 +364,154 @@ class ChatRepository {
     if (!force) {
       try {
         final mem = _chatsCache.firstWhere((c) => c.id == chatId);
-        // Background refresh if memory found
-        _fetchAndSaveChat(chatId);
-        return mem;
+        // Don't return broken chats with empty participants — fall through to heal
+        if (mem.participants.isNotEmpty) {
+          _fetchAndSaveChat(chatId);
+          return mem;
+        }
+        debugPrint('⚠️ getChat: Memory cache has empty participants for $chatId, falling through to remote');
       } catch (_) {}
 
-      // 1. Try Local
+      // 2. Try Local
       final localChat = await _localService.getChat(chatId);
       if (localChat != null) {
-        // Background refresh if local found
-        _fetchAndSaveChat(chatId);
-        return localChat;
+        // Don't return broken chats with empty participants — fall through to heal
+        if (localChat.participants.isNotEmpty) {
+          _fetchAndSaveChat(chatId);
+          return localChat;
+        }
+        debugPrint('⚠️ getChat: Local cache has empty participants for $chatId, falling through to remote');
       }
     }
 
-    // 3. Try Remote (RTDB)
+    // 3. Try Remote (Firestore) — this has self-healing logic
     return await _fetchAndSaveChat(chatId);
   }
 
   Future<Chat?> _fetchAndSaveChat(String chatId) async {
     try {
-      final snapshot = await _rtdb.ref('chats/$chatId').get();
-      if (snapshot.exists && snapshot.value != null) {
-        if (snapshot.value is Map) {
-          final data = Map<String, dynamic>.from(snapshot.value as Map);
-          final chat = Chat.fromRTDB(chatId, data);
+      final chatDoc = await _chatsCol.doc(chatId).get();
+      if (chatDoc.exists) {
+        var chat = Chat.fromFirestore(chatDoc);
 
-          // [FIX] ONLY cache locally if the user has actually joined this chat.
-          // Otherwise, just viewing a preview (getChat) will add it to the local DB,
-          // and getUserChats checks local DB, so it appears as if joined.
-          if (currentUserId != null) {
-             final userChatSnap = await _rtdb.ref('userChats/$currentUserId/$chatId').get();
-             
-             // Check if joined AND not softly deleted
-             bool shouldCache = false;
-             if (userChatSnap.exists && userChatSnap.value is Map) {
-                final uData = userChatSnap.value as Map;
-                if (uData['isDeleted'] != true) {
-                  shouldCache = true;
-                }
-             }
+        // Self-healing: Ensure type is correct based on chatId pattern
+        // This fixes chats migrated from RTDB that may be missing the type field
+        {
+          final data = chatDoc.data() ?? {};
+          final storedType = data['type'] as String?;
+          String? correctType;
+          if (chatId.startsWith('direct_')) {
+            correctType = 'direct';
+          } else if (chatId.startsWith('chat_') ||
+              chatId.startsWith('home_') ||
+              chatId.startsWith('host_') ||
+              chatId.startsWith('past_') ||
+              chatId == 'global_community') {
+            correctType = 'community';
+          } else if (chatId.startsWith('event_')) {
+            correctType = 'event';
+          } else if (chatId.startsWith('org_')) {
+            correctType = 'organization';
+          }
+          if (correctType != null && storedType != correctType) {
+            debugPrint('🔄 Self-healing type for $chatId: $storedType → $correctType');
+            final healData = <String, dynamic>{'type': correctType};
+            // Also ensure communityId is set for community chats
+            if (correctType == 'community' && data['communityId'] == null) {
+              final communityId = chatId.startsWith('chat_')
+                  ? chatId.substring(5) // Remove 'chat_' prefix
+                  : chatId;
+              healData['communityId'] = communityId;
+              chat = chat.copyWith(type: correctType, communityId: communityId);
+            } else {
+              chat = chat.copyWith(type: correctType);
+            }
+            _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
+          }
+        }
 
-             if (shouldCache) {
-               await _localService.saveChat(chat);
-             }
+        // Self-healing: If participants are empty for a direct chat, reconstruct them
+        if (chat.participants.isEmpty && currentUserId != null) {
+          debugPrint('🔄 Self-healing: Chat $chatId has empty participants. Reconstructing...');
+          final healedParticipants = <String>[currentUserId!];
+          
+          // Check createdBy and adminId from the document
+          final data = chatDoc.data() ?? {};
+          final createdBy = data['createdBy'] as String?;
+          final adminId = data['adminId'] as String?;
+          
+          if (createdBy != null && !healedParticipants.contains(createdBy)) {
+            healedParticipants.add(createdBy);
+          }
+          if (adminId != null && !healedParticipants.contains(adminId)) {
+            healedParticipants.add(adminId);
           }
 
-          return chat;
+          // If still only one participant for a direct chat, try scanning userChats
+          if (healedParticipants.length < 2 && chat.isDirect) {
+            try {
+              // Query all users who have this chatId in their userChats
+              // Since we can't query across user subcollections directly,
+              // we'll check if the chat was created by someone else
+              // by looking at messages for other senderIds
+              final messagesSnap = await _messagesCol(chatId)
+                  .orderBy('timestamp', descending: true)
+                  .limit(10)
+                  .get();
+              for (final msgDoc in messagesSnap.docs) {
+                final senderId = msgDoc.data()['senderId'] as String?;
+                if (senderId != null && !healedParticipants.contains(senderId)) {
+                  healedParticipants.add(senderId);
+                }
+              }
+            } catch (e) {
+              debugPrint('⚠️ Error scanning messages for participants: $e');
+            }
+          }
+
+          if (healedParticipants.length > 1 || healedParticipants.isNotEmpty) {
+            debugPrint('✅ Healed participants for $chatId: $healedParticipants');
+            
+            // Write the healed data back to Firestore (fire-and-forget)
+            final healData = <String, dynamic>{
+              'participants': healedParticipants,
+            };
+            if (chat.type == 'direct' || chatId.startsWith('direct_')) {
+              healData['type'] = 'direct';
+            } else if (chatId.startsWith('chat_') ||
+                chatId.startsWith('home_') ||
+                chatId.startsWith('host_') ||
+                chatId.startsWith('past_') ||
+                chatId == 'global_community') {
+              healData['type'] = 'community';
+            } else if (chatId.startsWith('event_')) {
+              healData['type'] = 'event';
+            } else if (chatId.startsWith('org_')) {
+              healData['type'] = 'organization';
+            }
+            _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
+            
+            // Rebuild the chat object with healed participants
+            chat = chat.copyWith(participants: healedParticipants);
+          }
         }
+
+        // Only cache locally if the user has actually joined this chat
+        if (currentUserId != null) {
+          final userChatDoc = await _userChatsCol(currentUserId!)
+              .doc(chatId)
+              .get();
+
+          if (userChatDoc.exists) {
+            final uData = userChatDoc.data() ?? {};
+            if (uData['isDeleted'] != true) {
+              chat = chat.withUserPreferences(uData);
+              await _localService.saveChat(chat);
+            }
+          }
+        }
+
+        return chat;
       }
     } catch (e) {
       debugPrint('Error fetching chat $chatId: $e');
@@ -539,20 +537,29 @@ class ChatRepository {
     String type = 'text',
     Map<String, dynamic>? metadata,
   }) async {
-    // [NEW] Check for Blocked Status (Sender -> Recipient)
-    // Only for direct chats
+    // [FIX] Use cached data for blocked check — avoid network fetch
     if (chatId.startsWith('direct_')) {
-      final chat = await getChat(chatId);
-      if (chat != null && chat.participants.isNotEmpty) {
-        final otherId = chat.participants.firstWhere(
+      // Try memory cache first (sync, no network call)
+      List<String> participants = [];
+      try {
+        final cached = _chatsCache.firstWhere((c) => c.id == chatId);
+        participants = cached.participants;
+      } catch (_) {
+        // Not in cache — skip the check rather than delay the message
+      }
+
+      if (participants.isNotEmpty) {
+        final otherId = participants.firstWhere(
           (id) => id != currentUserId,
           orElse: () => '',
         );
-        
+
         if (otherId.isNotEmpty) {
           final profile = _ref.read(userProfileProvider).value;
           if (profile?.blockedUsers?.contains(otherId) ?? false) {
-             throw Exception('You have blocked this user. Unblock them to send a message.');
+            throw Exception(
+              'You have blocked this user. Unblock them to send a message.',
+            );
           }
         }
       }
@@ -756,14 +763,6 @@ class ChatRepository {
         );
   }
 
-  Future<XFile?> _pickVideo(ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickVideo(
-      source: source,
-      maxDuration: const Duration(minutes: 5),
-    );
-    return pickedFile;
-  }
 
   // ============================================
   // CREATION & ACTIONS
@@ -774,12 +773,11 @@ class ChatRepository {
     final existingId = await getExistingDirectChat(otherUserId);
     if (existingId != null) return getChat(existingId);
 
-    final newChatKey = _rtdb.ref('chats').push().key;
-    final chatId = 'direct_$newChatKey';
+    final chatId = 'direct_${_chatsCol.doc().id}';
     final now = DateTime.now().millisecondsSinceEpoch;
 
     final chatData = {
-      'id': chatId, // [FIX] Ensure ID is in data
+      'id': chatId,
       'type': 'direct',
       'participants': [currentUserId, otherUserId],
       'createdAt': now,
@@ -788,61 +786,50 @@ class ChatRepository {
       'adminId': currentUserId,
     };
 
-    await _rtdb.ref('chats/$chatId').set(chatData);
-    await _rtdb.ref('userChats/$currentUserId/$chatId').set({
+    final batch = _firestore.batch();
+    batch.set(_chatsCol.doc(chatId), chatData);
+    batch.set(_userChatsCol(currentUserId!).doc(chatId), {
       'updatedAt': now,
       'chatId': chatId,
     });
-    await _rtdb.ref('userChats/$otherUserId/$chatId').set({
+    batch.set(_userChatsCol(otherUserId).doc(chatId), {
       'updatedAt': now,
       'chatId': chatId,
     });
+    await batch.commit();
 
-    return Chat.fromRTDB(chatId, chatData);
+    return Chat.fromFirestore(
+      await _chatsCol.doc(chatId).get(),
+    );
   }
 
   Future<String?> getExistingDirectChat(String otherUserId) async {
     if (currentUserId == null) return null;
-    final myChatsSnapshot = await _rtdb.ref('userChats/$currentUserId').get();
-    if (!myChatsSnapshot.exists) return null;
 
-    final myChatsData = myChatsSnapshot.value as Map;
-    for (final chatId in myChatsData.keys) {
-      final chatSnapshot = await _rtdb.ref('chats/$chatId').get();
-      if (chatSnapshot.exists) {
-        final chatData = chatSnapshot.value as Map;
-        if (chatData['type'] == 'direct') {
-          final rawParticipants = chatData['participants'];
-          List<String> participants = [];
+    // Query user's chats for direct chats
+    final myChatsSnap = await _userChatsCol(currentUserId!).get();
+    if (myChatsSnap.docs.isEmpty) return null;
 
-          if (rawParticipants is List) {
-            participants = rawParticipants.map((e) => e.toString()).toList();
-          } else if (rawParticipants is Map) {
-            if (rawParticipants.isNotEmpty) {
-              final firstVal = rawParticipants.values.first;
-              if (firstVal is bool || (firstVal is num && firstVal == 1)) {
-                participants = rawParticipants.keys
-                    .map((e) => e.toString())
-                    .toList();
-              } else {
-                participants = rawParticipants.values
-                    .map((e) => e.toString())
-                    .toList();
-              }
-            }
-          }
+    for (final doc in myChatsSnap.docs) {
+      final chatId = doc.id;
+      final chatDoc = await _chatsCol.doc(chatId).get();
+      if (!chatDoc.exists) continue;
 
-          if (participants.contains(otherUserId) &&
-              participants.contains(currentUserId)) {
-            return chatId.toString();
-          }
+      final chatData = chatDoc.data()!;
+      if (chatData['type'] == 'direct') {
+        final participants = List<String>.from(
+          chatData['participants'] ?? [],
+        );
+        if (participants.contains(otherUserId) &&
+            participants.contains(currentUserId)) {
+          return chatId;
         }
       }
     }
     return null;
   }
 
-  /// [NEW] Create a Group Chat (Generic)
+  /// Create a Group Chat (Generic)
   Future<String?> createGroupChat({
     required String name,
     required List<String> participants,
@@ -852,11 +839,9 @@ class ChatRepository {
   }) async {
     if (currentUserId == null) return null;
 
-    final newChatKey = _rtdb.ref('chats').push().key;
-    final chatId = '${type}_$newChatKey';
+    final chatId = '${type}_${_chatsCol.doc().id}';
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    // Ensure creator is in participants and admins
     final finalParticipants = {...participants, currentUserId!}.toList();
     final finalAdmins = {...admins, currentUserId!}.toList();
 
@@ -879,30 +864,122 @@ class ChatRepository {
       },
     };
 
-    await _rtdb.ref('chats/$chatId').set(chatData);
+    final batch = _firestore.batch();
+    batch.set(_chatsCol.doc(chatId), chatData);
 
-    // Fan-out to userChats
-    final Map<String, dynamic> updates = {};
     for (final uid in finalParticipants) {
-      updates['userChats/$uid/$chatId'] = {
+      batch.set(_userChatsCol(uid).doc(chatId), {
         'chatId': chatId,
         'updatedAt': now,
-        'lastRead': now, // Mark as read initially
+        'lastRead': now,
         'addedAt': now,
-      };
+      });
     }
-    await _rtdb.ref().update(updates);
+    await batch.commit();
 
     return chatId;
-  } /*
-  }               }
-            }
-         }
-     }
-     return null;
   }
 
-  */
+  /// Create-or-join a single "Family Group Chat" shared by two users.
+  Future<String?> createOrJoinFamilyGroupChat({
+    required String userId1,
+    required String userId2,
+  }) async {
+    const familyGroupName = 'Family Group Chat';
+    const familyGroupMetaKey = 'isFamilyGroup';
+
+    try {
+      // Helper to search user's chats for existing family group
+      Future<String?> findFamilyChat(String searchUid, String addUid) async {
+        final chatsSnap = await _userChatsCol(searchUid).get();
+        for (final doc in chatsSnap.docs) {
+          final chatDoc = await _chatsCol.doc(doc.id).get();
+          if (!chatDoc.exists) continue;
+          final chatData = chatDoc.data()!;
+
+          final meta = chatData['metadata'];
+          if (meta is! Map || meta[familyGroupMetaKey] != true) continue;
+
+          final parts = List<String>.from(chatData['participants'] ?? []);
+
+          if (parts.contains(addUid)) {
+            debugPrint('✅ [ChatRepo] Family group already has both users: ${doc.id}');
+            return doc.id;
+          }
+
+          // Add the missing user
+          final now = DateTime.now().millisecondsSinceEpoch;
+          parts.add(addUid);
+          final batch = _firestore.batch();
+          batch.update(_chatsCol.doc(doc.id), {
+            'participants': parts,
+            'memberCount': parts.length,
+          });
+          batch.set(_userChatsCol(addUid).doc(doc.id), {
+            'chatId': doc.id,
+            'updatedAt': now,
+            'lastRead': now,
+            'addedAt': now,
+          });
+          await batch.commit();
+          debugPrint('✅ [ChatRepo] Added $addUid to family group: ${doc.id}');
+          return doc.id;
+        }
+        return null;
+      }
+
+      // 1. Search from userId1's side
+      final result1 = await findFamilyChat(userId1, userId2);
+      if (result1 != null) return result1;
+
+      // 2. Search from userId2's side
+      final result2 = await findFamilyChat(userId2, userId1);
+      if (result2 != null) return result2;
+
+      // 3. No family group exists — create one
+      debugPrint('🆕 [ChatRepo] Creating new Family Group Chat for $userId1 & $userId2');
+      final chatId = 'group_${_chatsCol.doc().id}';
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final participants = [userId1, userId2];
+
+      final chatData = {
+        'id': chatId,
+        'type': 'group',
+        'name': familyGroupName,
+        'participants': participants,
+        'admins': participants,
+        'createdAt': now,
+        'updatedAt': now,
+        'createdBy': userId1,
+        'memberCount': participants.length,
+        'metadata': {familyGroupMetaKey: true},
+        'lastMessage': {
+          'content': '👨‍👩‍👧‍👦 Family Group Chat created',
+          'timestamp': now,
+          'type': 'system',
+          'status': 'sent',
+        },
+      };
+
+      final batch = _firestore.batch();
+      batch.set(_chatsCol.doc(chatId), chatData);
+      for (final uid in participants) {
+        batch.set(_userChatsCol(uid).doc(chatId), {
+          'chatId': chatId,
+          'updatedAt': now,
+          'lastRead': now,
+          'addedAt': now,
+        });
+      }
+      await batch.commit();
+
+      debugPrint('✅ [ChatRepo] Family Group Chat created: $chatId');
+      return chatId;
+    } catch (e) {
+      debugPrint('❌ [ChatRepo] Error in createOrJoinFamilyGroupChat: $e');
+      return null;
+    }
+  }
 
   Future<Chat?> createDirectChatWithMessage(
     String otherUserId,
@@ -911,6 +988,142 @@ class ChatRepository {
     final chat = await createDirectChat(otherUserId);
     if (chat != null) await sendTextMessage(chat.id, initialMessage);
     return chat;
+  }
+
+  Future<Chat?> createListingChat({
+    required String otherUserId,
+    required String listingId,
+    required String listingTitle,
+    required String listingType,
+    String? sellerRole,
+    String? listingImageUrl,
+  }) async {
+    if (currentUserId == null) return null;
+
+    final existingId = await getExistingListingChat(listingId);
+    if (existingId != null) {
+      // Add current user if not already a participant
+      final chatDoc = await _chatsCol.doc(existingId).get();
+      if (chatDoc.exists) {
+        final chatData = chatDoc.data()!;
+        final parts = List<String>.from(chatData['participants'] ?? []);
+
+        if (!parts.contains(currentUserId)) {
+          parts.add(currentUserId!);
+          final now = DateTime.now().millisecondsSinceEpoch;
+          final batch = _firestore.batch();
+          batch.update(_chatsCol.doc(existingId), {
+            'participants': parts,
+            'memberCount': parts.length,
+          });
+          batch.set(_userChatsCol(currentUserId!).doc(existingId), {
+            'chatId': existingId,
+            'updatedAt': now,
+            'lastRead': now,
+            'addedAt': now,
+          });
+          await batch.commit();
+          debugPrint('✅ [ChatRepo] Added $currentUserId to listing group $existingId');
+        }
+      }
+      return getChat(existingId);
+    }
+
+    // No existing group — create a new public group chat for this listing
+    final chatId = 'group_${_chatsCol.doc().id}';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final participants = <String>{currentUserId!, otherUserId}.toList();
+
+    final chatData = {
+      'id': chatId,
+      'type': 'group',
+      'name': listingTitle,
+      'photoUrl': listingImageUrl,
+      'participants': participants,
+      'admins': [otherUserId],
+      'createdAt': now,
+      'updatedAt': now,
+      'createdBy': otherUserId,
+      'isPublic': true,
+      'memberCount': participants.length,
+      'metadata': {
+        'listingId': listingId,
+        'listingType': listingType,
+        'isListingChat': true,
+        if (sellerRole != null) 'sellerRole': sellerRole,
+      },
+      'lastMessage': {
+        'content': '🛒 Listing chat created',
+        'timestamp': now,
+        'type': 'system',
+        'status': 'sent',
+      },
+    };
+
+    final batch = _firestore.batch();
+    batch.set(_chatsCol.doc(chatId), chatData);
+
+    for (final uid in participants) {
+      batch.set(_userChatsCol(uid).doc(chatId), {
+        'chatId': chatId,
+        'updatedAt': now,
+        'lastRead': now,
+        'addedAt': now,
+      });
+    }
+
+    // Index as discoverable public group
+    batch.set(_firestore.collection('discoverableChats').doc(chatId), {
+      'id': chatId,
+      'name': listingTitle,
+      'photoUrl': listingImageUrl,
+      'description': 'Marketplace listing chat',
+      'category': 'marketplace',
+      'createdAt': now,
+      'memberCount': participants.length,
+    });
+
+    await batch.commit();
+
+    debugPrint('✅ [ChatRepo] Created listing group chat: $chatId');
+    return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
+  }
+
+  /// Find an existing listing group chat by listing ID.
+  Future<String?> getExistingListingChat(String listingId) async {
+    if (currentUserId == null) return null;
+
+    // First check current user's chats
+    final myChatsSnap = await _userChatsCol(currentUserId!).get();
+    for (final doc in myChatsSnap.docs) {
+      final chatDoc = await _chatsCol.doc(doc.id).get();
+      if (!chatDoc.exists) continue;
+      final chatData = chatDoc.data()!;
+      final meta = chatData['metadata'];
+      if (meta is Map &&
+          meta['isListingChat'] == true &&
+          meta['listingId'] == listingId) {
+        return doc.id;
+      }
+    }
+
+    // Also check discoverable chats index
+    final discoverSnap = await _firestore
+        .collection('discoverableChats')
+        .get();
+    for (final doc in discoverSnap.docs) {
+      final chatDoc = await _chatsCol.doc(doc.id).get();
+      if (!chatDoc.exists) continue;
+      final chatData = chatDoc.data()!;
+      final meta = chatData['metadata'];
+      if (meta is Map &&
+          meta['isListingChat'] == true &&
+          meta['listingId'] == listingId) {
+        return doc.id;
+      }
+    }
+
+    return null;
   }
 
   // Missing methods restoration
@@ -1009,14 +1222,14 @@ class ChatRepository {
     String name,
     List<String> userIds, {
     XFile? groupImage,
-    String? description, // [NEW]
-    String? communityId, // [NEW]
-    bool isPublic = false, // [NEW]
+    String? description,
+    String? communityId,
+    bool isPublic = false,
+    String? category,
   }) async {
     if (currentUserId == null) return null;
     final allParticipants = {...userIds, currentUserId!}.toList();
-    final newChatRef = _rtdb.ref('chats').push();
-    final chatId = 'group_${newChatRef.key}';
+    final chatId = 'group_${_chatsCol.doc().id}';
     final now = DateTime.now().millisecondsSinceEpoch;
 
     String? imageUrl;
@@ -1038,7 +1251,7 @@ class ChatRepository {
 
     debugPrint('Creating group: $name with participants: $allParticipants');
     final chatData = {
-      'id': chatId, // [FIX] Include ID
+      'id': chatId,
       'type': 'group',
       'name': name,
       'photoUrl': imageUrl,
@@ -1049,8 +1262,9 @@ class ChatRepository {
       'admins': [currentUserId],
       if (description != null && description.isNotEmpty)
         'description': description,
-      if (communityId != null) 'communityId': communityId, // [NEW]
-      if (isPublic) 'isPublic': true, // [NEW]
+      if (communityId != null) 'communityId': communityId,
+      if (isPublic) 'isPublic': true,
+      if (category != null) 'category': category,
       'lastMessage': {
         'content': 'Group created',
         'timestamp': now,
@@ -1060,15 +1274,11 @@ class ChatRepository {
     };
 
     try {
-      // [FIX] Write to 'chats/$chatId' (prefixed), not newChatRef (unprefixed)
-      await _rtdb.ref('chats/$chatId').set(chatData);
-      debugPrint('Chat data set for $chatId');
+      final batch = _firestore.batch();
+      batch.set(_chatsCol.doc(chatId), chatData);
 
-      await _rtdb.ref('chats/$chatId/updatedAt').set(now);
-
-      // Add to userChats for all participants
       for (final userId in allParticipants) {
-        await _rtdb.ref('userChats/$userId/$chatId').set({
+        batch.set(_userChatsCol(userId).doc(chatId), {
           'updatedAt': now,
           'chatId': chatId,
           'pinned': false,
@@ -1077,20 +1287,24 @@ class ChatRepository {
         debugPrint('Added userChat for $userId');
       }
 
-      // [NEW] Index Public Groups for Discovery
+      // Index Public Groups for Discovery
       if (isPublic) {
-        await _rtdb.ref('discoverableChats/groups/$chatId').set({
+        batch.set(_firestore.collection('discoverableChats').doc(chatId), {
           'id': chatId,
           'name': name,
           'photoUrl': imageUrl,
           'description': description,
           'communityId': communityId,
+          'category': category,
           'createdAt': now,
-          'memberCount': 1, // Start with 1 (creator)
+          'memberCount': 1,
         });
       }
 
-      return Chat.fromRTDB(chatId, chatData);
+      await batch.commit();
+      debugPrint('Chat data set for $chatId');
+
+      return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
     } catch (e, stack) {
       debugPrint('Error creating group: $e\n$stack');
       rethrow;
@@ -1099,48 +1313,34 @@ class ChatRepository {
 
   Future<void> joinGroup(String chatId) async {
     if (currentUserId == null) return;
-    
-    // [SECURITY] Verify Group is Public
-    final isPublicSnap = await _rtdb.ref('chats/$chatId/isPublic').get();
-    if (isPublicSnap.value != true) {
+
+    // Verify Group is Public
+    final chatDoc = await _chatsCol.doc(chatId).get();
+    if (!chatDoc.exists) return;
+    final chatData = chatDoc.data()!;
+    if (chatData['isPublic'] != true) {
       throw Exception('Cannot join private group without invitation');
     }
-    
-    // 1. Add to participants
-    final chatRef = _rtdb.ref('chats/$chatId');
-    await chatRef.runTransaction((data) {
-       if (data == null) return Transaction.success(data);
-       final chat = Map<String, dynamic>.from(data as Map);
-       // Check if 'participants' is List or Map (legacy safety)
-       List<String> participants = [];
-       if (chat['participants'] is List) {
-          participants = List<String>.from(chat['participants']);
-       } else if (chat['participants'] is Map) {
-          participants = (chat['participants'] as Map).keys.map((e) => e.toString()).toList();
-       }
-       
-       if (!participants.contains(currentUserId)) {
-         participants.add(currentUserId!);
-         chat['participants'] = participants;
-         chat['memberCount'] = participants.length; // Update internal count too
-       }
-       return Transaction.success(chat);
-    });
 
-    // 2. Add to userChats
-    await _rtdb.ref('userChats/$currentUserId/$chatId').set({
-      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    // Add to participants using Firestore arrayUnion
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final batch = _firestore.batch();
+    batch.update(_chatsCol.doc(chatId), {
+      'participants': FieldValue.arrayUnion([currentUserId]),
+      'memberCount': FieldValue.increment(1),
+    });
+    batch.set(_userChatsCol(currentUserId!).doc(chatId), {
+      'updatedAt': now,
       'chatId': chatId,
       'pinned': false,
-       'lastRead': DateTime.now().millisecondsSinceEpoch,
+      'lastRead': now,
     });
-    
-    // 3. Update discoverable count if public (Best Effort)
+    await batch.commit();
+
+    // Update discoverable count (best effort)
     try {
-      final discRef = _rtdb.ref('discoverableChats/groups/$chatId/memberCount');
-      await discRef.runTransaction((data) {
-        if (data == null) return Transaction.success(data);
-        return Transaction.success((data as int? ?? 0) + 1);
+      await _firestore.collection('discoverableChats').doc(chatId).update({
+        'memberCount': FieldValue.increment(1),
       });
     } catch (_) {}
   }
@@ -1150,26 +1350,20 @@ class ChatRepository {
   // ============================================
 
   Stream<List<String>> subscribeToTypingIndicators(String chatId) {
-    // 1. Listen to typing node
-    return _rtdb.ref('chats/$chatId/typing').onValue.map((event) {
-      if (!event.snapshot.exists || event.snapshot.value == null) return [];
-
-      final data = event.snapshot.value as Map;
-      final List<String> userIds = [];
+    return _typingCol(chatId).snapshots().map((snapshot) {
       final now = DateTime.now().millisecondsSinceEpoch;
+      final List<String> userIds = [];
 
-      data.forEach((key, value) {
-        if (key != currentUserId) {
-          // Don't show own indicator
-          if (value is Map && value['isTyping'] == true) {
-            // Check timestamp to avoid stuck indicators (> 10s old)
-            final timestamp = value['timestamp'] as int? ?? 0;
-            if (now - timestamp < 10000) {
-              userIds.add(key.toString());
-            }
+      for (final doc in snapshot.docs) {
+        if (doc.id == currentUserId) continue; // Don't show own indicator
+        final data = doc.data();
+        if (data['isTyping'] == true) {
+          final timestamp = data['timestamp'] as int? ?? 0;
+          if (now - timestamp < 10000) {
+            userIds.add(doc.id);
           }
         }
-      });
+      }
 
       return userIds;
     });
@@ -1178,13 +1372,14 @@ class ChatRepository {
   Future<void> setTypingStatus(String chatId, bool isTyping) async {
     if (currentUserId == null) return;
 
-    final ref = _rtdb.ref('chats/$chatId/typing/$currentUserId');
+    final ref = _typingCol(chatId).doc(currentUserId);
     if (isTyping) {
-      await ref.set({'isTyping': true, 'timestamp': ServerValue.timestamp});
-      // Auto-remove on disconnect
-      await ref.onDisconnect().remove();
+      await ref.set({
+        'isTyping': true,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
     } else {
-      await ref.remove();
+      await ref.delete();
     }
   }
 
@@ -1198,117 +1393,101 @@ class ChatRepository {
     if (name != null) updates['name'] = name;
     if (image != null) updates['photoUrl'] = image;
     if (description != null) updates['description'] = description;
-    if (updates.isNotEmpty) await _rtdb.ref('chats/$chatId').update(updates);
+    if (updates.isNotEmpty) await _chatsCol.doc(chatId).update(updates);
   }
 
   Future<bool> addGroupMember(String chatId, String userId) async {
-    final snapshot = await _rtdb.ref('chats/$chatId/participants').get();
-    if (!snapshot.exists) return false;
+    final chatDoc = await _chatsCol.doc(chatId).get();
+    if (!chatDoc.exists) return false;
 
-    final rawParticipants = snapshot.value;
-    List<String> currentList = [];
+    final participants = List<String>.from(
+      chatDoc.data()?['participants'] ?? [],
+    );
 
-    if (rawParticipants is List) {
-      currentList = rawParticipants.map((e) => e.toString()).toList();
-    } else if (rawParticipants is Map) {
-      if (rawParticipants.isNotEmpty) {
-        final firstVal = rawParticipants.values.first;
-        if (firstVal is bool || (firstVal is num && firstVal == 1)) {
-          currentList = rawParticipants.keys.map((e) => e.toString()).toList();
-        } else {
-          currentList = rawParticipants.values
-              .map((e) => e.toString())
-              .toList();
-        }
-      }
-    }
-
-    if (!currentList.contains(userId)) {
-      currentList.add(userId);
-      await _rtdb.ref('chats/$chatId/participants').set(currentList);
-      await _rtdb.ref('userChats/$userId/$chatId').set({
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    if (!participants.contains(userId)) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final batch = _firestore.batch();
+      batch.update(_chatsCol.doc(chatId), {
+        'participants': FieldValue.arrayUnion([userId]),
+        'memberCount': FieldValue.increment(1),
+      });
+      batch.set(_userChatsCol(userId).doc(chatId), {
+        'updatedAt': now,
         'chatId': chatId,
       });
+      await batch.commit();
       return true;
     }
     return false;
   }
 
   Future<bool> removeGroupMember(String chatId, String userId) async {
-    final snapshot = await _rtdb.ref('chats/$chatId/participants').get();
-    if (!snapshot.exists) return false;
-    final currentList = List<String>.from(snapshot.value as List? ?? []);
-    if (currentList.contains(userId)) {
-      currentList.remove(userId);
-      await _rtdb.ref('chats/$chatId/participants').set(currentList);
-      await _rtdb.ref('userChats/$userId/$chatId').remove();
+    final chatDoc = await _chatsCol.doc(chatId).get();
+    if (!chatDoc.exists) return false;
+
+    final participants = List<String>.from(
+      chatDoc.data()?['participants'] ?? [],
+    );
+
+    if (participants.contains(userId)) {
+      final batch = _firestore.batch();
+      batch.update(_chatsCol.doc(chatId), {
+        'participants': FieldValue.arrayRemove([userId]),
+        'memberCount': FieldValue.increment(-1),
+      });
+      batch.delete(_userChatsCol(userId).doc(chatId));
+      await batch.commit();
       return true;
     }
     return false;
   }
 
   Future<bool> promoteToAdmin(String chatId, String userId) async {
-    // implementation ...
+    await _chatsCol.doc(chatId).update({
+      'admins': FieldValue.arrayUnion([userId]),
+    });
     return true;
   }
 
-  // Brace removed
-
-  // [NEW] Batch mark messages as read and decrement unread count
+  // Batch mark messages as read and decrement unread count
   Future<void> markMessagesAsRead(
     String chatId,
     List<String> messageIds,
   ) async {
     if (currentUserId == null || messageIds.isEmpty) return;
 
-    // 1. Mark individual messages as read (if they are incoming)
-    final updates = <String, Object?>{};
-    bool shouldUpdateLastMessage = false;
-
-    // Filter to only mark messages sent by OTHERS
-    // We can't easily check senderId here without fetching.
-    // Optimization: Assume UI filters list to only include incoming messages.
-    // UI Responsibility: Only pass IDs of messages NOT sent by current user.
-
-    for (final id in messageIds) {
-      updates['chats/$chatId/messages/$id/status'] = 'read';
-    }
-
-    if (updates.isEmpty) return;
-
     try {
-      await _rtdb.ref().update(updates);
+      final batch = _firestore.batch();
 
-      // 2. Decrement unread count
-      final userChatRef = _rtdb.ref('userChats/$currentUserId/$chatId');
-      final chatSnap = await userChatRef.get();
-      
-      if (chatSnap.exists) {
-        final chatData = chatSnap.value as Map?;
-        final isDeleted = chatData?['isDeleted'] == true;
-        
-        // Only decrement if NOT deleted (i.e. currently in main list)
-        if (!isDeleted) {
-          final unreadRef = userChatRef.child('unreadCount');
-          await unreadRef.runTransaction((currentData) {
-            if (currentData == null) return Transaction.abort();
-            final current = (currentData is int) ? currentData : 0;
-            final newVal = current - messageIds.length;
-            return Transaction.success(newVal < 0 ? 0 : newVal);
+      for (final id in messageIds) {
+        batch.update(_messagesCol(chatId).doc(id), {'status': 'read'});
+      }
+
+      // Decrement unread count
+      final userChatDoc = await _userChatsCol(currentUserId!).doc(chatId).get();
+      if (userChatDoc.exists) {
+        final data = userChatDoc.data() ?? {};
+        if (data['isDeleted'] != true) {
+          final current = (data['unreadCount'] as int?) ?? 0;
+          final newVal = (current - messageIds.length).clamp(0, current);
+          batch.update(_userChatsCol(currentUserId!).doc(chatId), {
+            'unreadCount': newVal,
           });
         }
       }
 
-      // 3. Update lastMessage status if applicable
-      // Not perfect but helps sync
-      final lastMsgSnap = await _rtdb.ref('chats/$chatId/lastMessage').get();
-      if (lastMsgSnap.exists) {
-        final lastMsg = Map<String, dynamic>.from(lastMsgSnap.value as Map);
-        if (messageIds.contains(lastMsgSnap.key) ||
-            messageIds.contains(lastMsg['id'])) {
-          if (lastMsg['senderId'] != currentUserId) {
-            await _rtdb.ref('chats/$chatId/lastMessage/status').set('read');
+      await batch.commit();
+
+      // Update lastMessage status if applicable
+      final chatDoc = await _chatsCol.doc(chatId).get();
+      if (chatDoc.exists) {
+        final lastMsg = chatDoc.data()?['lastMessage'] as Map<String, dynamic>?;
+        if (lastMsg != null && lastMsg['senderId'] != currentUserId) {
+          final lastMsgId = lastMsg['id']?.toString();
+          if (lastMsgId != null && messageIds.contains(lastMsgId)) {
+            await _chatsCol.doc(chatId).update({
+              'lastMessage.status': 'read',
+            });
           }
         }
       }
@@ -1320,25 +1499,16 @@ class ChatRepository {
   Future<void> markChatAsRead(String chatId) async {
     if (currentUserId == null) return;
     try {
-      // 1. Update lastRead timestamp (Safe as it's a separate node)
-      await _rtdb
-          .ref('lastRead/$currentUserId/$chatId')
-          .set(DateTime.now().millisecondsSinceEpoch);
-
-      // 2. ONLY reset unread count if the chat IS in the user's active list.
-      // We check if the node exists and is NOT deleted.
-      final userChatRef = _rtdb.ref('userChats/$currentUserId/$chatId');
+      // Update lastRead timestamp in userChats
+      final userChatRef = _userChatsCol(currentUserId!).doc(chatId);
       final snap = await userChatRef.get();
-      
+
       if (snap.exists) {
-        final data = snap.value as Map?;
-        final isDeleted = data?['isDeleted'] == true;
-        
-        // Only update if it's NOT deleted. If it's deleted, we don't want to "undelete" it
-        // just by viewing it (e.g. from discovery).
-        if (!isDeleted) {
+        final data = snap.data() ?? {};
+        if (data['isDeleted'] != true) {
           await userChatRef.update({
             'unreadCount': 0,
+            'lastRead': DateTime.now().millisecondsSinceEpoch,
           });
         }
       }
@@ -1350,23 +1520,19 @@ class ChatRepository {
   Future<void> markMessageAsRead(String chatId, String messageId) async {
     if (currentUserId == null) return;
     try {
-      final messageRef = _rtdb.ref('chats/$chatId/messages/$messageId');
-      final snapshot = await messageRef.get();
-      if (snapshot.exists) {
-        final data = snapshot.value as Map;
+      final msgDoc = await _messagesCol(chatId).doc(messageId).get();
+      if (msgDoc.exists) {
+        final data = msgDoc.data() ?? {};
         if (data['senderId'] != currentUserId && data['status'] != 'read') {
-          await messageRef.update({'status': 'read'});
+          await _messagesCol(chatId).doc(messageId).update({'status': 'read'});
 
-          // Also update in lastMessage if it's the last message
-          final lastMsgSnap = await _rtdb
-              .ref('chats/$chatId/lastMessage')
-              .get();
-          if (lastMsgSnap.exists) {
-            final lastMsgData = lastMsgSnap.value as Map;
-            // This is a bit rough but works for simple cases
-            if (lastMsgData['senderId'] != currentUserId) {
-              await _rtdb.ref('chats/$chatId/lastMessage').update({
-                'status': 'read',
+          // Also update lastMessage if it's the last message
+          final chatDoc = await _chatsCol.doc(chatId).get();
+          if (chatDoc.exists) {
+            final lastMsg = chatDoc.data()?['lastMessage'] as Map<String, dynamic>?;
+            if (lastMsg != null && lastMsg['senderId'] != currentUserId) {
+              await _chatsCol.doc(chatId).update({
+                'lastMessage.status': 'read',
               });
             }
           }
@@ -1381,53 +1547,45 @@ class ChatRepository {
 
   Future<void> toggleMute(String chatId, bool mute) async {
     if (currentUserId == null) return;
-    await _rtdb.ref('userChats/$currentUserId/$chatId/muted').set(mute);
+    await _userChatsCol(currentUserId!).doc(chatId).update({'muted': mute});
   }
 
   Future<void> togglePin(String chatId, bool pin) async {
     if (currentUserId == null) return;
-    await _rtdb.ref('userChats/$currentUserId/$chatId/pinned').set(pin);
+    await _userChatsCol(currentUserId!).doc(chatId).update({'pinned': pin});
   }
 
   Future<void> togglePinBottom(String chatId, bool pin) async {
     if (currentUserId == null) return;
-    await _rtdb.ref('userChats/$currentUserId/$chatId/pinnedBottom').set(pin);
+    await _userChatsCol(currentUserId!).doc(chatId).update({'pinnedBottom': pin});
   }
 
   Future<void> deleteChat(String chatId) async {
     if (currentUserId == null) return;
 
-    // Check if it's a DM or other type.
-    // Ideally we should check type, but "Soft Delete" is safe for all types as "Hide from my list".
-    // For groups, "Leave" is distinct. If user calls "Delete" on group without leaving, hiding is appropriate behavior.
-
-    final updates = {
+    await _userChatsCol(currentUserId!).doc(chatId).update({
       'isDeleted': true,
       'clearedAt': DateTime.now().millisecondsSinceEpoch,
-    };
+    });
 
-    await _rtdb.ref('userChats/$currentUserId/$chatId').update(updates);
-
-    // Clear local cache if needed, or update it
     await _localService.deleteChat(chatId);
   }
 
   Future<void> clearChat(String chatId) async {
     if (currentUserId == null) return;
-    // Set clearedAt timestamp. Messages before this will be hidden.
-    await _rtdb
-        .ref('userChats/$currentUserId/$chatId/clearedAt')
-        .set(DateTime.now().millisecondsSinceEpoch);
-    // Also clear lastMessage display or set to empty
-    await _rtdb.ref('userChats/$currentUserId/$chatId/lastMessage').remove();
+    await _userChatsCol(currentUserId!).doc(chatId).update({
+      'clearedAt': DateTime.now().millisecondsSinceEpoch,
+      'lastMessage': FieldValue.delete(),
+    });
   }
 
-  // [NEW] Clear mentions for a chat (removes sticky notifications)
+  // Clear mentions for a chat (removes sticky notifications)
   Future<void> clearChatMentions(String chatId) async {
     if (currentUserId == null) return;
     try {
-      // Remove the 'mentions' node which tracks unread mentions
-      await _rtdb.ref('userChats/$currentUserId/$chatId/mentions').remove();
+      await _userChatsCol(currentUserId!).doc(chatId).update({
+        'mentions': FieldValue.delete(),
+      });
     } catch (e) {
       debugPrint('Error clearing mentions: $e');
     }
@@ -1442,76 +1600,36 @@ class ChatRepository {
   }) async {
     if (currentUserId == null) return;
     try {
-      final updates = <String, dynamic>{
-        'content': 'ðŸš« Message deleted',
-        'type': 'deleted',
-      };
+      final msgRef = _messagesCol(chatId).doc(messageId);
 
-      if (deleteForEveryone) {
-        updates['deletedForEveryone'] = true;
-      } else {
+      if (!deleteForEveryone) {
         // Add to deletedFor list
-        final msgRef = _rtdb.ref(
-          'chats/$chatId/messages/$messageId/deletedFor',
-        );
-        final snapshot = await msgRef.get();
-        final list = List<String>.from(snapshot.value as List? ?? []);
-        if (!list.contains(currentUserId)) {
-          list.add(currentUserId!);
-          await msgRef.set(list);
-        }
-        return; // Local delete handled
+        await msgRef.update({
+          'deletedFor': FieldValue.arrayUnion([currentUserId]),
+        });
+        return;
       }
 
-      await _rtdb.ref('chats/$chatId/messages/$messageId').update(updates);
+      // Delete for everyone
+      final updates = <String, dynamic>{
+        'content': '🚫 Message deleted',
+        'type': 'deleted',
+        'deletedForEveryone': true,
+      };
+
+      await msgRef.update(updates);
 
       // Update lastMessage if it's the one being deleted
-      final lastMsgSnap = await _rtdb.ref('chats/$chatId/lastMessage').get();
-      if (lastMsgSnap.exists) {
-        final lastMsgData = lastMsgSnap.value as Map;
-        // Note: RTDB doesn't easily store message ID in lastMessage,
-        // but we can check timestamp or just always update if it matches content
-        if (lastMsgData['timestamp'] != null) {
-          // We'll fetch the actual message to check ID
-          final msgSnap = await _rtdb
-              .ref('chats/$chatId/messages/$messageId')
-              .get();
-          final msgData = msgSnap.value as Map;
-          if (lastMsgData['timestamp'] == msgData['timestamp']) {
-            await _rtdb.ref('chats/$chatId/lastMessage').update(updates);
-
-            // Also update for all participants
-            final chatSnap = await _rtdb.ref('chats/$chatId').get();
-            if (chatSnap.exists) {
-              final chatData = chatSnap.value as Map;
-
-              final rawParticipants = chatData['participants'];
-              List<String> participants = [];
-              if (rawParticipants is List) {
-                participants = rawParticipants
-                    .map((e) => e.toString())
-                    .toList();
-              } else if (rawParticipants is Map) {
-                if (rawParticipants.isNotEmpty) {
-                  final firstVal = rawParticipants.values.first;
-                  if (firstVal is bool || (firstVal is num && firstVal == 1)) {
-                    participants = rawParticipants.keys
-                        .map((e) => e.toString())
-                        .toList();
-                  } else {
-                    participants = rawParticipants.values
-                        .map((e) => e.toString())
-                        .toList();
-                  }
-                }
-              }
-
-              for (final uid in participants) {
-                await _rtdb
-                    .ref('userChats/$uid/$chatId/lastMessage')
-                    .update(updates);
-              }
-            }
+      final chatDoc = await _chatsCol.doc(chatId).get();
+      if (chatDoc.exists) {
+        final lastMsg = chatDoc.data()?['lastMessage'] as Map<String, dynamic>?;
+        if (lastMsg != null) {
+          final msgDoc = await msgRef.get();
+          if (msgDoc.exists && lastMsg['timestamp'] == msgDoc.data()?['timestamp']) {
+            await _chatsCol.doc(chatId).update({
+              'lastMessage.content': '🚫 Message deleted',
+              'lastMessage.type': 'deleted',
+            });
           }
         }
       }
@@ -1562,9 +1680,9 @@ class ChatRepository {
     String emoji,
   ) async {
     if (currentUserId == null) return;
-    await _rtdb
-        .ref('chats/$chatId/messages/$messageId/reactions/$currentUserId')
-        .remove();
+    await _messagesCol(chatId).doc(messageId).update({
+      'reactions.$currentUserId': FieldValue.delete(),
+    });
   }
 
   Future<List<Chat>> searchDiscoverableChats(String query) async {
@@ -1573,32 +1691,13 @@ class ChatRepository {
     final List<Chat> results = [];
 
     try {
-      // [NEW] Get IDs of chats the user has already joined
-      final userChatsSnap = await _rtdb.ref('userChats/$currentUserId').get();
+      // Get IDs of chats the user has already joined
+      final userChatsSnap = await _userChatsCol(currentUserId!).get();
       final Set<String> joinedChatIds = {};
-      if (userChatsSnap.exists) {
-        final value = userChatsSnap.value;
-        if (value is Map) {
-          value.forEach((key, val) {
-            // ONLY skip if NOT deleted
-            if (val is Map && val['isDeleted'] == true) {
-              // It's deleted/left, so it SHOULD be discoverable again
-            } else {
-              joinedChatIds.add(key.toString());
-            }
-          });
-        } else if (value is List) {
-          // Fallback for list representation (index-based)
-          for (int i = 0; i < value.length; i++) {
-            final item = value[i];
-            if (item is Map) {
-              if (item['isDeleted'] != true) {
-                joinedChatIds.add(item['chatId']?.toString() ?? i.toString());
-              }
-            } else if (item != null) {
-              joinedChatIds.add(item.toString());
-            }
-          }
+      for (final doc in userChatsSnap.docs) {
+        final data = doc.data();
+        if (data['isDeleted'] != true) {
+          joinedChatIds.add(doc.id);
         }
       }
 
@@ -1607,14 +1706,15 @@ class ChatRepository {
       final events = await eventRepo.searchEvents(query);
 
       for (final event in events) {
-        // Filter: User is NOT already an attendee OR has it in their chat list
         if (event.attendees?.contains(currentUserId) == true) continue;
-        if (event.chatId != null && joinedChatIds.contains(event.chatId)) continue;
+        if (event.chatId != null && joinedChatIds.contains(event.chatId)) {
+          continue;
+        }
         if (event.chatId == null) continue;
 
         results.add(
           Chat(
-            id: event.chatId!, 
+            id: event.chatId!,
             communityId: '',
             type: 'event',
             name: event.title,
@@ -1622,7 +1722,7 @@ class ChatRepository {
             participants: [],
             admins: [],
             createdBy: event.creatorId,
-            createdAt: DateTime.now().millisecondsSinceEpoch, 
+            createdAt: DateTime.now().millisecondsSinceEpoch,
             updatedAt: DateTime.now().millisecondsSinceEpoch,
             eventId: event.id,
             memberCount: event.attendeeCount,
@@ -1640,8 +1740,7 @@ class ChatRepository {
         final followers = List<String>.from(org['followers'] ?? []);
         final chatId = org['chatId'] as String?;
 
-        // Filter: User is NOT an admin/participant AND NOT a follower AND NOT in userChats
-        if (admins.contains(currentUserId) || 
+        if (admins.contains(currentUserId) ||
             followers.contains(currentUserId) ||
             (chatId != null && joinedChatIds.contains(chatId))) {
           continue;
@@ -1665,45 +1764,45 @@ class ChatRepository {
         }
       }
 
-      // [NEW] 3. Search Public Groups
-      final groupsSnap = await _rtdb.ref('discoverableChats/groups').get();
-      if (groupsSnap.exists && groupsSnap.value is Map) {
-        final groupsData = groupsSnap.value as Map;
-        groupsData.forEach((key, value) {
-          final groupStr = value is Map ? value : {};
-          final name = groupStr['name']?.toString() ?? '';
-          final desc = groupStr['description']?.toString() ?? '';
-          final groupId = groupStr['id']?.toString() ?? key.toString();
-          
-          if (query.isEmpty || 
-              name.toLowerCase().contains(query.toLowerCase()) || 
-              desc.toLowerCase().contains(query.toLowerCase())) {
-            
-            // Filter: Hide if already in userChats
-            if (joinedChatIds.contains(groupId)) return;
-            
-             results.add(
-              Chat(
-                id: groupId,
-                communityId: groupStr['communityId'],
-                type: 'group',
-                name: name,
-                photoUrl: groupStr['photoUrl'],
-                participants: [],
-                admins: [], 
-                createdBy: '',
-                createdAt: groupStr['createdAt'] is int ? groupStr['createdAt'] : 0,
-                updatedAt: 0,
-                description: desc,
-                memberCount: groupStr['memberCount'] is int ? groupStr['memberCount'] : 0,
-                metadata: {'isPublic': true}, 
-                isPinned: false,
-              ),
-            );
-          }
-        });
-      }
+      // 3. Search Public Groups
+      final groupsSnap = await _firestore
+          .collection('discoverableChats')
+          .get();
+      for (final doc in groupsSnap.docs) {
+        final groupData = doc.data();
+        final name = groupData['name']?.toString() ?? '';
+        final desc = groupData['description']?.toString() ?? '';
+        final groupId = groupData['id']?.toString() ?? doc.id;
 
+        if (query.isEmpty ||
+            name.toLowerCase().contains(query.toLowerCase()) ||
+            desc.toLowerCase().contains(query.toLowerCase())) {
+          if (joinedChatIds.contains(groupId)) continue;
+
+          results.add(
+            Chat(
+              id: groupId,
+              communityId: groupData['communityId'],
+              type: 'group',
+              name: name,
+              photoUrl: groupData['photoUrl'],
+              participants: [],
+              admins: [],
+              createdBy: '',
+              createdAt: groupData['createdAt'] is int
+                  ? groupData['createdAt']
+                  : 0,
+              updatedAt: 0,
+              description: desc,
+              memberCount: groupData['memberCount'] is int
+                  ? groupData['memberCount']
+                  : 0,
+              metadata: {'isPublic': true},
+              isPinned: false,
+            ),
+          );
+        }
+      }
     } catch (e) {
       debugPrint('Error searching discoverable chats: $e');
     }
@@ -1712,16 +1811,14 @@ class ChatRepository {
   }
 
   Future<void> syncCommunityChats(List<String> communityIds) async {
-    // Implementation...
     if (currentUserId == null) return;
     for (final commId in communityIds) {
-      // [FIX] Use consistent prefix 'chat_' to match CommunityService
       final chatId = 'chat_$commId';
-      await _rtdb.ref('userChats/$currentUserId/$chatId').update({
+      await _userChatsCol(currentUserId!).doc(chatId).set({
         'chatId': chatId,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
-        'isDeleted': false, // [NEW] Ensure it's visible if it was previously left
-      });
+        'isDeleted': false,
+      }, SetOptions(merge: true));
     }
   }
 
@@ -1746,17 +1843,12 @@ class ChatRepository {
   Future<int> getDeletableChatsCount() async {
     if (currentUserId == null) return 0;
     try {
-      final snapshot = await _rtdb.ref('userChats/$currentUserId').get();
-      if (!snapshot.exists) return 0;
+      final snapshot = await _userChatsCol(currentUserId!).get();
+      if (snapshot.docs.isEmpty) return 0;
 
-      final data = snapshot.value as Map;
       int count = 0;
-
-      // We must check each chat's TYPE to be sure it's not a community.
-      // ID prefix is unreliable.
-      for (final key in data.keys) {
-        final chatId = key.toString();
-        // Skip obvious ones first for performance
+      for (final doc in snapshot.docs) {
+        final chatId = doc.id;
         if (chatId.startsWith('community_')) continue;
 
         final chat = await getChat(chatId);
@@ -1774,25 +1866,25 @@ class ChatRepository {
   Future<void> clearAllChats() async {
     if (currentUserId == null) return;
     try {
-      final snapshot = await _rtdb.ref('userChats/$currentUserId').get();
-      if (!snapshot.exists) return;
+      final snapshot = await _userChatsCol(currentUserId!).get();
+      if (snapshot.docs.isEmpty) return;
 
-      final data = snapshot.value as Map;
-
-      for (final key in data.keys) {
-        final chatId = key.toString();
-
-        // Skip obvious prefix
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        final chatId = doc.id;
         if (chatId.startsWith('community_')) continue;
 
-        // Fetch to check type
         final chat = await getChat(chatId);
-
-        // Only delete if verified NOT a community chat
         if (chat != null && !chat.isCommunity) {
-          // We remove from userChats and LocalCache
-          await _rtdb.ref('userChats/$currentUserId/$chatId').remove();
-          await _localService.deleteChat(chatId);
+          batch.delete(_userChatsCol(currentUserId!).doc(chatId));
+        }
+      }
+      await batch.commit();
+
+      // Clear local cache
+      for (final doc in snapshot.docs) {
+        if (!doc.id.startsWith('community_')) {
+          await _localService.deleteChat(doc.id);
         }
       }
     } catch (e) {
@@ -1801,11 +1893,15 @@ class ChatRepository {
   }
 
   Stream<LastMessage?> getLastMessageStream(String chatId) {
-    return _rtdb.ref().child('chats/$chatId/lastMessage').onValue.map((event) {
-      if (event.snapshot.value == null) return null;
+    return _chatsCol.doc(chatId).snapshots().map((snapshot) {
+      if (!snapshot.exists) return null;
       try {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        return LastMessage.fromRTDB(data);
+        final data = snapshot.data();
+        final lastMsg = data?['lastMessage'];
+        if (lastMsg == null) return null;
+        return LastMessage.fromFirestore(
+          Map<String, dynamic>.from(lastMsg as Map),
+        );
       } catch (e) {
         return null;
       }
@@ -1817,3 +1913,4 @@ final chatLastMessageStreamProvider =
     StreamProvider.family<LastMessage?, String>((ref, chatId) {
       return ref.watch(chatRepositoryProvider).getLastMessageStream(chatId);
     });
+

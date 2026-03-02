@@ -7,7 +7,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
-import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class QRAttendanceScreen extends ConsumerStatefulWidget {
   final String eventId;
@@ -27,11 +26,11 @@ class QRAttendanceScreen extends ConsumerStatefulWidget {
 
 class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
   // Default to scanning for attendees, showing code for creators
-  late bool _isScanning; 
+  late bool _isScanning;
   String? _generatedCode;
   String? _scanError;
   String? _scanSuccess;
-  
+
   // MobileScanner controller
   final MobileScannerController controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
@@ -43,7 +42,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
   void initState() {
     super.initState();
     _isScanning = !widget.isCreator; // Creator shows code by default
-    
+
     if (widget.isCreator) {
       _generateCode();
     }
@@ -70,14 +69,14 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
 
   Future<void> _handleScan(BarcodeCapture capture) async {
     final List<Barcode> barcodes = capture.barcodes;
-    
+
     for (final barcode in barcodes) {
       if (barcode.rawValue != null) {
         final rawValue = barcode.rawValue!;
-        
+
         // Stop scanning immediately to prevent multiple triggers
         controller.stop();
-        setState(() => _isScanning = false); 
+        setState(() => _isScanning = false);
 
         String attendanceCode = rawValue;
 
@@ -121,7 +120,9 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                 setState(() => _scanSuccess = 'You\'re already checked in!');
                 break;
               case VerificationResult.invalidCode:
-                _showError('Invalid Event Code. Please scan the official event QR.');
+                _showError(
+                  'Invalid Event Code. Please scan the official event QR.',
+                );
                 break;
               case VerificationResult.error:
                 _showError('Error verifying attendance. Please try again.');
@@ -150,7 +151,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
       _isScanning = !_isScanning;
       _scanError = null;
       _scanSuccess = null;
-      
+
       if (_isScanning) {
         controller.start();
       } else {
@@ -197,7 +198,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
       ),
       body: Stack(
         children: [
-           // Background Gradient
+          // Background Gradient
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -209,7 +210,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
               ),
             ),
           ),
-          
+
           SafeArea(
             child: Column(
               children: [
@@ -226,9 +227,18 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.alertCircle, color: Colors.red, size: 20),
+                        const Icon(
+                          LucideIcons.alertCircle,
+                          color: Colors.red,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(_scanError!, style: const TextStyle(color: Colors.red))),
+                        Expanded(
+                          child: Text(
+                            _scanError!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -245,9 +255,21 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.checkCircle, color: Colors.green, size: 20),
+                        const Icon(
+                          LucideIcons.checkCircle,
+                          color: Colors.green,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                         Expanded(child: Text(_scanSuccess!, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
+                        Expanded(
+                          child: Text(
+                            _scanSuccess!,
+                            style: const TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -283,8 +305,13 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                         width: 200,
                                         height: 200,
                                         decoration: BoxDecoration(
-                                          border: Border.all(color: primaryColor, width: 2),
-                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: primaryColor,
+                                            width: 2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -294,7 +321,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                             ),
                           )
                         : SingleChildScrollView(
-                          child: Padding(
+                            child: Padding(
                               padding: const EdgeInsets.all(24.0),
                               child: GlassContainer(
                                 borderRadius: BorderRadius.circular(32),
@@ -304,7 +331,10 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                   children: [
                                     Text(
                                       widget.eventTitle,
-                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
                                             fontWeight: FontWeight.bold,
                                           ),
                                       textAlign: TextAlign.center,
@@ -314,20 +344,26 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                     const SizedBox(height: 8),
                                     Text(
                                       'Scan to check in',
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                            color: Colors.grey,
-                                          ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(color: Colors.grey),
                                     ),
                                     const SizedBox(height: 24),
-                                    if (!widget.isCreator && _scanSuccess != null)
+                                    if (!widget.isCreator &&
+                                        _scanSuccess != null)
                                       Container(
                                         padding: const EdgeInsets.all(24),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(24),
+                                          borderRadius: BorderRadius.circular(
+                                            24,
+                                          ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.green.withOpacity(0.1),
+                                              color: Colors.green.withOpacity(
+                                                0.1,
+                                              ),
                                               blurRadius: 20,
                                               offset: const Offset(0, 10),
                                             ),
@@ -335,19 +371,32 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                         ),
                                         child: Column(
                                           children: [
-                                            const Icon(LucideIcons.checkCircle, size: 80, color: Colors.green),
+                                            const Icon(
+                                              LucideIcons.checkCircle,
+                                              size: 80,
+                                              color: Colors.green,
+                                            ),
                                             const SizedBox(height: 16),
                                             Text(
-                                              _scanSuccess?.contains('already') == true 
+                                              _scanSuccess?.contains(
+                                                        'already',
+                                                      ) ==
+                                                      true
                                                   ? 'You\'re already checked in!'
                                                   : 'You\'re checked in!',
                                               textAlign: TextAlign.center,
-                                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.green,
-                                              ),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleLarge
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.green,
+                                                  ),
                                             ),
-                                            if (_scanSuccess?.contains('already') == false) ...[
+                                            if (_scanSuccess?.contains(
+                                                  'already',
+                                                ) ==
+                                                false) ...[
                                               const SizedBox(height: 8),
                                               const Text(
                                                 '+1,000 DSP Awarded',
@@ -365,10 +414,14 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                         padding: const EdgeInsets.all(16),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(24),
+                                          borderRadius: BorderRadius.circular(
+                                            24,
+                                          ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.1),
+                                              color: Colors.black.withOpacity(
+                                                0.1,
+                                              ),
                                               blurRadius: 20,
                                               offset: const Offset(0, 10),
                                             ),
@@ -383,24 +436,35 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                             eyeShape: QrEyeShape.square,
                                             color: Colors.black,
                                           ),
-                                          dataModuleStyle: const QrDataModuleStyle(
-                                            dataModuleShape: QrDataModuleShape.square,
-                                            color: Colors.black87,
-                                          ),
+                                          dataModuleStyle:
+                                              const QrDataModuleStyle(
+                                                dataModuleShape:
+                                                    QrDataModuleShape.square,
+                                                color: Colors.black87,
+                                              ),
                                         ),
                                       )
-                                    else if (_scanError != null && !widget.isCreator)
+                                    else if (_scanError != null &&
+                                        !widget.isCreator)
                                       Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          const Icon(LucideIcons.alertCircle, size: 64, color: Colors.red),
+                                          const Icon(
+                                            LucideIcons.alertCircle,
+                                            size: 64,
+                                            color: Colors.red,
+                                          ),
                                           const SizedBox(height: 16),
                                           Text(
                                             'Scan Failed',
-                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red,
-                                            ),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.red,
+                                                ),
                                           ),
                                           const SizedBox(height: 24),
                                           ElevatedButton.icon(
@@ -411,22 +475,31 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                                 controller.start();
                                               });
                                             },
-                                            icon: const Icon(LucideIcons.refreshCcw),
+                                            icon: const Icon(
+                                              LucideIcons.refreshCcw,
+                                            ),
                                             label: const Text('Retry Scan'),
                                           ),
                                         ],
                                       )
                                     else
                                       const SizedBox(
-                                        height: 200, 
-                                        child: Center(child: CircularProgressIndicator())
+                                        height: 200,
+                                        child: Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
                                       ),
                                     const SizedBox(height: 24),
                                     if (widget.isCreator)
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          const Icon(LucideIcons.shieldCheck, size: 16, color: Colors.blue),
+                                          const Icon(
+                                            LucideIcons.shieldCheck,
+                                            size: 16,
+                                            color: Colors.blue,
+                                          ),
                                           const SizedBox(width: 8),
                                           Text(
                                             'Official Event Code',
@@ -441,16 +514,20 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                 ),
                               ),
                             ),
-                        ),
+                          ),
                   ),
                 ),
                 // Footer instructions
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 32.0, left: 24, right: 24),
+                  padding: const EdgeInsets.only(
+                    bottom: 32.0,
+                    left: 24,
+                    right: 24,
+                  ),
                   child: Text(
-                    _isScanning 
-                      ? 'Align the QR code within the frame to check in.' 
-                      : 'Show this code to attendees at the venue entrance.',
+                    _isScanning
+                        ? 'Align the QR code within the frame to check in.'
+                        : 'Show this code to attendees at the venue entrance.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: isDark ? Colors.white70 : Colors.black54,

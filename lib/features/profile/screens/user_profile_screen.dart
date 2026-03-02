@@ -10,17 +10,13 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
-import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
-import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
-import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
-import 'package:diaspora_nearby/features/community/models/community_data.dart' as comm_model;
-import 'package:diaspora_nearby/features/events/models/event_data.dart' as event_model;
-import 'package:diaspora_nearby/features/chat/models/chat.dart';
-import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/community/services/community_service.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 
 import '../widgets/user_profile_view.dart';
 import '../widgets/user_profile_editor.dart';
@@ -80,7 +76,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         setState(() {
           _isEditing = true;
           if (highlightStr != null) {
-            _initialHighlightFields = highlightStr.split(',').map((e) => e.trim()).toList();
+            _initialHighlightFields = highlightStr
+                .split(',')
+                .map((e) => e.trim())
+                .toList();
           }
         });
       }
@@ -107,11 +106,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       // Check if already connected to avoid duplicate logic
       if (_profile?.firstQrConnection?.otherUid == user.uid ||
           currentProfile.firstQrConnection?.otherUid == widget.userId) {
-        debugPrint('UserProfileScreen: Already connected via QR, skipping auto-exchange.');
+        debugPrint(
+          'UserProfileScreen: Already connected via QR, skipping auto-exchange.',
+        );
         return;
       }
 
-      debugPrint('UserProfileScreen: Detected incoming QR link. Triggering connection.');
+      debugPrint(
+        'UserProfileScreen: Detected incoming QR link. Triggering connection.',
+      );
       _triggerQRConnection(user.uid, widget.userId);
     }
   }
@@ -119,13 +122,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   Future<void> _triggerQRConnection(String fromUid, String toUid) async {
     try {
       // Show a brief loading indicator or overlay if needed, but performQRExchange handles logic
-      await ref.read(trustServiceProvider).performQRExchange(
-        fromUid: fromUid,
-        toUid: toUid,
-        // locationAddress is null here as we don't want to block on geocoding for deep links
-        // TrustService can handle null or we can try a quick fetch if critical.
-      );
-      
+      await ref
+          .read(trustServiceProvider)
+          .performQRExchange(
+            fromUid: fromUid,
+            toUid: toUid,
+            // locationAddress is null here as we don't want to block on geocoding for deep links
+            // TrustService can handle null or we can try a quick fetch if critical.
+          );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -139,7 +144,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       if (!mounted) return;
 
       if (e.isOwnProfile) {
-        debugPrint('UserProfileScreen: OWN profile incomplete for QR connection. Showing modal.');
+        debugPrint(
+          'UserProfileScreen: OWN profile incomplete for QR connection. Showing modal.',
+        );
         final success = await _showCompleteProfileModal(e.missingFields);
         if (success == true) {
           // Re-trigger connection after profile update
@@ -148,7 +155,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('The other user needs to complete their profile. Missing: ${e.missingFields.join(', ')}'),
+            content: Text(
+              'The other user needs to complete their profile. Missing: ${e.missingFields.join(', ')}',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -163,8 +172,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (user == null) return false;
 
     // Fetch latest profile data to ensure modal has current state
-    final latestProfile = await ref.read(profileRepositoryProvider).getUserProfile(user.uid);
-    
+    final latestProfile = await ref
+        .read(profileRepositoryProvider)
+        .getUserProfile(user.uid);
+
     if (!mounted) return false;
 
     return showModalBottomSheet<bool>(
@@ -191,8 +202,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       _isLoadingProfile = true;
       _errorMessage = null;
     });
-
-
 
     try {
       final profile = await ref
@@ -398,7 +407,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+                          padding: const EdgeInsets.all(
+                            AppTheme.pageHorizontalPadding,
+                          ),
                           decoration: BoxDecoration(
                             color: Theme.of(
                               context,
@@ -436,26 +447,31 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                           child: FilledButton.icon(
                             onPressed: () async {
                               Navigator.pop(ctx);
-                              
-                              final user = ref.read(authRepositoryProvider).currentUser;
-                              String shareUrl = 'https://www.diasporanearby.com';
+
+                              final user = ref
+                                  .read(authRepositoryProvider)
+                                  .currentUser;
+                              String shareUrl = 'https://diasporanearby.com';
 
                               if (user != null) {
                                 try {
-                                  String? code = await ref.read(pointsRepositoryProvider).getReferralCode(user.uid);
+                                  String? code = await ref
+                                      .read(pointsRepositoryProvider)
+                                      .getReferralCode(user.uid);
                                   if (code == null) {
-                                     // profileToSave is the latest profile we just saved
-                                     final countryCode = profileToSave.homeCountryCode ?? 'US';
-                                     code = await ref.read(pointsRepositoryProvider).generateReferralCode(
-                                       user.uid, 
-                                       profileToSave.firstName, 
-                                       countryCode
-                                     );
+                                    // profileToSave is the latest profile we just saved
+                                    final countryCode =
+                                        profileToSave.homeCountryCode ?? 'US';
+                                    code = await ref
+                                        .read(pointsRepositoryProvider)
+                                        .generateReferralCode(
+                                          user.uid,
+                                          profileToSave.firstName,
+                                          countryCode,
+                                        );
                                   }
-                                  if (code != null) {
-                                    shareUrl = '$shareUrl/invite?code=$code';
-                                  }
-                                } catch (e) {
+                                  shareUrl = '$shareUrl/invite?code=$code';
+                                                                } catch (e) {
                                   debugPrint('Error getting referral code: $e');
                                 }
                               }
@@ -490,6 +506,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         ).showSnackBar(SnackBar(content: Text('Error saving profile: $e')));
       }
       rethrow; // Editor needs to know it failed
+    }
+  }
+
+  Future<void> _trackExploration(String actionId) async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(user.uid, actionId);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
     }
   }
 
@@ -528,7 +556,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                     profile: _profile!,
                     isSelf: isSelf,
                     isEnforced: widget.isEnforced,
-                    onEdit: () => setState(() => _isEditing = true),
+                    onEdit: () {
+                      _trackExploration(ExplorationAction.profileEdit);
+                      setState(() => _isEditing = true);
+                    },
 
                     src: _src,
                     distanceKm: () {
@@ -578,7 +609,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
             child: Center(
               child: Card(
                 color: Colors.red.shade700,
-                margin: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding * 2),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.pageHorizontalPadding * 2,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
                   child: Column(
@@ -608,7 +641,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       ElevatedButton(
                         onPressed: _openSettings,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('Enable Location Permission'),

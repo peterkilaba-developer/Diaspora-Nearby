@@ -20,7 +20,7 @@ class VideoMessagePlayer extends StatefulWidget {
 }
 
 class _VideoMessagePlayerState extends State<VideoMessagePlayer>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   late VideoPlayerController _videoController;
   ChewieController? _chewieController;
   bool _isInitialized = false;
@@ -32,7 +32,18 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeVideo();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      if (_isInitialized && _videoController.value.isPlaying) {
+        _videoController.pause();
+      }
+    }
   }
 
   Future<void> _initializeVideo() async {
@@ -94,6 +105,8 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _videoController.pause(); // Stop decoding before disposing
     _videoController.dispose();
     _chewieController?.dispose();
     super.dispose();

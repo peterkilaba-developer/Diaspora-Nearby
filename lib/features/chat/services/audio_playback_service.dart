@@ -24,7 +24,12 @@ class AudioPlaybackService {
   AudioPlayer get player => _player;
   final AudioPlayer _player = AudioPlayer();
 
-  AudioPlaybackService(this._ref);
+  AudioPlaybackService(this._ref) {
+    _ref.onDispose(() {
+      _idController.close();
+      _player.dispose();
+    });
+  }
 
   /// Toggles play/pause for a specific audio ID and URL.
   /// If [id] matches current, it toggles play/pause.
@@ -37,26 +42,28 @@ class AudioPlaybackService {
         } else {
           // Check/Stop Radio availability before resuming
           // We need to stop radio if it holds the background session
-           
+
           // If finished, seek to start
           if (_player.processingState == ProcessingState.completed) {
             await _player.seek(Duration.zero);
           }
-          
-           // --- MUTUAL EXCLUSIVITY ---
+
+          // --- MUTUAL EXCLUSIVITY ---
           try {
-             _ref.read(radioProvider.notifier).stop(); 
-          } catch (e) { /* ignore */ }
+            _ref.read(radioProvider.notifier).stop();
+          } catch (e) {
+            /* ignore */
+          }
           // --------------------------
 
           await _player.play();
         }
       } else {
         // New audio
-        
+
         // 1. Stop Radio (Mutual Exclusivity)
         try {
-          _ref.read(radioProvider.notifier).stop(); 
+          _ref.read(radioProvider.notifier).stop();
         } catch (e) {
           debugPrint('⚠️ Could not auto-stop radio: $e');
         }
@@ -125,10 +132,5 @@ class AudioPlaybackService {
     await _player.stop();
     _currentId = null;
     _idController.add(null);
-  }
-
-  void dispose() {
-    _idController.close();
-    _player.dispose();
   }
 }

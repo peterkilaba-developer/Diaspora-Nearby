@@ -32,29 +32,32 @@ class ShareReceiverService {
       List<SharedMediaFile> value,
     ) {
       _handleSharedFiles(value);
-      ReceiveSharingIntent.instance.reset(); // [FIX] Clear intent to prevent loop on restart
+      ReceiveSharingIntent.instance
+          .reset(); // [FIX] Clear intent to prevent loop on restart
     });
   }
 
   void _handleSharedFiles(List<SharedMediaFile> files) {
     if (files.isEmpty) return;
 
-    // [FIX] Ignore profile deep links to prevent opening "Send to..." / Share screen
-    // GoRouter should handle these deep links directly.
-    final hasProfileLink = files.any((f) {
+    // [FIX] Ignore ALL links to our own domain to prevent triggering the share screen.
+    // These should be handled by deep linking (GoRouter) instead.
+    final hasOurLink = files.any((f) {
+      final isUrl =
+          f.type == SharedMediaType.url || f.type == SharedMediaType.text;
       final path = f.path.toLowerCase();
-      final isUrl = f.type == SharedMediaType.url || f.type == SharedMediaType.text;
-      final match = path.contains('diasporanearby.com/profile/');
-      
-      if (isUrl && match) {
-        debugPrint("ShareReceiverService: Detected profile deep link in path: ${f.path}");
+      final isInternal = path.contains('diasporanearby.com');
+
+      if (isUrl && isInternal) {
+        debugPrint(
+          "ShareReceiverService: Detected internal deep link in path: ${f.path}. Ignoring.",
+        );
         return true;
       }
       return false;
     });
 
-    if (hasProfileLink) {
-      debugPrint("ShareReceiverService: Ignoring shared files because profile deep link was detected.");
+    if (hasOurLink) {
       return;
     }
 

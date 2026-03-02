@@ -1,4 +1,3 @@
-import 'package:diaspora_nearby/features/governance/models/governance_unit.dart';
 
 void main() {
   print('============================================================');

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TgeDistributionRecord {
   final int epoch;
   final int tgeNumber;
@@ -19,10 +21,15 @@ class TgeDistributionRecord {
       tgeNumber: (map['tgeNumber'] as num? ?? 0).toInt(),
       amount: (map['amount'] as num? ?? 0).toDouble(),
       efficiency: (map['efficiency'] as num? ?? 0).toDouble(),
-      date: map['date'] != null
-          ? DateTime.tryParse(map['date'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      date: _parseDateTime(map['date']) ?? DateTime.now(),
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is String) return DateTime.tryParse(val);
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    return null;
   }
 
   Map<String, dynamic> toMap() {
@@ -46,14 +53,20 @@ class UserPoints {
   final DateTime lastUpdated;
   final DateTime signupDate; // Used for "Days Active" status calculation
   final int dailyShareCount; // [NEW] max 12/day
-  final List<String> dailyCommunitiesMessaged; // [NEW] track per-community daily msg
+  final List<String>
+  dailyCommunitiesMessaged; // [NEW] track per-community daily msg
   final List<String> completedExplorationActions; // [FIX] Added missing field
   final String? walletAddress; // [NEW] User's Crypto Wallet Address
   final DateTime? lastCheckInDate; // [NEW]
   final int? trustScore; // [NEW] Proof of Community Trust (PoCT)
   final String? homeCountryCode; // [NEW] For community aggregation
-  final Map<String, int> lifetimeEarnings; // [NEW] Track total DSP earned per activity
-  final List<TgeDistributionRecord> tgeHistory; // [NEW] Track historical TGE distributions
+  final Map<String, int>
+  lifetimeEarnings; // [NEW] Track total DSP earned per activity
+  final List<TgeDistributionRecord>
+  tgeHistory; // [NEW] Track historical TGE distributions
+  final int verifiedCount; // [NEW] Track number of verified peers
+  final int familyConnectionCount; // [NEW] Track number of family connections
+  final int qrConnectionCount; // [NEW] Track number of QR connections
 
   UserPoints({
     required this.userId,
@@ -73,6 +86,9 @@ class UserPoints {
     this.homeCountryCode,
     this.lifetimeEarnings = const {},
     this.tgeHistory = const [],
+    this.verifiedCount = 0,
+    this.familyConnectionCount = 0,
+    this.qrConnectionCount = 0,
   });
 
   int get totalDsp => totalPoints;
@@ -83,40 +99,43 @@ class UserPoints {
       totalPoints: (map['totalPoints'] as num? ?? 0).toInt(),
       availablePoints: (map['availablePoints'] as num? ?? 0).toInt(),
       currentStreak: (map['currentStreak'] as num? ?? 0).toInt(),
-      lastActivityDate: map['lastActivityDate'] != null
-          ? DateTime.tryParse(map['lastActivityDate'] as String)
-          : null,
+      lastActivityDate: _parseDateTime(map['lastActivityDate']),
       dailyMessageCount: (map['dailyMessageCount'] as num? ?? 0).toInt(),
-      lastUpdated: map['lastUpdated'] != null
-          ? DateTime.tryParse(map['lastUpdated'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      lastUpdated: _parseDateTime(map['lastUpdated']) ?? DateTime.now(),
       completedExplorationActions:
           (map['completedExplorationActions'] as List<dynamic>?)
-                  ?.map((e) => e.toString())
-                  .toList() ??
-              [],
-      signupDate: map['signupDate'] != null
-          ? DateTime.tryParse(map['signupDate'] as String) ?? DateTime.now()
-          : DateTime.now(), // Fallback for existing users
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      signupDate:
+          _parseDateTime(map['signupDate']) ??
+          DateTime.now(), // Fallback for existing users
       dailyShareCount: (map['dailyShareCount'] as num? ?? 0).toInt(),
       dailyCommunitiesMessaged:
           (map['dailyCommunitiesMessaged'] as List<dynamic>?)
-                  ?.map((e) => e.toString())
-                  .toList() ??
-              [],
-      walletAddress: map['walletAddress'] as String?,
-      lastCheckInDate: map['lastCheckInDate'] != null
-          ? DateTime.tryParse(map['lastCheckInDate'] as String)
-          : null,
-      trustScore: (map['trustScore'] as num? ?? 0).toInt(),
-      homeCountryCode: map['homeCountryCode'] as String?,
-      lifetimeEarnings: (map['lifetimeEarnings'] as Map<String, dynamic>?)
-              ?.map((key, value) => MapEntry(key, (value as num).toInt())) ??
-          {},
-      tgeHistory: (map['tgeHistory'] as List<dynamic>?)
-              ?.map((e) => TgeDistributionRecord.fromMap(e as Map<String, dynamic>))
+              ?.map((e) => e.toString())
               .toList() ??
           [],
+      walletAddress: map['walletAddress'] as String?,
+      lastCheckInDate: _parseDateTime(map['lastCheckInDate']),
+      trustScore: (map['trustScore'] as num? ?? 0).toInt(),
+      homeCountryCode: map['homeCountryCode'] as String?,
+      lifetimeEarnings:
+          (map['lifetimeEarnings'] as Map<String, dynamic>?)?.map(
+            (key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0),
+          ) ??
+          {},
+      tgeHistory:
+          (map['tgeHistory'] as List<dynamic>?)
+              ?.map(
+                (e) => TgeDistributionRecord.fromMap(e as Map<String, dynamic>),
+              )
+              .toList() ??
+          [],
+      verifiedCount: (map['verifiedCount'] as num? ?? 0).toInt(),
+      familyConnectionCount: (map['familyConnectionCount'] as num? ?? 0)
+          .toInt(),
+      qrConnectionCount: (map['qrConnectionCount'] as num? ?? 0).toInt(),
     );
   }
 
@@ -139,6 +158,9 @@ class UserPoints {
       'homeCountryCode': homeCountryCode,
       'lifetimeEarnings': lifetimeEarnings,
       'tgeHistory': tgeHistory.map((e) => e.toMap()).toList(),
+      'verifiedCount': verifiedCount,
+      'familyConnectionCount': familyConnectionCount,
+      'qrConnectionCount': qrConnectionCount,
     };
   }
 
@@ -160,6 +182,9 @@ class UserPoints {
     String? homeCountryCode,
     Map<String, int>? lifetimeEarnings,
     List<TgeDistributionRecord>? tgeHistory,
+    int? verifiedCount,
+    int? familyConnectionCount,
+    int? qrConnectionCount,
   }) {
     return UserPoints(
       userId: userId ?? this.userId,
@@ -181,6 +206,17 @@ class UserPoints {
       homeCountryCode: homeCountryCode ?? this.homeCountryCode,
       lifetimeEarnings: lifetimeEarnings ?? this.lifetimeEarnings,
       tgeHistory: tgeHistory ?? this.tgeHistory,
+      verifiedCount: verifiedCount ?? this.verifiedCount,
+      familyConnectionCount:
+          familyConnectionCount ?? this.familyConnectionCount,
+      qrConnectionCount: qrConnectionCount ?? this.qrConnectionCount,
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is String) return DateTime.tryParse(val);
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    return null;
   }
 }

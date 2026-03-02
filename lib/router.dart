@@ -34,7 +34,6 @@ import 'package:diaspora_nearby/features/events/screens/event_attendees_screen.d
 // import 'package:diaspora_nearby/core/services/local_cache_service.dart'; // Deprecated
 import 'package:diaspora_nearby/features/events/screens/organizer_events_screen.dart'; // [NEW]
 // [NEW]
-import 'package:diaspora_nearby/features/notifications/screens/notifications_screen.dart';
 import 'features/radio/screens/radio_screen.dart';
 import 'features/shared/screens/scaffold_with_nav_bar.dart';
 import 'features/shared/screens/splash_screen.dart';
@@ -50,13 +49,32 @@ import 'features/shared/screens/error_screen.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/dsp/screens/points_system_screen.dart';
 import 'features/dsp/screens/remittances_screen.dart';
-import 'features/dsp/screens/bereavement_screen.dart';
+import 'features/dsp/screens/emergency_fund_screen.dart';
 import 'features/dsp/screens/airline_portal_screen.dart';
 import 'features/dsp/screens/dfdi_screen.dart';
 import 'features/dsp/screens/diaspora_crypto_screen.dart';
+import 'features/dsp/screens/economy_hub_screen.dart';
+import 'features/travel/screens/flight_search_screen.dart';
+import 'features/travel/screens/hotel_search_screen.dart';
+import 'features/travel/screens/stay_search_screen.dart';
+import 'features/travel/screens/car_rental_search_screen.dart';
+import 'features/settings/screens/settings_screen.dart';
 import 'features/sharing/screens/share_chat_selection_screen.dart'; // [NEW]
+import 'features/marketplace/screens/marketplace_screen.dart';
+import 'features/marketplace/screens/create_listing_screen.dart';
+import 'features/marketplace/models/marketplace_listing.dart';
+import 'features/marketplace/screens/listing_detail_screen.dart';
+import 'features/marketplace/screens/my_listings_screen.dart';
+import 'features/marketplace/screens/saved_listings_screen.dart';
+import 'features/marketplace/screens/compatible_parts_screen.dart';
 // [NEW]
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'features/hosting/screens/hosting_request_detail_screen.dart';
+import 'features/notifications/screens/notifications_screen.dart';
+import 'features/real_estate/models/real_estate_listing.dart';
+import 'features/real_estate/screens/real_estate_search_screen.dart';
+import 'features/real_estate/screens/real_estate_detail_screen.dart';
+import 'features/real_estate/screens/create_real_estate_listing_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -88,6 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     initialLocation: '/auth/phone',
     redirect: (context, state) async {
+      debugPrint(
+        'Router: Checking route: ${state.matchedLocation}, URI: ${state.uri}',
+      );
+
       // [NEW] Capture referral code from ANY incoming link with ?code=...
       final referralCode = state.uri.queryParameters['code'];
       if (referralCode != null && referralCode.isNotEmpty) {
@@ -123,7 +145,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/error?message=${Uri.encodeComponent(error.toString())}';
       }
 
-
       if (authState.isLoading ||
           (isBootstrapping && userProfileAsync.isLoading)) {
         return '/splash';
@@ -151,7 +172,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         // Allow OTP screen to show even when Firebase Auth detects phone number
         // User is not fully authenticated until OTP is verified
         // [FIX] Don't intercept navigation to profile-setup or chats after OTP success
-        if (isAuthRoute && 
+        if (isAuthRoute &&
             state.matchedLocation != '/auth/otp' &&
             state.matchedLocation != '/profile-setup' &&
             state.matchedLocation != '/chats') {
@@ -182,7 +203,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           // Check returning user status
           final sessionService = ref.read(sessionServiceProvider);
           final isReturning = await sessionService.isReturningUser();
-          return '/chats'; // Always go to chats first for stability
+
+          // Only redirect if we are on an auth route.
+          // If we are deep linking (e.g. /communities/...), we should fall through.
+          if (isAuthRoute) {
+            return '/chats';
+          }
         }
 
         if (state.matchedLocation == '/profile-setup' &&
@@ -196,7 +222,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
           final sessionService = ref.read(sessionServiceProvider);
           final isReturning = await sessionService.isReturningUser();
-          return '/chats'; // Always go to chats first for stability
+          return '/chats';
         }
 
         // Check for Ban
@@ -206,17 +232,26 @@ final routerProvider = Provider<GoRouter>((ref) {
 
         // Data Integrity Guard for Root/Auth redirect
         // [FIX] Don't intercept navigation from OTP verification
+        // Also don't intercept deep links! Only redirect to chats if user is on a "starting" path.
         if ((state.matchedLocation == '/' ||
-            (state.matchedLocation.startsWith('/auth') && state.matchedLocation != '/auth/otp') ||
+            (state.matchedLocation.startsWith('/auth') &&
+                state.matchedLocation != '/auth/otp') ||
             state.matchedLocation == '/splash')) {
+          debugPrint(
+            'Router: Handling root/auth/splash for authenticated user',
+          );
           if (profile?.communityMemberships == null ||
               profile!.communityMemberships!.isEmpty) {
+            debugPrint('Router: Profile setup required');
             return '/profile-setup';
           }
 
-          final sessionService = ref.read(sessionServiceProvider);
-          final isReturning = await sessionService.isReturningUser();
-          return '/chats'; // Always go to chats first for stability
+          // REMOVED await sessionService.isReturningUser() as it might be causing exceptions/delays
+          // final sessionService = ref.read(sessionServiceProvider);
+          // final isReturning = await sessionService.isReturningUser();
+
+          debugPrint('Router: Redirecting to /chats');
+          return '/chats'; // Default landing for authenticated users coming from root/auth
         }
 
         // [FIX] Global Profile Integrity Guard
@@ -227,7 +262,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (state.matchedLocation != '/profile-setup' &&
             !state.matchedLocation.startsWith('/auth') &&
             !userProfileAsync.isLoading &&
-            !userProfileAsync.hasError && // [FIX] Don't redirect on network error
+            !userProfileAsync
+                .hasError && // [FIX] Don't redirect on network error
             profile == null) {
           debugPrint(
             'Router: Profile missing for authenticated user. Redirecting to profile setup.',
@@ -281,9 +317,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
 
-      // Redirect /download to home (For Invite Links)
+      // Redirect /download and /invite to home (For Invite Links)
       GoRoute(
         path: '/download',
+        redirect: (context, state) => '/',
+        builder: (context, state) => const SizedBox.shrink(),
+      ),
+      GoRoute(
+        path: '/invite',
         redirect: (context, state) => '/',
         builder: (context, state) => const SizedBox.shrink(),
       ),
@@ -332,6 +373,23 @@ final routerProvider = Provider<GoRouter>((ref) {
           final orgId = state.pathParameters['orgId']!;
           final extra = state.extra as Map<String, dynamic>?;
           return OrganizationDetailScreen(orgId: orgId, initialData: extra);
+        },
+      ),
+
+      // Notifications Hub
+      GoRoute(
+        path: '/notifications',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+
+      // Hosting Request Detail (from push notification)
+      GoRoute(
+        path: '/hosting/request/:requestId',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final requestId = state.pathParameters['requestId']!;
+          return HostingRequestDetailScreen(requestId: requestId);
         },
       ),
 
@@ -386,7 +444,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 
                           return GroupInfoScreen(
                             chatId: chatId,
-                            groupName: extra?['name'] ?? 'Group Info', // [FIX] Provide non-null fallback
+                            groupName:
+                                extra?['name'] ??
+                                'Group Info', // [FIX] Provide non-null fallback
                             groupImage: extra?['image'],
                             currentUserId: ref
                                 .read(authRepositoryProvider)
@@ -460,7 +520,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'create',
                     parentNavigatorKey: _rootNavigatorKey,
                     builder: (context, state) {
-                      final communityId = state.uri.queryParameters['communityId'];
+                      final communityId =
+                          state.uri.queryParameters['communityId'];
                       final groupId = state.uri.queryParameters['groupId'];
                       return CreateEventScreen(
                         communityId: communityId,
@@ -559,15 +620,67 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RemittancesScreen(),
       ),
       GoRoute(
-        path: '/dsp/bereavement',
+        path: '/dsp/emergency-fund',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const BereavementScreen(),
+        builder: (context, state) => const EmergencyFundScreen(),
       ),
       GoRoute(
         path: '/dsp/airline',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const AirlinePortalScreen(),
       ),
+      
+      // Travel Portal
+      GoRoute(
+        path: '/dsp/travel/flights',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const FlightSearchScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/travel/hotels',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HotelSearchScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/travel/stays',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const StaySearchScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/travel/car-rental',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const CarRentalSearchScreen(),
+      ),
+
+      // Real Estate
+      GoRoute(
+        path: '/dsp/real-estate/:category',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final category = state.pathParameters['category'] ?? 'plot';
+          return RealEstateSearchScreen(category: category);
+        },
+      ),
+      GoRoute(
+        path: '/dsp/real-estate-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final listing = state.extra as RealEstateListing;
+          return RealEstateDetailScreen(listing: listing);
+        },
+      ),
+      GoRoute(
+        path: '/dsp/real-estate-create',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final extras = state.extra as Map<String, dynamic>?;
+          return CreateRealEstateListingScreen(
+            defaultCategory: extras?['category'] as String? ?? 'plot',
+            existing: extras?['listing'] as RealEstateListing?,
+          );
+        },
+      ),
+
       GoRoute(
         path: '/dsp/dfdi',
         parentNavigatorKey: _rootNavigatorKey,
@@ -577,6 +690,66 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/dsp/crypto',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const DiasporaCryptoScreen(),
+      ),
+
+      // Economy Hub
+      GoRoute(
+        path: '/economy',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const EconomyHubScreen(),
+      ),
+
+      // Settings
+      GoRoute(
+        path: '/settings',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+
+      // ── Marketplace ──────────────────────────────────────────────
+      GoRoute(
+        path: '/marketplace',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const MarketplaceScreen(),
+      ),
+      GoRoute(
+        path: '/marketplace/create',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is MarketplaceListing) {
+            return CreateListingScreen(existingListing: extra);
+          }
+          return CreateListingScreen(
+            defaultListingType: extra is String ? extra : null,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/marketplace/listing/:id',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => ListingDetailScreen(
+          listingId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/marketplace/my-listings',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const MyListingsScreen(),
+      ),
+      GoRoute(
+        path: '/marketplace/saved',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const SavedListingsScreen(),
+      ),
+      GoRoute(
+        path: '/marketplace/parts/:make',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => CompatiblePartsScreen(
+          make: Uri.decodeComponent(state.pathParameters['make']!),
+          model: state.uri.queryParameters['model'],
+          year: state.uri.queryParameters['year'],
+        ),
       ),
 
       // Current User Profile (Self)
@@ -627,6 +800,66 @@ final routerProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: AdminCommunitiesScreen()),
           ),
         ],
+      ),
+
+      // [NEW] Root Route
+      // This is crucial for handling deep links that resolve to '/' (like /invite or /download redirections)
+      // or simply opening the app via a generic link.
+      GoRoute(
+        path: '/',
+        builder: (context, state) {
+          debugPrint('Router: Rendering Root Route builder');
+          final isAuthenticated = ref.watch(authStateProvider).value != null;
+
+          // Failsafe: if we ended up here and are authenticated, force move to chats
+          if (isAuthenticated) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              debugPrint('Router: Root Builder Failsafe - Going to /chats');
+              context.go('/chats');
+            });
+          }
+
+          return Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'Redirecting Root...',
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Path: ${state.matchedLocation}',
+                    style: const TextStyle(color: Colors.amber),
+                  ),
+                  Text(
+                    'Uri: ${state.uri}',
+                    style: const TextStyle(color: Colors.amber),
+                  ),
+                  Text(
+                    'Auth: ${ref.read(authStateProvider).value != null}',
+                    style: const TextStyle(color: Colors.green),
+                  ),
+                  Text(
+                    'Profile: ${ref.read(userProfileProvider).value != null}',
+                    style: const TextStyle(color: Colors.cyan),
+                  ),
+                  Text(
+                    'Memberships: ${ref.read(userProfileProvider).value?.communityMemberships?.length ?? "null"}',
+                    style: const TextStyle(color: Colors.cyan),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => context.go('/chats'),
+                    child: const Text('Force Go to Home'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     ],
   );

@@ -21,6 +21,7 @@ import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW] Share reward toast
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
@@ -100,7 +101,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       if (pendingCode != null && pendingCode.isNotEmpty) {
         debugPrint('ProfileSetup: Auto-filling referral code: $pendingCode');
         _referralCodeController.text = pendingCode;
-        // Optionally clear it here so it doesn't persist across fresh attempts 
+        // Optionally clear it here so it doesn't persist across fresh attempts
         // if user backs out, but usually better to clear on submit success.
       }
     });
@@ -569,69 +570,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           .read(profileRepositoryProvider)
           .saveUserProfile(user.uid, profile);
 
-      // 4.5 Initialize Points System & Process Referral
-      try {
-        final pointsService = ref.read(pointsServiceProvider);
-
-        // Initialize user points
-        await pointsService.initializeUserPoints(user.uid);
-
-        // Process referral if code was provided
-        final referralCode = _referralCodeController.text.trim();
-        String? referrerId;
-        
-        if (referralCode.isNotEmpty) {
-          try {
-            // [UPDATED] Capture referrerId for immediate relationship connection
-            referrerId = await pointsService.processReferral(referralCode, user.uid);
-            debugPrint('Referral processed. Referrer ID: $referrerId');
-          } catch (e) {
-            debugPrint('Error processing referral: $e');
-          }
-        }
-        
-        // [NEW] If referred, prompt for Relationship Connection immediately
-        // We do this after communities content (step 5) or before?
-        // Let's do it after we have setup the user but BEFORE navigation.
-        // We will store it to trigger the dialog.
-        
-        if (referrerId != null && mounted) {
-           // Fetch referrer name for the modal
-           final referrerProfile = await ref.read(profileRepositoryProvider).getUserProfile(referrerId);
-           if (referrerProfile != null) {
-              final referrerName = referrerProfile.fullName;
-              
-              // Trigger Modal
-              await showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                enableDrag: false,
-                isDismissible: false, // Force selection? Or allow skip? User request says "we automatically show...". 
-                // Let's allow dismiss but it's strongly encouraged.
-                builder: (context) => RelationshipSelectionModal(
-                  otherUserId: referrerId!,
-                  otherUserName: referrerName,
-                  // [UPDATED] Allow all relationship types (including Friends) as requested.
-                  // includeFriend: false, 
-                ),
-              );
-           }
-        }
-
-        // Generate referral code for this new user
-        await pointsService.generateReferralCode(
-          user.uid,
-          profile.firstName,
-          homeParsed.countryCode,
-        );
-      } catch (e) {
-        debugPrint('Error initializing points: $e');
-        // Don't fail signup if points initialization fails
-      }
-
-      // 5. Create Communities & Chats (Critical Step)
-      // We do this BEFORE invalidating/navigating to ensure it succeeds
+      // 4.5 Create Communities & Chats (Critical Step)
+      // UPDATED: Moved BEFORE points initialization to ensure community documents exist
+      // when _distributeTreasuryPoints tries to update treasury subcollections
       List<String> createdCommunityIds = [];
       final Set<String> newCommunityNames = {};
       void onFirstMember(String name) => newCommunityNames.add(name);
@@ -643,6 +584,74 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         // If this fails, we must NOT proceed.
         // We report error and let user retry (submit button will re-enable).
         throw Exception('Failed to join communities: $e. Please try again.');
+      }
+
+      // 5. Initialize Points System & Process Referral
+      // UPDATED: Moved AFTER community creation to ensure parent documents exist
+      try {
+        final pointsService = ref.read(pointsServiceProvider);
+
+        // Initialize user points (now that communities exist)
+        await pointsService.initializeUserPoints(user.uid);
+
+        // Process referral if code was provided
+        final referralCode = _referralCodeController.text.trim();
+        String? referrerId;
+
+        if (referralCode.isNotEmpty) {
+          try {
+            // [UPDATED] Capture referrerId for immediate relationship connection
+            referrerId = await pointsService.processReferral(
+              referralCode,
+              user.uid,
+            );
+            debugPrint('Referral processed. Referrer ID: $referrerId');
+          } catch (e) {
+            debugPrint('Error processing referral: $e');
+          }
+        }
+
+        // [NEW] If referred, prompt for Relationship Connection immediately
+        // We do this after communities content (step 5) or before?
+        // Let's do it after we have setup the user but BEFORE navigation.
+        // We will store it to trigger the dialog.
+
+        if (referrerId != null && mounted) {
+          // Fetch referrer name for the modal
+          final referrerProfile = await ref
+              .read(profileRepositoryProvider)
+              .getUserProfile(referrerId);
+          if (referrerProfile != null) {
+            final referrerName = referrerProfile.fullName;
+
+            // Trigger Modal
+            await showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              enableDrag: false,
+              isDismissible:
+                  false, // Force selection? Or allow skip? User request says "we automatically show...".
+              // Let's allow dismiss but it's strongly encouraged.
+              builder: (context) => RelationshipSelectionModal(
+                otherUserId: referrerId!,
+                otherUserName: referrerName,
+                // [UPDATED] Allow all relationship types (including Friends) as requested.
+                // includeFriend: false,
+              ),
+            );
+          }
+        }
+
+        // Generate referral code for this new user
+        await pointsService.generateReferralCode(
+          user.uid,
+          profile.firstName,
+          homeParsed.countryCode,
+        );
+      } catch (e) {
+        debugPrint('Error initializing points: $e');
+        // Don't fail signup if points initialization fails
       }
 
       // 6. Invalidate profile provider and navigate
@@ -692,7 +701,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                   horizontal: 24,
                   vertical: 32,
                 ),
-                child: Column(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
@@ -720,10 +734,33 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'You are the first member of ${newCommunityNames.join(", ")}!\n\nKnow someone who lives here? Invite them to join!',
+                      'You are the first member of these ${newCommunityNames.length} communities!\n',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 16,
+                        color: Colors.grey,
+                        height: 1.4,
+                      ),
+                    ),
+                    // List communities as chips for readability
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: newCommunityNames.map((name) => Chip(
+                        label: Text(
+                          name,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      )).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Know someone who lives here?\nInvite them and earn 100 DSP! 🎁',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
                         color: Colors.grey,
                         height: 1.4,
                       ),
@@ -733,40 +770,74 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed: () async {
-                          Navigator.pop(ctx);
-                          
-                          final user = ref.read(authRepositoryProvider).currentUser;
-                          String shareUrl = 'https://www.diasporanearby.com';
+                          final user = ref
+                              .read(authRepositoryProvider)
+                              .currentUser;
+                          String shareUrl = 'https://diasporanearby.com';
 
                           if (user != null) {
                             try {
-                              String? code = await ref.read(pointsRepositoryProvider).getReferralCode(user.uid);
+                              String? code = await ref
+                                  .read(pointsRepositoryProvider)
+                                  .getReferralCode(user.uid);
                               if (code == null) {
-                                  // Use the details we just used for setup (e.g. _homeLocation usually for country code)
-                                  // Or just fetch profile. Since we just submitted, profile should be ready.
-                                  // _hostLocation has country code.
-                                  final countryCode = _hostLocation?.countryCode ?? 'US';
-                                  code = await ref.read(pointsRepositoryProvider).generateReferralCode(
-                                    user.uid, 
-                                    _firstNameController.text, 
-                                    countryCode
-                                  );
+                                final countryCode =
+                                    _hostLocation?.countryCode ?? 'US';
+                                code = await ref
+                                    .read(pointsRepositoryProvider)
+                                    .generateReferralCode(
+                                      user.uid,
+                                      _firstNameController.text,
+                                      countryCode,
+                                    );
                               }
-                              if (code != null) {
-                                shareUrl = '$shareUrl/invite?code=$code';
-                              }
-                            } catch (e) {
+                              shareUrl = '$shareUrl/invite?code=$code';
+                                                        } catch (e) {
                               debugPrint('Error getting referral code: $e');
                             }
                           }
 
-                          Share.share(
+                          await Share.share(
                             'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
                             subject: 'Diaspora Nearby',
                           );
+
+                          // Award DSP for sharing
+                          if (user != null) {
+                            try {
+                              // 10 DSP exploration reward for discovering the share action
+                              await ref
+                                  .read(pointsServiceProvider)
+                                  .trackExplorationReward(
+                                    user.uid,
+                                    'action_explore_first_share',
+                                  );
+
+                              // 100 DSP share reward using the proper share tracking
+                              final shareRewarded = await ref
+                                  .read(pointsServiceProvider)
+                                  .trackExternalShare(
+                                    user.uid,
+                                    'invite_referral',
+                                  );
+
+                              if (shareRewarded && ctx.mounted) {
+                                showExplorationRewardToast(
+                                  ctx,
+                                  message: 'First Share Reward! 🎉',
+                                  points: 110,
+                                );
+                              }
+                            } catch (e) {
+                              debugPrint('Error awarding share DSP: $e');
+                            }
+                          }
+
+                          // Dismiss dialog AFTER share sheet completes
+                          if (ctx.mounted) Navigator.pop(ctx);
                         },
                         icon: const Icon(LucideIcons.share2),
-                        label: const Text('Invite Friends'),
+                        label: const Text('Invite Friends  •  Earn 100 DSP'),
                       ),
                     ),
                     TextButton(
@@ -775,6 +846,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                     ),
                   ],
                 ),
+                ), // SingleChildScrollView
+              ), // ConstrainedBox
               ),
             ),
           );

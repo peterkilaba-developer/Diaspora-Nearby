@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
@@ -11,7 +11,7 @@ class MentionMonitorService {
   factory MentionMonitorService() => _instance;
   MentionMonitorService._internal();
 
-  late final FirebaseDatabase _rtdb;
+  late final FirebaseFirestore _firestore;
   late final FirebaseAuth _auth;
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -22,11 +22,8 @@ class MentionMonitorService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    _rtdb = FirebaseDatabase.instance;
+    _firestore = FirebaseFirestore.instance;
     _auth = FirebaseAuth.instance;
-
-    // Note: LocalNotificationsPlugin is initialized in PushNotificationService (Main Isolate)
-    // We rely on that initialization to handle onDidReceiveNotificationResponse.
 
     _startListening();
     _isInitialized = true;
@@ -46,32 +43,36 @@ class MentionMonitorService {
   }
 
   void _listenToUserChats(String userId) {
-    final ref = _rtdb.ref('userChats/$userId');
+    final userChatsRef = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('userChats');
 
-    // Listen for CHANGED children (updates to existing chats)
-    _subscription = ref.onChildChanged.listen((event) {
-      _checkAndNotify(event, userId);
-    });
-
-    // Also listen for ADDED children (new chats)
-    ref.onChildAdded.listen((event) {
-      _checkAndNotify(event, userId);
+    // Listen for changes to userChats
+    _subscription = userChatsRef.snapshots().listen((snapshot) {
+      for (final change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.modified ||
+            change.type == DocumentChangeType.added) {
+          _checkAndNotify(change.doc, userId);
+        }
+      }
     });
   }
 
-  Future<void> _checkAndNotify(DatabaseEvent event, String userId) async {
+  Future<void> _checkAndNotify(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+    String userId,
+  ) async {
     try {
-      if (!event.snapshot.exists || event.snapshot.value == null) return;
+      if (!doc.exists) return;
+      final data = doc.data();
+      if (data == null) return;
 
-      final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-      final chatId = event.snapshot.key;
+      final chatId = doc.id;
 
       // key fields
       final unreadCount = data['unreadCount'];
 
-      // If unread count is 0, user likely just read it or it's not new.
-      // However, for a *new* mention, unreadCount should be >= 1.
-      // We can be strict: only notify if unreadCount > 0
       bool hasUnread = false;
       if (unreadCount is int && unreadCount > 0) hasUnread = true;
       if (unreadCount is double && unreadCount > 0) hasUnread = true;
@@ -96,29 +97,22 @@ class MentionMonitorService {
       }
 
       if (isMentioned) {
-        // Prevent duplicate notifications?
-        // RTDB onChildChanged fires once per update.
-        // We might trigger multiple times if they spam updates, but usually ok.
-
-        final senderName = (messageData['senderName']?.toString().trim().isNotEmpty ?? false) 
-            ? messageData['senderName'] 
+        final senderName =
+            (messageData['senderName']?.toString().trim().isNotEmpty ?? false)
+            ? messageData['senderName']
             : 'Someone';
-        final content = (messageData['content']?.toString().trim().isNotEmpty ?? false) 
-            ? messageData['content'] 
+        final content =
+            (messageData['content']?.toString().trim().isNotEmpty ?? false)
+            ? messageData['content']
             : 'Sent a message';
 
         // Fetch Chat Name for "Mention in [Community Name]"
-        String chatName = 'Chat'; // Default
+        String chatName = 'Chat';
         try {
-          final chatSnapshot = await _rtdb.ref('chats/$chatId/name').get();
-          if (chatSnapshot.exists && chatSnapshot.value != null) {
-            chatName = chatSnapshot.value.toString();
-          } else {
-            // Fallback: Try to guess or use generic if name missing
-            // (e.g. DM might not have name, use Sender? But user asked for Community Name)
-            // For DMs, usually name is null or empty in 'chats' node typically?
-            // Let's check type.
-            // If generic, use "Mention in Chat"
+          final chatDoc =
+              await _firestore.collection('chats').doc(chatId).get();
+          if (chatDoc.exists) {
+            chatName = chatDoc.data()?['name']?.toString() ?? 'Chat';
           }
         } catch (e) {
           debugPrint('Error fetching chat name: $e');
@@ -128,21 +122,15 @@ class MentionMonitorService {
           '🔔 MentionMonitorService: TRIGGERING LOCAL NOTIFICATION for $chatId',
         );
 
-        // Format: "@[user name] mentioned you: [content]"
-        // Note: content usually is "@[my name] message..." already
-        // So we format: "@$senderName mentioned you: $content"
-
-        // Clean content of any legacy "You were mentioned: " prefix just in case
         String cleanContent = content
             .toString()
             .replaceAll('You were mentioned: ', '')
             .trim();
 
         await _showNotification(
-          id: chatId.hashCode, // Unique ID per chat
+          id: chatId.hashCode,
           title: 'Mention in $chatName',
           body: '@$senderName mentioned you: $cleanContent',
-          // [FIX] Add 'type' so PushNotificationService routing works
           payload: jsonEncode({
             'type': 'group_mention',
             'route': '/chat/$chatId',
@@ -163,7 +151,7 @@ class MentionMonitorService {
   }) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-          'high_importance_channel', // [FIX] Use shared channel ID
+          'high_importance_channel',
           'High Importance Notifications',
           channelDescription:
               'This channel is used for important notifications.',

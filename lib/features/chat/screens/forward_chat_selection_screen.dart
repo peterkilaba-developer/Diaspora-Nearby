@@ -11,7 +11,7 @@ import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart'; 
 class ForwardChatSelectionScreen extends ConsumerStatefulWidget {
   final Message message; // [NEW]
   const ForwardChatSelectionScreen({
-    super.key, 
+    super.key,
     required this.message, // [NEW]
   });
 
@@ -245,9 +245,11 @@ class _ForwardChatSelectionScreenState
                             onPressed: () async {
                               final chatRepo = ref.read(chatRepositoryProvider);
                               final chats = _selectedChatIds.toList();
-                              
+
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Forwarding message...')),
+                                const SnackBar(
+                                  content: Text('Forwarding message...'),
+                                ),
                               );
 
                               // Forward to all selected chats
@@ -256,26 +258,32 @@ class _ForwardChatSelectionScreenState
                                   chatId,
                                   widget.message.content,
                                   type: widget.message.type, // Preserve type
-                                  metadata: widget.message.metadata, // Preserve metadata
+                                  metadata: widget
+                                      .message
+                                      .metadata, // Preserve metadata
                                 );
                               }
 
                               if (context.mounted) {
                                 context.pop(); // Close screen
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Forwarded to ${chats.length} chats')),
+                                  SnackBar(
+                                    content: Text(
+                                      'Forwarded to ${chats.length} chats',
+                                    ),
+                                  ),
                                 );
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                               backgroundColor: greenColor,
-                               foregroundColor: Colors.white,
-                               padding: const EdgeInsets.symmetric(vertical: 16),
-                               shape: RoundedRectangleBorder(
-                                 borderRadius: BorderRadius.circular(12),
-                               ),
-                               elevation: 0,
-                             ),
+                              backgroundColor: greenColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
                             child: Text(
                               'Forward to ${_selectedChatIds.length} chat${_selectedChatIds.length > 1 ? 's' : ''}',
                               style: const TextStyle(

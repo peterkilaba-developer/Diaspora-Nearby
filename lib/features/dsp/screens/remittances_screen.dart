@@ -5,6 +5,9 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/dsp/repository/interest_repository.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 class RemittancesScreen extends ConsumerStatefulWidget {
   const RemittancesScreen({super.key});
@@ -21,6 +24,19 @@ class _RemittancesScreenState extends ConsumerState<RemittancesScreen> {
   void initState() {
     super.initState();
     _checkStatus();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(user.uid, ExplorationAction.dspRemittances);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
   }
 
   Future<void> _checkStatus() async {
@@ -85,7 +101,10 @@ class _RemittancesScreenState extends ConsumerState<RemittancesScreen> {
       appBar: AppBar(title: const Text('International Remittances')),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: AppTheme.cardPadding),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+            vertical: AppTheme.cardPadding,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -107,7 +126,7 @@ class _RemittancesScreenState extends ConsumerState<RemittancesScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Send money to your home country with near-zero fees using Diaspora (\$DSP). Fast, secure, and built for the community.',
+                'Send money to your home country with near-zero fees using Diaspora (\$DIASPORA). Fast, secure, and built for the community.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),

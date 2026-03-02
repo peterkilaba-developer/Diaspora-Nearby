@@ -30,97 +30,106 @@ class HomeRepository {
       if (!currentUserDoc.exists) return [];
 
       final currentUserData = currentUserDoc.data()!;
-    final homeCountryCode = currentUserData['homeCountryCode'] as String?;
-    final blockedUsers = currentUserData['blockedUsers'] as List<dynamic>? ?? [];
-    final Set<String> blockedUserIds = 
-        blockedUsers.map((e) => e.toString()).toSet();
+      final homeCountryCode = currentUserData['homeCountryCode'] as String?;
+      final blockedUsers =
+          currentUserData['blockedUsers'] as List<dynamic>? ?? [];
+      final Set<String> blockedUserIds = blockedUsers
+          .map((e) => e.toString())
+          .toSet();
 
-    // Location variables for distance calc
-    final currentUserProfile = ProfileData.fromJson(currentUserData);
-    final myLat =
-        currentUserProfile.currentLocation?.geometry.location.lat ??
-        currentUserProfile.hostLocation.geometry?.location.lat ??
-        0.0;
-    final myLng =
-        currentUserProfile.currentLocation?.geometry.location.lng ??
-        currentUserProfile.hostLocation.geometry?.location.lng ??
-        0.0;
+      // Location variables for distance calc
+      final currentUserProfile = ProfileData.fromJson(currentUserData);
+      final myLat =
+          currentUserProfile.currentLocation?.geometry.location.lat ??
+          currentUserProfile.hostLocation.geometry?.location.lat ??
+          0.0;
+      final myLng =
+          currentUserProfile.currentLocation?.geometry.location.lng ??
+          currentUserProfile.hostLocation.geometry?.location.lng ??
+          0.0;
 
-    // 1. Fetch DM user IDs to exclude
-    final Set<String> dmUserIds = {};
-    try {
-      // Note: we fetch ALL chats here to ensure we exclude all connected users.
-      // ChatRepository.getUserChats() might filter out blocked users, but
-      // we handle blocked users explicitly below.
-      final chats = await _chatRepo.getUserChats();
-      for (var chat in chats) {
-        if (chat.type == 'direct') {
-          for (var pid in chat.participants) {
-            if (pid != currentUser.uid) dmUserIds.add(pid);
+      // 1. Fetch DM user IDs to exclude
+      final Set<String> dmUserIds = {};
+      try {
+        // Note: we fetch ALL chats here to ensure we exclude all connected users.
+        // ChatRepository.getUserChats() might filter out blocked users, but
+        // we handle blocked users explicitly below.
+        final chats = await _chatRepo.getUserChats();
+        for (var chat in chats) {
+          if (chat.type == 'direct') {
+            for (var pid in chat.participants) {
+              if (pid != currentUser.uid) dmUserIds.add(pid);
+            }
           }
         }
+      } catch (e) {
+        // Continue even if chat fetch fails
       }
-    } catch (e) {
-      // Continue even if chat fetch fails
-    }
 
-    Query query = _firestore.collection('users');
+      Query query = _firestore.collection('users');
 
-    // Note: We use the same filtering logic as before
-    // [FIX] If homeCountryCode is null, we treat it as Global to avoid asymmetry
-    // where one user filters and the other doesn't.
-    if (!isGlobal && homeCountryCode != null) {
-      // Local Code: Filter by homeCountryCode
-      query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
-    }
+      // Note: We use the same filtering logic as before
+      // [FIX] If homeCountryCode is null, we treat it as Global to avoid asymmetry
+      // where one user filters and the other doesn't.
+      if (!isGlobal && homeCountryCode != null) {
+        // Local Code: Filter by homeCountryCode
+        query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
+      }
 
-    // Fetch more users (1000) for distance-based sorting and exclusion
-    final snapshot = await query.limit(1000).get();
+      // Fetch more users (1000) for distance-based sorting and exclusion
+      final snapshot = await query.limit(1000).get();
 
-    final users = snapshot.docs
-        .where((doc) {
-          if (doc.id == currentUser.uid) return false;
-          
-          // [FIX] Exclude blocked users explicitly
-          if (blockedUserIds.contains(doc.id)) return false;
+      final users = snapshot.docs
+          .where((doc) {
+            if (doc.id == currentUser.uid) return false;
 
-          if (dmUserIds.contains(doc.id)) {
-            return false; // Exclude connected users
-          }
-          return true;
-        })
-        .map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          var profile = ProfileData.fromJson(data);
-          profile.uid = doc.id;
+            // [FIX] Exclude blocked users explicitly
+            if (blockedUserIds.contains(doc.id)) return false;
 
-          // [FIX] Double check if the other user has blocked US
-          // This ensures asymmetry in blocking is also handled (though usually mutual in results)
-          final theirBlockedList = data['blockedUsers'] as List<dynamic>? ?? [];
-          if (theirBlockedList.contains(currentUser.uid)) return null;
+            if (dmUserIds.contains(doc.id)) {
+              return false; // Exclude connected users
+            }
+            return true;
+          })
+          .map((doc) {
+            try {
+              final data = doc.data() as Map<String, dynamic>;
+              var profile = ProfileData.fromJson(data);
+              profile.uid = doc.id;
 
-          // Calculate Distance
-          final theirLat =
-              profile.currentLocation?.geometry.location.lat ??
-              profile.hostLocation.geometry?.location.lat ??
-              0.0;
-          final theirLng =
-              profile.currentLocation?.geometry.location.lng ??
-              profile.hostLocation.geometry?.location.lng ??
-              0.0;
+              // [FIX] Double check if the other user has blocked US
+              final theirBlockedList =
+                  data['blockedUsers'] as List<dynamic>? ?? [];
+              if (theirBlockedList.contains(currentUser.uid)) return null;
 
-          final dist = calculateDistance(myLat, myLng, theirLat, theirLng);
-          return profile.copyWith(distance: dist);
-        })
-        .whereType<ProfileData>() // Filter out nulls from mutual blocking check
-        .toList();
+              // Calculate Distance
+              final theirLat =
+                  profile.currentLocation?.geometry.location.lat ??
+                  profile.hostLocation.geometry?.location.lat ??
+                  0.0;
+              final theirLng =
+                  profile.currentLocation?.geometry.location.lng ??
+                  profile.hostLocation.geometry?.location.lng ??
+                  0.0;
 
-    // Sort by distance (ascending)
-    users.sort(
-      (a, b) => (a.distance ?? 999999).compareTo(b.distance ?? 999999),
-    );
+              final dist = calculateDistance(myLat, myLng, theirLat, theirLng);
+              return profile.copyWith(distance: dist);
+            } catch (e) {
+              // Skip malformed user documents missing required fields
+              return null;
+            }
+          })
+          .whereType<
+            ProfileData
+          >() // Filter out nulls from mutual blocking check
+          .toList();
 
-    return users;
+      // Sort by distance (ascending)
+      users.sort(
+        (a, b) => (a.distance ?? 999999).compareTo(b.distance ?? 999999),
+      );
+
+      return users;
     } catch (e) {
       return [];
     }
@@ -138,13 +147,15 @@ class HomeRepository {
           .collection('users')
           .doc(currentUser.uid)
           .get();
-      
+
       if (!currentUserDoc.exists) return [];
-      
+
       final currentUserData = currentUserDoc.data()!;
-      final blockedUsers = currentUserData['blockedUsers'] as List<dynamic>? ?? [];
-      final Set<String> blockedUserIds = 
-          blockedUsers.map((e) => e.toString()).toSet();
+      final blockedUsers =
+          currentUserData['blockedUsers'] as List<dynamic>? ?? [];
+      final Set<String> blockedUserIds = blockedUsers
+          .map((e) => e.toString())
+          .toSet();
 
       double? myLat, myLng;
       final profile = ProfileData.fromJson(currentUserData);
@@ -177,18 +188,19 @@ class HomeRepository {
       final users = snapshot.docs
           .where((doc) {
             if (doc.id == currentUser.uid) return false;
-            
+
             // [FIX] Exclude blocked users explicitly
             if (blockedUserIds.contains(doc.id)) return false;
 
             if (dmUserIds.contains(doc.id)) {
               return false; // Exclude connected users
             }
-            
+
             final data = doc.data();
-            
+
             // [FIX] Double check if the other user has blocked US
-            final theirBlockedList = data['blockedUsers'] as List<dynamic>? ?? [];
+            final theirBlockedList =
+                data['blockedUsers'] as List<dynamic>? ?? [];
             if (theirBlockedList.contains(currentUser.uid)) return false;
 
             final firstName =
@@ -321,24 +333,35 @@ class HomeRepository {
             return true;
           })
           .map((doc) {
-            final data = doc.data();
-            var profile = ProfileData.fromJson(data);
-            profile.uid = doc.id;
+            try {
+              final data = doc.data();
+              var profile = ProfileData.fromJson(data);
+              profile.uid = doc.id;
 
-            final theirLat =
-                profile.currentLocation?.geometry.location.lat ??
-                profile.hostLocation.geometry?.location.lat ??
-                0.0;
-            final theirLng =
-                profile.currentLocation?.geometry.location.lng ??
-                profile.hostLocation.geometry?.location.lng ??
-                0.0;
+              final theirLat =
+                  profile.currentLocation?.geometry.location.lat ??
+                  profile.hostLocation.geometry?.location.lat ??
+                  0.0;
+              final theirLng =
+                  profile.currentLocation?.geometry.location.lng ??
+                  profile.hostLocation.geometry?.location.lng ??
+                  0.0;
 
-            final distKm = calculateDistance(myLat, myLng, theirLat, theirLng);
-            // Convert km to miles (1 km â‰ˆ 0.621371 miles)
-            final distanceMiles = distKm * 0.621371;
-            return profile.copyWith(distance: distanceMiles);
+              final distKm = calculateDistance(
+                myLat,
+                myLng,
+                theirLat,
+                theirLng,
+              );
+              // Convert km to miles (1 km ≈ 0.621371 miles)
+              final distanceMiles = distKm * 0.621371;
+              return profile.copyWith(distance: distanceMiles);
+            } catch (e) {
+              // Skip malformed user documents
+              return null;
+            }
           })
+          .whereType<ProfileData>() // Filter out nulls from malformed docs
           .where(
             (profile) => (profile.distance ?? 999999) <= 999,
           ) // Within 999 miles

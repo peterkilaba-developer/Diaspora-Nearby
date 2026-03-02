@@ -19,15 +19,36 @@ class ProfileData {
 
   bool get isComplete => getMissingRequiredFields().isEmpty;
 
+  // [NEW] Milestone Tracking
+  int get totalMilestoneFields => 12;
+  int get completedMilestoneFieldCount {
+    int count = 0;
+    if (bio != null && bio!.isNotEmpty) count++;
+    if (occupation != null && occupation!.isNotEmpty) count++;
+    if (yearsInHostCountry != null && yearsInHostCountry!.isNotEmpty) count++;
+    if (industry != null && industry!.isNotEmpty) count++;
+    if (profession != null && profession!.isNotEmpty) count++;
+    if (languages != null && languages!.isNotEmpty) count++;
+    if (meetingPreferences != null && meetingPreferences!.isNotEmpty) count++;
+    if (availability != null && availability!.isNotEmpty) count++;
+    if (interests != null && interests!.isNotEmpty) count++;
+    if (servicesOffered != null && servicesOffered!.isNotEmpty) count++;
+    if (lookingFor != null && lookingFor!.isNotEmpty) count++;
+    if (education != null && education!.isNotEmpty) count++;
+    return count;
+  }
+
   List<String> getMissingRequiredFields() {
     final List<String> missing = [];
-    if (firstName.isEmpty) missing.add('First Name');
-    if (lastName.isEmpty) missing.add('Last Name');
-    if (profileImage.isEmpty) missing.add('Profile Photo');
-    if (homeLocation.city == null) missing.add('Home Town');
-    if (homeCountryCode == null) missing.add('Home Country');
-    if (hostLocation.city == null) missing.add('Host Town');
-    if (hostCountryCode == null) missing.add('Host Country');
+    // Relaxed requirements: Photo, Name, and Locations are no longer mandatory here
+    // as they are captured during registration.
+    // if (firstName.isEmpty) missing.add('First Name');
+    // if (lastName.isEmpty) missing.add('Last Name');
+    // if (profileImage.isEmpty) missing.add('Profile Photo');
+    // if (homeLocation.city == null) missing.add('Home Town');
+    // if (homeCountryCode == null) missing.add('Home Country');
+    // if (hostLocation.city == null) missing.add('Host Town');
+    // if (hostCountryCode == null) missing.add('Host Country');
     if (bio == null || bio!.isEmpty) missing.add('Bio');
     if (occupation == null || occupation!.isEmpty) missing.add('Occupation');
     if (yearsInHostCountry == null || yearsInHostCountry!.isEmpty) {
@@ -39,12 +60,18 @@ class ProfileData {
     if (meetingPreferences == null || meetingPreferences!.isEmpty) {
       missing.add('Meeting Preferences');
     }
-    if (availability == null || availability!.isEmpty) missing.add('Availability');
+    if (availability == null || availability!.isEmpty) {
+      missing.add('Availability');
+    }
+    if (interests == null || interests!.isEmpty) missing.add('Interests');
     if (servicesOffered == null || servicesOffered!.isEmpty) {
       missing.add('Services Offered');
     }
     if (lookingFor == null || lookingFor!.isEmpty) missing.add('Looking For');
     if (education == null || education!.isEmpty) missing.add('Education');
+    if (pastLocations == null || pastLocations!.isEmpty) {
+      // Not required anymore per user request
+    }
     return missing;
   }
 
@@ -85,8 +112,10 @@ class ProfileData {
   // Administrative
   final DateTime? createdAt; // [NEW]
   final int? advertReportCount;
-  final int? blockedByCount; // [NEW] Track how many users have blocked this user
-  final int? flaggedMessagesCount; // [NEW] Track how many of this user's messages reached report threshold
+  final int?
+  blockedByCount; // [NEW] Track how many users have blocked this user
+  final int?
+  flaggedMessagesCount; // [NEW] Track how many of this user's messages reached report threshold
   final bool? isBanned;
   final String? bannedAt;
   final String? bannedReason;
@@ -113,6 +142,9 @@ class ProfileData {
 
   // [NEW] QR Connection info for verification
   final QRConnectionInfo? firstQrConnection;
+
+  // Wallet
+  final String? walletAddress;
 
   // Transient/Calculated
   final double? distance;
@@ -167,7 +199,9 @@ class ProfileData {
     this.blockedUsers,
     this.createdAt,
     this.showCurrentLocationName,
+
     this.firstQrConnection,
+    this.walletAddress,
   });
 
   factory ProfileData.fromJson(Map<String, dynamic> json) {
@@ -184,7 +218,8 @@ class ProfileData {
             .toIso8601String();
       }
       // Handle case-sensitivity mismatch in Firestore
-      if (qrConn['locationaddress'] != null && qrConn['locationAddress'] == null) {
+      if (qrConn['locationaddress'] != null &&
+          qrConn['locationAddress'] == null) {
         qrConn['locationAddress'] = qrConn['locationaddress'];
       }
     }
@@ -258,7 +293,9 @@ class ProfileData {
     String? city,
     String? country,
     bool? showCurrentLocationName,
+
     QRConnectionInfo? firstQrConnection,
+    String? walletAddress,
   }) {
     return ProfileData(
       uid: uid ?? this.uid,
@@ -315,6 +352,7 @@ class ProfileData {
       showCurrentLocationName:
           showCurrentLocationName ?? this.showCurrentLocationName,
       firstQrConnection: firstQrConnection ?? this.firstQrConnection,
+      walletAddress: walletAddress ?? this.walletAddress,
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -20,6 +19,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart'; // [New]
+import 'package:diaspora_nearby/features/dsp/models/user_points.dart'; // [New]
 
 class MessageInput extends ConsumerStatefulWidget {
   final String chatId;
@@ -33,7 +33,7 @@ class MessageInput extends ConsumerStatefulWidget {
   onPickLocation; // [NEW] Returns location data
   final Function(MessageLocation)?
   onSendLocation; // [UPDATED] Sends location data
-  final Function(int, String?) onSendDSP;
+  final Function(int, String, String?) onSendDSP;
   final Function(List<XFile>, String type, String caption)? onMediaSelected;
   final Message? replyingTo;
   final VoidCallback onCancelReply;
@@ -46,7 +46,6 @@ class MessageInput extends ConsumerStatefulWidget {
   final BoxBorder? inputBorder; // [NEW] Style
   final BorderRadius? inputBorderRadius; // [NEW] Style
   final bool canAlwaysSend; // [NEW]
-
 
   const MessageInput({
     super.key,
@@ -72,9 +71,13 @@ class MessageInput extends ConsumerStatefulWidget {
     this.inputBorder,
     this.inputBorderRadius,
     this.canAlwaysSend = false, // [NEW] Force enable send button
+    this.recipientUserId, // [NEW] For transfers
   });
 
+  // ... (Keep existing fields)
+
   final List<String> participantIds;
+  final String? recipientUserId; // [NEW]
 
   @override
   ConsumerState<MessageInput> createState() => _MessageInputState();
@@ -103,6 +106,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
 
   bool _isProcessingAttachment = false; // [NEW] Loading state for files
   int? _pendingDSPAmount; // [NEW] For transfer preview using attachment logic
+  String _pendingDSPAssetType = 'points'; // [NEW] 'points' or 'token'
   MessageLocation? _pendingLocation; // [NEW]
 
   // Playback State (Removed internal player, delegating to AudioMessagePlayer widget)
@@ -163,6 +167,9 @@ class _MessageInputState extends ConsumerState<MessageInput>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _setTyping(false);
+      if (_isRecording) {
+        _stopRecording();
+      }
     }
   }
 
@@ -443,7 +450,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
     }
   }
 
-
   String _formatDuration(int seconds) {
     final m = (seconds ~/ 60).toString().padLeft(2, '0');
     final s = (seconds % 60).toString().padLeft(2, '0');
@@ -545,7 +551,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
         } else if (type == 'document') {
           widget.onSendDocument(attachments.first, caption);
         } else if (type == 'dsp_transfer' && dspAmount != null) {
-          widget.onSendDSP(dspAmount, caption);
+          widget.onSendDSP(dspAmount, _pendingDSPAssetType, caption);
         } else if (type == 'location' && location != null) {
           if (widget.onSendLocation != null) {
             widget.onSendLocation!(location);
@@ -553,11 +559,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
         } else {
           // Image/Video
           // Ensure type is not null, default to 'image' if unclear
-          widget.onSendMedia(
-            attachments,
-            type ?? 'image',
-            caption,
-          );
+          widget.onSendMedia(attachments, type ?? 'image', caption);
         }
       });
       return;
@@ -594,8 +596,8 @@ class _MessageInputState extends ConsumerState<MessageInput>
       text,
       type: 'text',
       metadata: {
-        if (mentionIds != null) 'mentions': mentionIds,
-        if (richContent != null) 'richContent': richContent,
+        'mentions': ?mentionIds,
+        'richContent': ?richContent,
       },
     );
 
@@ -616,6 +618,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
       isScrollControlled: true, // [Fix] Allow modal to resize with keyboard
       backgroundColor: Colors.transparent,
       builder: (context) => _AttachmentPickerModal(
+        recipientUserId: widget.recipientUserId, // [NEW]
         onPickImage: () => _pickMedia(ImageSource.gallery, 'image'),
         onPickCamera: () => _pickMedia(ImageSource.camera, 'image'),
         onPickVideo: () => _pickMedia(ImageSource.gallery, 'video'),
@@ -638,7 +641,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
             }
           }
         },
-        onPickDSP: (amount) {
+        onPickDSP: (amount, assetType) {
           Navigator.pop(context);
           setState(() {
             _pendingAttachments = [
@@ -646,6 +649,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
             ]; // Dummy file to satisfy hasAttachment logic
             _pendingAttachmentType = 'dsp_transfer';
             _pendingDSPAmount = amount;
+            _pendingDSPAssetType = assetType;
             _isProcessingAttachment = false;
           });
         },
@@ -840,6 +844,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
                       enabled: widget.isEnabled,
                       maxLines: 5,
                       minLines: 1,
+                      autofocus: false, // [FIX] Disable auto-focus
                       textCapitalization: TextCapitalization.sentences,
                       textInputAction: hasAttachment
                           ? TextInputAction.send
@@ -865,14 +870,14 @@ class _MessageInputState extends ConsumerState<MessageInput>
                       ),
                       contentInsertionConfiguration:
                           ContentInsertionConfiguration(
-                        allowedMimeTypes: const <String>[
-                          'image/png',
-                          'image/jpeg',
-                          'image/gif',
-                          'video/mp4',
-                        ],
-                        onContentInserted: _handleContentInsertion,
-                      ),
+                            allowedMimeTypes: const <String>[
+                              'image/png',
+                              'image/jpeg',
+                              'image/gif',
+                              'video/mp4',
+                            ],
+                            onContentInserted: _handleContentInsertion,
+                          ),
                       style: theme.textTheme.bodyMedium,
                       onChanged: (text) {
                         // Keep cursor in view
@@ -903,7 +908,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
                     color: showSend
                         ? theme.colorScheme.primary
                         : (widget.showAudioRecording
-                              ? theme.colorScheme.onSurfaceVariant
+                              ? theme.colorScheme.primary
                               : theme.disabledColor),
                   ),
                 ),
@@ -1078,7 +1083,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sending $_pendingDSPAmount DSP',
+                  'Sending $_pendingDSPAmount ${_pendingDSPAssetType == 'points' ? 'DSP' : r'$DIASPORA'}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -1385,7 +1390,8 @@ class _AttachmentPickerModal extends ConsumerStatefulWidget {
   final VoidCallback onPickDocument;
   final VoidCallback onPickAudio;
   final VoidCallback onPickLocation;
-  final Function(int) onPickDSP; // Renamed to ensure clarity it's just picking
+  final Function(int, String)
+  onPickDSP; // Renamed to ensure clarity it's just picking
 
   const _AttachmentPickerModal({
     required this.onPickImage,
@@ -1395,7 +1401,10 @@ class _AttachmentPickerModal extends ConsumerStatefulWidget {
     required this.onPickAudio,
     required this.onPickLocation,
     required this.onPickDSP,
+    this.recipientUserId, // [NEW]
   });
+
+  final String? recipientUserId; // [NEW]
 
   @override
   ConsumerState<_AttachmentPickerModal> createState() =>
@@ -1405,14 +1414,13 @@ class _AttachmentPickerModal extends ConsumerStatefulWidget {
 class _AttachmentPickerModalState
     extends ConsumerState<_AttachmentPickerModal> {
   final TextEditingController _amountController = TextEditingController();
-  int _currentBalance = 0;
-  bool _isLoadingBalance = true;
+
+  String _selectedAssetType = 'points'; // 'points' or 'token'
   int _inputAmount = 0;
 
   @override
   void initState() {
     super.initState();
-    _fetchBalance();
     _amountController.addListener(() {
       final val = int.tryParse(_amountController.text) ?? 0;
       if (mounted) setState(() => _inputAmount = val);
@@ -1425,39 +1433,46 @@ class _AttachmentPickerModalState
     super.dispose();
   }
 
-  Future<void> _fetchBalance() async {
-    try {
-      final authUser = ref.read(authRepositoryProvider).currentUser;
-      if (authUser != null) {
-        final repo = ref.read(pointsRepositoryProvider);
-        final points = await repo.getUserPoints(authUser.uid);
-        if (mounted) {
-          setState(() {
-            _currentBalance = points?.availablePoints ?? 0;
-            _isLoadingBalance = false;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching balance: $e');
-      if (mounted) setState(() => _isLoadingBalance = false);
-    }
-  }
+  // Removed _fetchBalance in favor of ref.watch in build
 
-  void _handlePickDSP() {
+  void _handlePickDSP(int currentBalance) {
     if (_inputAmount <= 0) return;
-    if (_inputAmount > _currentBalance) return;
 
-    widget.onPickDSP(_inputAmount);
+    if (_inputAmount > currentBalance) {
+      // Optionally show error, but UI handles disabled button
+      return;
+    }
+
+    widget.onPickDSP(_inputAmount, _selectedAssetType);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isToken = _selectedAssetType == 'token';
+    final activeColor = isToken ? Colors.orange : theme.colorScheme.primary;
+
+    // [Refactor] Reactive Balance Fetching
+    final authState = ref.watch(authStateProvider);
+    final authUser = authState.asData?.value;
+
+    // Watch points if user is logged in
+    final pointsAsync = authUser != null
+        ? ref.watch(userPointsProvider(authUser.uid))
+        : const AsyncValue<UserPoints?>.loading();
+
+    final pointsBalance = pointsAsync.asData?.value?.availablePoints ?? 0;
+    // TODO: Implement token balance provider
+    final tokenBalance = 0;
+
+    final currentBalance = _selectedAssetType == 'points'
+        ? pointsBalance
+        : tokenBalance;
+    final isLoadingBalance = pointsAsync.isLoading;
 
     // Projected balance calculation
-    final remaining = _currentBalance - _inputAmount;
-    final isError = _inputAmount > _currentBalance;
+    final remaining = currentBalance - _inputAmount;
+    final isError = _inputAmount > currentBalance;
     final isZero = _inputAmount <= 0;
 
     // [Fix] Handle keyboard
@@ -1475,7 +1490,6 @@ class _AttachmentPickerModalState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -1525,81 +1539,175 @@ class _AttachmentPickerModalState
               ),
 
               const SizedBox(height: 20),
-              // Metamask Address Row
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHigh.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: theme.colorScheme.outline.withOpacity(0.2)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
+
+              // [NEW] Recipient Address Row (Only for Token)
+              if (widget.recipientUserId != null &&
+                  isToken) // [FIX] Hide for DSP
+                Consumer(
+                  builder: (context, ref, _) {
+                    final recipientAsync = ref.watch(
+                      userProfileByIdProvider(widget.recipientUserId!),
+                    );
+                    final recipient = recipientAsync.asData?.value;
+                    final walletAddress = recipient?.walletAddress;
+                    final displayAddress = walletAddress != null
+                        ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}'
+                        : (recipientAsync.isLoading
+                              ? 'Loading...'
+                              : 'No address linked');
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
-                        shape: BoxShape.circle,
+                        color: theme.colorScheme.primaryContainer.withOpacity(
+                          0.2,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.orange.withOpacity(0.5),
+                        ), // [FIX] Orange border
                       ),
-                      child: const Icon(
-                        LucideIcons.wallet,
-                        color: Colors.orange,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            'Diaspora - \$DSP (Metamask)',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(
+                                0.1,
+                              ), // [FIX] Orange background
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.wallet, // [FIX] Wallet icon
+                              color: Colors.orange, // [FIX] Orange icon
+                              size: 20,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '0x71C...9A21',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontFamily: 'monospace',
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontSize: 11,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'To: ${recipient?.firstName ?? 'Recipient'} ${recipient?.lastName ?? ''}',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  displayAddress,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontFamily: 'monospace',
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        Clipboard.setData(const ClipboardData(
-                            text:
-                                '0x71C7656EC7ab88b098defB751B7401B5f6d89A21'));
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Address copied to clipboard'),
-                              duration: Duration(seconds: 1),
+                    );
+                  },
+                ),
+
+              // [REMOVED] Sender Layout as per request
+              const SizedBox(height: 20),
+              Divider(color: theme.dividerColor, height: 1),
+              const SizedBox(height: 16),
+
+              // [New] Asset Type Toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(
+                    0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _selectedAssetType = 'points'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedAssetType == 'points'
+                                ? theme.colorScheme.surface
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: _selectedAssetType == 'points'
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Text(
+                            'Points (DSP)',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: _selectedAssetType == 'points'
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: _selectedAssetType == 'points'
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant,
                             ),
-                          );
-                        }
-                      },
-                      icon: Icon(
-                        LucideIcons.copy,
-                        size: 16,
-                        color: theme.colorScheme.primary,
+                          ),
+                        ),
                       ),
-                      tooltip: 'Copy Address',
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _selectedAssetType = 'token'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedAssetType == 'token'
+                                ? theme.colorScheme.surface
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: _selectedAssetType == 'token'
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Text(
+                            'Token (\$DIASPORA)',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: _selectedAssetType == 'token'
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: _selectedAssetType == 'token'
+                                  ? Colors
+                                        .orange // [FIX] Orange for Token
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 20),
-              Divider(color: theme.dividerColor, height: 1),
               const SizedBox(height: 16),
 
               // [New] Bottom DSP Row - Wrapped in Light Background
@@ -1634,7 +1742,7 @@ class _AttachmentPickerModalState
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  _isLoadingBalance ? '...' : '$remaining',
+                                  isLoadingBalance ? '...' : '$remaining',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: isError
@@ -1645,10 +1753,12 @@ class _AttachmentPickerModalState
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'DSP',
+                                  _selectedAssetType == 'points'
+                                      ? 'DSP'
+                                      : r'$DIASPORA',
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     fontSize: 8,
-                                    color: theme.colorScheme.primary,
+                                    color: activeColor, // [FIX] Dynamic color
                                   ),
                                 ),
                               ],
@@ -1672,7 +1782,7 @@ class _AttachmentPickerModalState
                                 textAlign: TextAlign.center,
                                 style: theme.textTheme.headlineSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.primary,
+                                  color: activeColor, // [FIX] Dynamic color
                                 ),
                                 decoration: InputDecoration(
                                   hintText: '0',
@@ -1697,15 +1807,14 @@ class _AttachmentPickerModalState
                             flex: 2,
                             child: Center(
                               child: Material(
-                                color: (isZero || isError || _isLoadingBalance)
+                                color: (isZero || isError || isLoadingBalance)
                                     ? theme.disabledColor
-                                    : Colors.green,
+                                    : activeColor, // [FIX] Dynamic color
                                 shape: const CircleBorder(),
                                 child: InkWell(
-                                  onTap:
-                                      (isZero || isError || _isLoadingBalance)
+                                  onTap: (isZero || isError || isLoadingBalance)
                                       ? null
-                                      : _handlePickDSP,
+                                      : () => _handlePickDSP(currentBalance),
                                   customBorder: const CircleBorder(),
                                   child: Container(
                                     width: 48,
@@ -1727,10 +1836,10 @@ class _AttachmentPickerModalState
                     const SizedBox(height: 12),
                     // Label centered at bottom
                     Text(
-                      'Enter Amount of DSP to Send',
+                      'Enter Amount of ${_selectedAssetType == 'points' ? 'DSP' : r'$DIASPORA'} to Send',
                       style: theme.textTheme.labelSmall?.copyWith(
                         fontSize: 10,
-                        color: theme.colorScheme.primary,
+                        color: activeColor, // [FIX] Dynamic color
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -1778,7 +1887,6 @@ class _AttachmentPickerModalState
 }
 
 // [NEW] Mention List Item
-
 
 // Ensure proper imports are added if missing.
 // userProfileProvider needs to be found.

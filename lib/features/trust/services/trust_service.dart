@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:diaspora_nearby/features/chat/repository/report_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +20,22 @@ final trustServiceProvider = Provider<TrustService>((ref) {
   return TrustService(ref.read(trustRepositoryProvider), ref);
 });
 
+enum HTSActivityType {
+  eventHosting, // Gain
+  eventNoShow, // Loss
+  fraudReporting, // Gain (when your report is verified)
+  rejectedVouch, // Loss
+  referral, // Gain
+  flaggedMessage, // Loss
+  verifiedSolution, // Gain
+  fraudulentVerification, // Loss
+  vote, // Gain
+  missedVote, // Loss
+  blockedBy, // Loss
+  reportedFraud, // Loss (major)
+  physicalPresence, // Gain [NEW]
+}
+
 final userTrustProvider = FutureProvider.family<TrustData?, String>((
   ref,
   userId,
@@ -25,7 +43,10 @@ final userTrustProvider = FutureProvider.family<TrustData?, String>((
   return ref.read(trustServiceProvider).getTrustData(userId);
 });
 
-final flaggedFieldsProvider = FutureProvider.family<List<String>, String>((ref, userId) {
+final flaggedFieldsProvider = FutureProvider.family<List<String>, String>((
+  ref,
+  userId,
+) {
   return ref.read(trustServiceProvider).getFlaggedFields(userId);
 });
 
@@ -41,17 +62,15 @@ class IncompleteProfileException implements Exception {
   });
 
   @override
-  String toString() => 'IncompleteProfileException: $message (Missing: ${missingFields.join(', ')})';
+  String toString() =>
+      'IncompleteProfileException: $message (Missing: ${missingFields.join(', ')})';
 }
 
 class AlreadyConnectedException implements Exception {
   final String message;
   final String otherUid;
 
-  AlreadyConnectedException({
-    required this.message,
-    required this.otherUid,
-  });
+  AlreadyConnectedException({required this.message, required this.otherUid});
 
   @override
   String toString() => 'AlreadyConnectedException: $message';
@@ -62,6 +81,217 @@ class TrustService {
   final Ref _ref;
 
   TrustService(this._repository, this._ref);
+
+  /// [NEW] Central entry point for recording HTS activities
+  Future<void> recordActivity(String userId, HTSActivityType type) async {
+    final fieldName = _getMetricFieldName(type);
+
+    // 1. Increment the counter in Firestore
+    await _repository.incrementTrustMetric(userId, fieldName);
+
+    // 2. Fetch fresh data and trigger recalculation
+    final profile = await _ref
+        .read(profileRepositoryProvider)
+        .getUserProfile(userId);
+    final points = await _ref
+        .read(pointsRepositoryProvider)
+        .getUserPoints(userId);
+
+    if (profile != null && points != null) {
+      await recalculateTrustScore(
+        userId: userId,
+        profile: profile,
+        points: points,
+      );
+    }
+  }
+
+  /// [NEW] Record a solution verification (entry point for Chat UI)
+  Future<bool> markAsVerifiedSolution({
+    required String reporterId,
+    required String messageId,
+    required String senderId,
+    required String chatId,
+  }) async {
+    // 1. Prevent self-verification
+    if (reporterId == senderId) return false;
+
+    // 2. Prevent duplicate verification for the same message by same user
+    final id = '${reporterId}_$messageId';
+    final doc = await FirebaseFirestore.instance
+        .collection('verified_solutions')
+        .doc(id)
+        .get();
+    if (doc.exists) return false;
+
+    try {
+      // 3. Record the event
+      await FirebaseFirestore.instance
+          .collection('verified_solutions')
+          .doc(id)
+          .set({
+            'reporterId': reporterId,
+            'messageId': messageId,
+            'senderId': senderId,
+            'chatId': chatId,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+
+      // 4. Update message metadata in Firestore to show badge
+      if (chatId.isNotEmpty) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('chats')
+              .doc(chatId)
+              .collection('messages')
+              .doc(messageId)
+              .update({'metadata.isVerifiedSolution': true});
+        } catch (e) {
+          debugPrint('Error updating message metadata: $e');
+        }
+      }
+
+      // 5. Record the HTS activity for the sender
+      await recordActivity(senderId, HTSActivityType.verifiedSolution);
+
+      // 6. Award 100 DSP to the verifier to incentivize verification
+      try {
+        await _ref
+            .read(pointsServiceProvider)
+            .awardPoints(
+              userId: reporterId,
+              amount: 100,
+              reason: 'verified_solution_verifier_reward',
+            );
+        debugPrint(
+          'Verified solution: 100 DSP awarded to verifier $reporterId',
+        );
+      } catch (e) {
+        debugPrint('Error awarding verifier DSP: $e');
+      }
+
+      // 6. Count unique verifiers for THIS specific message
+      //    Award 100 DSP + 1 PoCT at every 10 unique verifiers
+      try {
+        final messageVerifications = await FirebaseFirestore.instance
+            .collection('verified_solutions')
+            .where('messageId', isEqualTo: messageId)
+            .get();
+        final uniqueCount = messageVerifications.docs.length;
+
+        if (uniqueCount > 0 && uniqueCount % 10 == 0) {
+          // Award 100 DSP to the solution owner
+          await _ref
+              .read(pointsServiceProvider)
+              .awardPoints(
+                userId: senderId,
+                amount: 100,
+                reason: 'verified_solution_milestone',
+              );
+
+          // Award 1 PoCT to the solution owner
+          await _ref
+              .read(pointsServiceProvider)
+              .awardPoints(
+                userId: senderId,
+                amount: 1,
+                reason: 'poct_verified_solution_milestone',
+              );
+
+          debugPrint(
+            'Verified solution milestone: $uniqueCount unique verifiers '
+            'for message $messageId — 100 DSP + 1 PoCT awarded to $senderId',
+          );
+        }
+      } catch (e) {
+        debugPrint('Error checking verified solution milestone: $e');
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error marking solution: $e');
+      return false;
+    }
+  }
+
+  /// [NEW] Vet an Organization (Organization Vetting: 1000 DSP)
+  Future<bool> vetOrganization({
+    required String vetterId,
+    required String orgId,
+    required String orgOwnerId,
+  }) async {
+    if (vetterId == orgOwnerId) return false;
+
+    // Prevent duplicate vetting
+    final id = '${vetterId}_${orgId}_vetting';
+    final doc = await FirebaseFirestore.instance
+        .collection('organization_vettings')
+        .doc(id)
+        .get();
+    if (doc.exists) return false;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('organization_vettings')
+          .doc(id)
+          .set({
+            'vetterId': vetterId,
+            'orgId': orgId,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+
+      // Award DSP (Organization Vetting: 1000 DSP)
+      // Awarded to the VETTER for doing the work
+      try {
+        await _ref
+            .read(pointsServiceProvider)
+            .trackOrganizationVetting(vetterId);
+      } catch (e) {
+        debugPrint('Error awarding Org Vetting points: $e');
+      }
+
+      // Record Activity (Check-in / Physical Presence proxy?)
+      await recordActivity(vetterId, HTSActivityType.physicalPresence);
+
+      return true;
+    } catch (e) {
+      debugPrint('Error vetting organization: $e');
+      return false;
+    }
+  }
+
+  String _getMetricFieldName(HTSActivityType type) {
+    switch (type) {
+      case HTSActivityType.eventHosting:
+        return 'attendedEventsCount';
+      case HTSActivityType.eventNoShow:
+        return 'eventNoShowCount';
+      case HTSActivityType.fraudReporting:
+        return 'reportCount';
+      case HTSActivityType.rejectedVouch:
+        return 'rejectedFamilyConnectionsCount';
+      case HTSActivityType.referral:
+        return 'referralCount';
+      case HTSActivityType.flaggedMessage:
+        return 'flaggedMessagesCount';
+      case HTSActivityType.verifiedSolution:
+        return 'verifiedSolutionsCount';
+      case HTSActivityType.fraudulentVerification:
+        return 'fakeVerificationsCount';
+      case HTSActivityType.vote:
+        return 'uniqueVerificationCount';
+      case HTSActivityType.missedVote:
+        return 'unresponsiveLiaisonCount';
+      case HTSActivityType.blockedBy:
+        return 'blockedByCount';
+      case HTSActivityType.reportedFraud:
+        return 'reportedFraudCount';
+      case HTSActivityType.physicalPresence:
+        return 'attendedEventsCount';
+    }
+  }
+
+
 
   Future<TrustData?> getTrustData(String uid) => _repository.getTrustData(uid);
 
@@ -105,368 +335,265 @@ class TrustService {
     required ProfileData profile,
     required UserPoints points,
   }) async {
-    // 1. Fetch Reputation Data
-    final vouches = await _repository.getVouchesForUser(userId);
-    // final vouches = <Vouch>[]; // (Removed empty list stub)
+    // 1. Fetch Existing Data
     final trustDataOld = await _repository.getTrustData(userId);
+    final relationships = await _ref
+        .read(relationshipRepositoryProvider)
+        .getRelationships(userId)
+        .first;
+    final vouches = await _repository.getVouchesForUser(userId);
+    final ratingDetails = await _repository.getDetailedTrustRatingsForUser(
+      userId,
+    );
+    final allVerifications = await _repository.getAllVerificationsForUser(
+      userId,
+    );
+    final pointsService = _ref.read(pointsServiceProvider);
 
-    // Fetch Relationships (New Weighted Factor)
-    final relRepo = _ref.read(relationshipRepositoryProvider);
-    final relationships = await relRepo.getRelationships(userId).first;
-    final activeRelCount = relationships.where((r) => r.status == 'active').length;
+    // --- Milestone & Governance Tracking ---
+    const familyTypes = {
+      'wife', 'husband', 'daughter', 'son', 'mother', 'father',
+      'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+    };
 
-    // 2. Calculate Identity Score (Max 30)
-    double identityScore = 0;
-    if (profile.profileImage.isNotEmpty) identityScore += 5;
-    if (profile.bio != null && profile.bio!.isNotEmpty) identityScore += 5;
+    final familyIds = relationships
+        .where((r) => r.status == 'active' && familyTypes.contains(r.type.toLowerCase()))
+        .map((r) => r.id)
+        .toSet();
 
-    // Identity completeness (Photo, Bio, Home/Host Town, Occupation, Education)
-    if (profile.occupation != null && profile.occupation!.isNotEmpty) identityScore += 5;
-    if (profile.education != null && profile.education!.isNotEmpty) identityScore += 5;
+    // [NEW] Friend connections (all non-family active relationships)
+    final friendIds = relationships
+        .where((r) => r.status == 'active' && !familyTypes.contains(r.type.toLowerCase()))
+        .map((r) => r.id)
+        .toSet();
 
-    // Account Age > 6 months
-    if (profile.createdAt != null) {
-      final createdResult = DateTime.now().difference(profile.createdAt!);
-      if (createdResult.inDays > 180) {
-        identityScore += 10;
-      } else if (createdResult.inDays > 30) {
-        identityScore += 5;
+    final allQrIds = await _repository.getQrExchangeUserIds(userId);
+    final uniqueQrIds = allQrIds.where((id) => !familyIds.contains(id)).toSet();
+
+    final uniqueVouchIds = ratingDetails
+        .where((r) => (r['score'] as num) >= 100)
+        .map((r) => r['fromUserId'] as String)
+        .where((id) => !familyIds.contains(id) && !uniqueQrIds.contains(id))
+        .toSet();
+
+    final uniqueVerificationIds = allVerifications
+        .map((v) => v['fromUserId'] as String)
+        .where(
+          (id) =>
+              !familyIds.contains(id) &&
+              !uniqueQrIds.contains(id) &&
+              !uniqueVouchIds.contains(id),
+        )
+        .toSet();
+
+    // Counts for Milestones
+    final uniqueFamilyCount = familyIds.length;
+    final uniqueFriendCount = friendIds.length;
+    final uniqueQrCount = uniqueQrIds.length;
+    final uniqueTrustIds = uniqueVouchIds.union(uniqueVerificationIds);
+    final uniqueTrustCount = uniqueTrustIds.length;
+    final isProfileComplete = profile.isComplete;
+
+    // --- Milestone Awards (10k DSP + 10 PoCT logic via Score Bonus) ---
+  final milestones = List<String>.from(
+    trustDataOld?.awardedQualificationMilestones ?? [],
+  );
+  
+  // Create a writable copy of the ledger for tracking real-time DSP and PoCT levels
+  final ledger = Map<String, int>.from(
+    trustDataOld?.awardedHtsTracking ?? {},
+  );
+  
+  double milestonePoCT = 0;
+
+  Future<void> checkAndAward(String milestone, int count) async {
+    int previouslyAwardedDspCount = ledger['${milestone}_dsp_count'] ?? 0;
+    
+    if (milestone == 'Profile') {
+      // 1. Profile Milestone: Pays 10,000 DSP only when fully complete (>= 10)
+      if (count >= 10 && previouslyAwardedDspCount < 10) {
+        pointsService.awardManualPoints(
+          userId,
+          10000,
+          'Governance Genesis: $milestone',
+        );
+        previouslyAwardedDspCount = 10;
+        ledger['${milestone}_dsp_count'] = 10;
+        
+        if (!milestones.contains(milestone)) {
+          milestones.add(milestone);
+          await _ref
+              .read(pointsRepositoryProvider)
+              .markExplorationActionCompleted(userId, 'milestone_10_profile_fields');
+          await _ref
+              .read(pointsRepositoryProvider)
+              .markExplorationActionCompleted(userId, 'complete_profile');
+        }
       }
-    }
-
-    // Note: Social/Business links removed as per Blueprint update.
-
-    // Clamp Identity
-    if (identityScore > 30) identityScore = 30;
-
-    // [UPDATED] 2. PoCT Identity Score (Max 20)
-    // 0 pts: Mandatory only - Default.
-    // 5 pts: Level 1: Complete Profile.
-    // 10 pts: Level 2: Peer Verified (Received field verification).
-    // 20 pts: Level 3: QR Verified.
-    
-    identityScore = 0; // Reset to recalculate based on new logic
-    
-    // Check Tier 1: Complete Profile (All 10 Fields Required)
-    // Fields: Bio, Education, Years in Host Country, Industry, Profession, 
-    // Languages, Meeting Preferences, Availability, Services Offered, Looking For.
-
-    bool isProfileComplete = true;
-
-    // 1. Bio
-    if (profile.bio == null || profile.bio!.isEmpty) isProfileComplete = false;
-    // 2. Education
-    if (profile.education == null || profile.education!.isEmpty) isProfileComplete = false;
-    // 3. Years in Host Country
-    if (profile.yearsInHostCountry == null || profile.yearsInHostCountry!.isEmpty) isProfileComplete = false;
-    // 4. Industry
-    if (profile.industry == null || profile.industry!.isEmpty) isProfileComplete = false;
-    // 5. Profession
-    if (profile.profession == null || profile.profession!.isEmpty) isProfileComplete = false;
-    // 6. Languages
-    if (profile.languages == null || profile.languages!.isEmpty) isProfileComplete = false;
-    // 7. Meeting Preferences
-    if (profile.meetingPreferences == null || profile.meetingPreferences!.isEmpty) isProfileComplete = false;
-    // 8. Availability
-    if (profile.availability == null || profile.availability!.isEmpty) isProfileComplete = false;
-    // 9. Services Offered
-    if (profile.servicesOffered == null || profile.servicesOffered!.isEmpty) isProfileComplete = false;
-    // 10. Looking For
-    if (profile.lookingFor == null || profile.lookingFor!.isEmpty) isProfileComplete = false;
-
-    if (isProfileComplete) {
-      identityScore = 5;
-    }
-    
-    // Check Peer Verification (Level 2)
-    if (vouches.isNotEmpty) {
-       identityScore = 10; // Level 2: +5 from Level 1, Total 10
-    }
-    
-    // Check QR Verification (Level 3)
-    bool hasQrExchange = (trustDataOld?.identityQRExchange ?? false) || (profile.firstQrConnection != null);
-
-    if (hasQrExchange) {
-      identityScore = 20;
-    }
-
-    // Clamp Identity
-    if (identityScore > 20) identityScore = 20;
-
-    // 3. [UPDATED] Calculate Activity Score (Max 20)
-    double activityScore = 0;
-    
-    // Streak: 1 pt per day (Max 10)
-    activityScore += (points.currentStreak * 1.0).clamp(0.0, 10.0);
-    
-    // Participation (Max 10): 
-    // - Daily Posts (Community Messages): 1 pt each (Max 5)
-    final dailyPostsCount = points.dailyCommunitiesMessaged.length;
-    activityScore += (dailyPostsCount * 1.0).clamp(0.0, 5.0);
-    
-    // - DMs/Standard Messages: 0.1 pt each (Max 5)
-    activityScore += (points.dailyMessageCount * 0.1).clamp(0.0, 5.0);
-
-    // Clamp Activity
-    if (activityScore > 20) activityScore = 20;
-
-    // [NEW] 3.1 Calculate Reliability Score (Max 20)
-    double reliabilityScore = 0;
-
-    final joined = trustDataOld?.joinedEventsCount ?? 0;
-    final attended = trustDataOld?.attendedEventsCount ?? 0;
-
-    if (joined > 0) {
-      double rate = attended / joined;
-      double volumeBonus = (attended * 4.0).clamp(0.0, 20.0);
-      reliabilityScore = rate * volumeBonus;
     } else {
-      reliabilityScore = 0;
-    }
+      // 2. Connection Milestones: Pays 1,000 DSP instantly per connection
+      if (count > previouslyAwardedDspCount) {
+        int newActivities = count - previouslyAwardedDspCount;
+        
+        String dspAction = 'Activity Reward: $milestone';
+        if (milestone == 'Verified') dspAction = 'verified_by_peer';
+        if (milestone == 'Trust') dspAction = 'vouched_by_peer';
+        if (milestone == 'Family') dspAction = 'family_connection';
+        if (milestone == 'Friend') dspAction = 'friend_connection';
+        if (milestone == 'QR') dspAction = 'identity_qr_exchange';
 
-    // [NEW] 3.2 Calculate Helpfulness Score (Max 20)
-    final solutions = trustDataOld?.verifiedSolutionsCount ?? 0;
-    double helpfulnessScore = (solutions * 4.0).clamp(0, 20);
+        pointsService.awardManualPoints(
+          userId,
+          1000 * newActivities,
+          dspAction,
+        );
+        
+        previouslyAwardedDspCount = count;
+        ledger['${milestone}_dsp_count'] = count;
 
-    // 4. Calculate Reputation Score (Max 20)
-    double reputationScore = 0;
-
-    // +2 per unique vouch (Max 10)
-    reputationScore += (vouches.length * 2).clamp(0, 10);
-
-    // +2 per active relationship (Max 10)
-    reputationScore += (activeRelCount * 2).clamp(0, 10);
-
-    // [NEW] DSP Balance Factor (Max 6)
-    if (points.totalPoints > 0) {
-      reputationScore += (points.totalPoints / 1000).clamp(0, 6);
-    }
-
-    // Fetch Peer Ratings Details
-    final ratingDetails =
-        await _repository.getDetailedTrustRatingsForUser(userId);
-    final ratings =
-        ratingDetails.map((d) => (d['score'] as num).toDouble()).toList();
-
-    double averageRating = 0.0;
-    if (ratings.isNotEmpty) {
-      averageRating = ratings.reduce((a, b) => a + b) / ratings.length;
-    }
-
-    // Clamp Reputation (Automated part)
-    if (reputationScore > 20) reputationScore = 20; // [UPDATED] Clamp at 20
-
-    // 4. [UPDATED] Fetch Negative Signals & Penalties
-    final reportRepo = _ref.read(reportRepositoryProvider);
-    final profileRepo = _ref.read(profileRepositoryProvider);
-    
-    int reportCount = 0;
-    try {
-      reportCount = await reportRepo.getReportCount(userId);
-    } catch (e) {
-      debugPrint('⚠️ [TrustService] Error fetching report count for $userId (possible permission denied): $e');
-    }
-
-    // Check for "Bad Actor" Vouch chain penalty (If you vouch for someone banned for fraud)
-    final vouchees = await _repository.getVouchesByVoucher(userId);
-    int bannedVoucheeCount = 0;
-    for (final v in vouchees) {
-      final voucheeProfile = await profileRepo.getUserProfile(v.toUserId);
-      if (voucheeProfile?.isBanned == true) {
-        bannedVoucheeCount++;
-      }
-    }
-
-    double penaltyScore = 0;
-    
-    // Standardized Major Penalties: -10 PoCT (Refined Model)
-    // 1. Unique Blocks (Every 10)
-    final blockedByCount = profile.blockedByCount ?? 0;
-    if (blockedByCount >= 10) {
-      penaltyScore += (blockedByCount / 10).floor() * 10.0;
-    }
-
-    // 2. Unique Flags/Reports (Every 10)
-    final flaggedMessagesCount = profile.flaggedMessagesCount ?? 0;
-    if (flaggedMessagesCount >= 10) {
-      penaltyScore += (flaggedMessagesCount / 10).floor() * 10.0;
-    }
-
-    // 3. One-off Major Breaches (-10 each)
-    penaltyScore += (trustDataOld?.reportedFraudCount ?? 0) * 10.0;
-    penaltyScore += (trustDataOld?.rejectedFamilyConnectionsCount ?? 0) * 10.0;
-    penaltyScore += (trustDataOld?.fakeVerificationsCount ?? 0) * 10.0;
-    penaltyScore += (trustDataOld?.eventNoShowCount ?? 0) * 10.0;
-    penaltyScore += (bannedVoucheeCount * 10.0);
-
-    // 4. Minor Breaches
-    final unresponsiveCount = trustDataOld?.unresponsiveLiaisonCount ?? 0;
-    penaltyScore += unresponsiveCount * 1.0; // -1 PoCT per instance
-
-    // --- Verified Status Calculation ---
-    bool isVerified = false;
-    if (profile.isComplete) {
-      // Check Field Verifications
-      final allVerifications =
-          await _repository.getAllVerificationsForUser(userId);
-
-      // Map Field -> Set of Verifiers who said TRUE
-      final Map<String, Set<String>> fieldVerifiers = {};
-
-      for (final v in allVerifications) {
-        final String verifierId = v['fromUserId'];
-        final Map<String, dynamic> fields = v['fields'] ?? {};
-        fields.forEach((key, val) {
-          if (val == true) {
-            // Verified TRUE
-            fieldVerifiers.putIfAbsent(key, () => {}).add(verifierId);
+        // UI Exploration action sync at 10
+        if (count >= 10 && !milestones.contains(milestone)) {
+          milestones.add(milestone);
+          String? actionId;
+          switch (milestone) {
+            case 'Family': actionId = 'milestone_10_family'; break;
+            case 'QR': actionId = 'milestone_10_qr'; break;
+            case 'Verified': actionId = 'milestone_10_verified'; break;
+            case 'Friend': actionId = 'milestone_10_friend'; break;
+            case 'Trust': actionId = 'milestone_10_trust'; break;
           }
-        });
-      }
-
-      // Required verified fields
-      final requiredFields = [
-        'First Name',
-        'Last Name',
-        'Profile Photo',
-        'Home Town',
-        'Current Host Town',
-        'Bio',
-        'Occupation',
-        'Relatives',
-      ];
-
-      // Simplified Greedy Check:
-      bool allFieldsCovered = requiredFields.every(
-        (f) => fieldVerifiers.containsKey(f) && fieldVerifiers[f]!.isNotEmpty,
-      );
-      int uniqueVerifierCount =
-          fieldVerifiers.values.expand((s) => s).toSet().length;
-
-      // [NEW REQUIREMENT] At least 2 unrelated users vouching 100% on the trust slider
-      int qualifiedVoucherCount = 0;
-
-      for (final rating in ratingDetails) {
-        final double score = (rating['score'] as num).toDouble();
-        final String fromUid = rating['fromUserId'];
-
-        if (score == 100.0) {
-          // Check relationship status
-          final bool isRelative = relationships.any(
-            (r) =>
-                r.id == fromUid &&
-                r.status == 'active' &&
-                (r.type == 'Relative' || r.type == 'Family'),
-          );
-
-          if (!isRelative) {
-            qualifiedVoucherCount++;
+          if (actionId != null) {
+            await _ref
+                .read(pointsRepositoryProvider)
+                .markExplorationActionCompleted(userId, actionId);
           }
         }
       }
-
-      if (allFieldsCovered &&
-          uniqueVerifierCount >= requiredFields.length &&
-          activeRelCount >= 2 &&
-          qualifiedVoucherCount >= 2) {
-        isVerified = true;
-      }
     }
 
-    // [NEW] QR Verification overrides everything
-    if (hasQrExchange) {
-      isVerified = true;
+    // 3. PoCT Milestone checks for ALL models (10x intervals: 10, 100, 1K, 10K...)
+    int poctToAdd = 0;
+    int threshold = 10;
+    while (count >= threshold) {
+      poctToAdd += 10;
+      threshold *= 10;
+    }
+    milestonePoCT += poctToAdd;
+  }
+
+  await checkAndAward('Family', uniqueFamilyCount);
+  await checkAndAward('Friend', uniqueFriendCount);
+  await checkAndAward('QR', uniqueQrCount);
+  await checkAndAward('Trust', uniqueTrustCount);
+  await checkAndAward('Profile', profile.completedMilestoneFieldCount);
+
+  // --- Programmatic HTS Engine (The Ledger) ---
+    int htsPoctDelta = 0; 
+    
+    // GAINS: +1 PoCT for each activity from the beginning
+    htsPoctDelta += trustDataOld?.attendedEventsCount ?? 0;
+    htsPoctDelta += trustDataOld?.referralCount ?? 0;
+    htsPoctDelta += trustDataOld?.verifiedSolutionsCount ?? 0;
+    
+    // LOSSES: -1 PoCT for each penalty from the beginning
+    htsPoctDelta -= profile.blockedByCount ?? 0;
+    htsPoctDelta -= profile.flaggedMessagesCount ?? 0;
+    htsPoctDelta -= trustDataOld?.reportedFraudCount ?? 0;
+    htsPoctDelta -= trustDataOld?.fakeVerificationsCount ?? 0;
+    htsPoctDelta -= trustDataOld?.eventNoShowCount ?? 0;
+    htsPoctDelta -= trustDataOld?.rejectedFamilyConnectionsCount ?? 0;
+
+
+    // --- Seniority Milestone ---
+    double seniorityScore = 0;
+    if (profile.createdAt != null) {
+      final daysActive = DateTime.now().difference(profile.createdAt!).inDays;
+      seniorityScore = (daysActive / 100).floorToDouble();
     }
 
-    // 5. Final Formula
-    // Identity(20) + Activity(20) + Reliability(20) + Helpfulness(20) + Reputation(20) = 100.
+    // --- Final Score Calculation ---
+    double finalScore = milestonePoCT + htsPoctDelta + seniorityScore;
 
-    final double automatedScore =
-        identityScore +
-        activityScore +
-        reliabilityScore +
-        helpfulnessScore +
-        reputationScore;
-
-    double finalScore = automatedScore;
-
-    // [UPDATED] Peer Rating Consideration
-    // Removed Weighted Average. Trust Score is purely automated.
-    // Penalty logic handled in penalties section below.
-
-    // [REMOVED] Verified Badge Guarantee (Now granular)
-    // if (isVerified && finalScore < 80) {
-    //   finalScore = 80;
-    // }
-
-    // Update isVerified boolean if finalScore is high and all conditions met
-    isVerified = isVerified || finalScore >= 80;
-
-    // Apply Penalties
-    finalScore -= penaltyScore;
-
-    // Ensure 0-100
+    // Ensure 0-100 (PoCT is usually 1-100, but can exceed in theoretical systems, we clamp for UI)
     if (finalScore > 100) finalScore = 100;
     if (finalScore < 0) finalScore = 0;
 
-    // 6. Status Determination (Purely PoCT Score Based)
-    // [UPDATED] Thresholds based on Refined Model (DSP_EARNING_MODEL.md)
-    TrustLevel level = TrustLevel.lowTrust;
+    // --- Status & Verification ---
+    TrustLevel level = TrustLevelExtension.fromScore(finalScore);
 
-    if (finalScore >= 81) {
-      level = TrustLevel.highTrust;
-    } else if (finalScore >= 61) {
-      level = TrustLevel.standardTrust;
-    } else if (finalScore >= 41) {
-      level = TrustLevel.mediumTrust;
-    } else if (finalScore >= 21) {
-      level = TrustLevel.basicTrust;
-    } else {
-      level = TrustLevel.lowTrust;
-    }
-    
-    // Note: To be a "High Trust Member" (Pillar) in UI, user usually needs 100+ PoCT, 
-    // but the bracket starts at 91 for efficiency rates.
+    // [UPDATED] Verification Condition:
+    // 1. High Trust Score (>= 80) OR
+    // 2. Already Verified (Legacy/Stickiness) OR
+    // 3. Profile Completed (10+ Milestone fields)
 
-    // 7. Save
+    bool isProfileCompleteMilestone =
+        profile.completedMilestoneFieldCount >= 10;
+    bool isVerified =
+        finalScore >= 80 ||
+        (trustDataOld?.isVerified ?? false) ||
+        isProfileCompleteMilestone;
+
+    // --- Save & Sync ---
     final newTrustData = TrustData(
       uid: userId,
       trustScore: finalScore,
       level: level,
       isVerified: isVerified,
-      identityScore: identityScore,
-      activityScore: activityScore,
-      reputationScore: reputationScore,
+      identityScore:
+          (isProfileComplete ? 5.0 : 0.0) +
+          (uniqueQrCount > 0 ? 15.0 : 0.0), // Simplified Legacy Fallback
+      activityScore: (points.currentStreak * 1.0).clamp(0, 20),
+      reputationScore: (vouches.length * 2.0).clamp(0, 20),
       vouchCount: vouches.length,
       lastUpdated: DateTime.now(),
       vouchedBy: vouches.map((v) => v.fromUserId).toList(),
-      reviewCount: ratings.length,
-      averageRating: averageRating,
-      reportCount: reportCount,
-      attendedEventsCount: attended,
-      joinedEventsCount: joined,
-      verifiedSolutionsCount: solutions,
-      identityQRExchange: hasQrExchange,
+      reviewCount: ratingDetails.length,
+      averageRating: ratingDetails.isEmpty
+          ? 0.0
+          : ratingDetails
+                    .map((r) => (r['score'] as num).toDouble())
+                    .reduce((a, b) => a + b) /
+                ratingDetails.length,
+      reportCount: profile.advertReportCount ?? 0,
+      attendedEventsCount: trustDataOld?.attendedEventsCount ?? 0,
+      joinedEventsCount: trustDataOld?.joinedEventsCount ?? 0,
+      verifiedSolutionsCount: trustDataOld?.verifiedSolutionsCount ?? 0,
+      identityQRExchange: uniqueQrCount > 0,
       verifiedCheckInCount: trustDataOld?.verifiedCheckInCount ?? 0,
-      reliabilityScore: reliabilityScore,
-      helpfulnessScore: helpfulnessScore,
+      reliabilityScore: trustDataOld?.reliabilityScore ?? 0,
+      helpfulnessScore: trustDataOld?.helpfulnessScore ?? 0,
+      uniqueFamilyCount: uniqueFamilyCount,
+      uniqueFriendCount: uniqueFriendCount,
+      uniqueQrCount: uniqueQrCount,
+      isCouncilEligible:
+          uniqueFamilyCount >= 10 &&
+          uniqueQrCount >= 10 &&
+          uniqueTrustCount >= 10 &&
+          isProfileComplete,
+      awardedQualificationMilestones: milestones,
+      awardedHtsTracking: ledger,
+      referralCount: trustDataOld?.referralCount ?? 0,
+      blockedByCount: profile.blockedByCount ?? 0,
+      flaggedMessagesCount: profile.flaggedMessagesCount ?? 0,
+      reportedFraudCount: trustDataOld?.reportedFraudCount ?? 0,
+      fakeVerificationsCount: trustDataOld?.fakeVerificationsCount ?? 0,
+      eventNoShowCount: trustDataOld?.eventNoShowCount ?? 0,
+      rejectedFamilyConnectionsCount:
+          trustDataOld?.rejectedFamilyConnectionsCount ?? 0,
     );
 
     await _repository.saveTrustData(newTrustData);
 
-    // 8. [NEW] Sync Score to UserPoints (for Leaderboard/Average)
+    // Sync to UserPoints & community averages
     final pointsRepo = _ref.read(pointsRepositoryProvider);
     await pointsRepo.updateTrustScore(userId, finalScore);
-    
-    // 9. [NEW] Trigger Community Average Update
+
     if (profile.homeCountryCode != null) {
-      await pointsRepo.updateCommunityOverallAveragePoCT(profile.homeCountryCode!);
-      
-      // Update Continent Average
+      await pointsRepo.updateCommunityOverallAveragePoCT(
+        profile.homeCountryCode!,
+      );
       final continentCode = getContinentByCountryCode(profile.homeCountryCode!);
       await pointsRepo.updateContinentOverallAveragePoCT(continentCode);
-      
-      // Update Global Average
       await pointsRepo.updateGlobalOverallAveragePoCT();
     }
   }
@@ -490,14 +617,12 @@ class TrustService {
     final pointsService = _ref.read(pointsServiceProvider);
     if (type == 'event') {
       await pointsService.trackVerifiedCheckIn(userId);
-      await _repository.incrementAttendedEventsCount(userId);
     } else if (type == 'org') {
       await pointsService.trackOrganizationVetting(userId);
     }
 
-    // 4. Update Trust Data
-    await _repository.incrementVerifiedCheckInCount(userId);
-    await updateTrustForUser(userId);
+    // 4. Update Trust Data via Centralized HTS Engine
+    await recordActivity(userId, HTSActivityType.physicalPresence);
   }
 
   Future<int> performQRExchange({
@@ -518,36 +643,44 @@ class TrustService {
     // 2. Enforce Profile Completeness
     final fromMissing = fromProfile.getMissingRequiredFields();
     if (fromMissing.isNotEmpty) {
-      debugPrint("❌ performQRExchange: fromProfile ($fromUid) is incomplete: $fromMissing");
+      debugPrint(
+        "❌ performQRExchange: fromProfile ($fromUid) is incomplete: $fromMissing",
+      );
       throw IncompleteProfileException(
         missingFields: fromMissing,
         isOwnProfile: true, // Assuming fromUid is always the executor
-        message: "You must complete your profile before you can connect via QR.",
+        message:
+            "You must complete your profile before you can connect via QR.",
       );
     }
 
     final toMissing = toProfile.getMissingRequiredFields();
     if (toMissing.isNotEmpty) {
-      debugPrint("❌ performQRExchange: toProfile ($toUid) is incomplete: $toMissing");
+      debugPrint(
+        "❌ performQRExchange: toProfile ($toUid) is incomplete: $toMissing",
+      );
       throw IncompleteProfileException(
         missingFields: toMissing,
         isOwnProfile: false,
-        message: "The other user must complete their profile before you can connect via QR.",
+        message:
+            "The other user must complete their profile before you can connect via QR.",
       );
     }
 
     debugPrint("✅ performQRExchange: Both profiles complete.");
     debugPrint("📍 performQRExchange: locationAddress = $locationAddress");
-    
+
     // 2.1 Check for Duplicate Connection (Prevent double-payment)
     if (fromUid == 'unknown' || toUid == 'unknown') {
       debugPrint("❌ performQRExchange: Invalid UIDs detected (unknown)");
       throw Exception("Invalid user identification for QR exchange.");
     }
-    
+
     final alreadyConnected = await _repository.hasExchangedQR(fromUid, toUid);
     if (alreadyConnected) {
-      debugPrint("⚠️ performQRExchange: Users already connected. Skipping reward logic.");
+      debugPrint(
+        "⚠️ performQRExchange: Users already connected. Skipping reward logic.",
+      );
       throw AlreadyConnectedException(
         message: "You are already connected with this user.",
         otherUid: toUid,
@@ -558,12 +691,20 @@ class TrustService {
     // Use a fallback for locationAddress if it's null but we want to know where it failed
     final savedAddress = locationAddress ?? "Location Unavailable";
 
-    await _repository.saveQRExchangeRecord(fromUid, toUid,
-        locationAddress: savedAddress);
-    await _repository.saveQRExchangeRecord(toUid, fromUid,
-        locationAddress: savedAddress);
+    await _repository.saveQRExchangeRecord(
+      fromUid,
+      toUid,
+      locationAddress: savedAddress,
+    );
+    await _repository.saveQRExchangeRecord(
+      toUid,
+      fromUid,
+      locationAddress: savedAddress,
+    );
 
-    debugPrint("✅ performQRExchange: QR Exchange records saved with address: $savedAddress");
+    debugPrint(
+      "✅ performQRExchange: QR Exchange records saved with address: $savedAddress",
+    );
 
     // 4. Mark Identity QR Exchanged (in trust_data)
     // Fetch trust data to determine if they were already verified
@@ -592,12 +733,12 @@ class TrustService {
 
     // 6. Award Points (trackIdentityQRExchange awards 10,000 or 1,000 DSP)
     final pointsService = _ref.read(pointsServiceProvider);
-    
-    // logic: 
+
+    // logic:
     // - If it's my first connection: 10,000
     // - If I'm already verified AND the other person is NOT: 1,000 (I provided service)
     // - Otherwise: 0 or 1,000? Let's give 1,000 to anyone already verified who brings someone new.
-    
+
     final fromWasVerified = fromTrust?.identityQRExchange ?? false;
     final toWasVerified = toTrust?.identityQRExchange ?? false;
 
@@ -606,20 +747,38 @@ class TrustService {
     // Award to FROM (Scanner)
     if (!fromWasVerified) {
       scannerAward = 10000;
-      await pointsService.trackIdentityQRExchange(fromUid, toUid, isServiceProvider: false);
+      await pointsService.trackIdentityQRExchange(
+        fromUid,
+        toUid,
+        isServiceProvider: false,
+      );
     } else if (!toWasVerified) {
       scannerAward = 1000;
-      await pointsService.trackIdentityQRExchange(fromUid, toUid, isServiceProvider: true);
+      await pointsService.trackIdentityQRExchange(
+        fromUid,
+        toUid,
+        isServiceProvider: true,
+      );
     }
 
     // Award to TO (Scanned)
     if (!toWasVerified) {
-      await pointsService.trackIdentityQRExchange(toUid, fromUid, isServiceProvider: false);
+      await pointsService.trackIdentityQRExchange(
+        toUid,
+        fromUid,
+        isServiceProvider: false,
+      );
     } else if (!fromWasVerified) {
-      await pointsService.trackIdentityQRExchange(toUid, fromUid, isServiceProvider: true);
+      await pointsService.trackIdentityQRExchange(
+        toUid,
+        fromUid,
+        isServiceProvider: true,
+      );
     }
 
-    debugPrint("✅ performQRExchange: DSP points awarded ($scannerAward to scanner).");
+    debugPrint(
+      "✅ performQRExchange: DSP points awarded ($scannerAward to scanner).",
+    );
 
     // 7. Update Trust for both
     await updateTrustForUser(fromUid);
@@ -629,8 +788,10 @@ class TrustService {
 
     // 8. Invalidate Profile Cache
     _ref.invalidate(userProfileProvider);
-    debugPrint("✅ performQRExchange: Profile provider invalidated. Scanner side complete.");
-    
+    debugPrint(
+      "✅ performQRExchange: Profile provider invalidated. Scanner side complete.",
+    );
+
     return scannerAward;
   }
 
@@ -660,6 +821,18 @@ class TrustService {
     );
 
     await _repository.createVouch(vouch);
+
+    // [VALUE SINK] Deduct 50 DSP Collateral from the voucher
+    try {
+      final pointsService = _ref.read(pointsServiceProvider);
+      await pointsService.deductPoints(
+        userId: fromUserId,
+        amount: 50,
+        reason: 'Vouch Collateral (Locked for Sybil Defense)',
+      );
+    } catch (e) {
+      debugPrint('Error deducting vouch collateral: $e');
+    }
 
     // 3. Award Staged Vouch Reward
     try {
@@ -698,16 +871,37 @@ class TrustService {
     required String fromUserId,
     required String toUserId,
     required Map<String, bool> fields,
-  }) =>
-      _repository.saveVerificationEvent(
-          fromUserId: fromUserId, toUserId: toUserId, fields: fields);
+  }) async {
+    // [VALUE SINK] Deduct 10 DSP Network Fee for verification
+    try {
+      final pointsService = _ref.read(pointsServiceProvider);
+      await pointsService.deductPoints(
+        userId: fromUserId,
+        amount: 10,
+        reason: 'Verification Network Fee',
+      );
+    } catch (e) {
+      debugPrint('Error deducting verification fee: $e');
+      // We still allow the event if balance check passes in UI, 
+      // but the repository/service should ideally enforce this.
+    }
+
+    return _repository.saveVerificationEvent(
+      fromUserId: fromUserId,
+      toUserId: toUserId,
+      fields: fields,
+    );
+  }
 
   Future<List<String>> getFlaggedFields(String userId) =>
       _repository.getFlaggedFields(userId);
 
   /// Checks if a user is eligible to verify another user.
   /// Returns null if allowed, otherwise returns a reason string.
-  Future<String?> checkVerificationEligibility(String fromUserId, String toUserId) async {
+  Future<String?> checkVerificationEligibility(
+    String fromUserId,
+    String toUserId,
+  ) async {
     // [NEW] Base PoCT Conditions
     final baseError = await _checkBasePoCTEligibility(fromUserId);
     if (baseError != null) return baseError;
@@ -727,12 +921,22 @@ class TrustService {
         return 'Daily limit reached. You can verify another profile in $hoursLeft hours.';
       }
     }
-    
-    // 3. Check Relationships (Prevent related users from verifying each other)
+
+    // 3. Check Relationships (Only prevent FAMILY from verifying each other — Conflict of Interest)
     final relRepo = _ref.read(relationshipRepositoryProvider);
-    final relationship = await relRepo.getRelationship(userId: fromUserId, relatedUserId: toUserId);
+    final relationship = await relRepo.getRelationship(
+      userId: fromUserId,
+      relatedUserId: toUserId,
+    );
     if (relationship != null && relationship.status == 'active') {
-       return 'You cannot verify a relative (Conflict of Interest).';
+      // Only block if the relationship is a family type
+      const Set<String> familyTypes = {
+        'wife', 'husband', 'daughter', 'son', 'mother', 'father',
+        'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+      };
+      if (familyTypes.contains(relationship.type.toLowerCase())) {
+        return 'You cannot verify a family member (Conflict of Interest).';
+      }
     }
 
     return null;
@@ -740,23 +944,17 @@ class TrustService {
 
   /// Checks if a user is eligible to vouch for another user.
   /// Returns null if allowed, otherwise returns a reason string.
-  Future<String?> checkVouchEligibility(String fromUserId, String toUserId) async {
+  Future<String?> checkVouchEligibility(
+    String fromUserId,
+    String toUserId,
+  ) async {
     // [NEW] Base PoCT Conditions
-    // 4. Check Vouch Eligibility (Must be QR Verified - Level 3)
-    final trustData = await _repository.getTrustData(fromUserId);
-    bool isQrVerified = trustData?.identityQRExchange ?? false;
+    // 4. Check Vouch Eligibility (Must be Verified - via Profile or QR)
+    final eligibilityError = await _checkBasePoCTEligibility(fromUserId);
+    if (eligibilityError != null) return eligibilityError;
 
-    if (!isQrVerified) {
-       // Fallback: Check profile directly in case TrustData is stale
-       final profile = await _ref.read(profileRepositoryProvider).getUserProfile(fromUserId);
-       if (profile?.firstQrConnection != null) {
-         isQrVerified = true;
-       }
-    }
-
-    if (!isQrVerified) {
-       return "You must be fully Identity Verified (QR Exchange) to vouch for others.";
-    }
+    // Removed strict QR check here as _checkBasePoCTEligibility now covers isVerified status
+    // which includes profile completion.
 
     // 1. Validation
     if (fromUserId == toUserId) return "Cannot vouch for yourself";
@@ -765,12 +963,21 @@ class TrustService {
     if (alreadyVouched) {
       return "You have already vouched for this user";
     }
-    
-    // 2. Check Relationships (Prevent related users from vouching for each other)
+
+    // 2. Check Relationships (Only prevent FAMILY from vouching for each other — Conflict of Interest)
     final relRepo = _ref.read(relationshipRepositoryProvider);
-    final relationship = await relRepo.getRelationship(userId: fromUserId, relatedUserId: toUserId);
+    final relationship = await relRepo.getRelationship(
+      userId: fromUserId,
+      relatedUserId: toUserId,
+    );
     if (relationship != null && relationship.status == 'active') {
-       return 'You cannot vouch for a relative (Conflict of Interest).';
+      const Set<String> familyTypes = {
+        'wife', 'husband', 'daughter', 'son', 'mother', 'father',
+        'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+      };
+      if (familyTypes.contains(relationship.type.toLowerCase())) {
+        return 'You cannot vouch for a family member (Conflict of Interest).';
+      }
     }
 
     return null;
@@ -780,7 +987,7 @@ class TrustService {
   Future<String?> _checkBasePoCTEligibility(String userId) async {
     final profileRepo = _ref.read(profileRepositoryProvider);
     final pointsRepo = _ref.read(pointsRepositoryProvider);
-    
+
     // 1. Check Profile Completeness
     final profile = await profileRepo.getUserProfile(userId);
     if (profile == null) return "Profile not found.";
@@ -807,7 +1014,7 @@ class TrustService {
     final flaggedMessagesCount = profile.flaggedMessagesCount ?? 0;
 
     if (reports >= 5 || blockedByCount >= 5 || flaggedMessagesCount >= 5) {
-       return "Your account is under restriction due to multiple negative community signals. You cannot verify or vouch for others.";
+      return "Your account is under restriction due to multiple negative community signals. You cannot verify or vouch for others.";
     }
 
     return null;
@@ -815,54 +1022,60 @@ class TrustService {
 
   /// Returns a set of field keys that have been verified (true) by at least one user.
   Future<Set<String>> getVerifiedFields(String userId) async {
-    final allVerifications = await _repository.getAllVerificationsForUser(userId);
+    final allVerifications = await _repository.getAllVerificationsForUser(
+      userId,
+    );
     final Set<String> verifiedFields = {};
-    
+
     for (final v in allVerifications) {
-       final Map<String, dynamic> fields = v['fields'] ?? {};
-       fields.forEach((key, val) {
-          if (val == true) {
-             verifiedFields.add(key);
-          }
-       });
+      final Map<String, dynamic> fields = v['fields'] ?? {};
+      fields.forEach((key, val) {
+        if (val == true) {
+          verifiedFields.add(key);
+        }
+      });
     }
     return verifiedFields;
   }
 
-
   // --- TGE Eligibility Checks ---
 
   Future<bool> checkUserTgeEligibility(String userId, int epoch) async {
-    final points = await _ref.read(pointsRepositoryProvider).getUserPoints(userId);
+    final points = await _ref
+        .read(pointsRepositoryProvider)
+        .getUserPoints(userId);
     final trust = await _repository.getTrustData(userId);
-    
+
     if (points == null || trust == null) return false;
-    
+
     final dsp = points.totalPoints;
     final poct = trust.trustScore;
 
     // Aligned with "100k Club" + "51 PoCT" gate strategy (Refined Model)
-    const double gateDsp = 100000.0;
+    const double gateDsp = 10000.0;
     const int gatePoct = 51; // Low Trust or higher can swap
 
     return dsp >= gateDsp && poct >= gatePoct;
   }
 
-  Future<bool> checkCommunityTgeEligibility(String communityId, int epoch) async {
-     // Needs CommunityRepository to fetch user count and treasury balance.
-     // Mocking logic for now as CommunityRepository isn't injected here yet.
-     // In real implementation, we'd fetch Community doc.
-     return false; // Placeholder
+  Future<bool> checkCommunityTgeEligibility(
+    String communityId,
+    int epoch,
+  ) async {
+    // Needs CommunityRepository to fetch user count and treasury balance.
+    // Mocking logic for now as CommunityRepository isn't injected here yet.
+    // In real implementation, we'd fetch Community doc.
+    return false; // Placeholder
   }
 
   /// [NEW] Record a major breach and trigger trust recalculation
   Future<void> recordMajorBreach(String userId, String breachType) async {
     final trustDataOld = await _repository.getTrustData(userId);
     if (trustDataOld == null) return;
-    
+
     int updatedCount = 0;
     String field = '';
-    
+
     switch (breachType) {
       case 'family_rejected':
         field = 'rejectedFamilyConnectionsCount';
@@ -881,7 +1094,7 @@ class TrustService {
         updatedCount = trustDataOld.reportedFraudCount + 1;
         break;
     }
-    
+
     if (field.isNotEmpty) {
       await _repository.updateTrustCounter(userId, field, updatedCount);
       await updateTrustForUser(userId);

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship_request.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 class RelationshipResponseModal extends ConsumerStatefulWidget {
   final RelationshipRequest request;
@@ -36,11 +35,9 @@ class _RelationshipResponseModalState
       _selectedReciprocalType = possibleTypes.first;
     }
 
+    final theme = Theme.of(context);
     return PopScope(
-      canPop:
-          false, // Prevent accidental dismissal without choice if we want to enforce, but user said "dismiss without accepting" is allowed.
-      // User said: "if dismiss without accepting or rejecting he can still do that in his relationship section"
-      // So allow pop.
+      canPop: true, // User can dismiss without accepting — they can handle it later in their relationship section
       child: Material(
         // [FIX] Added Material widget to fix "No Material widget found" error
         type: MaterialType.transparency,
@@ -137,7 +134,9 @@ class _RelationshipResponseModalState
               const SizedBox(height: 12),
               TextButton(
                 onPressed: _rejectRequest,
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                ),
                 child: const Text('Reject Request'),
               ),
             ],
@@ -159,7 +158,7 @@ class _RelationshipResponseModalState
       // We can use the AuthRepository or just check if we have the profile loaded in previous screen context
       // But we are in a modal.
       // Let's rely on standard country lookup if possible, or default.
-      String myFlag = '❤️';
+      String myFlag = '';
       // Note: We don't have easy access to *my* profile data here without fetching.
       // For now, let's allow the repository to handle it or pass it in.
       // *Correction*: UserProfileView has access to `profile` (which is the visited user), not ME.
@@ -215,9 +214,7 @@ class _RelationshipResponseModalState
     if (confirm == true) {
       setState(() => _isLoading = true);
       try {
-        // We need PointsService
-        // We can get it via provider
-        final pointsService = ref.read(pointsServiceProvider);
+
         await ref
             .read(relationshipRepositoryProvider)
             .rejectRequest(widget.request);

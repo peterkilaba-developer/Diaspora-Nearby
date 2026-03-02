@@ -20,17 +20,7 @@ class ExplorationProgressCard extends ConsumerWidget {
     return Container(
       margin: EdgeInsets.zero,
       padding: const EdgeInsets.all(AppTheme.cardPadding),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: AppTheme.cardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -116,14 +106,14 @@ class ExplorationProgressCard extends ConsumerWidget {
                 color: Colors.blue.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(LucideIcons.info, size: 16, color: Colors.blue),
-                  const SizedBox(width: 8),
+                  Icon(LucideIcons.info, size: 16, color: Colors.blue),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Earn more DSP by exploring new screens and features in Diaspora.',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: Colors.blue,
                         fontWeight: FontWeight.w500,

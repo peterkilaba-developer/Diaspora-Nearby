@@ -78,8 +78,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
               communityId: widget.communityId,
               groupId: widget.groupId,
             ), // [NEW]
-            _JoinedEventsList(),
-            OrganizerEventsList(padding: EdgeInsets.zero),
+            const _JoinedEventsList(),
+            const OrganizerEventsList(padding: EdgeInsets.zero),
           ],
         ),
       ),
@@ -117,7 +117,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   TimeOfDay _endTime = TimeOfDay.now();
 
   String _category = 'Social Gathering';
-  bool _isPaid = false;
+
 
   // Audience
   String _attendingPermission = 'global_community';
@@ -127,6 +127,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   List<String> _invitedUserIds = [];
   bool _isLoadingAudience = true;
 
+  bool _isPaid = false;
   bool _isLoading = false;
   bool _isPublished = true; // [NEW] Default to published
 
@@ -229,10 +230,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     _descriptionController.text = e.description;
     _locationController.text = e.location;
     _category = e.category;
-    _isPaid = e.isPaid ?? false;
-    if (e.ticketPrice != null) {
-      _ticketPriceController.text = e.ticketPrice.toString();
-    }
+
     if (e.maxAttendees != null) {
       _maxAttendeesController.text = e.maxAttendees.toString();
     }
@@ -275,6 +273,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     _attendingPermission = e.attendingPermission ?? 'global';
     if (e.invitedUserIds != null) {
       _invitedUserIds = List.from(e.invitedUserIds!);
+    }
+
+    // Paid Event Fields
+    _isPaid = e.isPaid ?? false;
+    if (e.ticketPrice != null) {
+      _ticketPriceController.text = e.ticketPrice.toString();
     }
 
     // New Venue Fields
@@ -320,15 +324,17 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         setState(() {
           // [NEW] Filter if communityId is restricted
           if (widget.communityId != null) {
-            communities =
-                communities.where((c) => c.id == widget.communityId).toList();
+            communities = communities
+                .where((c) => c.id == widget.communityId)
+                .toList();
             groups = []; // Clear groups as we are in strict community mode
           }
 
           // [NEW] Handle groupId restriction
           if (widget.groupId != null) {
             groups = groups.where((g) => g.id == widget.groupId).toList();
-            communities = []; // Clear communities as we are in strict group mode
+            communities =
+                []; // Clear communities as we are in strict group mode
           }
 
           _myCommunities = communities;
@@ -486,14 +492,16 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
               child: Form(
                 key: _formKey,
                 child: ListView(
-                  padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
+                  padding: const EdgeInsets.all(
+                    AppTheme.pageHorizontalPadding * 2,
+                  ),
                   children: [
                     // Image Picker ... (same)
                     // Image Picker ... (same)
                     // Organization Selection
                     if (_userOrgs.isNotEmpty) ...[
                       DropdownButtonFormField<String?>(
-                        value: _selectedOrgId,
+                        initialValue: _selectedOrgId,
                         isExpanded: true, // Fix overflow
                         onTap: () => FocusScope.of(context).unfocus(), // [FIX]
                         decoration: InputDecoration(
@@ -707,7 +715,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                     const SizedBox(height: 16),
 
                     DropdownButtonFormField<String>(
-                      value: _category,
+                      initialValue: _category,
                       onTap: () => FocusScope.of(context).unfocus(), // [FIX]
                       decoration: InputDecoration(
                         labelText: 'Category *',
@@ -947,14 +955,16 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                 // [FIX] Removed verification check
                                 setState(() => _isPaid = v);
                               },
-                              activeColor: Theme.of(
+                              activeThumbColor: Theme.of(
                                 context,
                               ).colorScheme.primary,
                             ),
                           ),
                           if (_isPaid)
                             Padding(
-                              padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
+                              padding: const EdgeInsets.all(
+                                AppTheme.pageHorizontalPadding * 2,
+                              ),
                               child: TextFormField(
                                 controller: _ticketPriceController,
                                 keyboardType:
@@ -1046,14 +1056,19 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                         ), // [FIX] 8px horizontal padding
                         child: Column(
                           children: [
-                             // Communities
-                            if (widget.communityId != null && _myCommunities.isNotEmpty)
+                            // Communities
+                            if (widget.communityId != null &&
+                                _myCommunities.isNotEmpty)
                               // [NEW] Fixed/Locked Community Display
                               ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 title: Text(
                                   _myCommunities.first.name,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 subtitle: Text(
                                   'Event will be visible to this community \u2022 ${_myCommunities.first.memberCount} members',
@@ -1068,13 +1083,68 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                   chat: null,
                                   communityId: _myCommunities.first.id,
                                   type: _myCommunities.first.type,
-                                  locationType: _myCommunities.first.locationType,
-                                  profileImage: _myCommunities.first.profileImage,
-                                  homeCountryCode: _myCommunities.first.homeCountryCode,
-                                  hostCountryCode: _myCommunities.first.hostCountryCode,
+                                  locationType:
+                                      _myCommunities.first.locationType,
+                                  profileImage:
+                                      _myCommunities.first.profileImage,
+                                  homeCountryCode:
+                                      _myCommunities.first.homeCountryCode,
+                                  hostCountryCode:
+                                      _myCommunities.first.hostCountryCode,
                                   flag: _myCommunities.first.flag,
                                   size: 40,
                                 ),
+                              )
+                            else if (widget.eventToEdit != null &&
+                                _myCommunities.isNotEmpty)
+                              // Locked community display when editing
+                              Builder(
+                                builder: (context) {
+                                  final selected =
+                                      _myCommunities.firstWhere(
+                                        (c) =>
+                                            c.id == _attendingPermission,
+                                        orElse: () => _myCommunities.first,
+                                      );
+                                  return ListTile(
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                    title: Text(
+                                      selected.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'Community cannot be changed after creation',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                    trailing: const Icon(
+                                      LucideIcons.lock,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    ),
+                                    leading: CommunityChatUtils
+                                        .getCommunityAvatar(
+                                          context: context,
+                                          chat: null,
+                                          communityId: selected.id,
+                                          type: selected.type,
+                                          locationType:
+                                              selected.locationType,
+                                          profileImage:
+                                              selected.profileImage,
+                                          homeCountryCode:
+                                              selected.homeCountryCode,
+                                          hostCountryCode:
+                                              selected.hostCountryCode,
+                                          flag: selected.flag,
+                                          size: 40,
+                                        ),
+                                  );
+                                },
                               )
                             else
                               ..._myCommunities.map((community) {
@@ -1127,14 +1197,18 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                             // [NEW] Locked Group Display
                             if (widget.groupId != null && _myGroups.isNotEmpty)
                               ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 title: Text(
                                   _myGroups.first.name,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                                subtitle: Text(
+                                subtitle: const Text(
                                   'Private event for this group members only',
-                                  style: const TextStyle(fontSize: 12),
+                                  style: TextStyle(fontSize: 12),
                                 ),
                                 trailing: Icon(
                                   LucideIcons.checkCircle2,
@@ -1142,7 +1216,8 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                 ),
                                 leading: ClipRRect(
                                   borderRadius: BorderRadius.circular(20),
-                                  child: (_myGroups.first.photoUrl != null &&
+                                  child:
+                                      (_myGroups.first.photoUrl != null &&
                                           _myGroups.first.photoUrl!.isNotEmpty)
                                       ? Image.network(
                                           _myGroups.first.photoUrl!,
@@ -1177,7 +1252,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                 16 + MediaQuery.of(context).padding.bottom,
               ),
               decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
+                color: AppTheme.cardDecoration(context).color,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.05),
@@ -1187,7 +1262,22 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                 ],
               ),
               child: ElevatedButton(
-                onPressed: _isLoading || !_isFormValid ? null : _submitEvent,
+                onPressed: _isLoading || !_isFormValid
+                    ? null
+                    : () {
+                        if (widget.communityId != null &&
+                            widget.eventToEdit == null) {
+                          final communityName =
+                              ref
+                                  .read(communityProvider(widget.communityId!))
+                                  .valueOrNull
+                                  ?.name ??
+                              'this community';
+                          _showExclusivityDialog(communityName);
+                        } else {
+                          _submitEvent();
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -1257,6 +1347,70 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     );
   }
 
+  Future<void> _showExclusivityDialog(String communityName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                LucideIcons.shield,
+                color: theme.colorScheme.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Community Exclusive Event')),
+            ],
+          ),
+          content: RichText(
+            text: TextSpan(
+              style: theme.textTheme.bodyMedium,
+              children: [
+                const TextSpan(
+                  text: 'This event will be exclusively for members of ',
+                ),
+                TextSpan(
+                  text: communityName,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const TextSpan(
+                  text:
+                      '. Only current and future members of this community will be able to discover and attend this event.',
+                ),
+              ],
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Create Event'),
+              ),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true) {
+      _submitEvent();
+    }
+  }
+
   Future<void> _submitEvent() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -1324,17 +1478,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           endTime: _formatTimeOfDay(_endTime),
           location: _locationController.text.trim(),
           category: _category,
-          isPaid: _isPaid,
-          ticketPrice: _isPaid
-              ? double.tryParse(_ticketPriceController.text.replaceAll(RegExp(r'[^0-9.]'), ''))
-              : null,
           attendingPermission: _attendingPermission,
-          invitedUserIds: _attendingPermission == 'private'
-              ? _invitedUserIds
-              : null,
-          maxAttendees: _maxAttendeesController.text.isNotEmpty
-              ? int.tryParse(_maxAttendeesController.text)
-              : null,
           venueName: _venueName,
           venueAddress: _venueAddress,
           venueCity: _venueCity,
@@ -1342,13 +1486,30 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           venueCountry: _venueCountry,
           latitude: _latitude,
           longitude: _longitude,
-          status: _isPublished ? 'published' : 'hidden', // [NEW] Use toggle
+          status: _isPublished ? 'published' : 'hidden',
           organizationId: _selectedOrgId,
           organizationName: orgName,
         );
 
+        // Directly set nullable fields that copyWith can't clear
+        // (copyWith uses ?? which keeps old value when null is passed)
+        updatedEvent.isPaid = _isPaid;
+        updatedEvent.ticketPrice = _isPaid
+            ? double.tryParse(_ticketPriceController.text) ?? 0
+            : null;
+        updatedEvent.invitedUserIds = _attendingPermission == 'private'
+            ? _invitedUserIds
+            : null;
+        updatedEvent.maxAttendees = _maxAttendeesController.text.isNotEmpty
+            ? int.tryParse(_maxAttendeesController.text)
+            : null;
+
         await repo.updateEvent(updatedEvent, _imageFile);
         if (mounted) {
+          // Invalidate providers so stale data is refreshed
+          ref.invalidate(eventDetailsProvider(updatedEvent.id));
+          ref.invalidate(userEventsProvider(user.uid));
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Event Updated Successfully!')),
           );
@@ -1368,10 +1529,12 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           location: _locationController.text.trim(),
           category: _category,
           creatorId: user.uid,
+
           isPaid: _isPaid,
           ticketPrice: _isPaid
-              ? double.tryParse(_ticketPriceController.text.replaceAll(RegExp(r'[^0-9.]'), ''))
+              ? double.tryParse(_ticketPriceController.text) ?? 0
               : null,
+
           attendingPermission: _attendingPermission,
           invitedUserIds: _attendingPermission == 'private'
               ? _invitedUserIds
@@ -1424,10 +1587,11 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
 }
 
 // -----------------------------------------------------------------------------
-// TAB 2: JOINED EVENTS (View)
+// TAB 2: ATTENDING EVENTS (View)
 // -----------------------------------------------------------------------------
 class _JoinedEventsList extends ConsumerWidget {
   const _JoinedEventsList();
@@ -1472,7 +1636,7 @@ class _JoinedEventsList extends ConsumerWidget {
             // Using unified EventCard for consistency
             return EventCard(
               event: event,
-              isAttending: true, // Since it's 'Joined Events'
+              isAttending: true, // Since it's 'Attending Events'
             );
           },
         );

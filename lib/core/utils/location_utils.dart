@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
 
@@ -10,11 +10,15 @@ LocationParsed? parseLocationComponents(
   String address,
   List<AddressComponent> components,
 ) {
-  String? city, state, country, countryCode;
+  String? sublocality, city, state, country, countryCode;
 
   for (final component in components) {
     final types = component.types;
-    if (types.contains('locality')) {
+    if (types.contains('sublocality') || types.contains('sublocality_level_1')) {
+      sublocality ??= component.name;
+    } else if (types.contains('neighborhood')) {
+      sublocality ??= component.name; // fallback if no sublocality
+    } else if (types.contains('locality')) {
       city = component.name;
     } else if (types.contains('administrative_area_level_1')) {
       state = component.name;
@@ -61,14 +65,6 @@ LocationParsed? parseLocationComponents(
     }
   }
 
-  // [FALLBACK] If no city found (e.g. Region selected), use first part of address
-  if (city == null && address.isNotEmpty) {
-    final parts = address.split(',');
-    if (parts.isNotEmpty) {
-      city = parts.first.trim();
-    }
-  }
-
   if (country == null || countryCode == null) return null;
 
   // Verify if country supports state level
@@ -77,6 +73,7 @@ LocationParsed? parseLocationComponents(
   }
 
   return LocationParsed(
+    sublocality: sublocality,
     city: city,
     state: state,
     country: country,
@@ -85,6 +82,7 @@ LocationParsed? parseLocationComponents(
 }
 
 class LocationParsed {
+  final String? sublocality; // neighborhood / sub-locality for precise marketplace locations
   final String? city;
   final String? state;
   final String country;
@@ -92,6 +90,7 @@ class LocationParsed {
   final String? placeId; // [NEW] Explicit Place ID for robust matching
 
   LocationParsed({
+    this.sublocality,
     this.city,
     this.state,
     required this.country,
@@ -101,7 +100,7 @@ class LocationParsed {
 
   @override
   String toString() =>
-      'LocationParsed(city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId)';
+      'LocationParsed(sublocality: $sublocality, city: $city, state: $state, country: $country, code: $countryCode, placeId: $placeId)';
 }
 
 // --------------------------------------------------------------------------
@@ -154,15 +153,24 @@ String getContinentByCountryCode(String countryCode) {
 /// Get continent adjective from code (e.g. "AF" -> "African")
 String getContinentAdjective(String continentCode) {
   switch (continentCode) {
-    case 'AF': return 'African';
-    case 'AS': return 'Asian';
-    case 'EU': return 'European';
-    case 'NA': return 'North American';
-    case 'SA': return 'South American';
-    case 'OC': return 'Oceanian';
-    case 'AN': return 'Antarctic';
-    case 'CB': return 'Caribbean';
-    default: return 'Global';
+    case 'AF':
+      return 'African';
+    case 'AS':
+      return 'Asian';
+    case 'EU':
+      return 'European';
+    case 'NA':
+      return 'North American';
+    case 'SA':
+      return 'South American';
+    case 'OC':
+      return 'Oceanian';
+    case 'AN':
+      return 'Antarctic';
+    case 'CB':
+      return 'Caribbean';
+    default:
+      return 'Global';
   }
 }
 
@@ -224,20 +232,36 @@ String generateCommunityName({
     // Manual mapping for standard names to ensure "African Community" style
     // [FIX] Differentiate between Home (Adjective) and Host (Noun)
     // Host: "Africa Community" | Home: "African Community"
-    final isHome = locationType == 'home'; // Null implies host usually for this helper
-    
-    if (continent == 'Africa') return isHome ? 'African Community' : 'Africa Community';
-    if (continent == 'Asia') return isHome ? 'Asian Community' : 'Asia Community';
-    if (continent == 'Europe') return isHome ? 'European Community' : 'Europe Community';
-    if (continent == 'North America') return isHome ? 'North American Community' : 'North America Community';
-    if (continent == 'South America') return isHome ? 'South American Community' : 'South America Community';
-    if (continent == 'Oceania') return isHome ? 'Oceanian Community' : 'Oceania Community';
-    if (continent == 'Antarctica') return isHome ? 'Antarctic Community' : 'Antarctica Community';
-    if (continent == 'Caribbean') return isHome ? 'Caribbean Community' : 'Caribbean Community';
+    final isHome =
+        locationType == 'home'; // Null implies host usually for this helper
+
+    if (continent == 'Africa') {
+      return isHome ? 'African Community' : 'Africa Community';
+    }
+    if (continent == 'Asia') {
+      return isHome ? 'Asian Community' : 'Asia Community';
+    }
+    if (continent == 'Europe') {
+      return isHome ? 'European Community' : 'Europe Community';
+    }
+    if (continent == 'North America') {
+      return isHome ? 'North American Community' : 'North America Community';
+    }
+    if (continent == 'South America') {
+      return isHome ? 'South American Community' : 'South America Community';
+    }
+    if (continent == 'Oceania') {
+      return isHome ? 'Oceanian Community' : 'Oceania Community';
+    }
+    if (continent == 'Antarctica') {
+      return isHome ? 'Antarctic Community' : 'Antarctica Community';
+    }
+    if (continent == 'Caribbean') {
+      return isHome ? 'Caribbean Community' : 'Caribbean Community';
+    }
 
     return '$continent Community';
   }
-
 
   if (normalizedType == 'country') {
     return '${location.country} Community';
@@ -259,17 +283,8 @@ String generateCommunityName({
 // --------------------------------------------------------------------------
 
 /// Calculate distance between two points in kilometers using Haversine formula
-double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-  const p = 0.017453292519943295; // Math.PI / 180
-  final a =
-      0.5 -
-      math.cos((lat2 - lat1) * p) / 2 +
-      math.cos(lat1 * p) *
-          math.cos(lat2 * p) *
-          (1 - math.cos((lon2 - lon1) * p)) /
-          2;
-  return 12742 * math.asin(math.sqrt(a)); // 2 * R; R = 6371 km
-}
+double calculateDistance(double lat1, double lon1, double lat2, double lon2) =>
+    GeoUtils.haversine(lat1, lon1, lat2, lon2);
 
 /// Human readable distance string
 String formatDistance(double km) {

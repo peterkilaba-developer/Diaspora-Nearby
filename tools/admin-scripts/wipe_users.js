@@ -6,22 +6,11 @@ const serviceAccount = require('./service-account-key.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://diaspora-nearby-a3dac-default-rtdb.firebaseio.com"
 });
 
 const db = admin.firestore();
-const rtdb = admin.database();
 
-// ---------------------------------------------------------
-// Helper: Delete RTDB Node
-async function deleteRtdbNode(path) {
-  try {
-    await rtdb.ref(path).remove();
-    console.log(`Cleared RTDB node: ${path}`);
-  } catch (error) {
-    console.error(`Error clearing RTDB node ${path}:`, error);
-  }
-}
+
 // ---------------------------------------------------------
 // Helper: Delete all documents in a collection
 async function deleteCollection(collectionPath, batchSize) {
@@ -106,14 +95,7 @@ async function wipeAllUsers(nextPageToken) {
     console.log('Clearing radio_station_health collection...');
     await deleteCollection('radio_station_health', 500);
 
-    console.log('--- Starting RTDB Wipe ---');
-    await deleteRtdbNode('chats');
-    await deleteRtdbNode('userChats');
-    await deleteRtdbNode('messages');
-    await deleteRtdbNode('lastRead'); // [NEW] From screenshot
-    await deleteRtdbNode('onlineStatus');
-
-    console.log('Orphaned data sweep + RTDB wipe complete.');
+    console.log('Orphaned data sweep complete.');
   }
 }
 

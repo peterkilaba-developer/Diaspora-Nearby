@@ -36,14 +36,16 @@ void main() {
   for (int i = 0; i < populationSize; i++) {
     String level;
     int rand = random.nextInt(100);
-    if (rand < 20) level = "High";       // 20% Power Users
-    else if (rand < 70) level = "Medium"; // 50% Average Users
+    if (rand < 20) {
+      level = "High";       // 20% Power Users
+    } else if (rand < 70) level = "Medium"; // 50% Average Users
     else level = "Low";                  // 30% Casual Users
     
     // Initial Trust Score (varies by activity level)
     int trust = 0;
-    if (level == "High") trust = 40 + random.nextInt(30); // 40-70
-    else if (level == "Medium") trust = 20 + random.nextInt(40); // 20-60
+    if (level == "High") {
+      trust = 40 + random.nextInt(30); // 40-70
+    } else if (level == "Medium") trust = 20 + random.nextInt(40); // 20-60
     else trust = 10 + random.nextInt(30); // 10-40
 
     users.add(SimulatedUser(id: 'User_$i', activityLevel: level, trustScore: trust));
@@ -62,10 +64,10 @@ void main() {
   
   // To reach Epoch 1 Gate (10k), High user needs ~7 days. Low user needs ~100 days.
   // Let's set a standard "Epoch Duration" in days to see who makes it.
-  const int DAYS_PER_EPOCH = 30; // Monthly TGE checks? Or maybe longer? 
+  const int daysPerEpoch = 30; // Monthly TGE checks? Or maybe longer? 
   // Let's assume TGE happens every quarter (90 days) for realism in this simulation context
   // allowing accumulation.
-  const int SIMULATED_DAYS_PER_EPOCH = 90; 
+  const int simulatedDaysPerEpoch = 90; 
 
   double totalProtocolMinted = 0;
 
@@ -76,15 +78,16 @@ void main() {
     print('-----------------------------------------------------------');
 
     // --- A. Simulate Activity (Earning Phase) ---
-    print('  Simulating $SIMULATED_DAYS_PER_EPOCH days of activity...');
+    print('  Simulating $simulatedDaysPerEpoch days of activity...');
     for (var user in users) {
       // Simulate Daily Earnings
       double dailyRate = 0;
-      if (user.activityLevel == "High") dailyRate = 1200 + random.nextDouble() * 500; // 1200-1700
-      else if (user.activityLevel == "Medium") dailyRate = 400 + random.nextDouble() * 400; // 400-800
+      if (user.activityLevel == "High") {
+        dailyRate = 1200 + random.nextDouble() * 500; // 1200-1700
+      } else if (user.activityLevel == "Medium") dailyRate = 400 + random.nextDouble() * 400; // 400-800
       else dailyRate = 50 + random.nextDouble() * 150; // 50-200
       
-      double totalEarnedThisEpoch = dailyRate * SIMULATED_DAYS_PER_EPOCH;
+      double totalEarnedThisEpoch = dailyRate * simulatedDaysPerEpoch;
       user.dspBalance += totalEarnedThisEpoch;
 
       // Simulate Trust Growth (Slow steady increase)

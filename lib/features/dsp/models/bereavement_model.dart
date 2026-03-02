@@ -5,7 +5,7 @@ enum MembershipStatus {
   inactive,
   pending_proxy, // Waiting for proxy to accept
   pending_payment, // Proxy accepted, waiting for payment
-  grace_period
+  grace_period,
 }
 
 enum ProxyStatus { none, pending, accepted, rejected }
@@ -62,7 +62,8 @@ class BereavementMembership {
       ),
       joinedDate: (map['joinedDate'] as Timestamp).toDate(),
       nextPaymentDate: (map['nextPaymentDate'] as Timestamp?)?.toDate(),
-      annualContribution: (map['annualContribution'] as num?)?.toDouble() ??
+      annualContribution:
+          (map['annualContribution'] as num?)?.toDouble() ??
           (map['monthlyPremium'] as num?)?.toDouble() ??
           0.0, // Fallback for old data
       supportNumber:

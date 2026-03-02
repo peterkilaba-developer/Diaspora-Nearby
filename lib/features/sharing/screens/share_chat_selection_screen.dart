@@ -205,7 +205,10 @@ class _ShareChatSelectionScreenState
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.pageHorizontalPadding,
+              vertical: 8,
+            ),
             child: TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _searchQuery = value),
@@ -357,7 +360,10 @@ class _ShareChatSelectionScreenState
                     child: SafeArea(
                       top: false,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.pageHorizontalPadding,
+                          vertical: 12,
+                        ),
                         child: SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(

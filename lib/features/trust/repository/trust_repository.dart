@@ -7,6 +7,13 @@ final trustRepositoryProvider = Provider<TrustRepository>((ref) {
   return TrustRepository(FirebaseFirestore.instance);
 });
 
+final trustDataProvider = FutureProvider.family<TrustData?, String>((
+  ref,
+  uid,
+) async {
+  return ref.watch(trustRepositoryProvider).getTrustData(uid);
+});
+
 class TrustRepository {
   final FirebaseFirestore _firestore;
 
@@ -36,6 +43,23 @@ class TrustRepository {
     } catch (e) {
       debugPrint('Error saving trust data: $e');
       rethrow;
+    }
+  }
+
+  Future<List<TrustData>> getCouncilEligibleUsers() async {
+    try {
+      final snapshot = await _firestore
+          .collection('trust_data')
+          .where('isCouncilEligible', isEqualTo: true)
+          .limit(100) // Limit for safety, pagination might be needed later
+          .get();
+
+      return snapshot.docs
+          .map((doc) => TrustData.fromJson(doc.data()))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching council eligible users: $e');
+      return [];
     }
   }
 
@@ -76,7 +100,11 @@ class TrustRepository {
     }, SetOptions(merge: true));
   }
 
-  Future<void> saveQRExchangeRecord(String fromUid, String toUid, {String? locationAddress}) async {
+  Future<void> saveQRExchangeRecord(
+    String fromUid,
+    String toUid, {
+    String? locationAddress,
+  }) async {
     final id = '${fromUid}_${toUid}_qr';
     await _firestore.collection('qr_exchanges').doc(id).set({
       'fromUid': fromUid,
@@ -96,14 +124,46 @@ class TrustRepository {
     }
   }
 
-  Future<void> saveCheckInRecord(String userId, String entityId, String type) async {
-     final id = '${userId}_${entityId}_checkin';
-     await _firestore.collection('check_ins').doc(id).set({
-        'userId': userId,
-        'entityId': entityId,
-        'type': type, // 'event' or 'org'
-        'timestamp': FieldValue.serverTimestamp(),
-     });
+  Future<List<String>> getQrExchangeUserIds(String userId) async {
+    try {
+      final fromQuery = await _firestore
+          .collection('qr_exchanges')
+          .where('fromUid', isEqualTo: userId)
+          .get();
+
+      final toQuery = await _firestore
+          .collection('qr_exchanges')
+          .where('toUid', isEqualTo: userId)
+          .get();
+
+      final userIds = <String>{};
+
+      for (var doc in fromQuery.docs) {
+        userIds.add(doc['toUid'] as String);
+      }
+      for (var doc in toQuery.docs) {
+        userIds.add(doc['fromUid'] as String);
+      }
+
+      return userIds.toList();
+    } catch (e) {
+      debugPrint('Error fetching QR exchanges: $e');
+      return [];
+    }
+  }
+
+  Future<void> saveCheckInRecord(
+    String userId,
+    String entityId,
+    String type,
+  ) async {
+    final id = '${userId}_${entityId}_checkin';
+    await _firestore.collection('check_ins').doc(id).set({
+      'userId': userId,
+      'entityId': entityId,
+      'type': type, // 'event' or 'org'
+      'timestamp': FieldValue.serverTimestamp(),
+    });
   }
 
   // --- Vouches ---
@@ -184,7 +244,9 @@ class TrustRepository {
     return details.map((d) => (d['score'] as num).toDouble()).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getDetailedTrustRatingsForUser(String userId) async {
+  Future<List<Map<String, dynamic>>> getDetailedTrustRatingsForUser(
+    String userId,
+  ) async {
     try {
       final query = await _firestore
           .collection('trust_ratings')
@@ -198,7 +260,10 @@ class TrustRepository {
     }
   }
 
-  Future<double?> getRating({required String fromUserId, required String toUserId}) async {
+  Future<double?> getRating({
+    required String fromUserId,
+    required String toUserId,
+  }) async {
     try {
       final id = '${fromUserId}_$toUserId';
       final doc = await _firestore.collection('trust_ratings').doc(id).get();
@@ -210,13 +275,15 @@ class TrustRepository {
       return null;
     }
   }
+
   // --- Field Verifications ---
   Future<void> saveVerificationEvent({
     required String fromUserId,
     required String toUserId,
     required Map<String, bool> fields,
   }) async {
-    final id = '${fromUserId}_${toUserId}_${DateTime.now().millisecondsSinceEpoch}';
+    final id =
+        '${fromUserId}_${toUserId}_${DateTime.now().millisecondsSinceEpoch}';
     await _firestore.collection('field_verifications').doc(id).set({
       'fromUserId': fromUserId,
       'toUserId': toUserId,
@@ -238,7 +305,9 @@ class TrustRepository {
 
       for (final doc in query.docs) {
         final data = doc.data();
-        final fields = Map<String, dynamic>.from(data['fields'] ?? {}); // Safe cast
+        final fields = Map<String, dynamic>.from(
+          data['fields'] ?? {},
+        ); // Safe cast
         fields.forEach((key, value) {
           if (value == false) {
             falseCounts[key] = (falseCounts[key] ?? 0) + 1;
@@ -246,8 +315,11 @@ class TrustRepository {
         });
       }
 
-  // Return fields with at least 1 negative verification
-      return falseCounts.entries.where((e) => e.value >= 1).map((e) => e.key).toList();
+      // Return fields with at least 1 negative verification
+      return falseCounts.entries
+          .where((e) => e.value >= 1)
+          .map((e) => e.key)
+          .toList();
     } catch (e) {
       // Ignore index errors or empty states
       return [];
@@ -287,13 +359,15 @@ class TrustRepository {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getAllVerificationsForUser(String userId) async {
+  Future<List<Map<String, dynamic>>> getAllVerificationsForUser(
+    String userId,
+  ) async {
     try {
       final query = await _firestore
           .collection('field_verifications')
           .where('toUserId', isEqualTo: userId)
           .get();
-      
+
       return query.docs.map((doc) => doc.data()).toList();
     } catch (e) {
       debugPrint('Error getting all verifications: $e');
@@ -301,9 +375,20 @@ class TrustRepository {
     }
   }
 
-  Future<void> updateTrustCounter(String userId, String field, int value) async {
+  Future<void> updateTrustCounter(
+    String userId,
+    String field,
+    int value,
+  ) async {
     await _firestore.collection('trust_data').doc(userId).set({
       field: value,
+      'lastUpdated': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> incrementTrustMetric(String userId, String fieldName) async {
+    await _firestore.collection('trust_data').doc(userId).set({
+      fieldName: FieldValue.increment(1),
       'lastUpdated': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
   }

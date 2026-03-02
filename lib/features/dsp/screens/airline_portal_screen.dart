@@ -4,9 +4,10 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/dsp/repository/interest_repository.dart';
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 class AirlinePortalScreen extends ConsumerStatefulWidget {
   const AirlinePortalScreen({super.key});
@@ -24,6 +25,19 @@ class _AirlinePortalScreenState extends ConsumerState<AirlinePortalScreen> {
   void initState() {
     super.initState();
     _checkStatus();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(user.uid, ExplorationAction.dspAirlinePortal);
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
   }
 
   Future<void> _checkStatus() async {
@@ -88,7 +102,10 @@ class _AirlinePortalScreenState extends ConsumerState<AirlinePortalScreen> {
       appBar: AppBar(title: const Text('International Air Flight Portal')),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: AppTheme.cardPadding),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+            vertical: AppTheme.cardPadding,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -110,7 +127,7 @@ class _AirlinePortalScreenState extends ConsumerState<AirlinePortalScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Book discounted international flights using Diaspora (\$DSP). Exclusive deals for diaspora members returning home.',
+                'Book discounted international flights using Diaspora (\$DIASPORA). Exclusive deals for diaspora members returning home.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),

@@ -3,13 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart'; // [NEW]
 
 class OrganizationInfoScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -40,6 +41,7 @@ class _OrganizationInfoScreenState
   List<ProfileData> _admins = [];
   List<ProfileData> _followers = [];
   bool _isAdmin = false;
+  bool _isMuted = false; // [NEW]
 
   @override
   void initState() {
@@ -72,6 +74,21 @@ class _OrganizationInfoScreenState
 
         // Load Participants and Admins details
         await _loadMembers(data);
+
+        // [NEW] Fetch Mute Status
+        try {
+          final muteDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.currentUserId)
+              .collection('userChats')
+              .doc(widget.chatId)
+              .get();
+          if (muteDoc.exists && muteDoc.data()?['muted'] == true) {
+            _isMuted = true;
+          }
+        } catch (e) {
+          debugPrint('Error fetching mute status: $e');
+        }
       }
     } catch (e) {
       debugPrint('Error loading organization info: $e');
@@ -93,18 +110,16 @@ class _OrganizationInfoScreenState
       adminIds.insert(0, superAdminId);
     }
 
-    // Fetch Participants from RTDB (Board)
-    final participantsSnapshot = await FirebaseDatabase.instance
-        .ref('chats/${widget.chatId}/participants')
+    // Fetch Participants from Firestore
+    final chatDoc = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
         .get();
-    final snapshotValue = participantsSnapshot.value;
     List<String> chatParticipantIds = [];
-    if (snapshotValue is List) {
+    if (chatDoc.exists) {
       chatParticipantIds = List<String>.from(
-        snapshotValue.where((e) => e != null).map((e) => e.toString()),
+        chatDoc.data()?['participants'] ?? [],
       );
-    } else if (snapshotValue is Map) {
-      chatParticipantIds = snapshotValue.keys.map((e) => e.toString()).toList();
     }
 
     // Fetch Followers (Org Followers)
@@ -253,7 +268,9 @@ class _OrganizationInfoScreenState
                 children: [
                   // Logo & Details
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.pageHorizontalPadding,
+                    ),
                     child: Center(
                       child: Column(
                         children: [
@@ -292,7 +309,9 @@ class _OrganizationInfoScreenState
 
                   // Follow Button
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.pageHorizontalPadding,
+                    ),
                     child: SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -323,13 +342,40 @@ class _OrganizationInfoScreenState
                     ),
                   ),
 
+                  const SizedBox(height: 16),
+
+                  // [NEW] Mute Notifications Switch
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.pageHorizontalPadding,
+                    ),
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _isMuted,
+                      onChanged: (value) async {
+                        setState(() => _isMuted = value);
+                        await ref
+                            .read(chatRepositoryProvider)
+                            .toggleMute(widget.chatId, value);
+                      },
+                      title: const Text('Mute Notifications'),
+                      secondary: Icon(
+                        _isMuted ? LucideIcons.bellOff : LucideIcons.bell,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      activeThumbColor: theme.colorScheme.primary,
+                    ),
+                  ),
+
                   const SizedBox(height: 32),
 
                   // About Section
                   if (_orgData!['description'] != null &&
                       _orgData!['description'].isNotEmpty) ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.pageHorizontalPadding,
+                      ),
                       child: SizedBox(
                         width: double.infinity,
                         child: Column(
@@ -352,7 +398,9 @@ class _OrganizationInfoScreenState
                   // Admins Section (First)
                   if (_admins.isNotEmpty) ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.pageHorizontalPadding,
+                      ),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
@@ -398,7 +446,9 @@ class _OrganizationInfoScreenState
                   // Board Participants Section (Second)
                   if (_participants.isNotEmpty) ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.pageHorizontalPadding,
+                      ),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
@@ -440,7 +490,9 @@ class _OrganizationInfoScreenState
                     if (_isAdmin) ...[
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.pageHorizontalPadding,
+                        ),
                         child: TextButton.icon(
                           onPressed: () => context.push(
                             '/organization/manage?orgId=${_orgData!['id']}',
@@ -456,7 +508,9 @@ class _OrganizationInfoScreenState
                   // Followers Section (Last)
                   if (_followers.isNotEmpty) ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.pageHorizontalPadding,
+                      ),
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(

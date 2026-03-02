@@ -25,11 +25,15 @@ class Community {
   final int? createdAt;
   final int? updatedAt;
   final int points; // New: DSP points held by the community
-  final int cumulativeEarnings; // New: Tracks aggregate member earnings toward 1M milestone
-  final int memberPoints; // [NEW] Total points earned by members (basis for 10% target)
+  final int
+  cumulativeEarnings; // New: Tracks aggregate member earnings toward 1M milestone
+  final int
+  memberPoints; // [NEW] Total points earned by members (basis for 10% target)
   final double awardedBalance; // [NEW] Track distributed rewards
   final double averagePoCT; // [NEW] Track community average trust score
   final String? walletAddress; // New: Metamask address for $DSP
+  final int cumulativeGdp; // [NEW] Total transaction volume within community
+  final double averageHoldingPeriod; // [NEW] Average time tokens are held (Velocity inverse)
 
   Community({
     required this.id,
@@ -57,6 +61,8 @@ class Community {
     this.awardedBalance = 0, // [NEW]
     this.averagePoCT = 0, // [NEW]
     this.walletAddress,
+    this.cumulativeGdp = 0,
+    this.averageHoldingPeriod = 0.0,
   });
 
   Community copyWith({
@@ -85,6 +91,8 @@ class Community {
     double? awardedBalance, // [NEW]
     double? averagePoCT, // [NEW]
     String? walletAddress,
+    int? cumulativeGdp,
+    double? averageHoldingPeriod,
   }) {
     return Community(
       id: id ?? this.id,
@@ -112,6 +120,8 @@ class Community {
       awardedBalance: awardedBalance ?? this.awardedBalance, // [NEW]
       averagePoCT: averagePoCT ?? this.averagePoCT, // [NEW]
       walletAddress: walletAddress ?? this.walletAddress,
+      cumulativeGdp: cumulativeGdp ?? this.cumulativeGdp,
+      averageHoldingPeriod: averageHoldingPeriod ?? this.averageHoldingPeriod,
     );
   }
 
@@ -137,6 +147,8 @@ class Community {
     json['memberPoints'] ??= 0;
     json['awardedBalance'] ??= 0.0;
     json['averagePoCT'] ??= 0.0;
+    json['cumulativeGdp'] ??= 0;
+    json['averageHoldingPeriod'] ??= 0.0;
     json['isPrivate'] ??= false;
 
     return _$CommunityFromJson(json);

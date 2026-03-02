@@ -48,7 +48,10 @@ class CompleteProfileModal extends ConsumerWidget {
                 TextButton.icon(
                   onPressed: onNavigateToFullEdit,
                   icon: const Icon(LucideIcons.externalLink, size: 14),
-                  label: const Text('Full Edit', style: TextStyle(fontSize: 12)),
+                  label: const Text(
+                    'Full Edit',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
               IconButton(
                 icon: const Icon(LucideIcons.x),
@@ -68,16 +71,21 @@ class CompleteProfileModal extends ConsumerWidget {
               highlightFields: missingFields,
               submitLabel: 'Save & Continue Connection',
               showUserCard: false,
+              isFinishProfile: true,
               onSave: (updated, newImage) async {
                 try {
                   String imageUrl = updated.profileImage;
                   if (newImage != null) {
-                    imageUrl = await ref.read(profileRepositoryProvider).uploadProfileImage(updated.uid!, newImage);
+                    imageUrl = await ref
+                        .read(profileRepositoryProvider)
+                        .uploadProfileImage(updated.uid!, newImage);
                   }
-                  
+
                   final finalProfile = updated.copyWith(profileImage: imageUrl);
-                  await ref.read(profileRepositoryProvider).saveUserProfile(finalProfile.uid!, finalProfile);
-                  
+                  await ref
+                      .read(profileRepositoryProvider)
+                      .saveUserProfile(finalProfile.uid!, finalProfile);
+
                   if (context.mounted) {
                     Navigator.pop(context, true);
                   }

@@ -1,5 +1,6 @@
 import 'package:diaspora_nearby/features/admin_dashboard/services/admin_service.dart';
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -26,13 +27,13 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.elevationColor(context, 0), // Level 0 page bg
       body: Column(
         children: [
           // Search & Filters Header
           Container(
             padding: const EdgeInsets.all(24),
-            color: Colors.white,
+            color: AppTheme.elevationColor(context, 1), // Level 1 header
             child: Row(
               children: [
                 Expanded(
@@ -43,7 +44,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       hintText: 'Search users by name, email, or phone...',
                       prefixIcon: const Icon(LucideIcons.search, size: 20),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: AppTheme.elevationColor(context, 2), // Level 2 input
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -131,7 +132,7 @@ class _UserTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
       ),
@@ -242,7 +243,11 @@ class _UserTile extends StatelessWidget {
     );
   }
 
-  Future<void> _toggleBan(BuildContext context, ProfileData user, WidgetRef ref) async {
+  Future<void> _toggleBan(
+    BuildContext context,
+    ProfileData user,
+    WidgetRef ref,
+  ) async {
     final action = user.isBanned == true ? 'Unban' : 'Ban';
     final confirm = await showDialog<bool>(
       context: context,
@@ -294,7 +299,7 @@ class _FilterButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.elevationColor(context, 1), // Level 1 button
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade300),
         ),

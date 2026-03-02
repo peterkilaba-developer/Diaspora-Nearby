@@ -41,6 +41,9 @@ Community _$CommunityFromJson(Map<String, dynamic> json) => Community(
       awardedBalance: (json['awardedBalance'] as num?)?.toDouble() ?? 0,
       averagePoCT: (json['averagePoCT'] as num?)?.toDouble() ?? 0,
       walletAddress: json['walletAddress'] as String?,
+      cumulativeGdp: (json['cumulativeGdp'] as num?)?.toInt() ?? 0,
+      averageHoldingPeriod:
+          (json['averageHoldingPeriod'] as num?)?.toDouble() ?? 0.0,
     );
 
 Map<String, dynamic> _$CommunityToJson(Community instance) => <String, dynamic>{
@@ -69,6 +72,8 @@ Map<String, dynamic> _$CommunityToJson(Community instance) => <String, dynamic>{
       'awardedBalance': instance.awardedBalance,
       'averagePoCT': instance.averagePoCT,
       'walletAddress': instance.walletAddress,
+      'cumulativeGdp': instance.cumulativeGdp,
+      'averageHoldingPeriod': instance.averageHoldingPeriod,
     };
 
 CommunityData _$CommunityDataFromJson(Map<String, dynamic> json) =>

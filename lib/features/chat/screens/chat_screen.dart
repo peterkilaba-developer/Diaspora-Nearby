@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +23,7 @@ import 'package:diaspora_nearby/features/chat/screens/create_group_screen.dart';
 import 'package:diaspora_nearby/features/chat/screens/forward_chat_selection_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 // [FIXED]
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
@@ -40,13 +40,17 @@ import 'package:diaspora_nearby/features/profile/widgets/relationship_selection_
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship_request.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/providers/pending_message_provider.dart';
-import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
-import 'package:diaspora_nearby/features/shared/services/content_share_service.dart'; // [NEW]
+// [NEW]
+// [NEW]
+import 'package:diaspora_nearby/features/trust/widgets/profile_verification_modal.dart'; // [NEW]
+import 'package:diaspora_nearby/features/trust/widgets/verification_alert_modal.dart'; // [NEW]
 import 'package:diaspora_nearby/features/governance/repository/governance_repository.dart'; // [NEW]
+
 import 'package:diaspora_nearby/features/governance/screens/leader_selection_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/governance/models/governance_unit.dart'; // [NEW]
-import 'package:diaspora_nearby/features/events/screens/create_event_screen.dart'; // [NEW]
+// [NEW]
 import 'package:diaspora_nearby/features/more/widgets/business_registration_modal.dart'; // [NEW]
+import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart'; // [NEW]
 
 import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart'; // [NEW] Shared Providers
 
@@ -142,8 +146,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             // This avoids auto-joining if the user is just previewing from discovery.
             chatRepo.markChatAsRead(_activeChatId!);
             chatRepo.clearChatMentions(_activeChatId!);
-          }
 
+            // [NEW] Award exploration DSP for opening community chats
+            if (chat.type == 'community' && mounted) {
+              final actionId = 'action_open_community_chat_${chat.id}';
+              try {
+                final rewarded = await ref
+                    .read(pointsServiceProvider)
+                    .trackExplorationReward(currentUserId, actionId);
+                if (rewarded && mounted) {
+                  showExplorationRewardToast(
+                    context,
+                    message: 'Explored ${chat.name ?? 'Community Chat'}',
+                    points: 10,
+                  );
+                }
+              } catch (e) {
+                debugPrint('Error tracking chat exploration: $e');
+              }
+            }
+          }
         }
       });
     }
@@ -164,7 +186,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
     _readReceiptDebounceTimer?.cancel();
-    
+
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _messageController.dispose(); // [NEW]
@@ -307,26 +329,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         senderImageOverride = identity['profileImage'];
       }
 
-      // [NEW] Fetch participants for instant list update
-      List<String>? participants;
-      try {
-        final chat = await chatRepo.getChat(_activeChatId!);
-        participants = chat?.participants;
-      } catch (e) {
-        debugPrint('Error fetching chat for participants: $e');
-      }
-
-      // [NEW] Optimistic UI
+      // [FIX] Add optimistic message FIRST, before any async calls
       final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
-      if (currentUserId != null) {
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final tempId = 'temp_${now}_$currentUserId';
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final tempId = 'temp_${now}_$currentUserId';
 
+      if (currentUserId != null) {
         final optimisticMessage = Message(
           id: tempId,
           chatId: _activeChatId!,
           senderId: senderIdOverride ?? currentUserId,
-          senderName: senderNameOverride ?? 'Me', // Fallback, usually fetched
+          senderName: senderNameOverride ?? 'Me',
           senderImage: senderImageOverride,
           content: text.trim(),
           type: 'text',
@@ -338,6 +351,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref
             .read(pendingMessagesProvider.notifier)
             .addMessage(_activeChatId!, optimisticMessage);
+
+        // Now fetch participants (non-blocking for UI)
+        List<String>? participants;
+        try {
+          final chat = await chatRepo.getChat(_activeChatId!);
+          participants = chat?.participants;
+        } catch (e) {
+          debugPrint('Error fetching chat for participants: $e');
+        }
 
         try {
           await chatRepo.sendTextMessage(
@@ -355,10 +377,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             replyToSenderId: _replyingTo?.senderId,
           );
         } catch (e) {
-          debugPrint('Error sending message: $e');
-          // Optionally mark as failed instead of removing?
-          // For now, removing to avoid stuck 'sending' state if logic doesn't handle failures well
-          // or we could update status to 'failed'
+          debugPrint('❌ Error sending message: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to send message: ${e.toString().replaceAll('Exception: ', '')}'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         } finally {
           ref
               .read(pendingMessagesProvider.notifier)
@@ -373,7 +401,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           senderIdOverride: senderIdOverride,
           senderNameOverride: senderNameOverride,
           senderImageOverride: senderImageOverride,
-          participants: participants,
           mentions: (metadata?['mentions'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList(),
@@ -1145,14 +1172,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
           data: (chat) {
+
             if (chat != null && chat.isDirect) {
               final profileAsync = ref.watch(
                 chatScreenUserProfileProvider(chat),
               );
+
               return profileAsync.when(
                 data: (profile) => ChatHeaderTitle(
                   profile: profile,
                   fallbackTitle: displayNameAsync.value ?? chat.name,
+                  onTap: () {
+                    if (profile?.uid != null) {
+                      context.push('/profile/${profile!.uid}');
+                    }
+                  },
                 ),
                 loading: () => Text(
                   displayNameAsync.value ?? chat.name,
@@ -1364,43 +1398,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           // More Options Menu
           // More Options Menu (Only if member)
-          Builder(builder: (context) {
-            final chat = chatAsync.value;
-            // Basic participant check
-             var isParticipant =
+          Builder(
+            builder: (context) {
+              final chat = chatAsync.value;
+              // Basic participant check
+              var isParticipant =
                   chat?.participants.contains(currentUserId) ?? false;
 
               // Extended check for Events (Creator/Attendee)
               if (chat?.isEvent == true &&
                   chat?.eventId != null &&
                   !isParticipant) {
-                  // We need to resolve the event here. 
-                  // Since we are in the actions list, we can rely on the fact that if we are here, the chat is loaded.
-                  // But we need the event data.
-                   final eventAsync = ref.watch(
-                    eventDetailsProvider(chat!.eventId!),
-                  );
-                  final event = eventAsync.value;
-                  if (event != null) {
-                    final isCreator = event.creatorId == currentUserId;
-                    final isAttendee =
-                        event.attendees?.contains(currentUserId) ?? false;
-                    if (isCreator || isAttendee) {
-                      isParticipant = true;
-                    }
+                // We need to resolve the event here.
+                // Since we are in the actions list, we can rely on the fact that if we are here, the chat is loaded.
+                // But we need the event data.
+                final eventAsync = ref.watch(
+                  eventDetailsProvider(chat!.eventId!),
+                );
+                final event = eventAsync.value;
+                if (event != null) {
+                  final isCreator = event.creatorId == currentUserId;
+                  final isAttendee =
+                      event.attendees?.contains(currentUserId) ?? false;
+                  if (isCreator || isAttendee) {
+                    isParticipant = true;
                   }
+                }
               }
-            
-            if (chat != null && isParticipant) {
-              return IconButton(
-                icon: const Icon(LucideIcons.moreVertical),
-                onPressed: () {
-                  _showMoreMenu(context, chat, ref);
-                },
-              );
-            }
-            return const SizedBox.shrink();
-          }),
+
+              if (chat != null && isParticipant) {
+                return IconButton(
+                  icon: const Icon(LucideIcons.moreVertical),
+                  onPressed: () {
+                    _showMoreMenu(context, chat, ref);
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
         ],
       ),
       resizeToAvoidBottomInset: true,
@@ -1437,8 +1473,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ref.watch(pendingMessagesProvider)[_activeChatId!] ?? [];
 
                 // Merge strategies:
-                // Sort everything by timestamp DESC.
-                final allMessages = [...pendingMessages, ...streamMessages];
+                // Deduplicate: if a stream message matches a pending message
+                // (same sender + similar timestamp), skip the stream copy.
+                final filteredStream = pendingMessages.isEmpty
+                    ? streamMessages
+                    : streamMessages.where((sm) {
+                        return !pendingMessages.any((pm) =>
+                            pm.senderId == sm.senderId &&
+                            pm.type == sm.type &&
+                            (sm.timestamp - pm.timestamp).abs() < 5000 &&
+                            (pm.content == sm.content ||
+                                pm.content.isEmpty ||
+                                sm.content.isEmpty));
+                      }).toList();
+
+                final allMessages = [...pendingMessages, ...filteredStream];
                 allMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
                 if (allMessages.isEmpty) {
@@ -1519,9 +1568,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 message: message,
                                 isOwn: isOwn,
                                 showAvatar: chatAsync.value?.type != 'direct',
+                                sellerRole: _getSellerRoleForMessage(
+                                  chatAsync.value,
+                                  message,
+                                  currentUserId,
+                                ),
                                 onReply: () => _setReplyTo(message),
                                 onReplyTap: _scrollToMessage,
-                                onLongPress: () => _handleMessageAction(context, message, ref),
+                                onLongPress: () =>
+                                    _handleMessageAction(context, message, ref),
                                 onRetry: message.status == 'error'
                                     ? () => _retryMessage(message)
                                     : null,
@@ -1658,7 +1713,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   }
                   // BOARD DISCLOSURE (Restriction Message)
                   // Use chat.isCommunity to show town community specific message
-                  if (!isParticipant && (chat?.isOrganization == true || chat?.isCommunity == true))
+                  if (!isParticipant &&
+                      (chat.isOrganization == true ||
+                          chat.isCommunity == true)) {
                     Positioned(
                       bottom: 80,
                       left: 16,
@@ -1689,8 +1746,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              chat?.isCommunity == true
-                                  ? 'Only members of the ${chat?.name ?? 'this'} community can post here.'
+                              chat.isCommunity == true
+                                  ? 'Only members of the ${chat.name ?? 'this'} community can post here.'
                                   : 'Only authorized participants can post to this organization board.',
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodyMedium?.copyWith(
@@ -1701,6 +1758,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         ),
                       ),
                     );
+                  }
                 }
               }
 
@@ -1721,32 +1779,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           top: BorderSide(color: theme.dividerColor),
                         ),
                         boxShadow: [
-                           BoxShadow(
-                             color: Colors.black.withOpacity(0.05),
-                             blurRadius: 4,
-                             offset: const Offset(0, -2),
-                           )
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, -2),
+                          ),
                         ],
                       ),
                       child: FilledButton.icon(
                         onPressed: () async {
-                           // Join Logic
-                           try {
-                             await ref.read(chatRepositoryProvider).joinGroup(chat.id);
-                             if (context.mounted) {
-                               ScaffoldMessenger.of(context).showSnackBar(
-                                 const SnackBar(content: Text('Joined group!')),
-                               );
-                               // Force refresh
-                               ref.invalidate(chatProvider(chat.id));
-                             }
-                           } catch (e) {
-                             if (context.mounted) {
-                               ScaffoldMessenger.of(context).showSnackBar(
-                                 SnackBar(content: Text('Failed to join: $e')),
-                               );
-                             }
-                           }
+                          // Join Logic
+                          try {
+                            await ref
+                                .read(chatRepositoryProvider)
+                                .joinGroup(chat.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Joined group!')),
+                              );
+                              // Force refresh
+                              ref.invalidate(chatProvider(chat.id));
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to join: $e')),
+                              );
+                            }
+                          }
                         },
                         icon: const Icon(LucideIcons.plus),
                         label: const Text('Join Group'),
@@ -1807,6 +1867,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           .where((id) => id != currentUserId)
                           .toList() ??
                       [],
+                  // [NEW] Pass recipient ID for transfers (only valid for Direct chats)
+                  recipientUserId: (chat?.type == 'direct')
+                      ? chat?.participants
+                            .where((id) => id != currentUserId)
+                            .firstOrNull
+                      : null,
                   onSendMessage: (text, {type, metadata}) =>
                       _sendMessage(text, metadata: metadata),
                   onSendMedia: _sendMedia,
@@ -1825,267 +1891,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
           ),
         ],
-      ),
-    );
-  }
-
-  /// Show context menu for message interactions
-  void _showMessageContextMenu(
-    BuildContext context,
-    Message message,
-    String currentUserId,
-  ) {
-    final theme = Theme.of(context);
-    final chatRepo = ref.read(chatRepositoryProvider);
-    final isOwn = message.senderId == currentUserId;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              // Drag handle
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Reaction Row
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: ['❤️', '😂', '👍', '👎', '😮', '😢', '🙏', '🔥']
-                      .map((emoji) {
-                        final isSelected =
-                            message.reactions?.any(
-                              (r) =>
-                                  r.emoji == emoji &&
-                                  r.userIds.contains(currentUserId),
-                            ) ??
-                            false;
-
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            if (isSelected) {
-                              chatRepo.removeReaction(
-                                message.chatId,
-                                message.id,
-                                emoji,
-                              );
-                            } else {
-                              chatRepo.addReaction(
-                                message.chatId,
-                                message.id,
-                                emoji,
-                                message.senderId,
-                              );
-                            }
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 12),
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? theme.colorScheme.primaryContainer
-                                  : theme.colorScheme.surfaceContainerHighest
-                                        .withValues(alpha: 0.5),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              emoji,
-                              style: const TextStyle(fontSize: 24),
-                            ),
-                          ),
-                        );
-                      })
-                      .toList(),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-              const Divider(),
-
-              // Actions List
-              ListTile(
-                leading: const Icon(LucideIcons.reply),
-                title: const Text('Reply'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _setReplyTo(message);
-                },
-              ),
-              ListTile(
-                leading: const Icon(LucideIcons.forward),
-                title: const Text('Forward'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  // Navigate to Forward Selection Screen
-                  final selectedChatIds = await context.push<List<String>>(
-                    '/chats/forward_selection',
-                  );
-                  if (selectedChatIds != null && selectedChatIds.isNotEmpty) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Forwarding message...'),
-                          duration: Duration(
-                            seconds: 1,
-                          ), // Short duration as it updates quickly usually
-                        ),
-                      );
-                    }
-
-                    final identity = ref.read(chatIdentityProvider);
-                    await chatRepo.forwardMessage(
-                      message,
-                      selectedChatIds,
-                      senderIdOverride: identity?['id'],
-                      senderNameOverride:
-                          identity?['businessName'] ?? identity?['name'],
-                      senderImageOverride: identity?['profileImage'],
-                    );
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).hideCurrentSnackBar(); // Hide "sending"
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Forwarded to ${selectedChatIds.length} chat${selectedChatIds.length > 1 ? 's' : ''}',
-                          ),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(LucideIcons.copy),
-                title: const Text('Copy'),
-                onTap: () async {
-                  // Copy text logic
-                  await io.Clipboard.setData(
-                    io.ClipboardData(text: message.content),
-                  );
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Copied to clipboard')),
-                    );
-                  }
-                },
-              ),
-              if (isOwn)
-                ListTile(
-                  leading: Icon(
-                    LucideIcons.trash2,
-                    color: theme.colorScheme.error,
-                  ),
-                  title: Text(
-                    'Delete',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showDeleteMessageConfirmation(context, message, chatRepo);
-                  },
-                ),
-
-              if (!isOwn)
-                ListTile(
-                  leading: const Icon(LucideIcons.flag, color: Colors.orange),
-                  title: const Text(
-                    'Report',
-                    style: TextStyle(color: Colors.orange),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    // Show Report Dialog
-                    showDialog(
-                      context: context,
-                      builder: (c) {
-                        // Simple dialog for now, can be expanded to select reason
-                        return AlertDialog(
-                          title: const Text('Report Message'),
-                          content: const Text(
-                            'Flag this message as containing unsolicited ads or spam?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(c),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                Navigator.pop(c);
-                                final currentUserId = ref
-                                    .read(chatRepositoryProvider)
-                                    .currentUserId;
-                                if (currentUserId != null) {
-                                  await ref
-                                      .read(reportRepositoryProvider)
-                                      .reportMessage(
-                                        reporterId: currentUserId,
-                                        messageId: message.id,
-                                        senderId: message.senderId,
-                                        reason: 'ad',
-                                      );
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Message reported. Thank you.',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              child: const Text(
-                                'Report',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
-
-              // [NEW] Share Option
-              ListTile(
-                leading: const Icon(LucideIcons.share2),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  ref
-                      .read(contentShareServiceProvider)
-                      .shareMessage(context, message);
-                },
-              ),
-
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -2141,6 +1946,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return prevDate.day != currDate.day ||
         prevDate.month != currDate.month ||
         prevDate.year != currDate.year;
+  }
+
+  /// Returns the seller role badge text for listing chats, or null for
+  /// non-listing chats or the buyer's own messages.
+  String? _getSellerRoleForMessage(
+    dynamic chat,
+    Message message,
+    String currentUserId,
+  ) {
+    if (chat == null) return null;
+    final metadata = chat.metadata;
+    if (metadata == null || metadata['isListingChat'] != true) return null;
+
+    // Only show the role badge on the *seller's* messages (not the buyer's)
+    // The seller is the "other" participant (the one who received the chat)
+    final isMessageFromSeller = message.senderId != currentUserId;
+    if (!isMessageFromSeller) return null;
+
+    return metadata['sellerRole'] as String?;
   }
 
   Widget _buildDateSeparator(int timestamp, ThemeData theme) {
@@ -2296,8 +2120,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-
-
   Future<void> _showMoreMenu(
     BuildContext context,
     Chat chat,
@@ -2328,7 +2150,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final otherUserId = chat.getOtherParticipantId(repo.currentUserId ?? '');
       if (otherUserId != null && repo.currentUserId != null) {
         final relRepo = ref.read(relationshipRepositoryProvider);
-        
+
         // 1. Check Active Relationship
         existingRelationship = await relRepo.getRelationship(
           userId: repo.currentUserId!,
@@ -2337,17 +2159,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
         // 2. Check Pending Requests (only if no active relationship)
         if (existingRelationship == null) {
-           pendingSentRequest = await relRepo.getPendingSentRequest(
-             fromUserId: repo.currentUserId!,
-             toUserId: otherUserId,
-           );
-           
-           if (pendingSentRequest == null) {
-             pendingIncomingRequest = await relRepo.getPendingIncomingRequest(
-               userId: repo.currentUserId!,
-               fromUserId: otherUserId,
-             );
-           }
+          pendingSentRequest = await relRepo.getPendingSentRequest(
+            fromUserId: repo.currentUserId!,
+            toUserId: otherUserId,
+          );
+
+          if (pendingSentRequest == null) {
+            pendingIncomingRequest = await relRepo.getPendingIncomingRequest(
+              userId: repo.currentUserId!,
+              fromUserId: otherUserId,
+            );
+          }
         }
       }
     }
@@ -2363,7 +2185,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         governanceUnit = await ref
             .read(governanceRepositoryProvider)
             .getGovernanceUnitByCommunityId(chat.communityId!);
-            
+
         // Fetch Community (for fallback info)
         community = await ref
             .read(communityRepositoryProvider)
@@ -2373,7 +2195,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
 
+    // [NEW] Fetch current user's profile for Verify & Vouch gate
+    bool hasAnyProfileField = false;
+    if (isDirect && repo.currentUserId != null) {
+      try {
+        final myProfile = await ref
+            .read(profileRepositoryProvider)
+            .getUserProfile(repo.currentUserId!);
+        if (myProfile != null && myProfile.completedMilestoneFieldCount >= 1) {
+          hasAnyProfileField = true;
+        }
+      } catch (e) {
+        debugPrint('Error fetching profile for verify gate: $e');
+      }
+    }
+
     if (!context.mounted) return;
+
+    // Save the widget context before the dialog so it can be used after dialog is dismissed
+    final outerContext = context;
 
     // Use showDialog with column/spacer to position at top
     showDialog(
@@ -2441,14 +2281,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Request is pending acceptance'),
+                                    content: Text(
+                                      'Request is pending acceptance',
+                                    ),
                                   ),
                                 );
                               }
                             },
                           )
                         else if (pendingIncomingRequest != null)
-                           _buildSheetItem(
+                          _buildSheetItem(
                             context,
                             icon: LucideIcons.bellRing,
                             iconColor: Colors.green.shade600,
@@ -2463,9 +2305,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               // Implementing quick navigation to notification page logic or just a toast for now as 'Accept' logic is complex UI.
                               // Actually, let's just guide them.
                               if (context.mounted) {
-                                 ScaffoldMessenger.of(context).showSnackBar(
+                                ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Please check your notifications to accept.'),
+                                    content: Text(
+                                      'Please check your notifications to accept.',
+                                    ),
                                   ),
                                 );
                               }
@@ -2558,7 +2402,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             );
                           },
                         ),
-                      
+
                       // Create Group Event
                       if (!isCommunity && !isEvent && !isDirect)
                         _buildSheetItem(
@@ -2573,52 +2417,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             context.push(
                               Uri(
                                 path: '/events/create',
-                                queryParameters: {
-                                  'groupId': chat.id,
-                                },
+                                queryParameters: {'groupId': chat.id},
                               ).toString(),
                             );
                           },
                         ),
 
-                      // Mute
-                      _buildSheetItem(
-                        context,
-                        icon: LucideIcons.bell,
-                        iconColor: Colors.purple.shade700,
-                        iconBgColor: Colors.purple.shade50,
-                        title: chat.isMuted ? 'Unmute' : 'Mute',
-                        subtitle: chat.isMuted
-                            ? 'Enable notifications'
-                            : 'Stop receiving notifications',
-                        onTap: () async {
-                          Navigator.pop(context);
-                          await repo.toggleMute(chat.id, !chat.isMuted);
-                        },
-                      ),
-
                       // ... inside _showMoreMenu ...
 
                       // Block/Unblock User (Direct Only)
                       if (isDirect)
-                         Builder(
+                        Builder(
                           builder: (context) {
                             final profile = ref.read(userProfileProvider).value;
                             final otherId = chat.getOtherParticipantId(
                               repo.currentUserId ?? '',
                             );
-                            
+
                             if (otherId == null) return const SizedBox.shrink();
 
-                            final isBlocked = profile?.blockedUsers?.contains(otherId) ?? false;
+                            final isBlocked =
+                                profile?.blockedUsers?.contains(otherId) ??
+                                false;
 
                             return _buildSheetItem(
                               context,
-                              icon: isBlocked ? LucideIcons.shieldCheck : LucideIcons.ban,
-                              iconColor: isBlocked ? Colors.green.shade700 : Colors.red.shade700,
-                              iconBgColor: isBlocked ? Colors.green.shade50 : Colors.red.shade50,
+                              icon: isBlocked
+                                  ? LucideIcons.shieldCheck
+                                  : LucideIcons.ban,
+                              iconColor: isBlocked
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700,
+                              iconBgColor: isBlocked
+                                  ? Colors.green.shade50
+                                  : Colors.red.shade50,
                               title: isBlocked ? 'Unblock User' : 'Block User',
-                              subtitle: isBlocked ? 'Allow them to message you' : 'Block this user',
+                              subtitle: isBlocked
+                                  ? 'Allow them to message you'
+                                  : 'Block this user',
                               isDestructive: !isBlocked,
                               onTap: () async {
                                 Navigator.pop(context);
@@ -2631,8 +2467,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                           userId: repo.currentUserId!,
                                           relatedUserId: otherId,
                                         );
-                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         const SnackBar(
                                           content: Text('User unblocked'),
                                           backgroundColor: Colors.green,
@@ -2641,7 +2479,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                     }
                                   } catch (e) {
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(content: Text('Error: $e')),
                                       );
                                     }
@@ -2657,11 +2497,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       ),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
                                           child: const Text('Cancel'),
                                         ),
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
                                           style: TextButton.styleFrom(
                                             foregroundColor: AppTheme.error,
                                           ),
@@ -2680,8 +2522,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                             relatedUserId: otherId,
                                           );
                                       if (context.mounted) {
-                                         context.pop(); // Go back to list
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        context.pop(); // Go back to list
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           const SnackBar(
                                             content: Text('User blocked'),
                                             backgroundColor: Colors.red,
@@ -2690,7 +2534,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(content: Text('Error: $e')),
                                         );
                                       }
@@ -2699,7 +2545,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 }
                               },
                             );
-                          }
+                          },
                         ),
 
                       // existing items...
@@ -2720,6 +2566,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           );
                         },
                       ),
+
+                      // [UPDATED] Verify & Vouch (Only for DMs, requires at least 1 profile field)
+                      if (chat.isDirect && hasAnyProfileField)
+                        _buildSheetItem(
+                          context,
+                          icon: LucideIcons.shieldCheck,
+                          iconColor: AppTheme.accent,
+                          iconBgColor: AppTheme.accent.withOpacity(0.1),
+                          title: 'Verify & Vouch',
+                          subtitle: 'Verify or vouch for this user',
+                          onTap: () {
+                            Navigator.pop(context);
+                            // Use outerContext (widget context) since dialog context
+                            // is unmounted after pop, which would make mounted checks fail
+                            _handleVerifyChatUser(outerContext, ref, chat);
+                          },
+                        ),
 
                       // Delete / Leave Chat (All types except community)
                       if (!isCommunity)
@@ -2747,15 +2610,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             String dialogTitle = 'Delete Chat?';
                             if (isGroup) dialogTitle = 'Leave Group?';
                             if (isEvent) dialogTitle = 'Leave Event?';
-                            if (chat.isOrganization) dialogTitle = 'Unfollow Organization?'; // [UPDATED]
+                            if (chat.isOrganization) {
+                              dialogTitle =
+                                  'Unfollow Organization?'; // [UPDATED]
+                            }
 
                             _showDeleteConfirmation(
                               context,
                               repo,
                               chat.id,
                               nameToUse,
-                              isLeave: isGroup || isEvent || chat.isOrganization,
-                              titleOverride: (isGroup || isEvent || chat.isOrganization) ? dialogTitle : null,
+                              isLeave:
+                                  isGroup || isEvent || chat.isOrganization,
+                              titleOverride:
+                                  (isGroup || isEvent || chat.isOrganization)
+                                  ? dialogTitle
+                                  : null,
                             );
                           },
                         ),
@@ -2771,10 +2641,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           subtitle: 'Share this community with others',
                           onTap: () {
                             Navigator.pop(context);
-                            // Basic share implementation
-                            Share.share(
-                              'Check out $displayName on DiasporaNearby!',
-                            );
+                            if (community != null) {
+                              showDialog(
+                                context: context,
+                                builder: (context) =>
+                                    ShareCommunityDialog(community: community!),
+                              );
+                            } else {
+                              // Fallback if community data failed to load
+                              Share.share(
+                                'Check out $displayName on Diaspora Nearby!',
+                              );
+                            }
                           },
                         ),
 
@@ -2855,33 +2733,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           iconBgColor: AppTheme.accent.withValues(alpha: 0.1),
                           title: 'Council of Community Leaders',
                           subtitle: (governanceUnit?.isActiveElection ?? false)
-                              ? 'Active council election in progress' 
+                              ? 'Active council election in progress'
                               : 'Elect council members and treasury signers',
                           onTap: () {
                             Navigator.pop(context);
-                            
+
                             // Determine Unit ID (Use Unit if available, else derive from Community)
                             String? unitId = governanceUnit?.id;
-                            
+
                             if (unitId == null && community != null) {
                               if (community.type == 'global') {
                                 unitId = 'global';
                               } else if (community.type == 'continent') {
                                 // Standardize to continent_name_with_underscores
-                                final continentName = community.name.replaceAll(' Community', '').toLowerCase().replaceAll(' ', '_');
+                                final continentName = community.name
+                                    .replaceAll(' Community', '')
+                                    .toLowerCase()
+                                    .replaceAll(' ', '_');
                                 unitId = 'continent_$continentName';
                               } else if (community.type == 'country') {
                                 // Standardize to country_iso (e.g. country_tz)
-                                final countryCode = community.homeCountryCode?.toLowerCase() ?? 
-                                                 (community.location?['countryCode']?.toString().toLowerCase()) ??
-                                                 (community.name.replaceAll(' Community', '').toLowerCase());
+                                final countryCode =
+                                    community.homeCountryCode?.toLowerCase() ??
+                                    (community.location?['countryCode']
+                                        ?.toString()
+                                        .toLowerCase()) ??
+                                    (community.name
+                                        .replaceAll(' Community', '')
+                                        .toLowerCase());
                                 unitId = 'country_$countryCode';
                               } else {
                                 // Fallback for local/other
                                 unitId = chat.communityId;
                               }
                             }
-                            
+
                             if (unitId != null) {
                               Navigator.push(
                                 context,
@@ -2895,7 +2781,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Governance not initialized for this community.'),
+                                  content: Text(
+                                    'Governance not initialized for this community.',
+                                  ),
                                 ),
                               );
                             }
@@ -2913,7 +2801,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   // [NEW] DSP Transfer Logic
-  Future<void> _sendDSP(int amount, String? caption) async {
+  Future<void> _sendDSP(int amount, String assetType, String? caption) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -2969,10 +2857,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // Execute Transfer
       await ref
           .read(pointsServiceProvider)
-          .transferPoints(
+          .transferAsset(
             fromUserId: currentUserId,
             toUserId: toUserId,
             amount: amount,
+            assetType: assetType, // Use the selected asset type
           );
 
       if (mounted && Navigator.canPop(context)) {
@@ -2992,13 +2881,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             chatId,
             caption?.isNotEmpty == true
                 ? caption!
-                : 'Sent $amount DSP', // Use caption if available
+                : 'Sent $amount ${assetType == 'token' ? '\$DIASPORA' : 'DSP'}', // Use caption if available
             type: 'dsp_transfer',
             senderIdOverride: identity?['id'],
-            senderNameOverride:
-                identity?['businessName'] ?? identity?['name'],
+            senderNameOverride: identity?['businessName'] ?? identity?['name'],
             senderImageOverride: identity?['profileImage'],
-            metadata: {'amount': amount, 'currency': 'DSP'},
+            metadata: {
+              'amount': amount,
+              'currency': assetType == 'token' ? 'DIASPORA' : 'DSP',
+              'assetType': assetType,
+            },
             participants: participants,
             // We should also set push notification payload if needed here via metadata or server function?
             // Cloud function triggers on message create usually handles push.
@@ -3006,7 +2898,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           );
     } catch (e) {
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
-      debugPrint('DSP_TRANSFER: Error transferring DSP: $e');
+      debugPrint('DSP_TRANSFER: Error transferring $assetType: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Transfer failed: ${e.toString()}')),
@@ -3058,13 +2950,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(titleOverride ?? (isLeave ? 'Leave Group?' : 'Delete Chat?')),
+        title: Text(
+          titleOverride ?? (isLeave ? 'Leave Group?' : 'Delete Chat?'),
+        ),
         content: Text(
           isLeave
               ? 'Are you sure you want to leave $name?'
-              : (titleOverride == 'Unfollow Organization?') // [UPDATED] 
-                  ? 'Are you sure you want to unfollow $name?' 
-                  : 'Are you sure you want to delete your chat with $name? This action cannot be undone.',
+              : (titleOverride == 'Unfollow Organization?') // [UPDATED]
+              ? 'Are you sure you want to unfollow $name?'
+              : 'Are you sure you want to delete your chat with $name? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -3092,16 +2986,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  void _handleMessageAction(BuildContext context, Message message, WidgetRef ref) {
+  void _handleMessageAction(
+    BuildContext context,
+    Message message,
+    WidgetRef ref,
+  ) {
     if (message.isDeletedForEveryone) return;
-    
+
     final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
     final isOwn = message.senderId == currentUserId;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -3110,107 +3012,238 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              
-              // [NEW] Reaction Bar
-              SizedBox(
-                height: 60,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: ['❤️', '😂', '👍', '👎', '😮', '😢', '🙏'].map((emoji) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: GestureDetector(
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+
+                    // Reaction Bar
+                    SizedBox(
+                      height: 60,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        children: ['❤️', '😂', '👍', '👎', '😮', '😢', '🙏']
+                            .map((emoji) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    _handleReaction(message, emoji);
+                                  },
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 32),
+                                  ),
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ),
+                    ),
+                    const Divider(),
+
+                    // Scrollable action list
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                    // Actions
+                    ListTile(
+                      leading: const Icon(LucideIcons.reply),
+                      title: const Text('Reply'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _setReplyTo(message);
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(LucideIcons.forward),
+                      title: const Text('Forward'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ForwardChatSelectionScreen(message: message),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(LucideIcons.copy),
+                      title: const Text('Copy'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Clipboard.setData(
+                          ClipboardData(text: message.content),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Message copied')),
+                        );
+                      },
+                    ),
+
+                    ListTile(
+                      leading: const Icon(LucideIcons.share2),
+                      title: const Text('Share'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Share.share(
+                          message.content,
+                        );
+                      },
+                    ),
+
+                    // Report / Block — only for others' messages
+                    if (!isOwn) ...[
+                      ListTile(
+                        leading: const Icon(
+                          LucideIcons.ban,
+                          color: Colors.grey,
+                        ),
+                        title: const Text('Block Sender'),
                         onTap: () {
                           Navigator.pop(context);
-                          _handleReaction(message, emoji);
-                        },
-                        child: Text(emoji, style: const TextStyle(fontSize: 32)),
+                          _handleBlockUser(
+                            context,
+                            ref,
+                            message.senderId,
+                            message.senderName ?? 'Sender',
+                          );
+                                                },
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const Divider(),
+                      ListTile(
+                        leading: const Icon(
+                          LucideIcons.flag,
+                          color: AppTheme.error,
+                        ),
+                        title: const Text(
+                          'Report Sender',
+                          style: TextStyle(color: AppTheme.error),
+                        ),
+                        subtitle: const Text(
+                          'Earn 10 DSP for reporting',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _handleReportUser(
+                            context,
+                            ref,
+                            message.senderId,
+                            message.senderName ?? 'Sender',
+                          );
+                                                },
+                      ),
+                      ListTile(
+                        leading: const Icon(
+                          LucideIcons.flag,
+                          color: AppTheme.error,
+                        ),
+                        title: const Text(
+                          'Report Message',
+                          style: TextStyle(color: AppTheme.error),
+                        ),
+                        subtitle: const Text(
+                          'Earn 10 DSP for reporting',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showReportDialog(context, ref, message);
+                        },
+                      ),
+                    ],
 
-              // [NEW] Restored Actions
-              ListTile(
-                leading: const Icon(LucideIcons.reply),
-                title: const Text('Reply'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _setReplyTo(message);
-                },
-              ),
-              ListTile(
-                leading: const Icon(LucideIcons.forward),
-                title: const Text('Forward'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ForwardChatSelectionScreen(message: message),
+                    if (!isOwn)
+                      ListTile(
+                        leading: const Icon(
+                          LucideIcons.checkCircle2,
+                          color: Colors.green,
+                        ),
+                        title: const Text(
+                          'Mark as Verified Solution',
+                          style: TextStyle(color: Colors.green),
+                        ),
+                        subtitle: const Text(
+                          'Earn 100 DSP · 10 marks = 100 DSP + 1 PoCT for sender',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        onTap: () async {
+                          Navigator.pop(context);
+                          final chatRepo = ref.read(chatRepositoryProvider);
+                          final currentUserId = chatRepo.currentUserId;
+                          if (currentUserId == null) return;
+
+                          final success = await ref
+                              .read(trustServiceProvider)
+                              .markAsVerifiedSolution(
+                                senderId: message.senderId,
+                                messageId: message.id,
+                                chatId: _activeChatId ?? '',
+                                reporterId: currentUserId,
+                              );
+
+                          if (context.mounted) {
+                            if (success) {
+                              showExplorationRewardToast(
+                                context,
+                                message: 'Verified solution! +100 DSP for you.',
+                                points: 100,
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Already marked as solution or error occurred.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+
+                    // Delete — own messages only, always last
+                    if (isOwn)
+                      ListTile(
+                        leading: const Icon(
+                          LucideIcons.trash2,
+                          color: AppTheme.error,
+                        ),
+                        title: const Text(
+                          'Delete',
+                          style: TextStyle(color: AppTheme.error),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _handleDeleteMessage(message);
+                        },
+                      ),
+
+                    const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
                     ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(LucideIcons.copy),
-                title: const Text('Copy'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Clipboard.setData(ClipboardData(text: message.content));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Message copied')),
-                  );
-                },
-              ),
-              // Delete only for own messages
-              if (isOwn)
-                ListTile(
-                  leading: const Icon(LucideIcons.trash2, color: AppTheme.error),
-                  title: const Text('Delete', style: TextStyle(color: AppTheme.error)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _handleDeleteMessage(message);
-                  },
-                ),
-              
-              ListTile(
-                leading: const Icon(LucideIcons.share2),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Share.share(message.content); // SharePlus.instance.share is preferred but Share.share is also from share_plus
-                },
-              ),
-
-              // Report only for others' messages
-              if (!isOwn)
-                ListTile(
-                  leading: const Icon(LucideIcons.flag, color: AppTheme.error),
-                  title: const Text('Report Message', style: TextStyle(color: AppTheme.error)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showReportDialog(context, ref, message);
-                  },
-                ),
             ],
           ),
         ),
       ),
     );
   }
+
 
   // [NEW] Handle Reaction
   void _handleReaction(Message message, String emoji) {
@@ -3220,7 +3253,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Check if user already reacted with this emoji
     bool isRemoved = false;
     final reactions = message.reactions ?? [];
-    
+
     for (final reaction in reactions) {
       if (reaction.emoji == emoji && reaction.userIds.contains(currentUserId)) {
         isRemoved = true;
@@ -3229,14 +3262,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     if (isRemoved) {
-       ref.read(chatRepositoryProvider).removeReaction(message.chatId, message.id, emoji);
+      ref
+          .read(chatRepositoryProvider)
+          .removeReaction(message.chatId, message.id, emoji);
     } else {
-       ref.read(chatRepositoryProvider).addReaction(
-         message.chatId, 
-         message.id, 
-         emoji,
-         message.senderId,
-       );
+      ref
+          .read(chatRepositoryProvider)
+          .addReaction(message.chatId, message.id, emoji, message.senderId);
     }
   }
 
@@ -3246,13 +3278,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Message'),
-        content: const Text('Are you sure you want to delete this message? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this message? This action cannot be undone.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              ref.read(chatRepositoryProvider).deleteMessage(message.chatId, message.id);
+              ref
+                  .read(chatRepositoryProvider)
+                  .deleteMessage(message.chatId, message.id);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
@@ -3264,6 +3303,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _showReportDialog(BuildContext context, WidgetRef ref, Message message) {
     final reasons = [
       'Spam or Scam',
+      'Prohibited Advertising', // [NEW]
       'Hate Speech',
       'Harassment or Bullying',
       'Nudity or Sexual Activity',
@@ -3285,32 +3325,60 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 title: Text(reasons[index]),
                 onTap: () async {
                   Navigator.pop(context); // Close dialog
-                  
+
                   // Show loading
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Submitting report...')),
                   );
 
                   try {
-                    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+                    final currentUserId = ref
+                        .read(authRepositoryProvider)
+                        .currentUser
+                        ?.uid;
                     if (currentUserId == null) return;
 
-                    final success = await ref.read(reportRepositoryProvider).reportMessage(
-                      reporterId: currentUserId,
-                      messageId: message.id,
-                      senderId: message.senderId,
-                      reason: reasons[index],
-                    );
+                    final success = await ref
+                        .read(reportRepositoryProvider)
+                        .reportMessage(
+                          reporterId: currentUserId,
+                          messageId: message.id,
+                          senderId: message.senderId,
+                          reason: reasons[index],
+                        );
+
+                    // [NEW] Award 10 DSP for reporting a message
+                    if (success) {
+                      try {
+                        await ref
+                            .read(pointsServiceProvider)
+                            .awardPoints(
+                              userId: currentUserId,
+                              amount: 10,
+                              reason: 'report_message',
+                            );
+                      } catch (e) {
+                        debugPrint('Error awarding report DSP: $e');
+                      }
+                    }
 
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(success 
-                            ? 'Report submitted. Thank you for helping keep our community safe.' 
-                            : 'Failed to submit report. Please try again.'),
-                          backgroundColor: success ? Colors.green : AppTheme.error,
-                        ),
-                      );
+                      if (success) {
+                        showExplorationRewardToast(
+                          context,
+                          message: 'Report submitted. Thank you!',
+                          points: 10,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Failed to submit report. Please try again.',
+                            ),
+                            backgroundColor: AppTheme.error,
+                          ),
+                        );
+                      }
                     }
                   } catch (e) {
                     debugPrint('Error reporting: $e');
@@ -3386,20 +3454,370 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  // [NEW] Handle Verify User from Chat
+  Future<void> _handleVerifyChatUser(
+    BuildContext context,
+    WidgetRef ref,
+    Chat chat,
+  ) async {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUserId == null) return;
+
+    // Identify other user
+    final otherUserId = chat.participants.firstWhere(
+      (id) => id != currentUserId,
+      orElse: () => '',
+    );
+
+    if (otherUserId.isEmpty) return;
+
+    // Fetch profile
+    try {
+      final profile = await ref
+          .read(profileRepositoryProvider)
+          .getUserProfile(otherUserId);
+      if (profile == null) return;
+
+      // 1. Check existing relationship — only block family (Conflict of Interest)
+      final relRepo = ref.read(relationshipRepositoryProvider);
+      final rel = await relRepo.getRelationship(
+        userId: currentUserId,
+        relatedUserId: otherUserId,
+      );
+
+      if (rel != null && rel.status == 'active') {
+        const Set<String> familyTypes = {
+          'wife', 'husband', 'daughter', 'son', 'mother', 'father',
+          'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+        };
+        if (familyTypes.contains(rel.type.toLowerCase())) {
+          if (context.mounted) {
+            VerificationAlertModal.show(
+              context,
+              type: VerificationAlertType.conflict,
+              title: 'Conflict of Interest',
+              message:
+                  'You cannot verify a family member. Verification must be performed by independent community members.',
+            );
+          }
+          return;
+        }
+      }
+
+      // 2. Check eligibility
+      final trustService = ref.read(trustServiceProvider);
+      final eligibilityError = await trustService.checkVerificationEligibility(
+        currentUserId,
+        otherUserId,
+      );
+
+      if (eligibilityError != null) {
+        if (context.mounted) {
+          VerificationAlertType type = VerificationAlertType.error;
+          if (eligibilityError.contains('already verified')) {
+            type = VerificationAlertType.alreadyVerified;
+          } else if (eligibilityError.contains('limit reached')) {
+            type = VerificationAlertType.limit;
+          } else if (eligibilityError.contains('complete your profile') ||
+              eligibilityError.contains('Verified User') ||
+              eligibilityError.contains('acquired at least')) {
+            type = VerificationAlertType.requirements;
+          }
+
+          VerificationAlertModal.show(
+            context,
+            type: type,
+            title: type == VerificationAlertType.requirements
+                ? 'Requirements Not Met'
+                : 'Action Restricted',
+            message: eligibilityError,
+          );
+        }
+        return;
+      }
+
+      // 3. Show Relationship Selection / Verification Flow
+      if (context.mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (modalContext) => RelationshipSelectionModal(
+            otherUserId: otherUserId,
+            otherUserName: profile.fullName,
+            includeFriend: true,
+            onSelected: (type) async {
+              Navigator.pop(modalContext);
+
+              final socialTypes = [
+                'Colleague',
+                'Business Partner',
+                'Community Member',
+                'Friend',
+              ];
+
+              if (socialTypes.contains(type)) {
+                // Allow verification
+                if (context.mounted) {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (c) => ProfileVerificationModal(
+                      targetUser: profile,
+                      currentUserId: currentUserId,
+                    ),
+                  );
+                }
+              } else {
+                // Relative - deny
+                if (context.mounted) {
+                  VerificationAlertModal.show(
+                    context,
+                    type: VerificationAlertType.conflict,
+                    title: 'Verification Blocked',
+                    message:
+                        'Relationship request sent. You cannot verify relatives to ensure unbiased community trust.',
+                  );
+                }
+                // Send relationship request
+                final repo = ref.read(relationshipRepositoryProvider);
+
+                try {
+                  final myProfile = await ref
+                      .read(profileRepositoryProvider)
+                      .getUserProfile(currentUserId);
+                  if (myProfile != null) {
+                    await repo.sendRelationshipRequest(
+                      fromUserId: currentUserId,
+                      fromUserName: myProfile.fullName,
+                      fromUserFlag: _getCountryFlag(myProfile.homeCountryCode),
+                      toUserId: otherUserId,
+                      toUserName: profile.fullName,
+                      relationshipType: type,
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('Error sending request: $e');
+                }
+              }
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error in verify flow: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   void _showRelationshipPicker(
     BuildContext context,
     WidgetRef ref,
     String? otherUserId,
-    String otherUserName,
+    String? displayName,
   ) {
-    if (otherUserId == null || otherUserId.isEmpty) return;
+    if (otherUserId == null) return;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) => RelationshipSelectionModal(
         otherUserId: otherUserId,
-        otherUserName: otherUserName,
+        otherUserName: displayName ?? 'User',
+        onSelected: (type) async {
+          Navigator.pop(context);
+          final repo = ref.read(relationshipRepositoryProvider);
+          final myProfile = ref.read(userProfileProvider).value;
+
+          if (myProfile == null) return;
+
+          try {
+            await repo.sendRelationshipRequest(
+              fromUserId: myProfile.uid!,
+              fromUserName: myProfile.fullName,
+              fromUserFlag: _getCountryFlag(myProfile.homeCountryCode),
+              toUserId: otherUserId,
+              toUserName: displayName ?? 'User',
+              relationshipType: type,
+            );
+
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Relationship request sent')),
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error sending request: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  String _getCountryFlag(String? countryCode) {
+    if (countryCode == null) return '🏳️';
+    String country = countryCode.toUpperCase();
+    if (country.length != 2) return '🏳️';
+    int flagOffset = 0x1F1E6;
+    int asciiOffset = 0x41;
+    int firstChar = country.codeUnitAt(0) - asciiOffset + flagOffset;
+    int secondChar = country.codeUnitAt(1) - asciiOffset + flagOffset;
+    return String.fromCharCode(firstChar) + String.fromCharCode(secondChar);
+  }
+
+  void _handleBlockUser(
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+    String userName,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Block User?'),
+        content: Text(
+          'Are you sure you want to block $userName? They will not be able to message you.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+
+              final currentUserId = ref
+                  .read(authRepositoryProvider)
+                  .currentUser
+                  ?.uid;
+              if (currentUserId == null) return;
+
+              try {
+                await ref
+                    .read(relationshipRepositoryProvider)
+                    .blockUser(userId: currentUserId, relatedUserId: userId);
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('User blocked')));
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error blocking user: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Block', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleReportUser(
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+    String userName,
+  ) {
+    final reasons = [
+      'Fake Account',
+      'Harassment or Bullying',
+      'Inappropriate Content',
+      'Spam',
+      'Prohibited Advertising', // [NEW]
+      'Other',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Report $userName'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: reasons.length,
+            itemBuilder: (context, index) {
+              return ListTile(
+                title: Text(reasons[index]),
+                onTap: () async {
+                  Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Submitting report...')),
+                  );
+
+                    try {
+                      final currentUserId = ref
+                          .read(authRepositoryProvider)
+                          .currentUser
+                          ?.uid;
+                      if (currentUserId == null) return;
+
+                      final success = await ref
+                          .read(reportRepositoryProvider)
+                          .reportUser(
+                            reporterId: currentUserId,
+                            reportedUserId: userId,
+                            reason: reasons[index],
+                          );
+
+                      if (success) {
+                        // Award 10 DSP for reporting a sender (new report only)
+                        try {
+                          await ref
+                              .read(pointsServiceProvider)
+                              .awardPoints(
+                                userId: currentUserId,
+                                amount: 10,
+                                reason: 'report_sender',
+                              );
+                        } catch (e) {
+                          debugPrint('Error awarding report DSP: $e');
+                        }
+
+                        if (context.mounted) {
+                          showExplorationRewardToast(
+                            context,
+                            message: 'Report submitted. Thank you!',
+                            points: 10,
+                          );
+                        }
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('You have already reported this user.'),
+                            ),
+                          );
+                        }
+                      }
+                  } catch (e) {
+                    // Handle error
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }

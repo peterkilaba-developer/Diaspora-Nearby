@@ -57,7 +57,7 @@ class Event {
   String? venueState;
   String? venueCountry;
 
-  // Status: 'draft', 'published'
+  // Status: 'published', 'hidden'
   String status;
 
   // Geolocation (Write-time optimized)
@@ -76,6 +76,7 @@ class Event {
 
   String? organizationId;
   String? organizationName;
+  int? dspFee; // [DEPRECATED] No longer used — DSP fees removed
 
   Event({
     required this.id,
@@ -111,7 +112,7 @@ class Event {
     this.venueCity,
     this.venueState,
     this.venueCountry,
-    this.status = 'draft',
+    this.status = 'published',
     this.latitude,
     this.longitude,
     this.distance,
@@ -119,6 +120,7 @@ class Event {
     this.creatorPhoto,
     this.organizationId,
     this.organizationName,
+    this.dspFee,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) => _$EventFromJson(json);
@@ -163,6 +165,7 @@ class Event {
     double? longitude,
     String? organizationId,
     String? organizationName,
+    int? dspFee,
   }) {
     return Event(
       id: id ?? this.id,
@@ -178,7 +181,8 @@ class Event {
       creatorId: creatorId ?? this.creatorId,
       attendees: attendees ?? this.attendees,
       attendeeCount: attendeeCount ?? this.attendeeCount,
-      confirmedAttendees: confirmedAttendees ?? this.confirmedAttendees, // [NEW]
+      confirmedAttendees:
+          confirmedAttendees ?? this.confirmedAttendees,
       interested: interested ?? this.interested,
       invitedUserIds: invitedUserIds ?? this.invitedUserIds,
       isPaid: isPaid ?? this.isPaid,
@@ -203,6 +207,7 @@ class Event {
       longitude: longitude ?? this.longitude,
       organizationId: organizationId ?? this.organizationId,
       organizationName: organizationName ?? this.organizationName,
+      dspFee: dspFee ?? this.dspFee,
     );
   }
 

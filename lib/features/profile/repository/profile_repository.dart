@@ -1,5 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart' as cf;
-import 'package:firebase_database/firebase_database.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
@@ -59,16 +59,32 @@ class ProfileRepository {
           .get()
           .timeout(const Duration(seconds: 10));
       if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        // Ensure UID is set in the model
-        data['uid'] = uid;
-        return ProfileData.fromJson(data);
+        try {
+          final data = doc.data()!;
+          // Ensure UID is set in the model
+          data['uid'] = uid;
+          return ProfileData.fromJson(data);
+        } catch (e) {
+          debugPrint('Error parsing user profile $uid: $e');
+          return null;
+        }
       }
       return null;
     } catch (e) {
       debugPrint('Error getting user profile: $e');
       rethrow; // [FIX] Rethrow to distinguish between "No Profile" and "Network Error"
     }
+  }
+
+  Stream<ProfileData?> watchProfile(String uid) {
+    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        data['uid'] = uid;
+        return ProfileData.fromJson(data);
+      }
+      return null;
+    });
   }
 
   Future<List<ProfileData>> searchUsers(
@@ -216,10 +232,9 @@ class ProfileRepository {
     final chatId = 'org_$orgId';
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    // 2. Initialize Chat in RTDB
+    // 2. Initialize Chat in Firestore
     try {
-      final rtdb = FirebaseDatabase.instance.ref();
-      await rtdb.child('chats/$chatId').set({
+      await _firestore.collection('chats').doc(chatId).set({
         'id': chatId,
         'type': 'organization',
         'name': businessName,
@@ -230,7 +245,7 @@ class ProfileRepository {
         'updatedAt': now,
         'createdBy': uid,
         'lastMessage': {
-          'content': 'â­ Organization created',
+          'content': 'Organization created',
           'timestamp': now,
           'type': 'system',
           'senderId': 'system',
@@ -238,17 +253,22 @@ class ProfileRepository {
         },
       });
 
-      await rtdb.child('userChats/$uid/$chatId').set({
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('userChats')
+          .doc(chatId)
+          .set({
         'chatId': chatId,
         'updatedAt': now,
         'lastMessage': {
-          'content': 'â­ Organization created',
+          'content': 'Organization created',
           'timestamp': now,
           'type': 'system',
         },
       });
     } catch (e) {
-      debugPrint('Error initializing RTDB chat: $e');
+      debugPrint('Error initializing Firestore chat: $e');
     }
 
     final orgData = {
@@ -268,23 +288,20 @@ class ProfileRepository {
       'createdAt': cf.FieldValue.serverTimestamp(),
       'status': 'active',
       // Location data
-      if (locationAddress != null) 'locationAddress': locationAddress,
+      'locationAddress': ?locationAddress,
       if (locationLat != null && locationLng != null)
         'location': {'lat': locationLat, 'lng': locationLng},
-      if (locationCity != null) 'city': locationCity,
-      if (locationState != null) 'state': locationState,
-      if (locationCountry != null) 'country': locationCountry,
-      if (homeCountryCode != null)
-        'homeCountryCode':
-            homeCountryCode, // For filtering by creator's home country
+      'city': ?locationCity,
+      'state': ?locationState,
+      'country': ?locationCountry,
+      'homeCountryCode':
+            ?homeCountryCode, // For filtering by creator's home country
       if (creatorTitle != null) 'adminTitles': {uid: creatorTitle},
       // Save Rich Data if available
-      if (richData != null) 'richData': richData,
+      'richData': ?richData,
       // [NEW] Link to community
-      if (communityId != null) 'communityId': communityId,
+      'communityId': ?communityId,
     };
-
-    await orgRef.set(orgData);
 
     await orgRef.set(orgData);
 

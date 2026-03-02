@@ -15,9 +15,15 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [
 import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 
-
 final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
+  final authState = ref.watch(authStateProvider);
   final chatRepo = ref.watch(chatRepositoryProvider);
+
+  // If user is not authenticated, return empty stream
+  if (authState.value == null) {
+    return const Stream.empty();
+  }
+
   return chatRepo.subscribeToUserChats();
 });
 
@@ -89,13 +95,14 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
           final allResults = snapshot.data ?? [];
           // Filter to show ONLY Organization and Event chats in Global mode
           final results = allResults
-              .where((chat) => 
-                  chat.type == 'organization' || 
-                  chat.type == 'event' || 
-                  chat.type == 'group'
+              .where(
+                (chat) =>
+                    chat.type == 'organization' ||
+                    chat.type == 'event' ||
+                    chat.type == 'group',
               )
               .toList();
-          
+
           if (results.isEmpty) {
             return _buildEmptyState(
               theme,
@@ -149,10 +156,11 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
                       // Navigate to community detail page for discovery/joining
                       context.push('/communities/${chat.communityId}');
                     }
-                  } else if (chat.type == 'group') { // [NEW]
+                  } else if (chat.type == 'group') {
+                    // [NEW]
                     if (context.mounted) {
-                       // For public groups, go to chat. ChatScreen should handle non-member view (Join button).
-                       context.push('/chats/${chat.id}');
+                      // For public groups, go to chat. ChatScreen should handle non-member view (Join button).
+                      context.push('/chats/${chat.id}');
                     }
                   }
                 },

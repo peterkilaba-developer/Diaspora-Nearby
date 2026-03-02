@@ -1,37 +1,50 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.22;
 
-import "@openzeppelin/contracts/token/ERC-20/ERC-20.sol";
-import "@openzeppelin/contracts/token/ERC-20/extensions/ERC20Burnable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC-20/extensions/ERC20Permit.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title DiasporaToken
  * @dev Implementation of the Diaspora Token ($DSP).
+ * Upgradable via UUPS Proxy.
  * Features:
- * - Fixed Hard Cap: 1 Trillion tokens.
+ * - Fixed Hard Cap: 1 Quadrillion tokens.
  * - Role-Based Access Control: Compatible with Gnosis Safe Multi-sig.
  * - Just-in-Time Minting: Tokens are minted as community milestones are reached.
  * - Permittable: Supports gasless approvals (EIP-2612).
  */
-contract DiasporaToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
+contract DiasporaToken is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, AccessControlUpgradeable, ERC20PermitUpgradeable, UUPSUpgradeable {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     
-    // 1 Trillion Hard Cap (18 decimals)
-    uint256 public constant HARD_CAP = 1_000_000_000_000 * 10**18;
+    // 1 Quadrillion Hard Cap (18 decimals)
+    uint256 public constant HARD_CAP = 1_000_000_000_000_000 * 10**18;
 
-    constructor(address defaultAdmin, address minter) 
-        ERC20("Diaspora", "DSP") 
-        ERC20Permit("Diaspora") 
-    {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address defaultAdmin, address minter, address upgrader) initializer public {
+        __ERC20_init("Diaspora", "DSP");
+        __ERC20Burnable_init();
+        __AccessControl_init();
+        __ERC20Permit_init("Diaspora");
+        __UUPSUpgradeable_init();
+
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         _grantRole(MINTER_ROLE, minter);
+        _grantRole(UPGRADER_ROLE, upgrader);
     }
 
     /**
      * @dev Mints new tokens. Can only be called by accounts with MINTER_ROLE.
-     * Enforces the 1 Trillion HARD_CAP.
+     * Enforces the 1 Quadrillion HARD_CAP.
      * @param to The address that will receive the minted tokens.
      * @param amount The amount of tokens to mint.
      */
@@ -42,9 +55,14 @@ contract DiasporaToken is ERC20, ERC20Burnable, AccessControl, ERC20Permit {
 
     /**
      * @dev Utility to check progress towards the total hard cap.
-     * Useful for Epoch-based transparency.
      */
     function getHardCapProgress() public view returns (uint256 currentSupply, uint256 maxSupply) {
         return (totalSupply(), HARD_CAP);
     }
+
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        onlyRole(UPGRADER_ROLE)
+        override
+    {}
 }

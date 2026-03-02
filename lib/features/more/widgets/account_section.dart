@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/screens/placeholder_screen.dart';
@@ -10,8 +12,8 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/core/services/pwa_install_service.dart';
+import 'package:diaspora_nearby/core/services/database_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/settings/screens/privacy_settings_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/settings/screens/storage_settings_screen.dart'; // [NEW]
@@ -161,7 +163,9 @@ class AccountSection extends ConsumerWidget {
           },
         ),
         GlassContainer(
-          padding: const EdgeInsets.all(AppTheme.sectionHorizontalPadding), // 8px padding
+          padding: const EdgeInsets.all(
+            AppTheme.sectionHorizontalPadding,
+          ), // 8px padding
           child: Column(
             children: [
               Row(
@@ -224,10 +228,7 @@ class AccountSection extends ConsumerWidget {
                     ),
                     const Text(
                       'Version 1.0.0',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -311,7 +312,10 @@ class AccountSection extends ConsumerWidget {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: AppTheme.pageHorizontalPadding, bottom: 8),
+      padding: const EdgeInsets.only(
+        left: AppTheme.pageHorizontalPadding,
+        bottom: 8,
+      ),
       child: Text(
         title,
         style: const TextStyle(
@@ -346,7 +350,10 @@ class AccountSection extends ConsumerWidget {
     return InkWell(
       onTap: effectiveOnTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppTheme.sectionHorizontalPadding, vertical: 16), // 8px horizontal
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.sectionHorizontalPadding,
+          vertical: 16,
+        ), // 8px horizontal
         child: Row(
           children: [
             Container(
@@ -425,7 +432,7 @@ class AccountSection extends ConsumerWidget {
                           : 'Notifications are disabled',
                     ),
                     value: isEnabled,
-                    activeColor: Colors.purple,
+                    activeThumbColor: Colors.purple,
                     onChanged: (val) async {
                       setDialogState(() => isEnabled = val);
                       if (val) {
@@ -543,12 +550,18 @@ class AccountSection extends ConsumerWidget {
       'Organizations': true,
       'Events': true,
       'Radio Health': true,
-      'Chats (RTDB)': true,
+      'Chats & Messages': true,
+      'Corridors': true,
+      'Hosting (Requests & Sessions)': true,
+      'Marketplace Listings': true,
+      'Peer Listings': true,
+      'Trust Data': true,
       'Storage (Photos)': true,
       'Points & Referrals': true,
       'Feedback History': true,
       'Proximity Cooldown': true,
       'Empty Communities': false,
+      'Local Cache': true,
     };
 
     final selected = await showDialog<List<String>>(
@@ -567,9 +580,7 @@ class AccountSection extends ConsumerWidget {
                       title: Text(key),
                       value: targets[key],
                       onChanged: (val) {
-                        setState(
-                          () => targets[key] = val ?? false,
-                        );
+                        setState(() => targets[key] = val ?? false);
                       },
                       activeColor: Colors.red,
                     );
@@ -600,8 +611,23 @@ class AccountSection extends ConsumerWidget {
                   if (targets['Radio Health']!) {
                     result.add('radio');
                   }
-                  if (targets['Chats (RTDB)']!) {
+                  if (targets['Chats & Messages']!) {
                     result.add('chats');
+                  }
+                  if (targets['Corridors']!) {
+                    result.add('corridors');
+                  }
+                  if (targets['Hosting (Requests & Sessions)']!) {
+                    result.add('hosting');
+                  }
+                  if (targets['Marketplace Listings']!) {
+                    result.add('marketplace');
+                  }
+                  if (targets['Peer Listings']!) {
+                    result.add('peer_listings');
+                  }
+                  if (targets['Trust Data']!) {
+                    result.add('trust');
                   }
                   if (targets['Storage (Photos)']!) {
                     result.add('storage');
@@ -617,6 +643,9 @@ class AccountSection extends ConsumerWidget {
                   }
                   if (targets['Empty Communities']!) {
                     result.add('empty_communities');
+                  }
+                  if (targets['Local Cache']!) {
+                    result.add('local_cache');
                   }
 
                   Navigator.pop(context, result);
@@ -636,14 +665,25 @@ class AccountSection extends ConsumerWidget {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
         );
 
         if (selected.contains('empty_communities')) {
           await ref.read(communityServiceProvider).pruneEmptyCommunities();
           selected.remove('empty_communities');
+        }
+
+        // Handle local cache clearing (client-side only)
+        if (selected.contains('local_cache')) {
+          try {
+            await DatabaseService().clean();
+            await FirebaseFirestore.instance.clearPersistence();
+            debugPrint('🧹 Admin Reset: Local caches cleared (Firestore persistence)');
+          } catch (e) {
+            debugPrint('⚠️ Admin Reset: Error clearing local cache: $e');
+          }
+          selected.remove('local_cache');
         }
 
         if (selected.isNotEmpty) {
@@ -670,7 +710,9 @@ class AccountSection extends ConsumerWidget {
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Partial Success. Failed: ${failed.join(", ")}'),
+                  content: Text(
+                    'Partial Success. Failed: ${failed.join(", ")}',
+                  ),
                   backgroundColor: Colors.orange,
                 ),
               );
@@ -683,10 +725,7 @@ class AccountSection extends ConsumerWidget {
         if (context.mounted) {
           Navigator.pop(context); // Pop loading
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
       }

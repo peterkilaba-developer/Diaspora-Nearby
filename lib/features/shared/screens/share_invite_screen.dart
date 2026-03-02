@@ -9,6 +9,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 
 class ShareInviteScreen extends ConsumerStatefulWidget {
   const ShareInviteScreen({super.key});
@@ -74,6 +75,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     if (user == null) return const SizedBox.shrink();
 
     final globalSupplyAsync = ref.watch(globalSupplyProvider);
+    final globalMemberCountAsync = ref.watch(globalMemberCountProvider);
 
     final codeFuture = ref
         .watch(pointsRepositoryProvider)
@@ -102,68 +104,75 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
               onPressed: () => context.pop(),
             ),
           ),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight:
-                        constraints.maxHeight -
-                        MediaQuery.of(context).padding.top -
-                        kToolbarHeight -
-                        32, // Adjust for appbar/padding
-                  ),
-                  child: IntrinsicHeight(
-                    // Helps center if needed, or just MainAxisAlignment.center
-                    child: Column(
-                      // This column needs to be full height to justify center
-                      // To truly center in a scroll view, we can verify height directly.
-                      // Simplified approach: MainAxisAlignment.center works if constraints force minimum height.
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(context),
-                        const SizedBox(height: 24),
-                        _buildTGEProgressPreview(context, globalSupplyAsync),
-                        const SizedBox(height: 32),
-
-                        // ...
-                        if (code != null)
-                          _buildCodeCard(context, code)
-                        else
-                          _buildGenerateCard(context, user.uid),
-
-                        const SizedBox(height: 32),
-                        const Text(
-                          "Share via",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+          body: Container(
+            decoration: AppTheme.pageDecoration(context),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight:
+                          constraints.maxHeight -
+                          MediaQuery.of(context).padding.top -
+                          kToolbarHeight -
+                          32, // Adjust for appbar/padding
+                    ),
+                    child: IntrinsicHeight(
+                      // Helps center if needed, or just MainAxisAlignment.center
+                      child: Column(
+                        // This column needs to be full height to justify center
+                        // To truly center in a scroll view, we can verify height directly.
+                        // Simplified approach: MainAxisAlignment.center works if constraints force minimum height.
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildHeader(context),
+                          const SizedBox(height: 24),
+                          _buildTGEProgressPreview(
+                            context,
+                            globalSupplyAsync,
+                            globalMemberCountAsync,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 32),
 
-                        if (code != null)
-                          _buildDirectShareButtons(context, code)
-                        else
-                          const Center(
-                            child: Text(
-                              "Generate a code to start sharing!",
-                              style: TextStyle(color: Colors.grey),
+                          // ...
+                          if (code != null)
+                            _buildCodeCard(context, code)
+                          else
+                            _buildGenerateCard(context, user.uid),
+
+                          const SizedBox(height: 32),
+                          const Text(
+                            "Share via",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
+                            textAlign: TextAlign.center,
                           ),
+                          const SizedBox(height: 24),
 
-                        SizedBox(
-                          height: MediaQuery.of(context).padding.bottom + 16,
-                        ),
-                      ],
+                          if (code != null)
+                            _buildDirectShareButtons(context, code)
+                          else
+                            const Center(
+                              child: Text(
+                                "Generate a code to start sharing!",
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+
+                          SizedBox(
+                            height: MediaQuery.of(context).padding.bottom + 16,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
@@ -199,11 +208,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
   Widget _buildGenerateCard(BuildContext context, String userId) {
     return Container(
       padding: const EdgeInsets.all(AppTheme.cardPadding),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.accent.withOpacity(0.3)),
-      ),
+      decoration: AppTheme.cardDecoration(context),
       child: Column(
         children: [
           const Icon(LucideIcons.sparkles, size: 40, color: AppTheme.accent),
@@ -223,7 +228,10 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
             onPressed: _isGenerating ? null : () => _generateCode(userId),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.accent,
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTheme.pageHorizontalPadding,
+                vertical: 12,
+              ),
             ),
             child: _isGenerating
                 ? const SizedBox(
@@ -274,47 +282,86 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     );
   }
 
-  Widget _buildTGEProgressPreview(BuildContext context, AsyncValue<int> globalSupplyAsync) {
+  Widget _buildTGEProgressPreview(
+    BuildContext context,
+    AsyncValue<int> globalSupplyAsync,
+    AsyncValue<int> globalMemberCountAsync,
+  ) {
     return globalSupplyAsync.when(
       data: (supply) {
-        const int target = 1000000; // 1 Million (Epoch 1 Target)
-        final double progress = (supply / target).clamp(0.0, 1.0);
-        final String percent = (progress * 100).toStringAsFixed(1);
+        return globalMemberCountAsync.when(
+          data: (members) {
+            final epochService = ref.read(epochServiceProvider);
+            final currentEpoch = epochService.getCurrentCommunityEpoch(
+              supply,
+              members,
+            );
+            final double progress = currentEpoch.calculateProgress(
+              supply,
+              members,
+            );
 
-        return Container(
-          padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-          decoration: BoxDecoration(
-            color: AppTheme.accent.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.accent.withOpacity(0.1)),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Format large numbers for readability (e.g., 1M, 1B)
+            String formatTarget(int target) {
+              if (target >= 1000000000) {
+                return '${(target / 1000000000).round()} Billion';
+              }
+              if (target >= 1000000) {
+                return '${(target / 1000000).round()} Million';
+              }
+              return target.toString();
+            }
+
+            final String targetLabel = formatTarget(currentEpoch.dspTarget);
+            final String percent = (progress * 100).toStringAsFixed(1);
+
+            return Container(
+              padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+              decoration: AppTheme.cardDecoration(context),
+              child: Column(
                 children: [
-                  const Text('Global TGE Progress', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  Text('$percent%', style: const TextStyle(color: AppTheme.accent, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Global TGE Progress',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        '$percent%',
+                        style: const TextStyle(
+                          color: AppTheme.accent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.withOpacity(0.1),
+                      valueColor: const AlwaysStoppedAnimation(AppTheme.accent),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "The Race to $targetLabel is $percent% complete! Pulse TGE events occur as we grow.",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
                 ],
               ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(5),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 8,
-                  backgroundColor: Colors.grey.withOpacity(0.1),
-                  valueColor: const AlwaysStoppedAnimation(AppTheme.accent),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "The Race to 1 Million is $percent% complete! Epoch 1 completes at 100%.",
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ],
-          ),
+            );
+          },
+          loading: () => const Center(child: LinearProgressIndicator()),
+          error: (_, __) => const SizedBox.shrink(),
         );
       },
       loading: () => const Center(child: LinearProgressIndicator()),
@@ -325,18 +372,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
   Widget _buildCodeCard(BuildContext context, String code) {
     return Container(
       padding: const EdgeInsets.all(AppTheme.cardPadding),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.accent.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: AppTheme.cardDecoration(context),
       child: Column(
         children: [
           const Text(

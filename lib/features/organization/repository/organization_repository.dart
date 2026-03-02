@@ -1,13 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_database/firebase_database.dart' hide Query;
+
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 // import 'package:diaspora_nearby/core/services/local_cache_service.dart'; // Deprecated
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_local_service.dart';
 
 final organizationRepositoryProvider = Provider(
-  (ref) => OrganizationRepository(),
+  (ref) => OrganizationRepository(ref),
 );
 
 /// Provider that streams organizations where the user has some admin role
@@ -28,12 +30,13 @@ final organizationByIdProvider =
 
 class OrganizationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final DatabaseReference _rtdb = FirebaseDatabase.instance.ref();
+
 
   final OrganizationLocalService _localService;
-  
-  OrganizationRepository() : _localService = OrganizationLocalService();
+  final Ref _ref;
 
+  OrganizationRepository(this._ref)
+    : _localService = OrganizationLocalService();
 
   /// Watch organizations where the user is an admin, superAdmin, or pendingAdmin
   Stream<List<Map<String, dynamic>>> watchUserOrganizations(String userId) {
@@ -161,7 +164,10 @@ class OrganizationRepository {
   }
 
   /// Get organization details by ID
-  Future<Map<String, dynamic>?> getOrganization(String orgId, {bool force = false}) async {
+  Future<Map<String, dynamic>?> getOrganization(
+    String orgId, {
+    bool force = false,
+  }) async {
     // 1. Check Local Cache
     if (!force) {
       final localOrg = await _localService.getOrganization(orgId);
@@ -181,10 +187,10 @@ class OrganizationRepository {
       if (doc.exists) {
         final data = doc.data()!;
         data['id'] = doc.id;
-        
+
         // Cache to Isar
         await _localService.saveOrganization(data);
-        
+
         return data;
       }
       return null;
@@ -242,10 +248,17 @@ class OrganizationRepository {
           'status': status,
         });
 
-        // Add to RTDB for chat permissions
+        // Add to Firestore for chat permissions
         if (chatId != null) {
-          await _rtdb.child('userChats/$userId/$chatId').set(true);
-          await _rtdb.child('chats/$chatId/adminIds').set(admins);
+          await _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('userChats')
+              .doc(chatId)
+              .set({'chatId': chatId, 'updatedAt': DateTime.now().millisecondsSinceEpoch}, SetOptions(merge: true));
+          await _firestore.collection('chats').doc(chatId).update({
+            'adminIds': admins,
+          });
         }
       }
     });
@@ -281,8 +294,15 @@ class OrganizationRepository {
         transaction.update(orgRef, {'admins': admins});
 
         if (chatId != null) {
-          await _rtdb.child('userChats/$adminId/$chatId').remove();
-          await _rtdb.child('chats/$chatId/adminIds').set(admins);
+          await _firestore
+              .collection('users')
+              .doc(adminId)
+              .collection('userChats')
+              .doc(chatId)
+              .delete();
+          await _firestore.collection('chats').doc(chatId).update({
+            'adminIds': admins,
+          });
         }
       }
     });
@@ -290,8 +310,10 @@ class OrganizationRepository {
 
   /// Register a new organization
   Future<String> registerOrganization(Map<String, dynamic> data) async {
-    final docRef = _firestore.collection('organizations').doc();
-    final orgId = docRef.id;
+    final orgId = const Uuid().v4();
+    final docRef = _firestore.collection('organizations').doc(orgId);
+
+
 
     final orgData = {
       ...data,
@@ -316,34 +338,39 @@ class OrganizationRepository {
     _localService.saveOrganization(cachedData);
     // await LocalCacheService.addToMyOrgsList(orgId); // Isar query handles this automatically implicitly by admin check
 
-    // 2. Initialize Chat in RTDB
+    // 2. Initialize Chat in Firestore
     final chatId = 'org_$orgId';
-    final rtdbNow = DateTime.now().millisecondsSinceEpoch;
-    await _rtdb.child('chats/$chatId').set({
+    final fsNow = DateTime.now().millisecondsSinceEpoch;
+    await _firestore.collection('chats').doc(chatId).set({
       'id': chatId,
       'type': 'organization',
       'name': data['businessName'] ?? data['name'] ?? 'Organization',
       'photoUrl': data['profileImage'] ?? data['logoUrl'],
       'participants': [data['superAdminId']],
       'admins': [data['superAdminId']],
-      'createdAt': rtdbNow,
-      'updatedAt': rtdbNow,
+      'createdAt': fsNow,
+      'updatedAt': fsNow,
       'createdBy': data['superAdminId'],
       'lastMessage': {
-        'content': 'â­ Organization created',
-        'timestamp': rtdbNow,
+        'content': 'Organization created',
+        'timestamp': fsNow,
         'type': 'system',
         'senderId': 'system',
         'senderName': 'System',
       },
     });
 
-    await _rtdb.child('userChats/${data['superAdminId']}/$chatId').set({
+    await _firestore
+        .collection('users')
+        .doc(data['superAdminId'])
+        .collection('userChats')
+        .doc(chatId)
+        .set({
       'chatId': chatId,
-      'updatedAt': rtdbNow,
+      'updatedAt': fsNow,
       'lastMessage': {
-        'content': 'â­ Organization created',
-        'timestamp': rtdbNow,
+        'content': 'Organization created',
+        'timestamp': fsNow,
         'type': 'system',
       },
     });
@@ -369,32 +396,26 @@ class OrganizationRepository {
       'followers': FieldValue.arrayUnion([userId]),
     });
 
-    // 3. Add to userChats in RTDB if chatId exists
+    // 3. Add to userChats and participants in Firestore if chatId exists
     if (chatId != null) {
       final now = DateTime.now().millisecondsSinceEpoch;
-      await _rtdb.child('userChats/$userId/$chatId').update({
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId)
+          .set({
         'chatId': chatId,
         'updatedAt': now,
         'following': true,
-      });
+      }, SetOptions(merge: true));
 
-      // [NEW] Also add to participants in RTDB so they can post to the board
-      final participantsRef = _rtdb.child('chats/$chatId/participants');
-      final pSnapshot = await participantsRef.get();
-      List<String> participants = [];
-      if (pSnapshot.exists) {
-        if (pSnapshot.value is List) {
-          participants = List<String>.from(pSnapshot.value as List);
-        } else if (pSnapshot.value is Map) {
-          participants = (pSnapshot.value as Map).values.map((e) => e.toString()).toList();
-        }
-      }
-      if (!participants.contains(userId)) {
-        participants.add(userId);
-        await participantsRef.set(participants);
-      }
+      // Also add to participants so they can post to the board
+      await _firestore.collection('chats').doc(chatId).update({
+        'participants': FieldValue.arrayUnion([userId]),
+      });
     }
-    
+
     // 4. Force refresh local cache
     await getOrganization(orgId, force: true);
   }
@@ -410,23 +431,17 @@ class OrganizationRepository {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     // 1. Ensure userChats entry exists
-    await _rtdb.child('userChats/$userId/$chatId').update({
-      'chatId': chatId,
-      'updatedAt': now,
-      // We don't force 'following' here, but user should probably follow to see it.
-    });
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('userChats')
+        .doc(chatId)
+        .set({'chatId': chatId, 'updatedAt': now}, SetOptions(merge: true));
 
-    // 2. Add to participants in RTDB
-    final participantsRef = _rtdb.child('chats/$chatId/participants');
-    final snapshot = await participantsRef.get();
-    List<String> participants = [];
-    if (snapshot.exists) {
-      participants = List<String>.from(snapshot.value as List);
-    }
-    if (!participants.contains(userId)) {
-      participants.add(userId);
-      await participantsRef.set(participants);
-    }
+    // 2. Add to participants in Firestore
+    await _firestore.collection('chats').doc(chatId).update({
+      'participants': FieldValue.arrayUnion([userId]),
+    });
   }
 
   /// Remove a user from organization chat participants (Admin only)
@@ -437,21 +452,10 @@ class OrganizationRepository {
     final chatId = doc.data()?['chatId'] as String?;
     if (chatId == null) return;
 
-    // Remove from participants in RTDB
-    final participantsRef = _rtdb.child('chats/$chatId/participants');
-    final snapshot = await participantsRef.get();
-    if (snapshot.exists) {
-      final participants = List<String>.from(snapshot.value as List);
-      if (participants.contains(userId)) {
-        participants.remove(userId);
-        await participantsRef.set(participants);
-      }
-    }
-
-    // We don't necessarily remove from userChats if they are still 'following'
-    // but without participant status they might not see it or can't post.
-    // Actually, if they are not participants, the filter in ChatRepository might hide it?
-    // Let's check ChatRepository's list fetching.
+    // Remove from participants in Firestore
+    await _firestore.collection('chats').doc(chatId).update({
+      'participants': FieldValue.arrayRemove([userId]),
+    });
   }
 
   /// Unfollow an organization
@@ -468,28 +472,56 @@ class OrganizationRepository {
       'followers': FieldValue.arrayRemove([userId]),
     });
 
-    // 2. Remove from userChats and participants
+    // 2. Remove from userChats and participants in Firestore
     if (chatId != null) {
-      await _rtdb.child('userChats/$userId/$chatId').remove();
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId)
+          .delete();
 
-      final participantsRef = _rtdb.child('chats/$chatId/participants');
-      final snapshot = await participantsRef.get();
-      if (snapshot.exists) {
-        List<String> participants = [];
-        if (snapshot.value is List) {
-          participants = List<String>.from(snapshot.value as List);
-        } else if (snapshot.value is Map) {
-          participants = (snapshot.value as Map).values.map((e) => e.toString()).toList();
-        }
-        
-        if (participants.contains(userId)) {
-          participants.remove(userId);
-          await participantsRef.set(participants);
-        }
-      }
+      await _firestore.collection('chats').doc(chatId).update({
+        'participants': FieldValue.arrayRemove([userId]),
+      });
     }
 
     // 3. Force refresh local cache
     await getOrganization(orgId, force: true);
+  }
+  /// Enable specialized Product/Service listing for a business
+  Future<void> enableProductListing(String orgId, String userId) async {
+
+    await _firestore.collection('organizations').doc(orgId).update({
+      'isListingEnabled': true,
+      'listingPaidAt': FieldValue.serverTimestamp(),
+      'listingPaidBy': userId,
+    });
+
+    // Refresh local cache
+    await getOrganization(orgId, force: true);
+  }
+
+  /// [NEW] Add a product or service item (100 DSP)
+  Future<String> addProductItem(
+    String orgId,
+    String userId,
+    Map<String, dynamic> itemData,
+  ) async {
+    // Save Item
+    final docRef = _firestore
+        .collection('organizations')
+        .doc(orgId)
+        .collection('products')
+        .doc();
+
+    await docRef.set({
+      ...itemData,
+      'id': docRef.id,
+      'createdBy': userId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    return docRef.id;
   }
 }

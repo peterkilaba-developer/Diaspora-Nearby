@@ -48,11 +48,12 @@ Event _$EventFromJson(Map<String, dynamic> json) => Event(
       venueCity: json['venueCity'] as String?,
       venueState: json['venueState'] as String?,
       venueCountry: json['venueCountry'] as String?,
-      status: json['status'] as String? ?? 'draft',
+      status: json['status'] as String? ?? 'published',
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       organizationId: json['organizationId'] as String?,
       organizationName: json['organizationName'] as String?,
+      dspFee: (json['dspFee'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$EventToJson(Event instance) => <String, dynamic>{
@@ -94,4 +95,5 @@ Map<String, dynamic> _$EventToJson(Event instance) => <String, dynamic>{
       'longitude': instance.longitude,
       'organizationId': instance.organizationId,
       'organizationName': instance.organizationName,
+      'dspFee': instance.dspFee,
     };

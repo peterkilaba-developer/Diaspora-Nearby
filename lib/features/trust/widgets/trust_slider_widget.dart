@@ -60,18 +60,20 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
     });
 
     try {
-      await ref.read(trustServiceProvider).rateUser(
+      await ref
+          .read(trustServiceProvider)
+          .rateUser(
             fromUserId: widget.currentUserId,
             toUserId: widget.targetUserId,
             score: _currentValue,
           );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Trust rating updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Trust rating updated')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -98,10 +100,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
               children: [
                 const Text(
                   'Community Trust',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 Text(
                   _getLabel(_currentValue),
@@ -122,8 +121,9 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
                 inactiveTrackColor: color.withOpacity(0.2),
                 overlayColor: color.withOpacity(0.1),
                 trackHeight: 8.0,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 12.0),
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 12.0,
+                ),
               ),
               child: Slider(
                 value: _currentValue,
@@ -138,10 +138,10 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
                 },
                 onChangeEnd: (value) {
                   // Auto-submit on release or require button?
-                  // Auto-submit is smoother UX for sliders usually, 
+                  // Auto-submit is smoother UX for sliders usually,
                   // but "Confirm" prevents accidental slips.
-                  // Let's hold off auto-submit and add a button or 
-                  // allow the user to settle. 
+                  // Let's hold off auto-submit and add a button or
+                  // allow the user to settle.
                   // The prompt says "slide...".
                   // Let's try auto-submit on drag end for seamless feel.
                   _submitRating();
@@ -149,17 +149,20 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget> {
               ),
             ),
             if (_isSubmitting)
-             const Center(child: LinearProgressIndicator(minHeight: 2,))
+              const Center(child: LinearProgressIndicator(minHeight: 2))
             else
-            Center(
+              Center(
                 child: Text(
-              '${_currentValue.round()}%',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color == Colors.grey.shade300 ? Colors.black45 : color,
+                  '${_currentValue.round()}%',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: color == Colors.grey.shade300
+                        ? Colors.black45
+                        : color,
+                  ),
+                ),
               ),
-            )),
           ],
         ),
       ),

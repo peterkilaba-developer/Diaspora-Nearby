@@ -236,7 +236,7 @@ class RecordLinux extends RecordPlatform {
       if (config.noiseSuppress) '--property=noise_suppression=1',
       if (canEncode) ...[
         '--file-format=${config.encoder.name}',
-        if (path case final path?) path,
+        ?path,
       ],
     ];
 

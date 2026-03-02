@@ -8,7 +8,7 @@ import 'package:diaspora_nearby/features/organization/repository/organization_re
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/organization/widgets/organization_chat_preview.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrganizationManagementScreen extends ConsumerStatefulWidget {
   final String? initialOrgId;
@@ -923,11 +923,12 @@ class _OrganizationManagementScreenState
   Future<List<String>> _getParticipants(String? chatId) async {
     if (chatId == null) return [];
     try {
-      final snapshot = await FirebaseDatabase.instance
-          .ref('chats/$chatId/participants')
+      final chatDoc = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
           .get();
-      if (snapshot.exists) {
-        return List<String>.from(snapshot.value as List);
+      if (chatDoc.exists) {
+        return List<String>.from(chatDoc.data()?['participants'] ?? []);
       }
     } catch (e) {
       debugPrint('Error fetching participants: $e');

@@ -5,12 +5,43 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import '../models/governance_unit.dart';
 import '../repository/governance_repository.dart';
 import 'leader_selection_screen.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
-class ActiveElectionsScreen extends ConsumerWidget {
+class ActiveElectionsScreen extends ConsumerStatefulWidget {
   const ActiveElectionsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActiveElectionsScreen> createState() =>
+      _ActiveElectionsScreenState();
+}
+
+class _ActiveElectionsScreenState extends ConsumerState<ActiveElectionsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _trackExploration();
+  }
+
+  Future<void> _trackExploration() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      final rewarded = await ref
+          .read(pointsServiceProvider)
+          .trackExplorationReward(
+            user.uid,
+            ExplorationAction.governanceActiveElections,
+          );
+      if (rewarded && mounted) {
+        showExplorationRewardToast(context);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Active Leader Elections'),
@@ -23,7 +54,7 @@ class ActiveElectionsScreen extends ConsumerWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           final activeUnits = snapshot.data ?? [];
           if (activeUnits.isEmpty) {
             return _buildEmptyState();
@@ -47,11 +78,19 @@ class ActiveElectionsScreen extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.vote, size: 64, color: Colors.grey.withValues(alpha: 0.5)),
+          Icon(
+            LucideIcons.vote,
+            size: 64,
+            color: Colors.grey.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 16),
           const Text(
             'No Active Elections',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
@@ -64,9 +103,10 @@ class ActiveElectionsScreen extends ConsumerWidget {
   }
 
   Widget _buildElectionCard(BuildContext context, GovernanceUnit unit) {
-    final timeLeft = unit.electionEndTime != null 
-        ? DateTime.fromMillisecondsSinceEpoch(unit.electionEndTime!)
-            .difference(DateTime.now())
+    final timeLeft = unit.electionEndTime != null
+        ? DateTime.fromMillisecondsSinceEpoch(
+            unit.electionEndTime!,
+          ).difference(DateTime.now())
         : null;
 
     return Card(
@@ -124,11 +164,16 @@ class ActiveElectionsScreen extends ConsumerWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('TIME REMAINING', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      const Text(
+                        'TIME REMAINING',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
                       Text(
                         _formatTimeLeft(timeLeft),
                         style: TextStyle(
-                          color: (timeLeft?.inHours ?? 24) < 24 ? Colors.red : Colors.green,
+                          color: (timeLeft?.inHours ?? 24) < 24
+                              ? Colors.red
+                              : Colors.green,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -137,9 +182,14 @@ class ActiveElectionsScreen extends ConsumerWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('PRECINCTS', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      const Text(
+                        'PRECINCTS',
+                        style: TextStyle(fontSize: 10, color: Colors.grey),
+                      ),
                       Text(
-                        unit.id.startsWith('country_') ? 'National' : 'Sub-National',
+                        unit.id.startsWith('country_')
+                            ? 'National'
+                            : 'Sub-National',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -185,7 +235,7 @@ class ActiveElectionsScreen extends ConsumerWidget {
   String _formatTimeLeft(Duration? duration) {
     if (duration == null) return 'Ending soon';
     if (duration.isNegative) return 'Voting closed';
-    
+
     if (duration.inDays > 0) {
       return '${duration.inDays}d ${duration.inHours % 24}h remaining';
     }

@@ -247,10 +247,8 @@ class CommunityChatUtils {
       final displayFlag = (flag != null && flag.isNotEmpty)
           ? flag
           : (chat?.flag != null && chat!.flag!.isNotEmpty)
-              ? chat!.flag
-              : (countryCode != null
-                  ? getCountryByCode(countryCode)?.flag
-                  : null);
+          ? chat.flag
+          : (countryCode != null ? getCountryByCode(countryCode)?.flag : null);
 
       if (displayFlag != null) {
         final isHome = effectiveLocationType == 'home';

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:json_annotation/json_annotation.dart';
 
 part 'chat.g.dart';
@@ -22,6 +23,26 @@ class ChatProfileImage {
   factory ChatProfileImage.fromJson(Map<String, dynamic> json) =>
       _$ChatProfileImageFromJson(json);
   Map<String, dynamic> toJson() => _$ChatProfileImageToJson(this);
+
+  /// Create from Firestore document data
+  factory ChatProfileImage.fromFirestore(Map<String, dynamic> data) {
+    return ChatProfileImage(
+      type: data['type'] as String? ?? 'icon',
+      value: data['value'] as String? ?? '',
+      backgroundColor: data['backgroundColor'] as String?,
+      gradientFrom: data['gradientFrom'] as String?,
+      gradientTo: data['gradientTo'] as String?,
+    );
+  }
+
+  /// Convert to Firestore-compatible map
+  Map<String, dynamic> toFirestore() => {
+    'type': type,
+    'value': value,
+    if (backgroundColor != null) 'backgroundColor': backgroundColor,
+    if (gradientFrom != null) 'gradientFrom': gradientFrom,
+    if (gradientTo != null) 'gradientTo': gradientTo,
+  };
 }
 
 /// Last message preview for chat list
@@ -57,6 +78,42 @@ class LastMessage {
   factory LastMessage.fromJson(Map<String, dynamic> json) =>
       _$LastMessageFromJson(json);
   Map<String, dynamic> toJson() => _$LastMessageToJson(this);
+
+  /// Create from Firestore document data
+  factory LastMessage.fromFirestore(Map<String, dynamic> data) {
+    return LastMessage(
+      id: data['id'] as String? ?? '',
+      content: data['content'] as String? ?? '',
+      timestamp: (data['timestamp'] is Timestamp)
+          ? (data['timestamp'] as Timestamp).millisecondsSinceEpoch
+          : (data['timestamp'] as int? ?? 0),
+      senderId: data['senderId'] as String? ?? '',
+      senderName: data['senderName'] as String? ?? 'Unknown',
+      type: data['type'] as String? ?? 'text',
+      mentions: (data['mentions'] as List<dynamic>?)?.cast<String>(),
+      forwarded: data['forwarded'] as bool?,
+      status: data['status'] as String?,
+      deletedForEveryone: data['deletedForEveryone'] as bool?,
+      metadata: (data['metadata'] is Map)
+          ? Map<String, dynamic>.from(data['metadata'] as Map)
+          : null,
+    );
+  }
+
+  /// Convert to Firestore-compatible map
+  Map<String, dynamic> toFirestore() => {
+    'id': id,
+    'content': content,
+    'timestamp': timestamp,
+    'senderId': senderId,
+    'senderName': senderName,
+    'type': type,
+    if (mentions != null) 'mentions': mentions,
+    if (forwarded != null) 'forwarded': forwarded,
+    if (status != null) 'status': status,
+    if (deletedForEveryone != null) 'deletedForEveryone': deletedForEveryone,
+    if (metadata != null) 'metadata': metadata,
+  };
 
   /// Create from RTDB with null-safe parsing
   factory LastMessage.fromRTDB(Map<String, dynamic> data) {
@@ -160,11 +217,111 @@ class Chat {
   factory Chat.fromJson(Map<String, dynamic> json) => _$ChatFromJson(json);
   Map<String, dynamic> toJson() => _$ChatToJson(this);
 
+  /// Create from Firestore document snapshot
+  factory Chat.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    return Chat.fromFirestoreData(doc.id, data);
+  }
+
+  /// Create from Firestore data map (for use with snapshots or manual construction)
+  factory Chat.fromFirestoreData(String id, Map<String, dynamic> data) {
+    // Parse timestamp safely (Firestore returns Timestamp objects)
+    int parseTimestamp(dynamic value, [int defaultValue = 0]) {
+      if (value == null) return defaultValue;
+      if (value is Timestamp) return value.millisecondsSinceEpoch;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? defaultValue;
+      return defaultValue;
+    }
+
+    return Chat(
+      id: id,
+      communityId: data['communityId'] as String?,
+      homeCountryCode: data['homeCountryCode'] as String?,
+      hostCountryCode: data['hostCountryCode'] as String?,
+      locationType: data['locationType'] as String?,
+      type: data['type'] as String? ?? 'direct',
+      name: data['name'] as String? ?? 'Chat',
+      photoUrl: data['photoUrl'] as String?,
+      profileImage: (data['profileImage'] is Map)
+          ? ChatProfileImage.fromFirestore(
+              Map<String, dynamic>.from(data['profileImage'] as Map),
+            )
+          : null,
+      participants: (data['participants'] as List<dynamic>?)?.cast<String>() ?? [],
+      admins: (data['admins'] as List<dynamic>?)?.cast<String>(),
+      createdBy: data['createdBy'] as String?,
+      lastMessage: (data['lastMessage'] is Map)
+          ? LastMessage.fromFirestore(
+              Map<String, dynamic>.from(data['lastMessage'] as Map),
+            )
+          : null,
+      createdAt: parseTimestamp(data['createdAt']),
+      updatedAt: parseTimestamp(data['updatedAt']),
+      eventId: data['eventId'] as String?,
+      memberCount: data['memberCount'] as int? ?? 0,
+      flag: data['flag'] as String?,
+      metadata: (data['metadata'] is Map)
+          ? Map<String, dynamic>.from(data['metadata'] as Map)
+          : null,
+      description: data['description'] as String?,
+    );
+  }
+
+  /// Apply per-user preferences from userChats subcollection
+  Chat withUserPreferences(Map<String, dynamic> userChatData) {
+    return copyWith(
+      isPinned: userChatData['isPinned'] as bool? ?? false,
+      isPinnedBottom: userChatData['isPinnedBottom'] as bool? ?? false,
+      isMuted: userChatData['isMuted'] as bool? ?? false,
+      unreadCount: userChatData['unreadCount'] as int? ?? 0,
+    );
+  }
+
+  /// Convert to Firestore-compatible map (for the chats collection)
+  Map<String, dynamic> toFirestore() => {
+    'type': type,
+    'name': name,
+    if (communityId != null) 'communityId': communityId,
+    if (homeCountryCode != null) 'homeCountryCode': homeCountryCode,
+    if (hostCountryCode != null) 'hostCountryCode': hostCountryCode,
+    if (locationType != null) 'locationType': locationType,
+    if (photoUrl != null) 'photoUrl': photoUrl,
+    if (profileImage != null) 'profileImage': profileImage!.toFirestore(),
+    'participants': participants,
+    if (admins != null) 'admins': admins,
+    if (createdBy != null) 'createdBy': createdBy,
+    if (lastMessage != null) 'lastMessage': lastMessage!.toFirestore(),
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    if (eventId != null) 'eventId': eventId,
+    if (memberCount != null) 'memberCount': memberCount,
+    if (flag != null) 'flag': flag,
+    if (metadata != null) 'metadata': metadata,
+    if (description != null) 'description': description,
+  };
+
+  /// Convert user preferences to Firestore map (for userChats subcollection)
+  Map<String, dynamic> toUserChatFirestore() => {
+    'isPinned': isPinned,
+    'isPinnedBottom': isPinnedBottom,
+    'isMuted': isMuted,
+    'unreadCount': unreadCount,
+    'joinedAt': FieldValue.serverTimestamp(),
+  };
+
   /// Check if this is a direct chat
   bool get isDirect => type == 'direct' || id.startsWith('direct_');
 
   /// Check if this is a community chat
-  bool get isCommunity => type == 'community' || id.startsWith('chat_');
+  bool get isCommunity =>
+      type == 'community' ||
+      id.startsWith('chat_') ||
+      id.startsWith('home_') ||
+      id.startsWith('host_') ||
+      id.startsWith('past_') ||
+      id == 'global_community';
 
   /// Check if this is a group chat
   bool get isGroup => type == 'group' || id.startsWith('group_');
@@ -174,6 +331,9 @@ class Chat {
 
   /// Check if this is an organization chat
   bool get isOrganization => type == 'organization' || id.startsWith('org_');
+
+  /// Check if this is a channel
+  bool get isChannel => type == 'channel';
 
   /// Get the other participant ID for direct chats
   String? getOtherParticipantId(String currentUserId) {
@@ -235,7 +395,9 @@ class Chat {
       admins: data['admins'] is List ? List<String>.from(data['admins']) : null,
       createdBy: data['createdBy'] as String?,
       lastMessage: (data['lastMessage'] is Map)
-          ? LastMessage.fromRTDB(Map<String, dynamic>.from(data['lastMessage'] as Map))
+          ? LastMessage.fromRTDB(
+              Map<String, dynamic>.from(data['lastMessage'] as Map),
+            )
           : null,
       createdAt: parseInt(data['createdAt']),
       updatedAt: parseInt(data['updatedAt']),
@@ -248,7 +410,8 @@ class Chat {
       description: data['description'] as String?,
       unreadCount: parseInt(data['unreadCount'], 0),
       isPinned: data['pinned'] == true || data['isPinned'] == true,
-      isPinnedBottom: data['pinnedBottom'] == true || data['isPinnedBottom'] == true,
+      isPinnedBottom:
+          data['pinnedBottom'] == true || data['isPinnedBottom'] == true,
       isMuted: data['muted'] == true || data['isMuted'] == true,
     );
   }

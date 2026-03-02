@@ -6,14 +6,14 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/core/services/database_service.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class StorageSettingsScreen extends ConsumerStatefulWidget {
   const StorageSettingsScreen({super.key});
 
   @override
-  ConsumerState<StorageSettingsScreen> createState() => _StorageSettingsScreenState();
+  ConsumerState<StorageSettingsScreen> createState() =>
+      _StorageSettingsScreenState();
 }
 
 class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
@@ -24,15 +24,15 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
     try {
       await DefaultCacheManager().emptyCache();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image cache cleared')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Image cache cleared')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error clearing cache: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error clearing cache: $e')));
       }
     } finally {
       if (mounted) setState(() => _isClearing = false);
@@ -46,7 +46,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
         title: const Text('Clear Local Database?'),
         content: const Text(
           'This will remove all cached messages and communities from this device. '
-          'They will be re-synced from the server when you open them again.'
+          'They will be re-synced from the server when you open them again.',
         ),
         actions: [
           TextButton(
@@ -67,15 +67,15 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
     try {
       await DatabaseService().clean();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Local database cleared')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Local database cleared')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error clearing database: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error clearing database: $e')));
       }
     } finally {
       if (mounted) setState(() => _isClearing = false);
@@ -95,7 +95,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
         ),
         content: const Text(
           'This will clear ALL local data, settings, and log you out. '
-          'The app will return to its initial state.'
+          'The app will return to its initial state.',
         ),
         actions: [
           TextButton(
@@ -103,7 +103,10 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('RESET EVERYTHING'),
           ),
@@ -123,15 +126,15 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
       await DefaultCacheManager().emptyCache();
       // 4. Sign Out
       await ref.read(authRepositoryProvider).signOut();
-      
+
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error during reset: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error during reset: $e')));
       }
     } finally {
       if (mounted) setState(() => _isClearing = false);
@@ -142,9 +145,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Storage & Cache'),
-      ),
+      appBar: AppBar(title: const Text('Storage & Cache')),
       body: Stack(
         children: [
           ListView(
@@ -155,7 +156,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 24),
-              
+
               _buildSectionHeader('CACHE MANAGEMENT'),
               GlassContainer(
                 child: _buildStorageItem(
@@ -167,7 +168,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               _buildSectionHeader('DATABASE'),
               GlassContainer(
                 child: _buildStorageItem(
@@ -179,7 +180,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               _buildSectionHeader('TROUBLESHOOTING'),
               GlassContainer(
                 child: _buildStorageItem(
@@ -255,10 +256,7 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen> {
                   ),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                 ],
               ),

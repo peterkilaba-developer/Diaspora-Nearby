@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -111,7 +111,7 @@ class _OrganizationsListScreenState
             final lat = (location['lat'] as num?)?.toDouble();
             final lng = (location['lng'] as num?)?.toDouble();
             if (lat != null && lng != null) {
-              org['distance'] = _calculateHaversineDistance(
+              org['distance'] = GeoUtils.haversine(
                 _userLat!,
                 _userLng!,
                 lat,
@@ -140,28 +140,7 @@ class _OrganizationsListScreenState
     }
   }
 
-  double _calculateHaversineDistance(
-    double lat1,
-    double lng1,
-    double lat2,
-    double lng2,
-  ) {
-    const R = 6371.0; // Earth radius in km
-    final dLat = _degToRad(lat2 - lat1);
-    final dLng = _degToRad(lng2 - lng1);
 
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degToRad(lat1)) *
-            math.cos(_degToRad(lat2)) *
-            math.sin(dLng / 2) *
-            math.sin(dLng / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return R * c;
-  }
-
-  double _degToRad(double deg) => deg * (math.pi / 180);
 
   String _formatDistance(double? distance) {
     if (distance == null) return '';
@@ -312,13 +291,15 @@ class _OrganizationsListScreenState
       case 'Business Organization (BO)':
         return LucideIcons.building2;
       case 'Diaspora Organization (DO)':
-        return Icons.handshake;
+        return LucideIcons.heartHandshake;
       case 'Political Organization (PO)':
         return LucideIcons.landmark;
       case 'Faith Organization (FO)':
         return LucideIcons.church;
       case 'Non Governmental Organization (NGO)':
         return LucideIcons.heartHandshake;
+      case 'Non-Profit Organization (NPO)':
+        return LucideIcons.heart;
       case 'Government Organization (GO)':
         return LucideIcons.building;
       default:
@@ -625,9 +606,9 @@ class _OrganizationsListScreenState
                         Flexible(
                           child: SearchHighlightUtils.highlightText(
                             [
-                              if (city != null) city,
-                              if (state != null) state,
-                              if (country != null) country,
+                              ?city,
+                              ?state,
+                              ?country,
                             ].join(', '),
                             _searchQuery,
                             theme.textTheme.bodySmall?.copyWith(

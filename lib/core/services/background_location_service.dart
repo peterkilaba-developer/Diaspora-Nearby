@@ -20,7 +20,7 @@ class BackgroundLocationService {
 
   static Future<void> initializeService() async {
     if (_isInitialized) {
-      debugPrint('BackgroundLocationService: Already initialized, skipping.');
+      // No-log: Already initialized
       return;
     }
 
@@ -87,9 +87,7 @@ class BackgroundLocationService {
     DartPluginRegistrant.ensureInitialized();
     WidgetsFlutterBinding.ensureInitialized();
 
-    debugPrint(
-      'ðŸ“ [BACKGROUND] BackgroundLocationService started (Release Mode).',
-    );
+    // No-log: Started
 
     if (service is AndroidServiceInstance) {
       service.on('setAsForeground').listen((event) {
@@ -131,19 +129,17 @@ class BackgroundLocationService {
       await _notificationsPlugin.initialize(initializationSettings);
 
       // [DEBUG] Explicit startup log
-      debugPrint(
-        'ðŸ“ [BACKGROUND] Service Started. Scheduling immediate check...',
-      );
+      // No-log start logic
 
       // [DEBUG] Run immediately after 5 seconds to verify logic without waiting
       Future.delayed(const Duration(seconds: 5), () async {
-        debugPrint('ðŸ“ [BACKGROUND] Running IMMEDIATE initial check...');
+        // No-log immediate check
         try {
           final user = FirebaseAuth.instance.currentUser;
           if (user != null) {
             await LocationUpdateService().updateCurrentLocation(user.uid);
           } else {
-            debugPrint('ðŸ“ [BACKGROUND] No user for immediate check.');
+            // No-log
           }
         } catch (e) {
           debugPrint('ðŸ“ [BACKGROUND] Immediate check failed: $e');
@@ -154,7 +150,7 @@ class BackgroundLocationService {
       // [UPDATED] Switch from Timer to Stream for reliable background updates
       // User requested 10 miles (approx 16093 meters)
       const int distanceFilterMeters = 16093;
-      
+
       late LocationSettings locationSettings;
 
       if (defaultTargetPlatform == TargetPlatform.android) {
@@ -164,12 +160,14 @@ class BackgroundLocationService {
           forceLocationManager: true,
           // Optional: configuration for battery usage vs latency
         );
-      } else if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
+      } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS) {
         locationSettings = AppleSettings(
           accuracy: LocationAccuracy.medium,
           activityType: ActivityType.automotiveNavigation, // Good for driving
           distanceFilter: distanceFilterMeters,
-          pauseLocationUpdatesAutomatically: false, // CRITICAL: Stop iOS from killing the stream
+          pauseLocationUpdatesAutomatically:
+              false, // CRITICAL: Stop iOS from killing the stream
           showBackgroundLocationIndicator: false,
         );
       } else {
@@ -179,18 +177,17 @@ class BackgroundLocationService {
         );
       }
 
-      debugPrint('📍 [BACKGROUND] Subscribing to location stream (Filter: ${distanceFilterMeters}m)...');
+      // No-log
 
       Geolocator.getPositionStream(locationSettings: locationSettings).listen(
         (Position? position) async {
-          debugPrint('📍 [BACKGROUND] Stream Event: Location changed.');
+          // No-log
           await _performBackgroundCheck(service);
         },
         onError: (e) {
           debugPrint('📍 [BACKGROUND] Stream Error: $e');
         },
       );
-      
     } catch (e) {
       debugPrint('CRITICAL: Error in background service onStart: $e');
     }
@@ -199,25 +196,23 @@ class BackgroundLocationService {
   // [NEW] Helper to perform the actual update and check
   static Future<void> _performBackgroundCheck(ServiceInstance service) async {
     try {
-        if (service is AndroidServiceInstance) {
-          if (await service.isForegroundService()) {
-            service.setForegroundNotificationInfo(
-              title: 'Diaspora Nearby',
-              content: 'Active in background (Location Updated)',
-            );
-          }
-        }
-
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          debugPrint('Background: Updating location for ${user.uid}');
-          // Update location in DB
-          await LocationUpdateService().updateCurrentLocation(user.uid);
-        } else {
-          debugPrint(
-            'No user logged in, skipping background location update.',
+      if (service is AndroidServiceInstance) {
+        if (await service.isForegroundService()) {
+          service.setForegroundNotificationInfo(
+            title: 'Diaspora Nearby',
+            content: 'Active in background (Location Updated)',
           );
         }
+      }
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        debugPrint('Background: Updating location for ${user.uid}');
+        // Update location in DB
+        await LocationUpdateService().updateCurrentLocation(user.uid);
+      } else {
+        debugPrint('No user logged in, skipping background location update.');
+      }
     } catch (e) {
       debugPrint('Error in background check: $e');
     }

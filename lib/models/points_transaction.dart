@@ -2,7 +2,8 @@ class PointsTransaction {
   final String id;
   final String userId;
   final String type; // 'earn', 'redeem', 'bonus'
-  final String action; // 'referral_signup', 'daily_open', 'message_sent', 'streak_7', 'streak_30'
+  final String
+  action; // 'referral_signup', 'daily_open', 'message_sent', 'streak_7', 'streak_30'
   final int points;
   final DateTime timestamp;
   final Map<String, dynamic>? metadata;

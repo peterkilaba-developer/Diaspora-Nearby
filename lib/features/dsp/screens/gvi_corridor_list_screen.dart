@@ -16,7 +16,7 @@ class GviCorridorListScreen extends StatefulWidget {
 class _GviCorridorListScreenState extends State<GviCorridorListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  
+
   final Map<String, double> _countryGvis = {};
   final Map<String, bool> _countryTrendUp = {};
   Timer? _simulationTimer;
@@ -38,14 +38,20 @@ class _GviCorridorListScreenState extends State<GviCorridorListScreen> {
               _countryGvis[name] = (1.1 + (name.length % 5) * 0.1);
               _countryTrendUp[name] = true;
             }
-            
+
             final change = (_random.nextDouble() * 0.09 + 0.01);
             final up = _random.nextBool();
             _countryTrendUp[name] = up;
             if (up) {
-              _countryGvis[name] = (_countryGvis[name]! + change).clamp(1.10, 1.80);
+              _countryGvis[name] = (_countryGvis[name]! + change).clamp(
+                1.10,
+                1.80,
+              );
             } else {
-              _countryGvis[name] = (_countryGvis[name]! - change).clamp(1.10, 1.80);
+              _countryGvis[name] = (_countryGvis[name]! - change).clamp(
+                1.10,
+                1.80,
+              );
             }
           }
         });
@@ -64,7 +70,9 @@ class _GviCorridorListScreenState extends State<GviCorridorListScreen> {
   Widget build(BuildContext context) {
     // Filter out home country and search query
     final filteredCountries = countries.where((c) {
-      final matchesSearch = c.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch = c.name.toLowerCase().contains(
+        _searchQuery.toLowerCase(),
+      );
       final isNotHome = c.name != widget.homeCountry;
       return matchesSearch && isNotHome;
     }).toList();
@@ -72,8 +80,14 @@ class _GviCorridorListScreenState extends State<GviCorridorListScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('GVI Bilateral Corridors', 
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'GVI Bilateral Corridors',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: AppTheme.accentDark,
         elevation: 0,
         centerTitle: true,
@@ -92,53 +106,94 @@ class _GviCorridorListScreenState extends State<GviCorridorListScreen> {
               decoration: InputDecoration(
                 hintText: 'Search bilateral countries...',
                 hintStyle: TextStyle(color: Colors.white.withAlpha(153)),
-                prefixIcon: const Icon(LucideIcons.search, color: Colors.white70, size: 20),
+                prefixIcon: const Icon(
+                  LucideIcons.search,
+                  color: Colors.white70,
+                  size: 20,
+                ),
                 filled: true,
                 fillColor: Colors.white.withAlpha(26),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 0,
+                ),
               ),
             ),
           ),
-          
+
           Expanded(
             child: ListView.separated(
-              padding: AppTheme.pagePaddingEdgeInsets.copyWith(top: 16, bottom: 32),
+              padding: AppTheme.pagePaddingEdgeInsets.copyWith(
+                top: 16,
+                bottom: 32,
+              ),
               itemCount: filteredCountries.length,
               separatorBuilder: (context, index) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final country = filteredCountries[index];
                 final name = country.name;
-                
+
                 // Use simulated values
-                final gviValue = _countryGvis[name] ?? (1.1 + (name.length % 5) * 0.1);
+                final gviValue =
+                    _countryGvis[name] ?? (1.1 + (name.length % 5) * 0.1);
                 final isUp = _countryTrendUp[name] ?? true;
-                
-                final statuses = ['Stable', 'Rising', 'Active', 'Growing', 'High Liquidity'];
+
+                final statuses = [
+                  'Stable',
+                  'Rising',
+                  'Active',
+                  'Growing',
+                  'High Liquidity',
+                ];
                 final status = statuses[name.length % statuses.length];
-                
+
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  leading: Text(country.flag, style: const TextStyle(fontSize: 24)),
-                  title: Text(name, 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  subtitle: Text(status, 
-                    style: TextStyle(fontSize: 12, color: Colors.blueGrey.withAlpha(204))),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  leading: Text(
+                    country.flag,
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                  title: Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  subtitle: Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blueGrey.withAlpha(204),
+                    ),
+                  ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(gviValue.toStringAsFixed(2), 
+                      Text(
+                        gviValue.toStringAsFixed(2),
                         style: TextStyle(
-                          fontSize: 16, 
-                          fontWeight: FontWeight.bold, 
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                           color: isUp ? AppTheme.accent : Colors.redAccent,
-                        )),
-                      const Text('GVI', 
-                        style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const Text(
+                        'GVI',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
@@ -192,43 +193,52 @@ class ChatCard extends ConsumerWidget {
     Color?
     customIconColor; // [NEW] Allow custom color for specific message types
 
-    switch (lastMessage.type) {
-      case 'image':
-        icon = LucideIcons.image;
-        text = 'Photo message';
-        break;
-      case 'video':
-        icon = LucideIcons.video;
-        text = 'Video message';
-        break;
-      case 'audio':
-        icon = LucideIcons.mic;
-        text = 'Voice message';
-        break;
-      case 'audio_file':
-        icon = LucideIcons.music;
-        text = 'Audio message';
-        break;
-      case 'location':
-        icon = LucideIcons.mapPin;
-        text = 'Location message';
-        break;
-      case 'document':
-        icon = LucideIcons.fileText;
-        text = 'Document message';
-        break;
-      case 'dsp_transfer': // [NEW]
-        icon = LucideIcons.coins;
-        text = 'Transfer message';
-        customIconColor = theme.colorScheme.tertiary; // Sage Green
-        break;
-      case 'money-transfer':
-        icon = LucideIcons.banknote;
-        text = 'Money transfer';
-        break;
-      default:
-        isMedia = false;
-        text = lastMessage.content;
+    // Check for hosting request/arrangement system messages
+    final systemType = lastMessage.metadata?['systemType'] as String?;
+    if (lastMessage.type == 'system' &&
+        (systemType == 'hosting_request' || systemType == 'hosting_arrangement')) {
+      icon = LucideIcons.plane;
+      text = lastMessage.content;
+      customIconColor = AppTheme.accent;
+    } else {
+      switch (lastMessage.type) {
+        case 'image':
+          icon = LucideIcons.image;
+          text = 'Photo message';
+          break;
+        case 'video':
+          icon = LucideIcons.video;
+          text = 'Video message';
+          break;
+        case 'audio':
+          icon = LucideIcons.mic;
+          text = 'Voice message';
+          break;
+        case 'audio_file':
+          icon = LucideIcons.music;
+          text = 'Audio message';
+          break;
+        case 'location':
+          icon = LucideIcons.mapPin;
+          text = 'Location message';
+          break;
+        case 'document':
+          icon = LucideIcons.fileText;
+          text = 'Document message';
+          break;
+        case 'dsp_transfer': // [NEW]
+          icon = LucideIcons.coins;
+          text = 'Transfer message';
+          customIconColor = theme.colorScheme.tertiary; // Sage Green
+          break;
+        case 'money-transfer':
+          icon = LucideIcons.banknote;
+          text = 'Money transfer';
+          break;
+        default:
+          isMedia = false;
+          text = lastMessage.content;
+      }
     }
 
     return Row(
@@ -287,11 +297,11 @@ class ChatCard extends ConsumerWidget {
 
     // Pending state (if status is null or unknown, though strictly covered by default above if passed)
     if (status != 'sent' && status != 'delivered' && status != 'read') {
-       return Icon(
-          LucideIcons.clock,
-          size: 14,
-          color: theme.colorScheme.onSurfaceVariant,
-        );
+      return Icon(
+        LucideIcons.clock,
+        size: 14,
+        color: theme.colorScheme.onSurfaceVariant,
+      );
     }
 
     if (isDouble) {
@@ -302,30 +312,18 @@ class ChatCard extends ConsumerWidget {
           children: [
             Positioned(
               left: 0,
-              child: Icon(
-                LucideIcons.check,
-                size: 16,
-                color: color,
-              ),
+              child: Icon(LucideIcons.check, size: 16, color: color),
             ),
             Positioned(
               left: 5, // Overlap
-              child: Icon(
-                LucideIcons.check,
-                size: 16,
-                color: color,
-              ),
+              child: Icon(LucideIcons.check, size: 16, color: color),
             ),
           ],
         ),
       );
     }
 
-    return Icon(
-      LucideIcons.check,
-      size: 16,
-      color: color,
-    );
+    return Icon(LucideIcons.check, size: 16, color: color);
   }
 
   IconData _getChatTypeIcon() {
@@ -548,6 +546,40 @@ class ChatCard extends ConsumerWidget {
         endActionPane: ActionPane(
           motion: const ScrollMotion(),
           children: [
+            // Mute/Unmute Action
+            CustomSlidableAction(
+              onPressed: (context) {
+                ref
+                    .read(chatRepositoryProvider)
+                    .toggleMute(chat.id, !chat.isMuted);
+              },
+              backgroundColor: chat.isMuted
+                  ? theme.colorScheme.surfaceContainerHighest
+                  : theme
+                        .colorScheme
+                        .tertiary, // Sage-like color for active action
+              foregroundColor: chat.isMuted
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onTertiary,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    chat.isMuted ? LucideIcons.bell : LucideIcons.bellOff,
+                    size: 24,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    chat.isMuted ? 'Unmute' : 'Mute',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Pin Action
             CustomSlidableAction(
               onPressed: (context) {
                 ref
@@ -799,6 +831,4 @@ class ChatCard extends ConsumerWidget {
       ),
     );
   }
-
-
 }

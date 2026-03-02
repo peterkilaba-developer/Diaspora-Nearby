@@ -2,61 +2,77 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
-import 'package:diaspora_nearby/features/community/services/community_local_service.dart';
 import 'package:rxdart/rxdart.dart';
 
 final communityRepositoryProvider = Provider((ref) => CommunityRepository());
 
-final communityProvider = StreamProvider.family<Community?, String>((ref, communityId) {
+final communityProvider = StreamProvider.family<Community?, String>((
+  ref,
+  communityId,
+) {
   return ref.watch(communityRepositoryProvider).watchCommunity(communityId);
 });
 
-final userCommunitiesStreamProvider = StreamProvider.family<List<Community>, String>((ref, uid) {
-  return ref.watch(communityRepositoryProvider).watchUserCommunities(uid);
+final userCommunitiesStreamProvider =
+    StreamProvider.family<List<Community>, String>((ref, uid) {
+      return ref.watch(communityRepositoryProvider).watchUserCommunities(uid);
+    });
+
+final homeCountryCommunityProvider = StreamProvider.family<Community?, String>((
+  ref,
+  countryCode,
+) {
+  return ref
+      .watch(communityRepositoryProvider)
+      .watchHomeCountryCommunity(countryCode);
 });
 
-final homeCountryCommunityProvider = StreamProvider.family<Community?, String>((ref, countryCode) {
-  return ref.watch(communityRepositoryProvider).watchHomeCountryCommunity(countryCode);
-});
-
-final homeContinentCommunityProvider = StreamProvider.family<Community?, String>((ref, continentName) {
-  return ref.watch(communityRepositoryProvider).watchHomeContinentCommunity(continentName);
-});
+final homeContinentCommunityProvider =
+    StreamProvider.family<Community?, String>((ref, continentName) {
+      return ref
+          .watch(communityRepositoryProvider)
+          .watchHomeContinentCommunity(continentName);
+    });
 
 class CommunityRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final CommunityLocalService _localService = CommunityLocalService();
 
   // ===========================================================================
-  // OFFLINE-FIRST METHODS (Isar)
+  // OFFLINE-FIRST METHODS (Firestore Offline Persistence)
   // ===========================================================================
 
   Stream<List<Community>> watchUserCommunities(String uid) {
-    if (kIsWeb) {
-      // WEB: Direct Firestore watch
-      return _firestore
-          .collection('communities')
-          .where('members', arrayContains: uid)
-          .snapshots()
-          .map(
-            (snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              try {
-                return Community.fromJson({...data, 'id': doc.id});
-              } catch (e) {
-                debugPrint('Error parsing community ${doc.id}: $e');
-                return null;
-              }
-            }).whereType<Community>().toList(),
-          );
-    }
-    return _localService.watchUserCommunities(uid);
+    // Direct Firestore watch (works on all platforms)
+    // Previously used local Isar cache on native, but that's been removed.
+    // Firestore's built-in offline persistence handles local caching.
+    syncUserCommunities(uid); // Background sync for any side-effects
+    return _firestore
+        .collection('communities')
+        .where('members', arrayContains: uid)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) {
+                final data = doc.data();
+                try {
+                  return Community.fromJson({...data, 'id': doc.id});
+                } catch (e) {
+                  debugPrint('Error parsing community ${doc.id}: $e');
+                  return null;
+                }
+              })
+              .whereType<Community>()
+              .toList(),
+        );
   }
 
   Stream<Community?> watchCommunity(String communityId) {
     final communityDoc = _firestore.collection('communities').doc(communityId);
     final metadataStream = communityDoc.snapshots();
-    final treasuryStream = communityDoc.collection('treasury').doc('current').snapshots();
+    final treasuryStream = communityDoc
+        .collection('treasury')
+        .doc('current')
+        .snapshots();
 
     return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
       metadataStream,
@@ -65,10 +81,10 @@ class CommunityRepository {
         if (!metaDoc.exists) return null;
         try {
           final metaData = metaDoc.data() as Map<String, dynamic>;
-          final treasuryData = treasuryDoc.exists 
-              ? treasuryDoc.data() as Map<String, dynamic> 
+          final treasuryData = treasuryDoc.exists
+              ? treasuryDoc.data() as Map<String, dynamic>
               : <String, dynamic>{};
-          
+
           return Community.fromJson({
             ...metaData,
             ...treasuryData,
@@ -91,30 +107,33 @@ class CommunityRepository {
         .limit(1)
         .snapshots()
         .switchMap((snapshot) {
-      if (snapshot.docs.isEmpty) return Stream.value(null);
-      
-      final communityDoc = snapshot.docs.first.reference;
-      final metadataStream = snapshot.docs.first.reference.snapshots();
-      final treasuryStream = communityDoc.collection('treasury').doc('current').snapshots();
+          if (snapshot.docs.isEmpty) return Stream.value(null);
 
-      return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
-        metadataStream,
-        treasuryStream,
-        (metaDoc, treasuryDoc) {
-          if (!metaDoc.exists) return null;
-          final metaData = metaDoc.data() as Map<String, dynamic>;
-          final treasuryData = treasuryDoc.exists 
-              ? treasuryDoc.data() as Map<String, dynamic> 
-              : <String, dynamic>{};
-          
-          return Community.fromJson({
-            ...metaData,
-            ...treasuryData,
-            'id': metaDoc.id,
+          final communityDoc = snapshot.docs.first.reference;
+          final metadataStream = snapshot.docs.first.reference.snapshots();
+          final treasuryStream = communityDoc
+              .collection('treasury')
+              .doc('current')
+              .snapshots();
+
+          return Rx.combineLatest2<
+            DocumentSnapshot,
+            DocumentSnapshot,
+            Community?
+          >(metadataStream, treasuryStream, (metaDoc, treasuryDoc) {
+            if (!metaDoc.exists) return null;
+            final metaData = metaDoc.data() as Map<String, dynamic>;
+            final treasuryData = treasuryDoc.exists
+                ? treasuryDoc.data() as Map<String, dynamic>
+                : <String, dynamic>{};
+
+            return Community.fromJson({
+              ...metaData,
+              ...treasuryData,
+              'id': metaDoc.id,
+            });
           });
-        },
-      );
-    });
+        });
   }
 
   Stream<Community?> watchHomeContinentCommunity(String continentName) {
@@ -126,35 +145,49 @@ class CommunityRepository {
         .limit(1)
         .snapshots()
         .switchMap((snapshot) {
-      if (snapshot.docs.isEmpty) return Stream.value(null);
-      
-      final communityDoc = snapshot.docs.first.reference;
-      final metadataStream = snapshot.docs.first.reference.snapshots();
-      final treasuryStream = communityDoc.collection('treasury').doc('current').snapshots();
+          if (snapshot.docs.isEmpty) return Stream.value(null);
 
-      return Rx.combineLatest2<DocumentSnapshot, DocumentSnapshot, Community?>(
-        metadataStream,
-        treasuryStream,
-        (metaDoc, treasuryDoc) {
-          if (!metaDoc.exists) return null;
-          final metaData = metaDoc.data() as Map<String, dynamic>;
-          final treasuryData = treasuryDoc.exists 
-              ? treasuryDoc.data() as Map<String, dynamic> 
-              : <String, dynamic>{};
-          
-          return Community.fromJson({
-            ...metaData,
-            ...treasuryData,
-            'id': metaDoc.id,
+          final communityDoc = snapshot.docs.first.reference;
+          final metadataStream = snapshot.docs.first.reference.snapshots();
+          final treasuryStream = communityDoc
+              .collection('treasury')
+              .doc('current')
+              .snapshots();
+
+          return Rx.combineLatest2<
+            DocumentSnapshot,
+            DocumentSnapshot,
+            Community?
+          >(metadataStream, treasuryStream, (metaDoc, treasuryDoc) {
+            if (!metaDoc.exists) return null;
+            final metaData = metaDoc.data() as Map<String, dynamic>;
+            final treasuryData = treasuryDoc.exists
+                ? treasuryDoc.data() as Map<String, dynamic>
+                : <String, dynamic>{};
+
+            return Community.fromJson({
+              ...metaData,
+              ...treasuryData,
+              'id': metaDoc.id,
+            });
           });
-        },
-      );
-    });
+        });
   }
 
-  /// Get communities from Local DB (Snapshot)
+  /// Get communities (direct Firestore query)
   Future<List<Community>> getLocalUserCommunities(String uid) async {
-    return _localService.getLocalUserCommunities(uid);
+    try {
+      final snapshot = await _firestore
+          .collection('communities')
+          .where('members', arrayContains: uid)
+          .get();
+      return snapshot.docs
+          .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting user communities: $e');
+      return [];
+    }
   }
 
   /// Sync User Communities (Remote -> Local)
@@ -167,15 +200,13 @@ class CommunityRepository {
           .get();
 
       final communities = membersQuery.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         return Community.fromJson({...data, 'id': doc.id});
       }).toList();
 
-      // Save valid communities
-      await _localService.saveCommunitiesToLocal(communities);
-      
+      // No-op: Firestore offline persistence handles local caching automatically
+
       debugPrint('✅ Synced ${communities.length} communities to local DB');
-      
     } catch (e) {
       debugPrint('❌ Error syncing communities: $e');
     }
@@ -185,17 +216,8 @@ class CommunityRepository {
   // HYBRID METHODS (Legacy Support / Migration)
   // ===========================================================================
 
-  /// Get Community (Try Local, then Remote)
+  /// Get Community (Firestore with offline persistence)
   Future<Community?> getCommunity(String communityId) async {
-    // 1. Try Local
-    final local = await _localService.getCommunity(communityId);
-    if (local != null) {
-      // Trigger background update if needed (stale-while-revalidate logic can go here)
-      _fetchAndSaveCommunity(communityId);
-      return local;
-    }
-
-    // 2. Fetch Remote
     return await _fetchAndSaveCommunity(communityId);
   }
 
@@ -211,7 +233,10 @@ class CommunityRepository {
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
-        return Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id});
+        return Community.fromJson({
+          ...doc.data(),
+          'id': doc.id,
+        });
       }
     } catch (e) {
       debugPrint('Error getting home country community: $e');
@@ -226,8 +251,11 @@ class CommunityRepository {
           .doc(communityId)
           .get();
       if (doc.exists) {
-        final community = Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id});
-        await _localService.saveCommunitiesToLocal([community]);
+        final community = Community.fromJson({
+          ...doc.data() as Map<String, dynamic>,
+          'id': doc.id,
+        });
+        // No-op: Firestore offline persistence handles caching
         return community;
       }
     } catch (e) {
@@ -260,9 +288,14 @@ class CommunityRepository {
     try {
       final snapshot = await _firestore.collection('communities').get();
       final list = snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
+          .map(
+            (doc) => Community.fromJson({
+              ...doc.data(),
+              'id': doc.id,
+            }),
+          )
           .toList();
-      await _localService.saveCommunitiesToLocal(list);
+      // No-op: Firestore offline persistence handles caching
       return list;
     } catch (e) {
       return [];
@@ -283,8 +316,13 @@ class CommunityRepository {
       final snapshot = await query.where('type', isEqualTo: 'country').get();
       // Filter by continent (Logic would use LocationUtils mapping)
       return snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
-          .toList(); 
+          .map(
+            (doc) => Community.fromJson({
+              ...doc.data() as Map<String, dynamic>,
+              'id': doc.id,
+            }),
+          )
+          .toList();
     } else if (parent.type == 'country') {
       // Children of Country are States or Cities
       // If 3-tier: States. If 2-tier: Cities.
@@ -292,15 +330,20 @@ class CommunityRepository {
           .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
           .where('type', whereIn: ['state', 'city'])
           .get();
-      
+
       final results = snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
+          .map(
+            (doc) => Community.fromJson({
+              ...doc.data() as Map<String, dynamic>,
+              'id': doc.id,
+            }),
+          )
           .toList();
 
       // If any states exist, they are the direct children.
       final states = results.where((c) => c.type == 'state').toList();
       if (states.isNotEmpty) return states;
-      
+
       // Otherwise cities are direct children
       return results.where((c) => c.type == 'city').toList();
     } else if (parent.type == 'state') {
@@ -309,11 +352,16 @@ class CommunityRepository {
           .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
           .where('type', isEqualTo: 'city')
           .get();
-      
+
       final results = snapshot.docs
-          .map((doc) => Community.fromJson({...doc.data() as Map<String, dynamic>, 'id': doc.id}))
+          .map(
+            (doc) => Community.fromJson({
+              ...doc.data() as Map<String, dynamic>,
+              'id': doc.id,
+            }),
+          )
           .toList();
-      
+
       // Filter by state field in location map
       final parentState = (parent.location?['state'] as String?)?.toLowerCase();
       return results.where((c) {
@@ -329,7 +377,7 @@ class CommunityRepository {
   Future<List<Community>> searchCommunities(String query) async {
     final queryLower = query.toLowerCase();
     try {
-      // Basic search: Fetch recent/active ones. 
+      // Basic search: Fetch recent/active ones.
       // Ideally we'd have a 'searchable' index, but for now fetch all or a subset.
       final snapshot = await _firestore
           .collection('communities')

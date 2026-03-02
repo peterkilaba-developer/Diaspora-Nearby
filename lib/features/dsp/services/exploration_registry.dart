@@ -28,6 +28,7 @@ class ExplorationAction {
   // Profile
   static const String profileEdit = 'profile_edit';
   static const String profileShare = 'profile_share';
+  static const String profileQr = 'explore_profile_qr';
 
   // Profile - Quick Actions
   static const String profileInvite = 'action_profile_more_invite';
@@ -58,6 +59,19 @@ class ExplorationAction {
       'profile_setup_past_locations';
 
   // DSP
+  static const String dspDashboard = 'explore_dsp_dashboard';
+  static const String dspPoA = 'explore_dsp_poa';
+  static const String dspPoCT = 'explore_dsp_poct';
+  static const String dspSyncTreasury = 'action_dsp_sync_treasury';
+  static const String dspTokenomics = 'explore_dsp_tokenomics';
+  static const String dspTreasuries = 'explore_dsp_treasuries';
+  static const String dspLeaderboard = 'explore_dsp_leaderboard';
+  static const String dspAirlinePortal = 'explore_dsp_airline_portal';
+  static const String dspRemittances = 'explore_dsp_remittances';
+  static const String dspEmergencyFund = 'explore_dsp_emergency_fund';
+  static const String dspDfdi = 'explore_dsp_dfdi';
+  static const String dspBereavement = 'explore_dsp_bereavement';
+
   static const String walletView = 'wallet_view';
 
   // AppBar Shortcuts
@@ -67,9 +81,22 @@ class ExplorationAction {
   // Radio
   static const String radioPlay = 'action_radio_play';
   static const String radioFavorite = 'action_radio_favorite';
+  static const String radioExplore = 'explore_radio_main';
 
   // Events
   static const String eventInterest = 'action_event_interest';
+  static const String eventQrSystem = 'explore_event_qr_system';
+
+  // Governance
+  static const String governanceActiveElections =
+      'explore_gov_active_elections';
+  static const String governanceElectionHistory =
+      'explore_gov_election_history';
+  static const String governanceLeaderSelection =
+      'explore_gov_leader_selection';
+
+  // Discovery
+  static const String discoveryExplore = 'explore_discovery_search';
 
   // Communities
   static const String communityViewMembers = 'action_community_members';
@@ -78,9 +105,18 @@ class ExplorationAction {
   // Economy Ecosystem Cards
   static const String economyCrypto = 'economy_crypto';
   static const String economyRemittances = 'economy_remittances';
-  static const String economyBereavement = 'economy_bereavement';
+  static const String economyEmergencyFund = 'economy_emergency_fund';
   static const String economyAirline = 'economy_airline';
   static const String economyDfdi = 'economy_dfdi';
+  static const String economyMarketplace = 'economy_marketplace';
+
+  // Travel Portal
+  static const String travelFlights = 'travel_flights';
+  static const String travelHotels = 'travel_hotels';
+  static const String travelStays = 'travel_stays';
+  static const String travelCarRental = 'travel_car_rental';
+
+  static const String feedbackSubmit = 'action_feedback_submitted';
 
   static final List<String> allActions = [
     moreScreenAccount,
@@ -120,13 +156,13 @@ class ExplorationAction {
     profileSetupAvailability,
     profileSetupMeetingPrefs,
     profileSetupPastLocations,
-    profileSetupPastLocations,
     walletView,
     economyCrypto,
     economyRemittances,
-    economyBereavement,
+    economyEmergencyFund,
     economyAirline,
     economyDfdi,
+    economyMarketplace,
     appbarCommunity,
     appbarRadio,
     radioPlay,
@@ -134,6 +170,30 @@ class ExplorationAction {
     eventInterest,
     communityViewMembers,
     communityExpand,
+    dspDashboard,
+    dspPoA,
+    dspPoCT,
+    dspSyncTreasury,
+    dspTokenomics,
+    dspTreasuries,
+    dspLeaderboard,
+    dspAirlinePortal,
+    dspRemittances,
+    dspEmergencyFund,
+    dspDfdi,
+    dspBereavement,
+    radioExplore,
+    eventQrSystem,
+    governanceActiveElections,
+    governanceElectionHistory,
+    governanceLeaderSelection,
+    discoveryExplore,
+    feedbackSubmit,
+    profileQr,
+    travelFlights,
+    travelHotels,
+    travelStays,
+    travelCarRental,
   ];
 }
 

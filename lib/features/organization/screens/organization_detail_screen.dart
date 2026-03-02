@@ -11,8 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/organization/widgets/organization_chat_preview.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrganizationDetailScreen extends ConsumerStatefulWidget {
   final String orgId;
@@ -106,18 +105,22 @@ class _OrganizationDetailScreenState
       return;
     }
 
-    // Fallback: Check RTDB userChats
+    // Fallback: Check Firestore userChats subcollection
     try {
       final chatId = _orgData!['chatId'] as String?;
       if (chatId != null) {
-        final userChatRef = FirebaseDatabase.instance.ref('userChats/${user.uid}/$chatId');
-        final snapshot = await userChatRef.get();
-        if (snapshot.exists) {
-           if (mounted) setState(() => _isFollowing = true);
+        final userChatDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('userChats')
+            .doc(chatId)
+            .get();
+        if (userChatDoc.exists) {
+          if (mounted) setState(() => _isFollowing = true);
         }
       }
     } catch (e) {
-      debugPrint('Error checking RTDB sequence: $e');
+      debugPrint('Error checking Firestore userChats: $e');
     }
   }
 
@@ -136,7 +139,7 @@ class _OrganizationDetailScreenState
         await repo.followOrganization(widget.orgId, user.uid);
         if (mounted) setState(() => _isFollowing = true);
       }
-      
+
       // Force reload to verify state
       await _loadData(force: true);
     } catch (e) {
@@ -413,6 +416,10 @@ class _OrganizationDetailScreenState
                     const SizedBox(height: 32),
                   ],
 
+                  // [NEW] Products & Services Section
+                  _buildProductsListingSection(theme, isAdmin),
+                  const SizedBox(height: 32),
+
                   // Info Cards
                   const Text(
                     'About',
@@ -439,8 +446,8 @@ class _OrganizationDetailScreenState
                       'Location',
                       [
                         city,
-                        if (state != null) state,
-                        if (country != null) country,
+                        ?state,
+                        ?country,
                       ].join(', '),
                       onTap: () => _openDirections(),
                     ),
@@ -633,5 +640,129 @@ class _OrganizationDetailScreenState
         ),
       ),
     );
+  }
+
+  Widget _buildProductsListingSection(ThemeData theme, bool isAdmin) {
+    final isEnabled = _orgData!['isListingEnabled'] == true;
+
+    if (!isEnabled) {
+      if (!isAdmin) return const SizedBox.shrink();
+
+      return GlassContainer(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(LucideIcons.shoppingBag, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                const Text(
+                  'Products & Services',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Showcase your products and services on a dedicated page for your organization. This specialized listing helps you reach more customers.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => _handleEnableListing(),
+                child: const Text('Enable Specialized Listing (1,000 DSP)'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Products & Services',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            if (isAdmin)
+              TextButton.icon(
+                onPressed: () {
+                  // TODO: Navigate to products management
+                },
+                icon: const Icon(LucideIcons.plus, size: 16),
+                label: const Text('Add Item (100 DSP)'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Detailed products and services listing is active. You can browse them below.',
+          style: TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+        // TODO: List products here
+        const SizedBox(height: 16),
+        const Center(
+          child: Text(
+            'Specialized page coming soon!',
+            style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleEnableListing() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enable Specialized Listing?'),
+        content: const Text(
+          'This will charge your account 1,000 DSP to enable a dedicated products and services page for your organization.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enable (1,000 DSP)'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isLoading = true);
+      try {
+        await ref
+            .read(organizationRepositoryProvider)
+            .enableProductListing(widget.orgId, user.uid);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Specialized listing enabled!')),
+          );
+          _loadData(force: true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to enable listing: $e')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
   }
 }

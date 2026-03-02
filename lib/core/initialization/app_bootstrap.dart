@@ -1,15 +1,16 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:audio_session/audio_session.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:diaspora_nearby/core/services/database_service.dart';
 import 'package:diaspora_nearby/features/chat/services/mention_monitor_service.dart';
+import 'package:diaspora_nearby/features/marketplace/utils/exchange_rate_service.dart';
 import 'package:diaspora_nearby/firebase_options.dart';
 
 /// Centralizes all application initialization logic.
@@ -18,6 +19,9 @@ class AppBootstrap {
   static Future<void> init() async {
     // 1. Core Framework Init
     WidgetsFlutterBinding.ensureInitialized();
+
+    // 1b. Load environment variables
+    await dotenv.load(fileName: '.env');
 
     // 2. Firebase & Critical Infrastructure
     await _initFirebase();
@@ -40,16 +44,16 @@ class AppBootstrap {
         );
       }
 
-      // [CRITICAL] Persistence MUST be enabled immediately after init
+      // [MIGRATED] Firestore persistence (auto-enabled on mobile, configure cache size)
       if (!kIsWeb) {
         try {
-          FirebaseDatabase.instance.setPersistenceEnabled(true);
-          FirebaseDatabase.instance.setPersistenceCacheSizeBytes(
-            100000000,
-          ); // 100MB
-          debugPrint('âœ… AppBootstrap: Firebase Persistence Enabled');
+          FirebaseFirestore.instance.settings = const Settings(
+            persistenceEnabled: true,
+            cacheSizeBytes: 100000000, // 100MB
+          );
+          debugPrint('AppBootstrap: Firestore Persistence Configured');
         } catch (e) {
-          debugPrint('âš ï¸ AppBootstrap: Persistence Init Warning: $e');
+          debugPrint('AppBootstrap: Persistence Init Warning: $e');
         }
 
         // Crashlytics for non-web
@@ -69,10 +73,10 @@ class AppBootstrap {
           appleProvider: AppleProvider.deviceCheck,
         );
       } catch (e) {
-        debugPrint('⚠️ AppBootstrap: App Check Init Error: $e');
+        debugPrint('AppBootstrap: App Check Init Error: $e');
       }
     } catch (e) {
-      debugPrint('❌ AppBootstrap: Firebase Fatal Error: $e');
+      debugPrint('AppBootstrap: Firebase Fatal Error: $e');
       rethrow; // Fatal
     }
   }
@@ -89,19 +93,24 @@ class AppBootstrap {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
     } catch (e) {
-      debugPrint('⚠️ AppBootstrap: Audio Init Warning: $e');
+      debugPrint('AppBootstrap: Audio Init Warning: $e');
     }
   }
 
   static Future<void> _initStorage() async {
     // Shared preferences is used by SessionService via provider
-    // final sharedPreferences = await SharedPreferences.getInstance(); 
-    // LocalCacheService.init(sharedPreferences); 
+    // final sharedPreferences = await SharedPreferences.getInstance();
+    // LocalCacheService.init(sharedPreferences);
     await DatabaseService().init();
   }
 
   static Future<void> _initServices() async {
     // Services that need to start listening immediately
     await MentionMonitorService().initialize();
+
+    // Live exchange rates (non-blocking, falls back to hardcoded)
+    ExchangeRateService.instance.initialize().catchError((e) {
+      debugPrint('AppBootstrap: Exchange Rate Init Warning: $e');
+    });
   }
 }

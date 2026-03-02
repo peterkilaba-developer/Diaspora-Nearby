@@ -183,7 +183,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.pageHorizontalPadding,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -331,9 +333,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(12),
+            decoration: AppTheme.cardDecoration(context).copyWith(
               border: Border.all(
                 color: isGranted
                     ? Theme.of(context).primaryColor
@@ -360,7 +360,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
                   ),
                   child: Icon(
                     icon,
-                    color: isGranted ? Theme.of(context).primaryColor : Colors.grey,
+                    color: isGranted
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -387,7 +389,10 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
                   ),
                 ),
                 if (isGranted)
-                  Icon(LucideIcons.checkCircle2, color: Theme.of(context).primaryColor)
+                  Icon(
+                    LucideIcons.checkCircle2,
+                    color: Theme.of(context).primaryColor,
+                  )
                 else
                   TextButton(
                     onPressed: isDisabled ? null : onPressed,

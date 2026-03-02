@@ -5,16 +5,16 @@ import 'package:diaspora_nearby/features/radio/repository/radio_repository.dart'
 import 'package:diaspora_nearby/features/radio/providers/radio_provider.dart';
 import 'package:diaspora_nearby/features/radio/models/radio_station.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
-import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
-
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 
 // --- Providers ---
 final stationsByCountryProvider =
@@ -59,7 +59,7 @@ class _RadioScreenState extends ConsumerState<RadioScreen>
           .read(pointsServiceProvider)
           .trackExplorationReward(
             ref.read(authRepositoryProvider).currentUser?.uid ?? '',
-            'explore_page_radio',
+            ExplorationAction.radioExplore,
           )
           .then((rewarded) {
             if (rewarded && mounted) {
@@ -260,7 +260,7 @@ class _RadioScreenState extends ConsumerState<RadioScreen>
                             height: 2,
                             color: Theme.of(
                               context,
-                            ).colorScheme.primary.withOpacity(0.5),
+                            ).colorScheme.primary.withValues(alpha: 0.5),
                           ),
                         );
                       },
@@ -455,7 +455,9 @@ class RadioStationCard extends ConsumerWidget {
           child: station.favicon.isEmpty
               ? Icon(
                   Icons.radio,
-                  color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
+                  color: Theme.of(
+                    context,
+                  ).iconTheme.color?.withValues(alpha: 0.5),
                 )
               : null,
         ),
@@ -475,7 +477,9 @@ class RadioStationCard extends ConsumerWidget {
                 standardizedCountry,
                 searchQuery,
                 theme.textTheme.bodySmall?.copyWith(
-                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                  color: theme.textTheme.bodySmall?.color?.withValues(
+                    alpha: 0.7,
+                  ),
                 ),
                 context,
               ),

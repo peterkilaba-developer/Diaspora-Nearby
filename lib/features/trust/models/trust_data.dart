@@ -62,19 +62,35 @@ class TrustData {
   final int reportCount; // Negative signal
   final int blockedByCount; // [NEW] -10 PoCT for every 10 unique blocks
   final int flaggedMessagesCount; // [NEW] -10 PoCT for every 10 unique flags
-  final int bannedVoucheeCount; // [NEW] -10 PoCT if someone you vouched for is banned
+  final int
+  bannedVoucheeCount; // [NEW] -10 PoCT if someone you vouched for is banned
 
   // [NEW] Reliability & Helpfulness metrics
   final int attendedEventsCount;
   final int joinedEventsCount;
   final int verifiedSolutionsCount;
   final bool identityQRExchange;
+
+  // [NEW] Council Eligibility Metrics
+  final int uniqueFamilyCount;
+  final int uniqueFriendCount; // [NEW] Non-family relationship connections
+  final int uniqueQrCount;
+  final int uniqueVouchCount;
+  final int uniqueVerificationCount; // [NEW] 10 standard verifications
+  final int verifiedByCount; // How many peers verified this user
+  final int vouchedByCount; // How many peers vouched for this user
+  final bool isCouncilEligible;
+  final List<String> awardedQualificationMilestones; // [NEW] Track awards
   final int verifiedCheckInCount;
   final int unresponsiveLiaisonCount;
   final int rejectedFamilyConnectionsCount; // [NEW] -10 PoCT
   final int fakeVerificationsCount; // [NEW] -10 PoCT
   final int eventNoShowCount; // [NEW] -10 PoCT
   final int reportedFraudCount; // [NEW] -10 PoCT
+  final int referralCount; // [NEW] 1 PoCT for every 10 referrals
+
+  // [NEW] Ledger for already awarded/penalized HTS units (sets of 10)
+  final Map<String, int> awardedHtsTracking;
 
   // Components (Physical/Behavioral)
   final double reliabilityScore; // (attended/joined) * 100
@@ -102,6 +118,15 @@ class TrustData {
     this.joinedEventsCount = 0,
     this.verifiedSolutionsCount = 0,
     this.identityQRExchange = false,
+    this.uniqueFamilyCount = 0,
+    this.uniqueFriendCount = 0,
+    this.uniqueQrCount = 0,
+    this.uniqueVouchCount = 0,
+    this.uniqueVerificationCount = 0,
+    this.verifiedByCount = 0,
+    this.vouchedByCount = 0,
+    this.isCouncilEligible = false,
+    this.awardedQualificationMilestones = const [],
     this.verifiedCheckInCount = 0,
     this.unresponsiveLiaisonCount = 0,
     this.reliabilityScore = 0.0,
@@ -113,6 +138,8 @@ class TrustData {
     this.fakeVerificationsCount = 0,
     this.eventNoShowCount = 0,
     this.reportedFraudCount = 0,
+    this.referralCount = 0,
+    this.awardedHtsTracking = const {},
     required this.lastUpdated,
     this.vouchedBy = const [],
   });
@@ -144,6 +171,15 @@ class TrustData {
     int? joinedEventsCount,
     int? verifiedSolutionsCount,
     bool? identityQRExchange,
+    int? uniqueFamilyCount,
+    int? uniqueFriendCount,
+    int? uniqueQrCount,
+    int? uniqueVouchCount,
+    int? uniqueVerificationCount,
+    int? verifiedByCount,
+    int? vouchedByCount,
+    bool? isCouncilEligible,
+    List<String>? awardedQualificationMilestones,
     int? verifiedCheckInCount,
     int? unresponsiveLiaisonCount,
     double? reliabilityScore,
@@ -157,6 +193,8 @@ class TrustData {
     int? fakeVerificationsCount,
     int? eventNoShowCount,
     int? reportedFraudCount,
+    int? referralCount,
+    Map<String, int>? awardedHtsTracking,
   }) {
     return TrustData(
       uid: uid ?? this.uid,
@@ -175,8 +213,20 @@ class TrustData {
       verifiedSolutionsCount:
           verifiedSolutionsCount ?? this.verifiedSolutionsCount,
       identityQRExchange: identityQRExchange ?? this.identityQRExchange,
+      uniqueFamilyCount: uniqueFamilyCount ?? this.uniqueFamilyCount,
+      uniqueFriendCount: uniqueFriendCount ?? this.uniqueFriendCount,
+      uniqueQrCount: uniqueQrCount ?? this.uniqueQrCount,
+      uniqueVouchCount: uniqueVouchCount ?? this.uniqueVouchCount,
+      uniqueVerificationCount:
+          uniqueVerificationCount ?? this.uniqueVerificationCount,
+      verifiedByCount: verifiedByCount ?? this.verifiedByCount,
+      vouchedByCount: vouchedByCount ?? this.vouchedByCount,
+      isCouncilEligible: isCouncilEligible ?? this.isCouncilEligible,
+      awardedQualificationMilestones:
+          awardedQualificationMilestones ?? this.awardedQualificationMilestones,
       verifiedCheckInCount: verifiedCheckInCount ?? this.verifiedCheckInCount,
-      unresponsiveLiaisonCount: unresponsiveLiaisonCount ?? this.unresponsiveLiaisonCount,
+      unresponsiveLiaisonCount:
+          unresponsiveLiaisonCount ?? this.unresponsiveLiaisonCount,
       reliabilityScore: reliabilityScore ?? this.reliabilityScore,
       helpfulnessScore: helpfulnessScore ?? this.helpfulnessScore,
       lastUpdated: lastUpdated ?? this.lastUpdated,
@@ -184,10 +234,14 @@ class TrustData {
       blockedByCount: blockedByCount ?? this.blockedByCount,
       flaggedMessagesCount: flaggedMessagesCount ?? this.flaggedMessagesCount,
       bannedVoucheeCount: bannedVoucheeCount ?? this.bannedVoucheeCount,
-      rejectedFamilyConnectionsCount: rejectedFamilyConnectionsCount ?? this.rejectedFamilyConnectionsCount,
-      fakeVerificationsCount: fakeVerificationsCount ?? this.fakeVerificationsCount,
+      rejectedFamilyConnectionsCount:
+          rejectedFamilyConnectionsCount ?? this.rejectedFamilyConnectionsCount,
+      fakeVerificationsCount:
+          fakeVerificationsCount ?? this.fakeVerificationsCount,
       eventNoShowCount: eventNoShowCount ?? this.eventNoShowCount,
       reportedFraudCount: reportedFraudCount ?? this.reportedFraudCount,
+      referralCount: referralCount ?? this.referralCount,
+      awardedHtsTracking: awardedHtsTracking ?? this.awardedHtsTracking,
     );
   }
 }

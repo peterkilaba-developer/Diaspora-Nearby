@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
 
 import 'message_content/text_message_content.dart';
 import 'message_content/image_message_content.dart';
@@ -14,6 +16,8 @@ import 'message_content/audio_message_content.dart';
 import 'message_content/document_message_content.dart';
 import 'message_content/location_message_content.dart';
 import 'message_content/dsp_transfer_message_content.dart'; // [NEW]
+import 'message_content/hosting_request_message_content.dart'; // [NEW] Hosting
+import 'message_content/hosting_arrangement_message_content.dart'; // [NEW] Hosting DM
 
 /// Message Bubble Widget
 /// Displays a single message in the chat
@@ -30,6 +34,7 @@ class MessageBubble extends ConsumerWidget {
   final bool
   isHighlighted; // Whether the message is currently highlighted (from "Jump to Message")
   final bool showAvatar; // Show avatar for group chats, hide for DMs
+  final String? sellerRole; // Seller/Provider/Employer role for listing chats
 
   const MessageBubble({
     super.key,
@@ -43,6 +48,7 @@ class MessageBubble extends ConsumerWidget {
     this.repliedMessage,
     this.isHighlighted = false,
     this.showAvatar = true, // Default to true for backwards compatibility
+    this.sellerRole,
   });
 
   String _formatTime(int timestamp) {
@@ -63,6 +69,36 @@ class MessageBubble extends ConsumerWidget {
     // Handle deleted for everyone
     if (message.isDeletedForEveryone) {
       return _buildDeletedMessage(theme);
+    }
+
+    // [NEW] Hosting request system messages render as standalone cards
+    if (message.type == 'system' &&
+        message.metadata?['systemType'] == 'hosting_request') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: HostingRequestMessageContent(
+            message: message,
+            isOwn: isOwn,
+          ),
+        ),
+      );
+    }
+
+    // [NEW] Hosting arrangement messages render as standalone green cards
+    if (message.type == 'system' &&
+        message.metadata?['systemType'] == 'hosting_arrangement') {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Align(
+          alignment: Alignment.center,
+          child: HostingArrangementMessageContent(
+            message: message,
+            isOwn: isOwn,
+          ),
+        ),
+      );
     }
 
     return Dismissible(
@@ -343,6 +379,34 @@ class MessageBubble extends ConsumerWidget {
 
                                         // Content
                                         _buildMessageContent(context),
+
+                                        // [NEW] Verified Solution Badge
+                                        if (message.metadata?['isVerifiedSolution'] == true)
+                                          const Padding(
+                                            padding: EdgeInsets.fromLTRB(
+                                              12, 4, 12, 0,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  LucideIcons.badgeCheck,
+                                                  size: 13,
+                                                  color: AppTheme.accent,
+                                                ),
+                                                SizedBox(width: 4),
+                                                Text(
+                                                  'Verified Solution',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppTheme.accent,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+
                                         const SizedBox(height: 4),
 
                                         // Footer (Time, Edits, Status)
@@ -532,10 +596,50 @@ class MessageBubble extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            // Seller role badge
+            if (sellerRole != null && !isOwn) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _getRoleBadgeColor(sellerRole!).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: _getRoleBadgeColor(sellerRole!).withOpacity(0.4),
+                    width: 0.5,
+                  ),
+                ),
+                child: Text(
+                  sellerRole!,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    color: _getRoleBadgeColor(sellerRole!),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  /// Returns a color for the seller role badge
+  Color _getRoleBadgeColor(String role) {
+    switch (role.toLowerCase()) {
+      case 'employer':
+        return const Color(0xFF3B82F6); // Blue
+      case 'provider':
+        return const Color(0xFF8B5CF6); // Purple
+      case 'seller':
+        return marketplaceSageGreen; // Sage green
+      default:
+        return marketplaceSageGreen;
+    }
   }
 
   Widget _buildAvatar(BuildContext context, ThemeData theme, dynamic profile) {
@@ -602,10 +706,17 @@ class MessageBubble extends ConsumerWidget {
           isOwn: isOwn,
         ); // Placeholder
       case 'system':
+        // Check for hosting request system messages
+        if (message.metadata?['systemType'] == 'hosting_request') {
+          return HostingRequestMessageContent(
+            message: message,
+            isOwn: isOwn,
+          );
+        }
         return TextMessageContent(
           message: message,
           isOwn: isOwn,
-        ); // Placeholder
+        );
       default:
         return TextMessageContent(message: message, isOwn: isOwn);
     }

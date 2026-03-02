@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
-import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -91,7 +90,8 @@ class EventCard extends StatelessWidget {
         userLocation != null &&
         event.latitude != null &&
         event.longitude != null) {
-      event.distance = Geolocator.distanceBetween(
+      event.distance =
+          Geolocator.distanceBetween(
             userLocation!.latitude,
             userLocation!.longitude,
             event.latitude!,
@@ -167,21 +167,24 @@ class EventCard extends StatelessWidget {
 
                     // Date Badge Overlay (Calendar Sheet Style)
                     Positioned(
-                      top: 8,
-                      left: 8,
-                      child: GlassContainer(
+                      top: 12,
+                      left: 12,
+                      child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 6,
                         ),
-                        borderRadius: BorderRadius.circular(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               monthStr,
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
+                              style: const TextStyle(
+                                color: Colors.white70,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1,
@@ -189,8 +192,8 @@ class EventCard extends StatelessWidget {
                             ),
                             Text(
                               dayStr,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
+                              style: const TextStyle(
+                                color: Colors.white,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 height: 1.1,
@@ -201,36 +204,57 @@ class EventCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Price Badge
+                    // Entry Fee / Free Badge
                     Positioned(
-                      top: 8,
-                      right: 8,
-                      child: GlassContainer(
+                      top: 12,
+                      right: 12,
+                      child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
-                        borderRadius: BorderRadius.circular(30),
-                        child: Text(
-                          event.isPaid == true
-                              ? '\$${event.ticketPrice?.toStringAsFixed(0)}'
-                              : 'FREE',
-                          style: TextStyle(
-                            color: theme.colorScheme.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        decoration: BoxDecoration(
+                          color: event.isPaid == true &&
+                                  (event.ticketPrice ?? 0) > 0
+                              ? Colors.black.withValues(alpha: 0.65)
+                              : Colors.green.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              event.isPaid == true &&
+                                      (event.ticketPrice ?? 0) > 0
+                                  ? LucideIcons.ticket
+                                  : LucideIcons.sparkles,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              event.isPaid == true &&
+                                      (event.ticketPrice ?? 0) > 0
+                                  ? '\$${event.ticketPrice!.toStringAsFixed(event.ticketPrice! == event.ticketPrice!.roundToDouble() ? 0 : 2)}'
+                                  : 'Free',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ],
                 ),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 0,
-                      vertical: 16,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 16,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -442,10 +466,12 @@ class EventCard extends StatelessWidget {
                         compact: true,
                         showDirections: true,
                         onDirectionsTap: (query) async {
-                           final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}');
-                           if (await canLaunchUrl(uri)) {
-                             await launchUrl(uri);
-                           }
+                          final uri = Uri.parse(
+                            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
+                          );
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri);
+                          }
                         },
                       ),
 

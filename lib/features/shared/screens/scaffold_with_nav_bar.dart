@@ -21,7 +21,7 @@ import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; 
 import 'package:diaspora_nearby/features/shared/screens/share_invite_screen.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-
+import 'package:diaspora_nearby/features/chat/services/audio_playback_service.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -40,6 +40,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     WidgetsBinding.instance.addObserver(this);
     _updateLocation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _triggerDailyCheckIn();
       _ensureBackgroundService();
     });
   }
@@ -52,35 +53,31 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
 
       final service = FlutterBackgroundService();
       final isRunning = await service.isRunning();
-      print('Shell: Background Service status: isRunning=$isRunning');
+      // No-log: Background Service status
 
       if (!isRunning) {
         if (await Permission.location.isGranted) {
-          print(
-            'Shell: Permission granted. Initializing and starting service...',
-          );
+          // No-log: Permission granted
 
           await BackgroundLocationService.initializeService();
 
           if (await service.isRunning()) {
-            print('Shell: Service started successfully during initialization.');
+            // No-log: Service started
           } else {
-            print('Shell: Starting service manually...');
+            // No-log: Starting manually
             await service.startService();
           }
         } else {
-          print(
-            'Shell: Skipping background service start: Permission not granted yet.',
-          );
+          // No-log: Skipping
         }
       } else {
-        print('Shell: Service is already running.');
+        // No-log: Already running
       }
 
       // [DEBUG] Trigger Foreground Proximity Check
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user != null) {
-        print('Shell: Triggering FOREGROUND Proximity Check...');
+        // No-log: Triggering proximity
         await ProximityService().checkAndNotify(user.uid);
       }
     } catch (e) {
@@ -98,8 +95,17 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _updateLocation();
+      _triggerDailyCheckIn();
       // Re-check background service state on resume
       _ensureBackgroundService();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // STOP Chat Audio when backgrounded (prevents MediaCodec leakage/errors)
+      try {
+        ref.read(audioPlaybackServiceProvider).stopAll();
+      } catch (e) {
+        debugPrint('Error stopping chat audio on background: $e');
+      }
     }
   }
 
@@ -107,6 +113,13 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user != null) {
       await LocationUpdateService().updateCurrentLocation(user.uid);
+    }
+  }
+
+  void _triggerDailyCheckIn() {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      ref.read(pointsServiceProvider).trackDailyCheckIn(user.uid);
     }
   }
 
@@ -123,7 +136,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
 
         // Show Toast/SnackBar
         if (mounted) {
-           showExplorationRewardToast(context);
+          showExplorationRewardToast(context);
         }
       }
     }
@@ -324,12 +337,12 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   }
 
   // Helpers to force unselected state
-  MaterialStateProperty<IconThemeData?> validIconTheme(
+  WidgetStateProperty<IconThemeData?> validIconTheme(
     BuildContext context,
     bool selected,
   ) {
-    return MaterialStateProperty.resolveWith((states) {
-      if (states.contains(MaterialState.selected)) {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) {
         // Return unselected style even if selected
         return IconThemeData(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -343,11 +356,11 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     });
   }
 
-  MaterialStateProperty<TextStyle?> validLabelStyle(
+  WidgetStateProperty<TextStyle?> validLabelStyle(
     BuildContext context,
     bool selected,
   ) {
-    return MaterialStateProperty.resolveWith((states) {
+    return WidgetStateProperty.resolveWith((states) {
       return TextStyle(
         color: Theme.of(context).colorScheme.onSurfaceVariant,
         fontWeight: FontWeight.w500,
