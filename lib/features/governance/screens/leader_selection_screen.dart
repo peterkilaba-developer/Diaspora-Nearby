@@ -1285,12 +1285,8 @@ class _LeaderTile extends ConsumerWidget {
 
   const _LeaderTile({
     required this.userId,
-    this.userPoints,
-    this.isSelected = false,
-    this.onChanged,
     this.showCheckmark = false,
     this.variant = LeaderTileVariant.default_t,
-    this.trailing,
     this.subtitle,
   });
 
