@@ -64,6 +64,7 @@ void main() {
   
   // To reach Epoch 1 Gate (10k), High user needs ~7 days. Low user needs ~100 days.
   // Let's set a standard "Epoch Duration" in days to see who makes it.
+  // ignore: unused_local_variable
   const int daysPerEpoch = 30; // Monthly TGE checks? Or maybe longer? 
   // Let's assume TGE happens every quarter (90 days) for realism in this simulation context
   // allowing accumulation.
@@ -73,8 +74,8 @@ void main() {
 
   for (final epochDef in epochService.getAllEpochs()) {
     print('\n-----------------------------------------------------------');
-    print('[EPOCH ${epochDef.epochNumber}: ${epochDef.label}] START');
-    print('  Gate: ${epochDef.minDspRequired} DSP  |  Trust: ${epochDef.minTrustScore}+');
+    print('[EPOCH ${epochDef.epochNumber}: Epoch ${epochDef.epochNumber}] START');
+    print('  Gate: ${epochDef.minDspRequired} DSP  |  Efficiency: Decile PoCT Scale');
     print('-----------------------------------------------------------');
 
     // --- A. Simulate Activity (Earning Phase) ---
@@ -108,7 +109,6 @@ void main() {
       bool eligible = epochService.isEligibleForTGE(
         epochNumber: epochDef.epochNumber, 
         userTotalDsp: user.dspBalance, 
-        userTrustScore: user.trustScore
       );
 
       if (eligible) {

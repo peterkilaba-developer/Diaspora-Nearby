@@ -55,7 +55,7 @@ class _TravelSkeletonLoaderState extends State<TravelSkeletonLoader>
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppTheme.accent.withOpacity(0.6),
+                  color: AppTheme.accent.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(width: 10),
@@ -64,7 +64,7 @@ class _TravelSkeletonLoaderState extends State<TravelSkeletonLoader>
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
             ],
@@ -93,10 +93,7 @@ class _SkeletonCard extends StatelessWidget {
   final double shimmerProgress;
   final bool isDark;
 
-  const _SkeletonCard({
-    required this.shimmerProgress,
-    required this.isDark,
-  });
+  const _SkeletonCard({required this.shimmerProgress, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -146,11 +143,11 @@ class _SkeletonCard extends StatelessWidget {
 
   Widget _shimmerBox(double width, double height, {double borderRadius = 8}) {
     final baseColor = isDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.black.withOpacity(0.06);
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.black.withValues(alpha: 0.06);
     final highlightColor = isDark
-        ? Colors.white.withOpacity(0.12)
-        : Colors.black.withOpacity(0.10);
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.10);
 
     // Calculate gradient position based on shimmer progress
     final gradientStart = shimmerProgress - 0.3;
@@ -223,7 +220,7 @@ class _TravelApiSkeletonLoaderState extends State<TravelApiSkeletonLoader>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
@@ -237,7 +234,7 @@ class _TravelApiSkeletonLoaderState extends State<TravelApiSkeletonLoader>
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             ],
@@ -318,11 +315,11 @@ class _ApiSkeletonCard extends StatelessWidget {
 
   Widget _box(double w, double h, double progress, {double borderRadius = 8}) {
     final baseColor = isDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.black.withOpacity(0.06);
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.black.withValues(alpha: 0.06);
     final highlightColor = isDark
-        ? Colors.white.withOpacity(0.12)
-        : Colors.black.withOpacity(0.10);
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.10);
 
     final start = (progress - 0.3).clamp(0.0, 1.0);
     final mid = progress.clamp(0.0, 1.0);

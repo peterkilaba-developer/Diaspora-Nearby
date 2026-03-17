@@ -158,7 +158,11 @@ class CommunityShareCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(LucideIcons.users, size: 16, color: AppTheme.accent),
+                      const Icon(
+                        LucideIcons.users,
+                        size: 16,
+                        color: AppTheme.accent,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '$memberCount Members',

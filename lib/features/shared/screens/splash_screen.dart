@@ -16,7 +16,7 @@ class SplashScreen extends StatelessWidget {
           children: [
             // Logo (no color filter needed - logo is already sage green)
             Image.asset(
-              'assets/icons/logo-original.png',
+              'assets/icons/logo-transparent-128.png',
               width: 128,
               height: 128,
             ),

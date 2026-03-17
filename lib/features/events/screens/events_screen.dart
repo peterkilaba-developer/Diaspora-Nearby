@@ -189,7 +189,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               itemCount: filteredEvents.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              separatorBuilder: (_, _) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final event = filteredEvents[index];
                 final isAttending =
@@ -227,7 +227,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               'action_event_interest',
                             )
                             .then((rewarded) {
-                              if (rewarded && mounted) {
+                              if (rewarded && context.mounted) {
                                 showExplorationRewardToast(
                                   context,
                                   message: 'Interested in Event',
@@ -238,9 +238,11 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
                       setState(() {});
                     } catch (e) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      }
                     }
                   },
                 );

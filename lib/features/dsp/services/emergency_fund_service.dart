@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:diaspora_nearby/features/dsp/models/emergency_fund_model.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
@@ -8,6 +10,8 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
+import 'package:diaspora_nearby/features/notifications/repository/notifications_repository.dart';
 import 'package:uuid/uuid.dart';
 
 final emergencyFundServiceProvider = Provider<EmergencyFundService>((ref) {
@@ -17,26 +21,22 @@ final emergencyFundServiceProvider = Provider<EmergencyFundService>((ref) {
     ref.read(pointsRepositoryProvider),
     ref.read(trustRepositoryProvider),
     ref.read(chatRepositoryProvider),
+    ref.read(notificationsRepositoryProvider),
   );
 });
 
 class EligibilityResult {
   final bool isProfileComplete;
-  final bool hasEnoughPoints;
   final bool hasEnoughFamily;
   final bool hasEnoughFriends;
   final int familyCount;
   final int friendCount;
 
   bool get isEligible =>
-      isProfileComplete &&
-      hasEnoughPoints &&
-      hasEnoughFamily &&
-      hasEnoughFriends;
+      isProfileComplete && hasEnoughFamily && hasEnoughFriends;
 
   EligibilityResult({
     required this.isProfileComplete,
-    required this.hasEnoughPoints,
     required this.hasEnoughFamily,
     required this.hasEnoughFriends,
     required this.familyCount,
@@ -47,14 +47,31 @@ class EligibilityResult {
 class EmergencyFundService {
   final FirebaseFirestore _firestore;
   final ProfileRepository _profileRepo;
+  // ignore: unused_field
   final PointsRepository _pointsRepo;
   final TrustRepository _trustRepo;
   final ChatRepository _chatRepo;
+  final NotificationsRepository _notificationsRepo;
   final _uuid = const Uuid();
 
+  /// Set to `false` to enforce eligibility conditions for production.
+  /// When `true`, all eligibility checks pass so we can build & test the flow.
+  static const bool bypassForTesting = false;
+
   static const Set<String> _familyTypes = {
-    'wife', 'husband', 'daughter', 'son', 'mother', 'father',
-    'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+    'wife',
+    'husband',
+    'daughter',
+    'son',
+    'mother',
+    'father',
+    'sister',
+    'brother',
+    'aunt',
+    'uncle',
+    'nephew',
+    'niece',
+    'cousin',
   };
 
   EmergencyFundService(
@@ -63,20 +80,27 @@ class EmergencyFundService {
     this._pointsRepo,
     this._trustRepo,
     this._chatRepo,
+    this._notificationsRepo,
   );
 
   // --- Eligibility ---
 
   Future<EligibilityResult> checkEligibility(String userId) async {
+    if (bypassForTesting) {
+      return EligibilityResult(
+        isProfileComplete: true,
+        hasEnoughFamily: true,
+        hasEnoughFriends: true,
+        familyCount: 1,
+        friendCount: 1,
+      );
+    }
+
     // 1. Profile Check
     final profile = await _profileRepo.getUserProfile(userId);
     final isProfileComplete = profile?.isComplete ?? false;
 
-    // 2. Points Check (>= 10,000 DSP — 10k Genesis Gate)
-    final points = await _pointsRepo.getUserPoints(userId);
-    final hasEnoughPoints = (points?.totalPoints ?? 0) >= 10000;
-
-    // 3. Relationships Check (10 Family, 10 Friends)
+    // 2. Relationships Check (1 Family, 1 Friend)
     final relationshipsSnap = await _firestore
         .collection('users')
         .doc(userId)
@@ -96,12 +120,11 @@ class EmergencyFundService {
       }
     }
 
-    final hasEnoughFamily = familyCount >= 10;
-    final hasEnoughFriends = friendCount >= 10;
+    final hasEnoughFamily = familyCount >= 1;
+    final hasEnoughFriends = friendCount >= 1;
 
     return EligibilityResult(
       isProfileComplete: isProfileComplete,
-      hasEnoughPoints: hasEnoughPoints,
       hasEnoughFamily: hasEnoughFamily,
       hasEnoughFriends: hasEnoughFriends,
       familyCount: familyCount,
@@ -224,19 +247,262 @@ class EmergencyFundService {
         });
   }
 
-  // Step 3: Process Payment
-  // [NOTE] Currently auto-approves as Free Beta Access.
-  // [TODO] Integrate Stripe/M-Pesa payment gateway for production.
-  Future<void> completeMembershipPayment(String userId) async {
-    await _firestore
-        .collection('emergency_fund_memberships')
-        .doc(userId)
-        .update({
-          'status': MembershipStatus.active.name,
-          'nextPaymentDate': Timestamp.fromDate(
-            DateTime.now().add(const Duration(days: 365)),
+  /// Whether payment processing is in beta (free) mode.
+  /// Set to `false` once Stripe/M-Pesa integration is complete.
+  static const bool isBetaMode = false;
+
+  // --- Inline Card Payment (embedded CardFormField) ---
+
+  /// Fetches a PaymentIntent client secret for inline card payment.
+  Future<String> fetchPaymentIntentSecret({String? email}) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createEmergencyFundCheckout')
+        .call({'email': email});
+
+    final clientSecret = result.data['paymentIntentClientSecret'] as String;
+    debugPrint('✅ [EmergencyFund] PaymentIntent fetched for inline payment');
+    return clientSecret;
+  }
+
+  /// Confirms inline card payment and activates membership.
+  Future<void> confirmInlinePayment(String clientSecret, String userId) async {
+    // Confirm the payment using the card details from CardFormField
+    await Stripe.instance.confirmPayment(
+      paymentIntentClientSecret: clientSecret,
+      data: const PaymentMethodParams.card(
+        paymentMethodData: PaymentMethodData(),
+      ),
+    );
+
+    debugPrint('✅ [EmergencyFund] Inline payment confirmed!');
+
+    // Activate membership with all required fields
+    await _firestore.collection('emergency_fund_memberships').doc(userId).set({
+      'userId': userId,
+      'country': 'US',
+      'status': MembershipStatus.active.name,
+      'joinedDate': Timestamp.fromDate(DateTime.now()),
+      'annualContribution': 100.0,
+      'supportNumber': 'EF-${DateTime.now().millisecondsSinceEpoch}',
+      'proxyStatus': ProxyStatus.none.name,
+      'coveredFamilyMembers': [],
+      'isBetaAccess': false,
+      'nextPaymentDate': Timestamp.fromDate(
+        DateTime.now().add(const Duration(days: 365)),
+      ),
+    }, SetOptions(merge: true));
+
+    // Fire notifications for payment + membership
+    try {
+      await _notificationsRepo.addNotification(
+        userId,
+        NotificationItem(
+          id: '',
+          type: NotificationType.emergencyFundPaymentSuccess,
+          title: 'Payment Successful',
+          body:
+              'Your \$100 annual contribution to the Community Emergency Fund has been processed.',
+          createdAt: DateTime.now(),
+        ),
+      );
+      await _notificationsRepo.addNotification(
+        userId,
+        NotificationItem(
+          id: '',
+          type: NotificationType.emergencyFundMembershipActive,
+          title: 'Membership Activated! 🎉',
+          body:
+              'Welcome to the Community Emergency Fund! Your family is now covered for emergency support.',
+          createdAt: DateTime.now(),
+        ),
+      );
+      // Notify DSP refund (stake returned after payment)
+      await _notificationsRepo.addNotification(
+        userId,
+        NotificationItem(
+          id: '',
+          type: NotificationType.emergencyFundDspRefunded,
+          title: '1,000 DSP Refunded',
+          body:
+              'Your staked DSP promissory has been returned to your balance now that your annual contribution is confirmed.',
+          createdAt: DateTime.now(),
+        ),
+      );
+    } catch (e) {
+      debugPrint(
+        '⚠️ [EmergencyFund] Failed to create payment notifications: $e',
+      );
+    }
+
+    // Refund DSP stake (mark as refunded)
+    try {
+      await _firestore.collection('emergency_fund_stakers').doc(userId).update({
+        'status': 'refunded',
+      });
+    } catch (e) {
+      debugPrint('⚠️ [EmergencyFund] Failed to update staker status: $e');
+    }
+  }
+
+  // Step 3: Process Payment (Payment Sheet fallback)
+  // When isBetaMode is false, shows Stripe's in-app Payment Sheet.
+  // The user pays without leaving the app.
+  Future<void> completeMembershipPayment(String userId, {String? email}) async {
+    if (!isBetaMode) {
+      // --- Production: Stripe Payment Sheet (in-app) ---
+      try {
+        // 1. Fetch user profile for billing details pre-fill (non-blocking)
+        ProfileData? profile;
+        try {
+          profile = await _profileRepo.getUserProfile(userId);
+        } catch (e) {
+          debugPrint('▶ [EmergencyFund] Profile fetch skipped: $e');
+        }
+        final hostCountryCode = profile?.hostCountryCode?.toUpperCase();
+        final userName = profile != null
+            ? '${profile.firstName} ${profile.lastName}'.trim()
+            : null;
+        final userEmail = email;
+
+        debugPrint(
+          '▶ [EmergencyFund] Billing pre-fill — '
+          'country: $hostCountryCode, name: $userName',
+        );
+
+        // 2. Get PaymentIntent from Cloud Function
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('createEmergencyFundCheckout')
+            .call({'email': userEmail});
+
+        final clientSecret = result.data['paymentIntentClientSecret'] as String;
+        final ephemeralKey = result.data['ephemeralKey'] as String;
+        final customerId = result.data['customerId'] as String;
+
+        debugPrint('✅ [EmergencyFund] PaymentIntent received');
+
+        // 3. Build default billing details from user profile
+        BillingDetails? defaultBilling;
+        if (hostCountryCode != null || userName != null) {
+          defaultBilling = BillingDetails(
+            name: userName,
+            email: userEmail,
+            address: Address(
+              country: hostCountryCode,
+              city: null,
+              line1: null,
+              line2: null,
+              postalCode: null,
+              state: null,
+            ),
+          );
+        }
+
+        // 4. Initialize the Payment Sheet with custom appearance
+        const sageGreen = Color(0xFF7CAE7A);
+        const darkSurface = Color(0xFF1A1A2E);
+        const darkCard = Color(0xFF252540);
+
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            customerEphemeralKeySecret: ephemeralKey,
+            customerId: customerId,
+            merchantDisplayName: 'Diaspora Nearby',
+            style: ThemeMode.dark,
+            billingDetails: defaultBilling,
+            billingDetailsCollectionConfiguration:
+                const BillingDetailsCollectionConfiguration(
+                  name: CollectionMode.automatic,
+                  email: CollectionMode.never,
+                  phone: CollectionMode.always,
+                  address: AddressCollectionMode.never,
+                  attachDefaultsToPaymentMethod: true,
+                ),
+            appearance: const PaymentSheetAppearance(
+              colors: PaymentSheetAppearanceColors(
+                primary: sageGreen,
+                background: darkSurface,
+                componentBackground: darkCard,
+                componentBorder: Color(0xFF3A3A5C),
+                componentDivider: Color(0xFF3A3A5C),
+                componentText: Colors.white,
+                primaryText: Colors.white,
+                secondaryText: Color(0xFFB0B0C0),
+                placeholderText: Color(0xFF6A6A80),
+                icon: sageGreen,
+                error: Color(0xFFFF6B6B),
+              ),
+              shapes: PaymentSheetShape(
+                borderWidth: 1.0,
+                borderRadius: 12.0,
+                shadow: PaymentSheetShadowParams(color: Colors.transparent),
+              ),
+              primaryButton: PaymentSheetPrimaryButtonAppearance(
+                colors: PaymentSheetPrimaryButtonTheme(
+                  dark: PaymentSheetPrimaryButtonThemeColors(
+                    background: sageGreen,
+                    text: Colors.white,
+                    border: Colors.transparent,
+                  ),
+                  light: PaymentSheetPrimaryButtonThemeColors(
+                    background: sageGreen,
+                    text: Colors.white,
+                    border: Colors.transparent,
+                  ),
+                ),
+              ),
+            ),
+            googlePay: const PaymentSheetGooglePay(
+              merchantCountryCode: 'US',
+              testEnv: true,
+            ),
+            // Only allow card payments (removes Affirm, Klarna, Amazon Pay, Link)
+            paymentMethodOrder: const ['card', 'google_pay'],
+            allowsDelayedPaymentMethods: false,
           ),
-        });
+        );
+
+        // 5. Present the Payment Sheet
+        await Stripe.instance.presentPaymentSheet();
+
+        debugPrint('✅ [EmergencyFund] Payment succeeded!');
+
+        // 6. Immediately activate membership (webhook is backup)
+        await _firestore
+            .collection('emergency_fund_memberships')
+            .doc(userId)
+            .set({
+              'status': MembershipStatus.active.name,
+              'isBetaAccess': false,
+              'nextPaymentDate': Timestamp.fromDate(
+                DateTime.now().add(const Duration(days: 365)),
+              ),
+            }, SetOptions(merge: true));
+
+        return;
+      } on StripeException catch (e) {
+        if (e.error.code == FailureCode.Canceled) {
+          debugPrint('[EmergencyFund] Payment canceled by user');
+          throw Exception('Payment was canceled');
+        }
+        debugPrint(
+          '❌ [EmergencyFund] Stripe error: ${e.error.localizedMessage}',
+        );
+        rethrow;
+      } catch (e) {
+        debugPrint('❌ [EmergencyFund] Payment error: $e');
+        rethrow;
+      }
+    }
+
+    // Beta mode: auto-approve without payment
+    await _firestore.collection('emergency_fund_memberships').doc(userId).set({
+      'status': MembershipStatus.active.name,
+      'isBetaAccess': true,
+      'nextPaymentDate': Timestamp.fromDate(
+        DateTime.now().add(const Duration(days: 365)),
+      ),
+    }, SetOptions(merge: true));
   }
 
   // Update proxy designation — creates a request that the proxy must accept
@@ -246,26 +512,20 @@ class EmergencyFundService {
     required String proxyUserId,
   }) async {
     // 1. Save proxy as pending on the membership doc
-    await _firestore
-        .collection('emergency_fund_memberships')
-        .doc(userId)
-        .set({
-          'proxyUserId': proxyUserId,
-          'proxyStatus': ProxyStatus.pending.name,
-        }, SetOptions(merge: true));
+    await _firestore.collection('emergency_fund_memberships').doc(userId).set({
+      'proxyUserId': proxyUserId,
+      'proxyStatus': ProxyStatus.pending.name,
+    }, SetOptions(merge: true));
 
     // 2. Write a proxy_requests doc so the proxy user gets notified
     final requestId = '${userId}_$proxyUserId';
-    await _firestore
-        .collection('proxy_requests')
-        .doc(requestId)
-        .set({
-          'fromUserId': userId,
-          'fromUserName': userName,
-          'toUserId': proxyUserId,
-          'status': 'pending',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+    await _firestore.collection('proxy_requests').doc(requestId).set({
+      'fromUserId': userId,
+      'fromUserName': userName,
+      'toUserId': proxyUserId,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
     debugPrint('✅ [EmergencyFund] Proxy request created: $requestId');
   }
@@ -279,19 +539,14 @@ class EmergencyFundService {
     final newStatus = accepted ? 'accepted' : 'rejected';
 
     // 1. Update the proxy_requests doc
-    await _firestore
-        .collection('proxy_requests')
-        .doc(requestId)
-        .update({
-          'status': newStatus,
-          'respondedAt': FieldValue.serverTimestamp(),
-        });
+    await _firestore.collection('proxy_requests').doc(requestId).update({
+      'status': newStatus,
+      'respondedAt': FieldValue.serverTimestamp(),
+    });
 
     // 2. Update the membership doc
     final proxyStatus = accepted ? ProxyStatus.accepted : ProxyStatus.rejected;
-    final updateData = <String, dynamic>{
-      'proxyStatus': proxyStatus.name,
-    };
+    final updateData = <String, dynamic>{'proxyStatus': proxyStatus.name};
     if (!accepted) {
       updateData['proxyUserId'] = null;
     }
@@ -357,4 +612,55 @@ class EmergencyFundService {
   // --- Helpers ---
   Future<ProfileData?> getUserProfile(String uid) =>
       _profileRepo.getUserProfile(uid);
+
+  // --- Promissory Staking ---
+
+  /// Persists this user as a promissory staker.
+  /// Collection: `emergency_fund_stakers/{userId}`
+  /// When the fund opens, all docs in this collection represent users
+  /// who already staked and can proceed directly to payment.
+  Future<void> stakePromissory(String userId) async {
+    await _firestore.collection('emergency_fund_stakers').doc(userId).set({
+      'userId': userId,
+      'stakedAt': FieldValue.serverTimestamp(),
+      'amountDSP': 1000,
+      'status': 'staked', // staked → contributed → refunded
+    });
+    debugPrint('✅ [EmergencyFund] User $userId staked 1,000 DSP promissory');
+
+    // Fire notification
+    try {
+      await _notificationsRepo.addNotification(
+        userId,
+        NotificationItem(
+          id: '',
+          type: NotificationType.emergencyFundStaked,
+          title: 'DSP Staked Successfully',
+          body:
+              'You staked 1,000 DSP promissory for the Community Emergency Fund. Complete your annual contribution to activate membership.',
+          createdAt: DateTime.now(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('⚠️ [EmergencyFund] Failed to create stake notification: $e');
+    }
+  }
+
+  /// Checks whether a user has already staked their DSP promissory.
+  Future<bool> hasStaked(String userId) async {
+    final doc = await _firestore
+        .collection('emergency_fund_stakers')
+        .doc(userId)
+        .get();
+    return doc.exists;
+  }
+
+  /// Returns the total number of users who have staked.
+  Future<int> getStakerCount() async {
+    final agg = await _firestore
+        .collection('emergency_fund_stakers')
+        .count()
+        .get();
+    return agg.count ?? 0;
+  }
 }

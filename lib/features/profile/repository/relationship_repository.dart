@@ -9,6 +9,7 @@ import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/community/services/community_service.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/notifications/repository/notifications_repository.dart';
 import 'package:diaspora_nearby/router.dart';
 
 final relationshipRepositoryProvider = Provider<RelationshipRepository>((ref) {
@@ -71,7 +72,7 @@ class RelationshipRepository {
     // 2. Fetch ALL my active relationships (Immediate/Close Family) to add to support group
     final allRelsSnapshot = await _relationshipsRef(
       uid,
-    ).where('status', isEqualTo: 'active').get();
+    ).where('status', isEqualTo: 'active').limit(200).get();
 
     final List<String> participants = [uid]; // Announcer is participant
     final List<String> admins = [uid]; // Announcer is admin
@@ -142,7 +143,7 @@ class RelationshipRepository {
 
   /// Get all relationships for a user (Stream)
   Stream<List<Relationship>> getRelationships(String userId) {
-    return _relationshipsRef(userId).snapshots().map((snapshot) {
+    return _relationshipsRef(userId).limit(500).snapshots().map((snapshot) {
       return snapshot.docs
           .map((doc) => Relationship.fromMap(doc.data(), doc.id))
           .toList();
@@ -151,7 +152,7 @@ class RelationshipRepository {
 
   /// Get all relationships for a user (Future - One-time fetch)
   Future<List<Relationship>> getRelationshipsList(String userId) async {
-    final snapshot = await _relationshipsRef(userId).get();
+    final snapshot = await _relationshipsRef(userId).limit(500).get();
     return snapshot.docs
         .map((doc) => Relationship.fromMap(doc.data(), doc.id))
         .toList();
@@ -341,23 +342,27 @@ class RelationshipRepository {
                   '✅ [RelationshipRepository] Synced relationship with ${request.toUserName}',
                 );
 
-                // [NEW] Also join Family Group Chat if applicable (sender side sync)
-                if (_isFamilyType(request.relationshipType)) {
-                  try {
-                    final chatRepo = _ref.read(chatRepositoryProvider);
-                    await chatRepo.createOrJoinFamilyGroupChat(
-                      userId1: userId, // Sender (me)
-                      userId2: request.toUserId, // Receiver
-                    );
-                    debugPrint(
-                      '✅ [RelationshipRepository] Sender joined Family Group Chat after sync',
-                    );
-                  } catch (e) {
-                    debugPrint(
-                      '❌ [RelationshipRepository] Sender family group chat join failed: $e',
-                    );
-                  }
+                // [NEW] Trigger trust recalculation for the sender now that the
+                // relationship doc exists. Without this, the milestone count
+                // for Friend/Community Member wasn't updating because
+                // trackRelationshipReward runs before this sync listener.
+                try {
+                  await _ref
+                      .read(trustServiceProvider)
+                      .updateTrustForUser(userId);
+                  debugPrint(
+                    '✅ [RelationshipRepository] Trust recalculated for sender $userId after sync',
+                  );
+                } catch (e) {
+                  debugPrint(
+                    '❌ [RelationshipRepository] Trust recalc failed: $e',
+                  );
                 }
+
+                // [REMOVED] Family group chat creation from sender sync —
+                // the receiver's acceptRequest already handles this for both users.
+                // Having it here caused duplicate family group chats due to
+                // Firestore propagation timing.
 
                 // [NEW] Navigate sender to the auto-created DM chat
                 final chatId = docData['chatId'] as String?;
@@ -387,6 +392,18 @@ class RelationshipRepository {
     String accepterFlag,
     String selectedReciprocalType,
   ) async {
+    // Guard: prevent double-processing if already accepted
+    final currentDoc = await _firestore
+        .collection('relationship_requests')
+        .doc(request.id)
+        .get();
+    if (currentDoc.data()?['status'] == 'accepted') {
+      debugPrint(
+        'ℹ️ [RelationshipRepository] Request ${request.id} already accepted, skipping.',
+      );
+      return;
+    }
+
     // 1. Update Request Status
     await _firestore.collection('relationship_requests').doc(request.id).update(
       {'status': 'accepted'},
@@ -462,6 +479,18 @@ class RelationshipRepository {
     } catch (e) {
       debugPrint('Failed to track accept rewards: $e');
     }
+
+    // 7. Mark the receiver's relationship request notification as completed
+    try {
+      await _ref
+          .read(notificationsRepositoryProvider)
+          .markActionCompletedByDedupKey(
+            request.toUserId,
+            'relationship_${request.id}',
+          );
+    } catch (e) {
+      debugPrint('Failed to mark notification completed: $e');
+    }
   }
 
   // [NEW] Reject Request (with Penalty Trigger)
@@ -488,6 +517,18 @@ class RelationshipRepository {
           .recordActivity(request.fromUserId, HTSActivityType.rejectedVouch);
     } catch (e) {
       debugPrint('Error applying rejection penalty/reward: $e');
+    }
+
+    // 3. Mark the receiver's relationship request notification as completed
+    try {
+      await _ref
+          .read(notificationsRepositoryProvider)
+          .markActionCompletedByDedupKey(
+            request.toUserId,
+            'relationship_${request.id}',
+          );
+    } catch (e) {
+      debugPrint('Failed to mark notification completed: $e');
     }
   }
 
@@ -571,7 +612,8 @@ class RelationshipRepository {
       );
     }
 
-    // 3. Milestone penalty: every 10 unique blockers → deduct 100 DSP + 1 PoCT
+    // 3. [UPDATED v8] Block milestone: PoCT-only (no DSP deduction)
+    // -10 PoCT per 10 unique blockers — handled by TrustService recalculation
     try {
       final blockersSnapshot = await _firestore
           .collection('users')
@@ -581,19 +623,10 @@ class RelationshipRepository {
       final uniqueBlockers = blockersSnapshot.count ?? 0;
 
       if (uniqueBlockers > 0 && uniqueBlockers % 10 == 0) {
-        final pointsService = _ref.read(pointsServiceProvider);
-        await pointsService.deductPoints(
-          userId: relatedUserId,
-          amount: 100,
-          reason: 'blocked_by_milestone_${uniqueBlockers ~/ 10}',
-        );
-        await pointsService.deductPoints(
-          userId: relatedUserId,
-          amount: 1,
-          reason: 'poct_blocked_by_milestone_${uniqueBlockers ~/ 10}',
-        );
+        // DSP deduction removed (v8) — PoCT handled in TrustService
+        await _ref.read(trustServiceProvider).updateTrustForUser(relatedUserId);
         debugPrint(
-          '🚨 Block milestone: $uniqueBlockers unique blockers — 100 DSP + 1 PoCT deducted from $relatedUserId',
+          '🚨 Block milestone: $uniqueBlockers unique blockers — PoCT deducted from $relatedUserId (no DSP)',
         );
       }
     } catch (e) {

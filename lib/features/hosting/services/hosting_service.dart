@@ -30,13 +30,9 @@ class HostingService {
 
   HostingService(this._ref);
 
-  HostingRepository get _hostingRepo =>
-      _ref.read(hostingRepositoryProvider);
+  HostingRepository get _hostingRepo => _ref.read(hostingRepositoryProvider);
 
-  ChatRepository get _chatRepo =>
-      _ref.read(chatRepositoryProvider);
-
-
+  ChatRepository get _chatRepo => _ref.read(chatRepositoryProvider);
 
   // =========================================================================
   // PHASE 2: Request Flow
@@ -185,7 +181,9 @@ class HostingService {
   }) async {
     try {
       debugPrint('🏠 [confirmArrangement] Starting for request ${request.id}');
-      debugPrint('🏠 [confirmArrangement] Host: $hostName ($hostId), chatId: $chatId');
+      debugPrint(
+        '🏠 [confirmArrangement] Host: $hostName ($hostId), chatId: $chatId',
+      );
 
       // 1. Update request to 'matched'
       debugPrint('🏠 [confirmArrangement] Step 1: selectHost...');
@@ -219,7 +217,9 @@ class HostingService {
       );
       debugPrint('🏠 [confirmArrangement] Session object created');
 
-      debugPrint('🏠 [confirmArrangement] Step 3: Saving session to Firestore...');
+      debugPrint(
+        '🏠 [confirmArrangement] Step 3: Saving session to Firestore...',
+      );
       await _hostingRepo.createSession(session);
       debugPrint('🏠 [confirmArrangement] Step 3 ✅ Session saved');
 
@@ -273,8 +273,7 @@ class HostingService {
       // 2. Mark as settled (no DSP fee — hosting is free)
       await _hostingRepo.markSettled(sessionId);
 
-      debugPrint(
-          '✅ [Hosting] Session $sessionId settled');
+      debugPrint('✅ [Hosting] Session $sessionId settled');
       return true;
     } catch (e) {
       debugPrint('❌ [Hosting] Settlement error: $e');

@@ -10,18 +10,18 @@ class Airport {
   final String name;
   final double lat;
   final double lon;
-  
+
   @JsonKey(name: 'iso_country')
   final String isoCountry;
-  
+
   @JsonKey(name: 'iso_region')
   final String isoRegion;
-  
+
   final String municipality;
-  
+
   @JsonKey(name: 'iata_code')
   final String iataCode;
-  
+
   @JsonKey(name: 'local_code')
   final String localCode;
 
@@ -39,6 +39,7 @@ class Airport {
     required this.localCode,
   });
 
-  factory Airport.fromJson(Map<String, dynamic> json) => _$AirportFromJson(json);
+  factory Airport.fromJson(Map<String, dynamic> json) =>
+      _$AirportFromJson(json);
   Map<String, dynamic> toJson() => _$AirportToJson(this);
 }

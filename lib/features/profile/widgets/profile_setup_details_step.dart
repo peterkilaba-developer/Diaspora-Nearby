@@ -115,12 +115,28 @@ class ProfileSetupDetailsStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          'Tap to add photo',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          textAlign: TextAlign.center,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              profileImage == null ? 'Tap to add photo' : 'Photo added ✓',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: profileImage == null
+                    ? theme.colorScheme.onSurfaceVariant
+                    : Colors.green,
+              ),
+            ),
+            if (profileImage == null) ...[
+              const SizedBox(width: 4),
+              Text(
+                '(Required)',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.red.shade400,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 32),
 

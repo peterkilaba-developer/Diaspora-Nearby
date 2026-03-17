@@ -10,7 +10,7 @@ subprojects {
         if (project.plugins.hasPlugin("com.android.library")) {
             val android = project.extensions.findByName("android") as? com.android.build.gradle.LibraryExtension
             if (android != null) {
-                // Force compileSdk to 36 for all modules to satisfy plugin requirements (like isar_flutter_libs)
+                // Force compileSdk to 36 for all modules to satisfy plugin requirements (like sqflite_android, isar_flutter_libs)
                 android.compileSdk = 36
                 android.compileOptions {
                     sourceCompatibility = JavaVersion.VERSION_17

@@ -2,38 +2,53 @@
 <html>
 
 <head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta name="base:app_id" content="69953c85fc66d1c93e7fe711" />
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
 
   <!-- Open Graph / Social Media Meta Tags (Must be early for WhatsApp) -->
-  <meta property="og:title" content="Diaspora Nearby">
+  <meta property="og:title" content="Join Your Diaspora Community — Diaspora Nearby">
   <meta property="og:description"
-    content="Bringing Together Global Diaspora Communities. Join Diaspora Communities, Discover and Connect with people from your home country nearby or across the world.">
+    content="Connect with people from your home country nearby or anywhere in the world. Connect with family and friends back home. Earn crypto tokens while doing it.">
   <meta property="og:image" content="https://diasporanearby.com/icons/Icon-512.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
   <meta property="og:url" content="https://diasporanearby.com">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Diaspora Nearby App">
+  <meta property="og:site_name" content="Diaspora Nearby">
 
   <!-- Fallback for other parsers -->
-  <meta itemprop="name" content="Diaspora Nearby">
+  <meta itemprop="name" content="Join Your Diaspora Community — Diaspora Nearby">
   <meta itemprop="description"
-    content="Bringing Together Global Diaspora Communities. Join Diaspora Communities, Discover and Connect with people from your home country nearby or across the world.">
+    content="Connect with people from your home country nearby or anywhere in the world. Connect with family and friends back home. Earn crypto tokens while doing it.">
   <meta itemprop="image" content="https://diasporanearby.com/icons/Icon-512.png">
 
   <!-- Twitter Card data -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Diaspora Nearby">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Join Your Diaspora Community — Diaspora Nearby">
   <meta name="twitter:description"
-    content="Bringing Together Global Diaspora Communities. Join Diaspora Communities, Discover and Connect with people from your home country nearby or across the world.">
+    content="Connect with people from your home country nearby or anywhere in the world. Connect with family and friends back home. Earn crypto tokens while doing it.">
   <meta name="twitter:image" content="https://diasporanearby.com/icons/Icon-512.png">
 
-  <meta name="description" content="Connecting diaspora communities worldwide.">
+  <meta name="description"
+    content="Connect with people from your home country nearby or anywhere in the world. Connect with family and friends back home. Earn crypto tokens while doing it.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -48,11 +63,16 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
+    html,
     body {
-      background-color: #FAFAFA;
+      background-color: #1A1A1A;
       margin: 0;
       padding: 0;
       overflow: hidden;
+      height: 100%;
+      width: 100%;
+      position: fixed;
+      inset: 0;
     }
 
     .loading {
@@ -91,6 +111,15 @@
       font-size: 18px;
     }
   </style>
+
+  <!-- Microsoft Clarity Analytics -->
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "vwwrhkj22s");
+  </script>
 </head>
 
 <body>
@@ -100,24 +129,95 @@
   </div>
 
   <script>
-    // Force HTML renderer to solve CORS issues with CanvasKit on the web
-    window.flutterConfiguration = {
-      renderer: "html"
-    };
-    // Legacy support for older bootstrapping
-    window.flutterWebRenderer = "html";
+    // Remove loading indicator once Flutter has rendered
+    (function () {
+      function removeLoader() {
+        var loader = document.getElementById('loading-indicator');
+        if (loader) {
+          loader.style.transition = 'opacity 0.3s ease';
+          loader.style.opacity = '0';
+          setTimeout(function () { loader.remove(); }, 350);
+        }
+      }
+
+      // Watch for flutter-view element appearing in DOM
+      var observer = new MutationObserver(function (mutations) {
+        if (document.querySelector('flutter-view')) {
+          observer.disconnect();
+          // Small delay to ensure Flutter has painted
+          setTimeout(removeLoader, 200);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      // Fallback: remove after 8 seconds no matter what
+      setTimeout(function () {
+        observer.disconnect();
+        removeLoader();
+      }, 8000);
+    })();
   </script>
+
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
-    window.addEventListener('load', function (ev) {
-      // Remove loading indicator when app is ready
-      // This is a bit tricky with flutter_bootstrap.js, 
-      // usually Flutter handles the splash screen if configured in pubspec.yaml,
-      // but a native HTML splash is faster.
-      // We'll rely on Flutter to cover it once it loads.
-    });
+    // ──────────────────────────────────────────────
+    // 1. Register Firebase Messaging Service Worker
+    // ──────────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+        scope: '/firebase-cloud-messaging-push-scope'
+      })
+        .then(function (reg) {
+          console.log('FCM SW registered, scope:', reg.scope);
+        })
+        .catch(function (err) {
+          console.warn('FCM SW registration failed:', err);
+        });
+    }
 
+    // ──────────────────────────────────────────────
+    // 2. Fix mobile keyboard gap on Flutter web
+    // ──────────────────────────────────────────────
+    // Use CSS 100dvh (dynamic viewport height) so the browser handles keyboard.
+    // Only use JS as a safety net to force scroll to 0 and reset any stale heights.
+    (function () {
+      // Apply 100dvh via injected CSS — overrides the static 100% height
+      var style = document.createElement('style');
+      style.textContent = [
+        'html, body, flutter-view, flt-glass-pane {',
+        '  height: 100dvh !important;',
+        '  max-height: 100dvh !important;',
+        '  overflow: hidden !important;',
+        '}'
+      ].join('\n');
+      document.head.appendChild(style);
+
+      // Safety net: on any viewport change, force scroll to 0
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        });
+        window.visualViewport.addEventListener('scroll', function () {
+          window.scrollTo(0, 0);
+        });
+      }
+
+      // Fallback: focusout — clear any stale inline styles
+      document.addEventListener('focusout', function () {
+        setTimeout(function () {
+          document.body.style.height = '';
+          var fv = document.querySelector('flutter-view');
+          if (fv) fv.style.height = '';
+          window.scrollTo(0, 0);
+        }, 100);
+      });
+    })();
+  </script>
+
+  <script>
     // PWA Install Prompt handling
     let deferredPrompt;
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -151,6 +251,11 @@
 
     window.isInstallPromptAvailable = function () {
       return !!deferredPrompt;
+    };
+
+    window.isPwaStandalone = function () {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
     };
   </script>
 </body>

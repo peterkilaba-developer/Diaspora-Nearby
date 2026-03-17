@@ -7,11 +7,8 @@ final trustRepositoryProvider = Provider<TrustRepository>((ref) {
   return TrustRepository(FirebaseFirestore.instance);
 });
 
-final trustDataProvider = FutureProvider.family<TrustData?, String>((
-  ref,
-  uid,
-) async {
-  return ref.watch(trustRepositoryProvider).getTrustData(uid);
+final trustDataProvider = StreamProvider.family<TrustData?, String>((ref, uid) {
+  return ref.watch(trustRepositoryProvider).streamTrustData(uid);
 });
 
 class TrustRepository {
@@ -32,6 +29,15 @@ class TrustRepository {
       debugPrint('Error getting trust data: $e');
       return null;
     }
+  }
+
+  Stream<TrustData?> streamTrustData(String uid) {
+    return _firestore.collection('trust_data').doc(uid).snapshots().map((doc) {
+      if (doc.exists && doc.data() != null) {
+        return TrustData.fromJson(doc.data()!);
+      }
+      return null;
+    });
   }
 
   Future<void> saveTrustData(TrustData data) async {
@@ -129,12 +135,18 @@ class TrustRepository {
       final fromQuery = await _firestore
           .collection('qr_exchanges')
           .where('fromUid', isEqualTo: userId)
+          .limit(200)
           .get();
 
       final toQuery = await _firestore
           .collection('qr_exchanges')
           .where('toUid', isEqualTo: userId)
+          .limit(200)
           .get();
+
+      debugPrint(
+        '🔍 [TrustRepo] QR query for $userId: fromQuery=${fromQuery.docs.length} docs, toQuery=${toQuery.docs.length} docs',
+      );
 
       final userIds = <String>{};
 
@@ -145,10 +157,60 @@ class TrustRepository {
         userIds.add(doc['fromUid'] as String);
       }
 
+      debugPrint(
+        '🔍 [TrustRepo] QR userIds for $userId: $userIds',
+      );
+
       return userIds.toList();
     } catch (e) {
       debugPrint('Error fetching QR exchanges: $e');
       return [];
+    }
+  }
+
+  /// Returns full QR exchange records keyed by partner user ID.
+  /// Each value contains {locationAddress, timestamp} from the exchange.
+  Future<Map<String, Map<String, dynamic>>> getQrExchangeRecords(
+    String userId,
+  ) async {
+    try {
+      final fromQuery = await _firestore
+          .collection('qr_exchanges')
+          .where('fromUid', isEqualTo: userId)
+          .limit(200)
+          .get();
+
+      final toQuery = await _firestore
+          .collection('qr_exchanges')
+          .where('toUid', isEqualTo: userId)
+          .limit(200)
+          .get();
+
+      final records = <String, Map<String, dynamic>>{};
+
+      for (var doc in fromQuery.docs) {
+        final data = doc.data();
+        final partnerId = data['toUid'] as String;
+        records[partnerId] = {
+          'locationAddress': data['locationAddress'],
+          'timestamp': data['timestamp'],
+        };
+      }
+      for (var doc in toQuery.docs) {
+        final data = doc.data();
+        final partnerId = data['fromUid'] as String;
+        if (!records.containsKey(partnerId)) {
+          records[partnerId] = {
+            'locationAddress': data['locationAddress'],
+            'timestamp': data['timestamp'],
+          };
+        }
+      }
+
+      return records;
+    } catch (e) {
+      debugPrint('Error fetching QR exchange records: $e');
+      return {};
     }
   }
 
@@ -186,6 +248,7 @@ class TrustRepository {
       final query = await _firestore
           .collection('vouches')
           .where('toUserId', isEqualTo: userId)
+          .limit(500)
           .get();
 
       return query.docs.map((doc) => Vouch.fromJson(doc.data())).toList();
@@ -200,6 +263,7 @@ class TrustRepository {
       final query = await _firestore
           .collection('vouches')
           .where('fromUserId', isEqualTo: userId)
+          .limit(500)
           .get();
 
       return query.docs.map((doc) => Vouch.fromJson(doc.data())).toList();
@@ -229,19 +293,34 @@ class TrustRepository {
     required String fromUserId,
     required String toUserId,
     required double score,
+    bool isFullTrust = false,
+    int stakedAmount = 0,
+    int remainingStake = 0,
+    String? fromUserName,
   }) async {
     final id = '${fromUserId}_$toUserId';
-    await _firestore.collection('trust_ratings').doc(id).set({
+    final data = <String, dynamic>{
       'fromUserId': fromUserId,
       'toUserId': toUserId,
       'score': score,
+      'isFullTrust': isFullTrust,
+      'stakedAmount': stakedAmount,
+      'remainingStake': remainingStake,
       'timestamp': DateTime.now().toIso8601String(),
-    });
+    };
+    if (fromUserName != null) data['fromUserName'] = fromUserName;
+    await _firestore.collection('trust_ratings').doc(id).set(data);
   }
 
-  Future<List<double>> getTrustRatingsForUser(String userId) async {
-    final details = await getDetailedTrustRatingsForUser(userId);
-    return details.map((d) => (d['score'] as num).toDouble()).toList();
+  Future<List<Map<String, dynamic>>> getTrustRatingsForUser(
+    String userId,
+  ) async {
+    final query = await _firestore
+        .collection('trust_ratings')
+        .where('toUserId', isEqualTo: userId)
+        .limit(500)
+        .get();
+    return query.docs.map((doc) => doc.data()).toList();
   }
 
   Future<List<Map<String, dynamic>>> getDetailedTrustRatingsForUser(
@@ -251,6 +330,7 @@ class TrustRepository {
       final query = await _firestore
           .collection('trust_ratings')
           .where('toUserId', isEqualTo: userId)
+          .limit(500)
           .get();
 
       return query.docs.map((doc) => doc.data()).toList();
@@ -258,6 +338,53 @@ class TrustRepository {
       debugPrint('Error getting trust ratings: $e');
       return [];
     }
+  }
+
+  /// Gets all full-trust stakers for a user (score > 90 with active stake)
+  Future<List<Map<String, dynamic>>> getFullTrustStakersForUser(
+    String userId,
+  ) async {
+    try {
+      final query = await _firestore
+          .collection('trust_ratings')
+          .where('toUserId', isEqualTo: userId)
+          .where('isFullTrust', isEqualTo: true)
+          .limit(100)
+          .get();
+
+      return query.docs.map((doc) => doc.data()).toList();
+    } catch (e) {
+      debugPrint('Error getting full trust stakers: $e');
+      return [];
+    }
+  }
+
+  /// Gets the full rating document between two users
+  Future<Map<String, dynamic>?> getTrustRatingDoc({
+    required String fromUserId,
+    required String toUserId,
+  }) async {
+    try {
+      final id = '${fromUserId}_$toUserId';
+      final doc = await _firestore.collection('trust_ratings').doc(id).get();
+      return doc.exists ? doc.data() : null;
+    } catch (e) {
+      debugPrint('Error getting trust rating doc: $e');
+      return null;
+    }
+  }
+
+  /// Updates a staker's remaining stake balance
+  Future<void> updateStakerBalance({
+    required String fromUserId,
+    required String toUserId,
+    required int remainingStake,
+    bool? isFullTrust,
+  }) async {
+    final id = '${fromUserId}_$toUserId';
+    final updates = <String, dynamic>{'remainingStake': remainingStake};
+    if (isFullTrust != null) updates['isFullTrust'] = isFullTrust;
+    await _firestore.collection('trust_ratings').doc(id).update(updates);
   }
 
   Future<double?> getRating({
@@ -345,6 +472,7 @@ class TrustRepository {
       final query = await _firestore
           .collection('field_verifications')
           .where('fromUserId', isEqualTo: fromUserId)
+          .limit(1)
           .get();
 
       if (query.docs.isNotEmpty) {
@@ -366,6 +494,7 @@ class TrustRepository {
       final query = await _firestore
           .collection('field_verifications')
           .where('toUserId', isEqualTo: userId)
+          .limit(100)
           .get();
 
       return query.docs.map((doc) => doc.data()).toList();

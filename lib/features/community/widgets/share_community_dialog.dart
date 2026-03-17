@@ -61,7 +61,7 @@ class _ShareCommunityDialogState extends ConsumerState<ShareCommunityDialog> {
 
         String shareText =
             'Join me in the ${widget.community.name} on Diaspora Nearby!';
-        String shareUrl = 'https://diasporanearby.com';
+        String shareUrl = 'https://diasporanearby.com/invite';
 
         try {
           final user = ref.read(authRepositoryProvider).currentUser;
@@ -80,17 +80,19 @@ class _ShareCommunityDialogState extends ConsumerState<ShareCommunityDialog> {
               );
             }
 
-            shareUrl = '$shareUrl/invite?code=$code';
-                    }
+            shareUrl = '$shareUrl?code=$code';
+          }
         } catch (e) {
           debugPrint('Error getting referral code: $e');
           // Continue sharing without code
         }
 
-        await Share.shareXFiles(
-          [XFile(imagePath)],
-          text: '$shareText\n\n$shareUrl',
-          subject: 'Join ${widget.community.name}',
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(imagePath)],
+            text: '$shareText\n\n$shareUrl',
+            subject: 'Join ${widget.community.name}',
+          ),
         );
       }
     } catch (e) {

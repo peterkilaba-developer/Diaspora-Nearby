@@ -6,7 +6,9 @@ void main() {
   group('Governance Hierarchy Simulation', () {
     test('Selection Ladder: City -> State -> Country', () async {
       // 1. Setup Cities
+      // ignore: unused_local_variable
       final cityA = Community(id: 'city_a', name: 'City A', type: 'city', homeCountryCode: 'TZ');
+      // ignore: unused_local_variable
       final cityB = Community(id: 'city_b', name: 'City B', type: 'city', homeCountryCode: 'TZ');
       
       final govA = GovernanceUnit(

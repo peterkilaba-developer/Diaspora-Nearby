@@ -12,24 +12,36 @@ class AppTheme {
   static const Color accentDark = Color(0xFF557A63); // Darker variant
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // ASSET COLORS — Use these for DSP / $DIASPORA / Fiat throughout the app
+  // ═══════════════════════════════════════════════════════════════════════════
+  static const Color dspColor = accent; // DSP = brand sage green
+  static const Color tokenColor = Color(0xFFE67E22); // $DIASPORA = warm orange
+  static const Color fiatColor = Color(0xFF22C55E); // Fiat = green
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // ELEVATION SURFACE SYSTEM
   // 4 levels (0–3), constant step gap per level.
   // Light: 3-step gap (subtle on bright surfaces)
   // Dark:  8-step gap (perceptually equivalent on dark surfaces)
   // ═══════════════════════════════════════════════════════════════════════════
-  static const int _elevationStepLight = 4;
-  static const int _elevationStepDark = 8;
-
   // Light mode elevation surfaces (4-step gap)
   static const Color elevationLight0 = Color(0xFFF3F3F3); // 243 — Page bg
-  static const Color elevationLight1 = Color(0xFFF7F7F7); // 247 — Cards/Sections
-  static const Color elevationLight2 = Color(0xFFFBFBFB); // 251 — Inner containers
-  static const Color elevationLight3 = Color(0xFFFFFFFF); // 255 — Dialogs/Modals
+  static const Color elevationLight1 = Color(
+    0xFFF7F7F7,
+  ); // 247 — Cards/Sections
+  static const Color elevationLight2 = Color(
+    0xFFFBFBFB,
+  ); // 251 — Inner containers
+  static const Color elevationLight3 = Color(
+    0xFFFFFFFF,
+  ); // 255 — Dialogs/Modals
 
   // Dark mode elevation surfaces (8-step gap)
   static const Color elevationDark0 = Color(0xFF0A0A0A); // 10  — Page bg
   static const Color elevationDark1 = Color(0xFF121212); // 18  — Cards/Sections
-  static const Color elevationDark2 = Color(0xFF1A1A1A); // 26  — Inner containers
+  static const Color elevationDark2 = Color(
+    0xFF1A1A1A,
+  ); // 26  — Inner containers
   static const Color elevationDark3 = Color(0xFF222222); // 34  — Dialogs/Modals
 
   /// Get the surface color for a given elevation level (0–3).
@@ -37,11 +49,16 @@ class AppTheme {
     assert(level >= 0 && level <= 3, 'Elevation level must be 0–3');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     switch (level) {
-      case 0: return isDark ? elevationDark0 : elevationLight0;
-      case 1: return isDark ? elevationDark1 : elevationLight1;
-      case 2: return isDark ? elevationDark2 : elevationLight2;
-      case 3: return isDark ? elevationDark3 : elevationLight3;
-      default: return isDark ? elevationDark0 : elevationLight0;
+      case 0:
+        return isDark ? elevationDark0 : elevationLight0;
+      case 1:
+        return isDark ? elevationDark1 : elevationLight1;
+      case 2:
+        return isDark ? elevationDark2 : elevationLight2;
+      case 3:
+        return isDark ? elevationDark3 : elevationLight3;
+      default:
+        return isDark ? elevationDark0 : elevationLight0;
     }
   }
 
@@ -68,10 +85,10 @@ class AppTheme {
   //   Sections:     0px margin → children sit flush inside page padding
   //   Content:      8px padding → breathing room inside containers
   // ═══════════════════════════════════════════════════════════════════════════
-  static const double pageHorizontalPadding = 8.0;    // Page-level body padding
-  static const double sectionHorizontalMargin = 0.0;  // Children have 0 margin
+  static const double pageHorizontalPadding = 8.0; // Page-level body padding
+  static const double sectionHorizontalMargin = 0.0; // Children have 0 margin
   static const double contentHorizontalPadding = 8.0; // Inside-card padding
-  static const double elementSpacing = 8.0;            // Gap between elements
+  static const double elementSpacing = 8.0; // Gap between elements
 
   // Section internals
   static const double sectionHorizontalPadding = 8.0;
@@ -317,7 +334,9 @@ class AppTheme {
         headerForegroundColor: Colors.white,
         dayForegroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return Colors.white;
-          if (states.contains(WidgetState.disabled)) return _lightForeground.withAlpha(76);
+          if (states.contains(WidgetState.disabled)) {
+            return _lightForeground.withAlpha(76);
+          }
           return _lightForeground;
         }),
         dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -515,7 +534,9 @@ class AppTheme {
         headerForegroundColor: Colors.white,
         dayForegroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return Colors.white;
-          if (states.contains(WidgetState.disabled)) return _darkForeground.withAlpha(76);
+          if (states.contains(WidgetState.disabled)) {
+            return _darkForeground.withAlpha(76);
+          }
           return _darkForeground;
         }),
         dayBackgroundColor: WidgetStateProperty.resolveWith((states) {

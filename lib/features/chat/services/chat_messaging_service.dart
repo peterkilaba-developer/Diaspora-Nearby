@@ -11,9 +11,7 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 // Provider definition
 final chatMessagingServiceProvider = Provider<ChatMessagingService>((ref) {
-  return ChatMessagingService(
-    pointsService: ref.read(pointsServiceProvider),
-  );
+  return ChatMessagingService(pointsService: ref.read(pointsServiceProvider));
 });
 
 class ChatMessagingService {
@@ -141,7 +139,7 @@ class ChatMessagingService {
         'senderName': senderName,
         'type': type,
         'status': 'sent',
-        if (metadata != null) 'metadata': metadata,
+        'metadata': ?metadata,
       };
 
       // Determine participants for the chat document
@@ -149,7 +147,9 @@ class ChatMessagingService {
 
       // If participants are missing, try to reconstruct from Firestore
       if (targetParticipants == null || targetParticipants.isEmpty) {
-        debugPrint('⚠️ Participants missing. Fetching from Firestore chat doc...');
+        debugPrint(
+          '⚠️ Participants missing. Fetching from Firestore chat doc...',
+        );
         final chatDoc = await _chatsCol.doc(chatId).get();
         if (chatDoc.exists) {
           final chatData = chatDoc.data()!;
@@ -183,11 +183,11 @@ class ChatMessagingService {
         'lastMessage': lastMessageData,
         'updatedAt': now,
       };
-      
-      if (targetParticipants != null && targetParticipants.isNotEmpty) {
+
+      if (targetParticipants.isNotEmpty) {
         chatDocUpdate['participants'] = targetParticipants;
       }
-      
+
       // Ensure type is set
       if (chatId.startsWith('direct_')) {
         chatDocUpdate['type'] = 'direct';
@@ -214,7 +214,7 @@ class ChatMessagingService {
 
       // 3. Update all participant userChats
       final Set<String> allTargets = {};
-      if (targetParticipants != null) allTargets.addAll(targetParticipants);
+      allTargets.addAll(targetParticipants);
       if (mentions != null) allTargets.addAll(mentions);
       if (replyToSenderId != null) allTargets.add(replyToSenderId);
       if (senderIdOverride != null) {
@@ -244,8 +244,8 @@ class ChatMessagingService {
             'senderName': senderName,
             'type': type,
             'status': 'sent',
-            if (mentions != null) 'mentions': mentions,
-            if (metadata != null) 'metadata': metadata,
+            'mentions': ?mentions,
+            'metadata': ?metadata,
           },
           'updatedAt': now,
           'isDeleted': false,
@@ -265,7 +265,9 @@ class ChatMessagingService {
       // Single network round-trip for ALL writes
       await batch.commit();
 
-      debugPrint('✅ Message sent via batch commit (${allTargets.length} targets)');
+      debugPrint(
+        '✅ Message sent via batch commit (${allTargets.length} targets)',
+      );
 
       // Track Engagement Rewards (fire-and-forget)
       _triggerPointRewards(
@@ -447,10 +449,9 @@ class ChatMessagingService {
             if (userId != currentUserId) {
               userChatUpdates['unreadCount'] = FieldValue.increment(1);
             }
-            await _userChatsCol(userId).doc(targetChatId).set(
-              userChatUpdates,
-              SetOptions(merge: true),
-            );
+            await _userChatsCol(
+              userId,
+            ).doc(targetChatId).set(userChatUpdates, SetOptions(merge: true));
           } catch (e) {
             debugPrint('Error updating userChat for $userId: $e');
           }
@@ -774,6 +775,7 @@ class ChatMessagingService {
     required double latitude,
     required double longitude,
     String? address,
+    String? caption,
     String? replyToMessageId,
     String? senderIdOverride,
     String? senderNameOverride,
@@ -791,17 +793,22 @@ class ChatMessagingService {
     final hostCountryCode = userData?['hostCountryCode'] as String?;
     final homeCountryCode = userData?['homeCountryCode'] as String?;
 
+    // Use caption as content if provided, otherwise fall back to address
+    final messageContent = (caption != null && caption.trim().isNotEmpty)
+        ? caption.trim()
+        : (address ?? 'Location');
+
     final messageData = <String, dynamic>{
       'senderId': senderIdOverride ?? currentUserId,
       'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
       'senderImage': senderImageOverride ?? profileImage,
       'senderHostCountryCode': hostCountryCode,
       'senderHomeCountryCode': homeCountryCode,
-      'content': address ?? 'Location',
+      'content': messageContent,
       'type': 'location',
       'location': {
-        'latitude': latitude,
-        'longitude': longitude,
+        'lat': latitude,
+        'lng': longitude,
         'address': address,
       },
       'timestamp': now,
@@ -836,8 +843,9 @@ class ChatMessagingService {
       final userIdsToUpdate = Set<String>.from(participants ?? []);
       if (senderIdOverride != null) {
         userIdsToUpdate.add(senderIdOverride);
-      } else if (currentUserId != null)
+      } else if (currentUserId != null) {
         userIdsToUpdate.add(currentUserId!);
+      }
 
       for (final userId in userIdsToUpdate) {
         try {
@@ -849,10 +857,9 @@ class ChatMessagingService {
           if (userId != currentUserId) {
             userChatUpdates['unreadCount'] = FieldValue.increment(1);
           }
-          await _userChatsCol(userId).doc(chatId).set(
-            userChatUpdates,
-            SetOptions(merge: true),
-          );
+          await _userChatsCol(
+            userId,
+          ).doc(chatId).set(userChatUpdates, SetOptions(merge: true));
         } catch (e) {
           debugPrint('Error updating userChat for $userId: $e');
         }
@@ -1033,7 +1040,7 @@ class ChatMessagingService {
         'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
         'type': type,
         'status': 'sent',
-        if (metadata != null) 'metadata': metadata,
+        'metadata': ?metadata,
       };
 
       final chatDocMediaUpdate = <String, dynamic>{
@@ -1055,7 +1062,9 @@ class ChatMessagingService {
         chatDocMediaUpdate['type'] = 'organization';
       }
 
-      await _chatsCol.doc(chatId).set(chatDocMediaUpdate, SetOptions(merge: true));
+      await _chatsCol
+          .doc(chatId)
+          .set(chatDocMediaUpdate, SetOptions(merge: true));
 
       var targetParticipants = participants;
       debugPrint(
@@ -1064,7 +1073,9 @@ class ChatMessagingService {
 
       if (targetParticipants == null || targetParticipants.isEmpty) {
         try {
-          debugPrint('⚠️ Media participants missing. Fetching from Firestore...');
+          debugPrint(
+            '⚠️ Media participants missing. Fetching from Firestore...',
+          );
           final chatDoc = await _chatsCol.doc(chatId).get();
           if (chatDoc.exists) {
             targetParticipants = List<String>.from(
@@ -1082,8 +1093,9 @@ class ChatMessagingService {
 
       if (senderIdOverride != null) {
         userIdsToUpdate.add(senderIdOverride);
-      } else if (currentUserId != null)
+      } else if (currentUserId != null) {
         userIdsToUpdate.add(currentUserId!);
+      }
 
       debugPrint('🎯 Updating userChats (media) for targets: $userIdsToUpdate');
 
@@ -1103,7 +1115,7 @@ class ChatMessagingService {
               'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
               'type': type,
               'status': 'sent',
-              if (metadata != null) 'metadata': metadata,
+              'metadata': ?metadata,
               if (type == 'image') 'imageUrl': derivedUrl,
               if (type == 'video') 'documentUrl': derivedUrl,
             },
@@ -1115,10 +1127,9 @@ class ChatMessagingService {
             userChatMediaData['unreadCount'] = FieldValue.increment(1);
           }
 
-          await _userChatsCol(userId).doc(chatId).set(
-            userChatMediaData,
-            SetOptions(merge: true),
-          );
+          await _userChatsCol(
+            userId,
+          ).doc(chatId).set(userChatMediaData, SetOptions(merge: true));
         } catch (e) {
           debugPrint('Error updating userChat for $userId: $e');
         }
@@ -1132,7 +1143,9 @@ class ChatMessagingService {
       );
 
       if (onConfirmed != null) {
-        onConfirmed(Message.fromFirestoreData(newMsgRef.id, chatId, messageData));
+        onConfirmed(
+          Message.fromFirestoreData(newMsgRef.id, chatId, messageData),
+        );
       }
     } catch (e, stack) {
       debugPrint('❌ Media upload failed: $e');
@@ -1158,7 +1171,7 @@ class ChatMessagingService {
     // 1. Read current reactions, update, and write back
     final msgDoc = await _messagesCol(chatId).doc(messageId).get();
     final msgData = msgDoc.data() ?? {};
-    
+
     // Parse existing reactions (stored as list of {emoji, userIds} maps)
     List<Map<String, dynamic>> reactionsList = [];
     if (msgData['reactions'] is List) {
@@ -1166,7 +1179,7 @@ class ChatMessagingService {
           .map((r) => Map<String, dynamic>.from(r as Map))
           .toList();
     }
-    
+
     // Remove user from any existing reaction
     for (final r in reactionsList) {
       final userIds = List<String>.from(r['userIds'] ?? []);
@@ -1174,18 +1187,23 @@ class ChatMessagingService {
       r['userIds'] = userIds;
     }
     reactionsList.removeWhere((r) => (r['userIds'] as List).isEmpty);
-    
+
     // Add user to the target emoji reaction
-    final existingReaction = reactionsList.where((r) => r['emoji'] == emoji).firstOrNull;
+    final existingReaction = reactionsList
+        .where((r) => r['emoji'] == emoji)
+        .firstOrNull;
     if (existingReaction != null) {
-      (existingReaction['userIds'] as List).add(currentUserId!);
+      (existingReaction['userIds'] as List).add(currentUserId);
     } else {
-      reactionsList.add({'emoji': emoji, 'userIds': [currentUserId]});
+      reactionsList.add({
+        'emoji': emoji,
+        'userIds': [currentUserId],
+      });
     }
-    
-    await _messagesCol(chatId).doc(messageId).set({
-      'reactions': reactionsList,
-    }, SetOptions(merge: true));
+
+    await _messagesCol(
+      chatId,
+    ).doc(messageId).set({'reactions': reactionsList}, SetOptions(merge: true));
 
     // 2. Notify the message sender (if not self)
     if (messageSenderId != currentUserId) {
@@ -1216,10 +1234,9 @@ class ChatMessagingService {
         'unreadCount': FieldValue.increment(1),
       };
 
-      await _userChatsCol(messageSenderId).doc(chatId).set(
-        reactionUpdate,
-        SetOptions(merge: true),
-      );
+      await _userChatsCol(
+        messageSenderId,
+      ).doc(chatId).set(reactionUpdate, SetOptions(merge: true));
     }
   }
 
@@ -1234,10 +1251,10 @@ class ChatMessagingService {
   }) {
     if (senderIdOverride != null || currentUserId == null) return;
 
-    // 1. Regular message reward (10 DSP, daily limit 100 handled in repo)
+    // 1. Regular message reward (100 DSP, daily limit 100 handled in repo)
     _pointsService.trackMessageSent(currentUserId!);
 
-    // 2. Specialized rewards (100 DSP)
+    // 2. Specialized rewards (1,000 DSP)
     // Community IDs usually start with 'home_', 'host_', 'past_', 'chat_', or is 'global_community'
     final isCommunity =
         chatId.startsWith('chat_') ||

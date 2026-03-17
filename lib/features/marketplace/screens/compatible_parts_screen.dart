@@ -86,8 +86,10 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Compatible Parts',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const Text(
+              'Compatible Parts',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
             Text(
               vehicleLabel,
               style: TextStyle(fontSize: 12, color: theme.hintColor),
@@ -98,73 +100,85 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _parts == null || _parts!.isEmpty
-              ? _buildEmptyState(theme)
-              : Column(
-                  children: [
-                    // Search bar
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (v) => setState(() => _searchQuery = v),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search by name or part number...',
-                          hintStyle: TextStyle(
-                            fontSize: 14,
-                            color: theme.hintColor.withOpacity(0.6),
-                          ),
-                          prefixIcon: Icon(LucideIcons.search,
-                              size: 18, color: theme.hintColor),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(LucideIcons.x,
-                                      size: 16, color: theme.hintColor),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: isDark
-                              ? Colors.white.withOpacity(0.06)
-                              : Colors.black.withOpacity(0.04),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
+          ? _buildEmptyState(theme)
+          : Column(
+              children: [
+                // Search bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search by name or part number...',
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        color: theme.hintColor.withValues(alpha: 0.6),
+                      ),
+                      prefixIcon: Icon(
+                        LucideIcons.search,
+                        size: 18,
+                        color: theme.hintColor,
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                LucideIcons.x,
+                                size: 16,
+                                color: theme.hintColor,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.04),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
                     ),
-                    // Parts list
-                    Expanded(
-                      child: _filteredParts.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(LucideIcons.searchX,
-                                      size: 40,
-                                      color: theme.hintColor.withOpacity(0.4)),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'No parts match "$_searchQuery"',
-                                    style: TextStyle(
-                                        fontSize: 14, color: theme.hintColor),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : _buildPartsList(theme, isDark),
-                    ),
-                  ],
+                  ),
                 ),
+                // Parts list
+                Expanded(
+                  child: _filteredParts.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                LucideIcons.searchX,
+                                size: 40,
+                                color: theme.hintColor.withValues(alpha: 0.4),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No parts match "$_searchQuery"',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _buildPartsList(theme, isDark),
+                ),
+              ],
+            ),
     );
   }
 
@@ -175,8 +189,11 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.package,
-                size: 56, color: theme.hintColor.withOpacity(0.4)),
+            Icon(
+              LucideIcons.package,
+              size: 56,
+              color: theme.hintColor.withValues(alpha: 0.4),
+            ),
             const SizedBox(height: 16),
             Text(
               'No Parts Listed Yet',
@@ -203,9 +220,12 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
     return RefreshIndicator(
       onRefresh: _fetchParts,
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16, 16, 16,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
         itemCount: parts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final part = parts[index];
           return _buildPartCard(part, theme, isDark);
@@ -214,8 +234,7 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
     );
   }
 
-  Widget _buildPartCard(
-      MarketplaceListing part, ThemeData theme, bool isDark) {
+  Widget _buildPartCard(MarketplaceListing part, ThemeData theme, bool isDark) {
     final cp = part.carPartsDetails;
     final partNumber = cp?['partNumber']?.toString() ?? '';
     final fitsYear = cp?['carYear']?.toString() ?? '';
@@ -224,20 +243,18 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
       onTap: () => context.push('/marketplace/listing/${part.id}'),
       child: Container(
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withOpacity(0.06)
-              : Colors.white,
+          color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.black.withOpacity(0.06),
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
           ),
           boxShadow: isDark
               ? null
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -258,30 +275,36 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
                     ? CachedNetworkImage(
                         imageUrl: part.images.first,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
+                        placeholder: (_, _) => Container(
                           color: isDark
-                              ? Colors.white.withOpacity(0.04)
+                              ? Colors.white.withValues(alpha: 0.04)
                               : Colors.grey[100],
-                          child: Icon(LucideIcons.wrench,
-                              size: 28,
-                              color: theme.hintColor.withOpacity(0.3)),
+                          child: Icon(
+                            LucideIcons.wrench,
+                            size: 28,
+                            color: theme.hintColor.withValues(alpha: 0.3),
+                          ),
                         ),
-                        errorWidget: (_, __, ___) => Container(
+                        errorWidget: (_, _, _) => Container(
                           color: isDark
-                              ? Colors.white.withOpacity(0.04)
+                              ? Colors.white.withValues(alpha: 0.04)
                               : Colors.grey[100],
-                          child: Icon(LucideIcons.wrench,
-                              size: 28,
-                              color: theme.hintColor.withOpacity(0.3)),
+                          child: Icon(
+                            LucideIcons.wrench,
+                            size: 28,
+                            color: theme.hintColor.withValues(alpha: 0.3),
+                          ),
                         ),
                       )
                     : Container(
                         color: isDark
-                            ? Colors.white.withOpacity(0.04)
+                            ? Colors.white.withValues(alpha: 0.04)
                             : Colors.grey[100],
-                        child: Icon(LucideIcons.wrench,
-                            size: 28,
-                            color: theme.hintColor.withOpacity(0.3)),
+                        child: Icon(
+                          LucideIcons.wrench,
+                          size: 28,
+                          color: theme.hintColor.withValues(alpha: 0.3),
+                        ),
                       ),
               ),
             ),
@@ -289,8 +312,10 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
             // Details
             Expanded(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -311,8 +336,11 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
                     Row(
                       children: [
                         if (part.subcategory != null) ...[
-                          Icon(LucideIcons.tag,
-                              size: 10, color: theme.hintColor),
+                          Icon(
+                            LucideIcons.tag,
+                            size: 10,
+                            color: theme.hintColor,
+                          ),
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(
@@ -320,7 +348,9 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 11, color: theme.hintColor),
+                                fontSize: 11,
+                                color: theme.hintColor,
+                              ),
                             ),
                           ),
                         ],
@@ -368,8 +398,11 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
             // Chevron
             Padding(
               padding: const EdgeInsets.only(right: 10),
-              child: Icon(LucideIcons.chevronRight,
-                  size: 16, color: theme.hintColor.withOpacity(0.4)),
+              child: Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: theme.hintColor.withValues(alpha: 0.4),
+              ),
             ),
           ],
         ),

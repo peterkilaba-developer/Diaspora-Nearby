@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
 import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
 import 'package:diaspora_nearby/features/travel/providers/travel_providers.dart';
 import 'package:diaspora_nearby/features/travel/screens/booking_confirmation_screen.dart';
@@ -20,7 +23,8 @@ class FlightBookingScreen extends ConsumerStatefulWidget {
   const FlightBookingScreen({super.key, required this.offer});
 
   @override
-  ConsumerState<FlightBookingScreen> createState() => _FlightBookingScreenState();
+  ConsumerState<FlightBookingScreen> createState() =>
+      _FlightBookingScreenState();
 }
 
 class _TravelerData {
@@ -30,9 +34,16 @@ class _TravelerData {
   final phoneC = TextEditingController();
   final dobC = TextEditingController();
   final passportC = TextEditingController();
+  final passportExpiryC = TextEditingController();
   final nationalityC = TextEditingController(text: 'US');
+  // Address fields (primary traveler only)
+  final addressLineC = TextEditingController();
+  final cityC = TextEditingController();
+  final postalCodeC = TextEditingController();
   String gender = 'MALE';
   String dobApi = '';
+  String passportExpiryApi = '';
+  country_data.Country? selectedCountry;
 
   void dispose() {
     firstNameC.dispose();
@@ -41,7 +52,11 @@ class _TravelerData {
     phoneC.dispose();
     dobC.dispose();
     passportC.dispose();
+    passportExpiryC.dispose();
     nationalityC.dispose();
+    addressLineC.dispose();
+    cityC.dispose();
+    postalCodeC.dispose();
   }
 }
 
@@ -75,7 +90,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
   }
 
   void _autoFillFromProfile() {
-    final profile = ref.read(userProfileProvider).valueOrNull;
+    final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
 
     final t = _travelers.first;
@@ -105,13 +120,17 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     }
 
     // Nationality from home country code (e.g. 'US', 'GH')
-    if (profile.homeCountryCode != null && profile.homeCountryCode!.isNotEmpty) {
-      t.nationalityC.text = profile.homeCountryCode!.toUpperCase();
+    if (profile.homeCountryCode != null &&
+        profile.homeCountryCode!.isNotEmpty) {
+      final code = profile.homeCountryCode!.toUpperCase();
+      t.nationalityC.text = code;
+      t.selectedCountry = country_data.getCountryByCode(code);
     }
 
     // Pre-fill card holder name
     if (profile.firstName.isNotEmpty && profile.lastName.isNotEmpty) {
-      _cardHolderController.text = '${profile.firstName} ${profile.lastName}'.toUpperCase();
+      _cardHolderController.text = '${profile.firstName} ${profile.lastName}'
+          .toUpperCase();
     }
   }
 
@@ -190,7 +209,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
 
     try {
       final amadeus = ref.read(amadeusServiceProvider);
-      final confirmedJson = await amadeus.confirmFlightPrice(widget.offer.rawJson!);
+      final confirmedJson = await amadeus.confirmFlightPrice(
+        widget.offer.rawJson!,
+      );
       final confirmedOffer = FlightOffer.fromJson(confirmedJson);
 
       if (mounted) {
@@ -208,11 +229,12 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           _errorMessage = 'Price confirmation failed: ${e.message}';
         });
       }
-    } catch (e) {
+    } catch (e, s) {
+      debugPrint('✈️ [FlightBooking] confirmPrice error: $e\n$s');
       if (mounted) {
         setState(() {
           _isProcessing = false;
-          _errorMessage = 'Connection error. Please try again.';
+          _errorMessage = 'Price error: $e';
         });
       }
     }
@@ -233,6 +255,8 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       final travelersList = _travelers.asMap().entries.map((entry) {
         final i = entry.key;
         final t = entry.value;
+        final natCode = t.nationalityC.text.trim().toUpperCase();
+        final dialCode = t.selectedCountry?.dialCode.replaceAll('+', '') ?? '1';
         return {
           'id': '${i + 1}',
           'dateOfBirth': t.dobApi,
@@ -246,29 +270,31 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             'phones': [
               {
                 'deviceType': 'MOBILE',
-                'countryCallingCode': '1',
+                'countryCallingCode': dialCode,
                 'number': t.phoneC.text.trim().replaceAll(RegExp(r'[^\d]'), ''),
-              }
+              },
             ],
           },
           'documents': [
             {
               'documentType': 'PASSPORT',
-              'birthPlace': 'N/A',
-              'issuanceLocation': 'N/A',
-              'issuanceDate': '2020-01-01',
               'number': t.passportC.text.trim().toUpperCase(),
-              'expiryDate': '2030-12-31',
-              'issuanceCountry': t.nationalityC.text.trim().toUpperCase(),
-              'validityCountry': t.nationalityC.text.trim().toUpperCase(),
-              'nationality': t.nationalityC.text.trim().toUpperCase(),
+              'expiryDate': t.passportExpiryApi.isNotEmpty
+                  ? t.passportExpiryApi
+                  : '2030-12-31',
+              'issuanceCountry': natCode,
+              'validityCountry': natCode,
+              'nationality': natCode,
               'holder': i == 0,
-            }
+            },
           ],
         };
       }).toList();
 
       final primary = _travelers.first;
+      final primaryDialCode =
+          primary.selectedCountry?.dialCode.replaceAll('+', '') ?? '1';
+      final primaryNat = primary.nationalityC.text.trim().toUpperCase();
       final contact = {
         'addresseeName': {
           'firstName': primary.firstNameC.text.trim().toUpperCase(),
@@ -278,11 +304,28 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         'phones': [
           {
             'deviceType': 'MOBILE',
-            'countryCallingCode': '1',
-            'number': primary.phoneC.text.trim().replaceAll(RegExp(r'[^\d]'), ''),
-          }
+            'countryCallingCode': primaryDialCode,
+            'number': primary.phoneC.text.trim().replaceAll(
+              RegExp(r'[^\d]'),
+              '',
+            ),
+          },
         ],
         'emailAddress': primary.emailC.text.trim(),
+        'address': {
+          'lines': [
+            primary.addressLineC.text.trim().isNotEmpty
+                ? primary.addressLineC.text.trim()
+                : '123 Main Street',
+          ],
+          'postalCode': primary.postalCodeC.text.trim().isNotEmpty
+              ? primary.postalCodeC.text.trim()
+              : '10001',
+          'cityName': primary.cityC.text.trim().isNotEmpty
+              ? primary.cityC.text.trim().toUpperCase()
+              : 'NEW YORK',
+          'countryCode': primaryNat,
+        },
       };
 
       final payment = {
@@ -298,25 +341,65 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         payment: payment,
       );
 
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => BookingConfirmationScreen(
-              bookingType: 'Flight',
-              bookingId: order.id,
-              pnrReference: order.pnrReference ?? 'N/A',
-              passengerName:
-                  '${primary.firstNameC.text} ${primary.lastNameC.text}${_travelers.length > 1 ? ' +${_travelers.length - 1}' : ''}',
-              route: widget.offer.routeSummary,
-              date: widget.offer.itineraries.isNotEmpty &&
-                     widget.offer.itineraries.first.segments.isNotEmpty
-                  ? widget.offer.itineraries.first.segments.first.departureAt
-                  : '',
-              price: '\$${(_confirmedOffer ?? widget.offer).totalPrice.toStringAsFixed(2)}',
-              currency: (_confirmedOffer ?? widget.offer).currency,
+      if (context.mounted) {
+        // ── Save booking to Firestore ──
+        final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+        final departureDate =
+            widget.offer.itineraries.isNotEmpty &&
+                widget.offer.itineraries.first.segments.isNotEmpty
+            ? widget.offer.itineraries.first.segments.first.departureAt
+            : '';
+        final totalPrice = (_confirmedOffer ?? widget.offer).totalPrice;
+        final currency = (_confirmedOffer ?? widget.offer).currency;
+        final passengerName =
+            '${primary.firstNameC.text} ${primary.lastNameC.text}${_travelers.length > 1 ? ' +${_travelers.length - 1}' : ''}';
+
+        if (uid != null) {
+          try {
+            await FirebaseFirestore.instance
+                .collection('flight_bookings')
+                .doc(order.id)
+                .set({
+                  'userId': uid,
+                  'orderId': order.id,
+                  'pnrReference': order.pnrReference ?? 'N/A',
+                  'passengerName': passengerName,
+                  'passengerNames': _travelers
+                      .map(
+                        (t) =>
+                            '${t.firstNameC.text.trim()} ${t.lastNameC.text.trim()}',
+                      )
+                      .toList(),
+                  'route': widget.offer.routeSummary,
+                  'departureDate': departureDate,
+                  'totalPrice': totalPrice,
+                  'currency': currency,
+                  'status': 'confirmed',
+                  'bookingType': 'flight',
+                  'travelerCount': _travelers.length,
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+          } catch (e) {
+            debugPrint('⚠️ Failed to save booking to Firestore: $e');
+          }
+        }
+
+        if (context.mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => BookingConfirmationScreen(
+                bookingType: 'Flight',
+                bookingId: order.id,
+                pnrReference: order.pnrReference ?? 'N/A',
+                passengerName: passengerName,
+                route: widget.offer.routeSummary,
+                date: departureDate,
+                price: '\$${totalPrice.toStringAsFixed(2)}',
+                currency: currency,
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     } on AmadeusException catch (e) {
       if (mounted) {
@@ -325,11 +408,12 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           _errorMessage = 'Booking failed: ${e.message}';
         });
       }
-    } catch (e) {
+    } catch (e, s) {
+      debugPrint('✈️ [FlightBooking] createBooking error: $e\n$s');
       if (mounted) {
         setState(() {
           _isProcessing = false;
-          _errorMessage = 'Connection error. Please try again.';
+          _errorMessage = 'Booking error: $e';
         });
       }
     }
@@ -353,6 +437,52 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         t.dobC.text = '${date.month}/${date.day}/${date.year}';
       });
     }
+  }
+
+  Future<void> _pickPassportExpiry(int travelerIndex) async {
+    final now = DateTime.now();
+    final date = await SmartDatePicker.show(
+      context: context,
+      title: 'Passport Expiry Date',
+      initialDate: now.add(const Duration(days: 365)),
+      firstDate: now,
+      lastDate: DateTime(now.year + 15),
+      shortcuts: [],
+    );
+    if (date != null && mounted) {
+      final t = _travelers[travelerIndex];
+      setState(() {
+        t.passportExpiryApi =
+            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        t.passportExpiryC.text = '${date.month}/${date.day}/${date.year}';
+      });
+    }
+  }
+
+  void _pickNationality(int travelerIndex) {
+    final t = _travelers[travelerIndex];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: CountryPickerSheet(
+          selectedCountry: t.selectedCountry,
+          showDialCode: false,
+          onCountrySelected: (country) {
+            Navigator.pop(context);
+            setState(() {
+              t.selectedCountry = country;
+              t.nationalityC.text = country.code.toUpperCase();
+            });
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -389,7 +519,11 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                    16, 16, 16, 32 + MediaQuery.of(context).padding.bottom),
+                  16,
+                  16,
+                  16,
+                  32 + MediaQuery.of(context).padding.bottom,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -464,7 +598,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                         fontWeight: FontWeight.bold,
                         color: isActive
                             ? Colors.white
-                            : theme.colorScheme.onSurface.withOpacity(0.4),
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.4,
+                              ),
                       ),
                     ),
             ),
@@ -477,7 +613,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
               fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
               color: isActive
                   ? theme.colorScheme.onSurface
-                  : theme.colorScheme.onSurface.withOpacity(0.3),
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.3),
             ),
           ),
         ],
@@ -493,7 +629,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       margin: const EdgeInsets.only(bottom: 14),
       color: isActive
           ? AppTheme.accent
-          : theme.colorScheme.onSurface.withOpacity(0.1),
+          : theme.colorScheme.onSurface.withValues(alpha: 0.1),
     );
   }
 
@@ -514,11 +650,14 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(0.1),
+              color: AppTheme.accent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(LucideIcons.plane,
-                color: AppTheme.accent, size: 22),
+            child: const Icon(
+              LucideIcons.plane,
+              color: AppTheme.accent,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -538,7 +677,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                   '${offer.stopsDescription} · ${offer.durationFormatted}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
               ],
@@ -559,7 +698,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                 offer.currency,
                 style: TextStyle(
                   fontSize: 11,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
               ),
             ],
@@ -577,9 +716,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
+        color: Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withOpacity(0.3)),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -615,8 +754,11 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.users, size: 20,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6)),
+                Icon(
+                  LucideIcons.users,
+                  size: 20,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -634,7 +776,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                         '${_travelers.length} passenger${_travelers.length > 1 ? 's' : ''}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                     ],
@@ -687,8 +831,12 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     );
   }
 
-  Widget _stepperButton(ThemeData theme,
-      {required IconData icon, required bool enabled, required VoidCallback onTap}) {
+  Widget _stepperButton(
+    ThemeData theme, {
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
@@ -696,13 +844,13 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         height: 32,
         decoration: BoxDecoration(
           color: enabled
-              ? AppTheme.accent.withOpacity(0.1)
-              : theme.colorScheme.onSurface.withOpacity(0.05),
+              ? AppTheme.accent.withValues(alpha: 0.1)
+              : theme.colorScheme.onSurface.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: enabled
-                ? AppTheme.accent.withOpacity(0.3)
-                : theme.colorScheme.onSurface.withOpacity(0.08),
+                ? AppTheme.accent.withValues(alpha: 0.3)
+                : theme.colorScheme.onSurface.withValues(alpha: 0.08),
           ),
         ),
         child: Icon(
@@ -710,7 +858,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           size: 16,
           color: enabled
               ? AppTheme.accent
-              : theme.colorScheme.onSurface.withOpacity(0.2),
+              : theme.colorScheme.onSurface.withValues(alpha: 0.2),
         ),
       ),
     );
@@ -737,7 +885,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(_radius),
         border: isExpanded
-            ? Border.all(color: AppTheme.accent.withOpacity(0.3))
+            ? Border.all(color: AppTheme.accent.withValues(alpha: 0.3))
             : null,
       ),
       child: Column(
@@ -755,7 +903,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                     height: 32,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppTheme.accent.withOpacity(isExpanded ? 0.15 : 0.08),
+                      color: AppTheme.accent.withValues(
+                        alpha: isExpanded ? 0.15 : 0.08,
+                      ),
                     ),
                     child: Center(
                       child: Text(
@@ -777,8 +927,8 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                           t.firstNameC.text.isNotEmpty
                               ? '${t.firstNameC.text} ${t.lastNameC.text}'
                               : isPrimary
-                                  ? 'Primary Traveler'
-                                  : 'Traveler ${index + 1}',
+                              ? 'Primary Traveler'
+                              : 'Traveler ${index + 1}',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -800,14 +950,19 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                   if (!isPrimary)
                     GestureDetector(
                       onTap: () => _removeTraveler(index),
-                      child: Icon(LucideIcons.trash2, size: 16,
-                          color: Colors.red.withOpacity(0.6)),
+                      child: Icon(
+                        LucideIcons.trash2,
+                        size: 16,
+                        color: Colors.red.withValues(alpha: 0.6),
+                      ),
                     ),
                   const SizedBox(width: 8),
                   Icon(
-                    isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                    isExpanded
+                        ? LucideIcons.chevronUp
+                        : LucideIcons.chevronDown,
                     size: 18,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ],
               ),
@@ -833,8 +988,13 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                           textCapitalization: TextCapitalization.words,
                           decoration: inputDecoration.copyWith(
                             hintText: 'First Name *',
-                            prefixIcon: Icon(LucideIcons.user, size: 18,
-                                color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                            prefixIcon: Icon(
+                              LucideIcons.user,
+                              size: 18,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
                           ),
                           style: const TextStyle(fontSize: 13),
                           validator: (v) =>
@@ -848,7 +1008,8 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                           controller: t.lastNameC,
                           textCapitalization: TextCapitalization.words,
                           decoration: inputDecoration.copyWith(
-                              hintText: 'Last Name *'),
+                            hintText: 'Last Name *',
+                          ),
                           style: const TextStyle(fontSize: 13),
                           validator: (v) =>
                               (v?.trim().isEmpty ?? true) ? 'Required' : null,
@@ -861,54 +1022,80 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
 
                   // Gender
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.elevationColor(context, 2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        Icon(LucideIcons.userCircle, size: 18,
-                            color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                        Icon(
+                          LucideIcons.userCircle,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
                         const SizedBox(width: 12),
-                        Text('Gender',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+                        Text(
+                          'Gender',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
                         const Spacer(),
                         SegmentedButton<String>(
                           segments: const [
                             ButtonSegment(
-                                value: 'MALE',
-                                label: Text('Male',
-                                    style: TextStyle(fontSize: 12))),
+                              value: 'MALE',
+                              label: Text(
+                                'Male',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
                             ButtonSegment(
-                                value: 'FEMALE',
-                                label: Text('Female',
-                                    style: TextStyle(fontSize: 12))),
+                              value: 'FEMALE',
+                              label: Text(
+                                'Female',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
                           ],
                           selected: {t.gender},
                           onSelectionChanged: (v) =>
                               setState(() => t.gender = v.first),
                           style: ButtonStyle(
-                            backgroundColor:
-                                WidgetStateProperty.resolveWith((states) {
+                            backgroundColor: WidgetStateProperty.resolveWith((
+                              states,
+                            ) {
                               if (states.contains(WidgetState.selected)) {
-                                return AppTheme.accent.withOpacity(0.15);
+                                return AppTheme.accent.withValues(alpha: 0.15);
                               }
                               return Colors.transparent;
                             }),
-                            foregroundColor:
-                                WidgetStateProperty.resolveWith((states) {
+                            foregroundColor: WidgetStateProperty.resolveWith((
+                              states,
+                            ) {
                               if (states.contains(WidgetState.selected)) {
                                 return AppTheme.accent;
                               }
-                              return theme.colorScheme.onSurface.withOpacity(0.6);
+                              return theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              );
                             }),
-                            side: WidgetStateProperty.all(BorderSide(
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(0.1),
-                            )),
+                            side: WidgetStateProperty.all(
+                              BorderSide(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.1,
+                                ),
+                              ),
+                            ),
                             visualDensity: VisualDensity.compact,
                           ),
                         ),
@@ -924,9 +1111,13 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                     onTap: () => _pickDateOfBirth(index),
                     decoration: inputDecoration.copyWith(
                       hintText: 'Date of Birth *',
-                      prefixIcon: Icon(LucideIcons.cake, size: 18,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.5)),
+                      prefixIcon: Icon(
+                        LucideIcons.cake,
+                        size: 18,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                     ),
                     style: const TextStyle(fontSize: 13),
                     validator: (v) =>
@@ -944,8 +1135,13 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                       keyboardType: TextInputType.emailAddress,
                       decoration: inputDecoration.copyWith(
                         hintText: 'Email Address *',
-                        prefixIcon: Icon(LucideIcons.mail, size: 18,
-                            color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                        prefixIcon: Icon(
+                          LucideIcons.mail,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
                       ),
                       style: const TextStyle(fontSize: 13),
                       validator: (v) {
@@ -961,12 +1157,18 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                       keyboardType: TextInputType.phone,
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
-                            RegExp(r'[\d\s\-\+\(\)]'))
+                          RegExp(r'[\d\s\-\+\(\)]'),
+                        ),
                       ],
                       decoration: inputDecoration.copyWith(
                         hintText: 'Phone Number *',
-                        prefixIcon: Icon(LucideIcons.phone, size: 18,
-                            color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                        prefixIcon: Icon(
+                          LucideIcons.phone,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
                       ),
                       style: const TextStyle(fontSize: 13),
                       validator: (v) =>
@@ -979,14 +1181,54 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                   _sectionHeader(theme, 'TRAVEL DOCUMENT'),
                   const SizedBox(height: 12),
 
+                  // Nationality — country picker
+                  GestureDetector(
+                    onTap: () => _pickNationality(index),
+                    child: AbsorbPointer(
+                      child: TextFormField(
+                        controller: t.nationalityC,
+                        decoration: inputDecoration.copyWith(
+                          hintText: 'Nationality *',
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.only(left: 12, right: 4),
+                            child: Text(
+                              t.selectedCountry?.flag ?? '🏳️',
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 40,
+                            minHeight: 0,
+                          ),
+                          suffixIcon: Icon(
+                            LucideIcons.chevronDown,
+                            size: 16,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.4,
+                            ),
+                          ),
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        validator: (v) => (v?.trim().length != 2)
+                            ? 'Select nationality'
+                            : null,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
                   TextFormField(
                     controller: t.passportC,
                     textCapitalization: TextCapitalization.characters,
                     decoration: inputDecoration.copyWith(
                       hintText: 'Passport Number *',
-                      prefixIcon: Icon(LucideIcons.bookOpen, size: 18,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.5)),
+                      prefixIcon: Icon(
+                        LucideIcons.bookOpen,
+                        size: 18,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                     ),
                     style: const TextStyle(fontSize: 13),
                     validator: (v) =>
@@ -994,21 +1236,80 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                   ),
                   const SizedBox(height: 10),
 
+                  // Passport expiry date
                   TextFormField(
-                    controller: t.nationalityC,
-                    textCapitalization: TextCapitalization.characters,
-                    maxLength: 2,
+                    controller: t.passportExpiryC,
+                    readOnly: true,
+                    onTap: () => _pickPassportExpiry(index),
                     decoration: inputDecoration.copyWith(
-                      hintText: 'Nationality (2-letter code) *',
-                      counterText: '',
-                      prefixIcon: Icon(LucideIcons.flag, size: 18,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.5)),
+                      hintText: 'Passport Expiry Date *',
+                      prefixIcon: Icon(
+                        LucideIcons.calendarCheck,
+                        size: 18,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                     ),
                     style: const TextStyle(fontSize: 13),
                     validator: (v) =>
-                        (v?.trim().length != 2) ? '2-letter code' : null,
+                        (v?.trim().isEmpty ?? true) ? 'Required' : null,
                   ),
+
+                  // Address fields — only for primary traveler
+                  if (isPrimary) ...[
+                    const SizedBox(height: 16),
+                    _sectionHeader(theme, 'ADDRESS'),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: t.addressLineC,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: inputDecoration.copyWith(
+                        hintText: 'Street Address *',
+                        prefixIcon: Icon(
+                          LucideIcons.mapPin,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+                      style: const TextStyle(fontSize: 13),
+                      validator: (v) =>
+                          (v?.trim().isEmpty ?? true) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 10),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: t.cityC,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: inputDecoration.copyWith(
+                              hintText: 'City *',
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            validator: (v) =>
+                                (v?.trim().isEmpty ?? true) ? 'Required' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 120,
+                          child: TextFormField(
+                            controller: t.postalCodeC,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: inputDecoration.copyWith(
+                              hintText: 'Postal Code',
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1046,15 +1347,18 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             ),
             child: Row(
               children: [
-                const Icon(LucideIcons.shieldCheck,
-                    size: 16, color: Color(0xFF4CAF50)),
+                const Icon(
+                  LucideIcons.shieldCheck,
+                  size: 16,
+                  color: Color(0xFF4CAF50),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Your payment details are secure and encrypted.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
@@ -1076,8 +1380,11 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             ],
             decoration: inputDecoration.copyWith(
               hintText: 'Card Number *',
-              prefixIcon: Icon(LucideIcons.creditCard, size: 18,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5)),
+              prefixIcon: Icon(
+                LucideIcons.creditCard,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
               suffixIcon: _buildCardBrandIcon(),
             ),
             style: const TextStyle(fontSize: 14, letterSpacing: 1.5),
@@ -1095,12 +1402,14 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             textCapitalization: TextCapitalization.characters,
             decoration: inputDecoration.copyWith(
               hintText: 'Cardholder Name *',
-              prefixIcon: Icon(LucideIcons.user, size: 18,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5)),
+              prefixIcon: Icon(
+                LucideIcons.user,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
             ),
             style: const TextStyle(fontSize: 13),
-            validator: (v) =>
-                (v?.trim().isEmpty ?? true) ? 'Required' : null,
+            validator: (v) => (v?.trim().isEmpty ?? true) ? 'Required' : null,
           ),
           const SizedBox(height: 10),
 
@@ -1117,8 +1426,11 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                   ],
                   decoration: inputDecoration.copyWith(
                     hintText: 'MM/YY *',
-                    prefixIcon: Icon(LucideIcons.calendar, size: 18,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                    prefixIcon: Icon(
+                      LucideIcons.calendar,
+                      size: 18,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                   style: const TextStyle(fontSize: 14, letterSpacing: 1.5),
                   validator: (v) {
@@ -1138,8 +1450,11 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                   decoration: inputDecoration.copyWith(
                     hintText: 'CVV *',
                     counterText: '',
-                    prefixIcon: Icon(LucideIcons.lock, size: 18,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                    prefixIcon: Icon(
+                      LucideIcons.lock,
+                      size: 18,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                   style: const TextStyle(fontSize: 14, letterSpacing: 2),
                   validator: (v) {
@@ -1152,39 +1467,10 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Test mode notice
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.withOpacity(0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(LucideIcons.info, size: 14, color: Colors.amber[700]),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Test mode — No real charges will be made. '
-                    'Use any valid card format (e.g. 4111 1111 1111 1111).',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.amber[700],
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
 
           _buildContinueButton(
             onPressed: _isProcessing ? null : _goToReview,
-            label:
-                _isProcessing ? 'Confirming Price...' : 'Continue to Review',
+            label: _isProcessing ? 'Confirming Price...' : 'Continue to Review',
             icon: _isProcessing ? null : LucideIcons.arrowRight,
             isLoading: _isProcessing,
           ),
@@ -1233,8 +1519,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Travelers summary
-        _sectionHeader(theme,
-            'TRAVELERS (${_travelers.length})'),
+        _sectionHeader(theme, 'TRAVELERS (${_travelers.length})'),
         const SizedBox(height: 8),
         ...List.generate(_travelers.length, (i) {
           final t = _travelers[i];
@@ -1247,10 +1532,27 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             ),
             child: Column(
               children: [
-                _reviewRow(theme, LucideIcons.user,
-                    '${t.firstNameC.text} ${t.lastNameC.text}${i == 0 ? ' (Primary)' : ''}'),
-                _reviewRow(theme, LucideIcons.bookOpen,
-                    'Passport: ${t.passportC.text}'),
+                _reviewRow(
+                  theme,
+                  LucideIcons.user,
+                  '${t.firstNameC.text} ${t.lastNameC.text}${i == 0 ? ' (Primary)' : ''}',
+                ),
+                _reviewRow(
+                  theme,
+                  LucideIcons.flag,
+                  '${t.selectedCountry?.flag ?? ''} ${t.selectedCountry?.name ?? t.nationalityC.text}',
+                ),
+                _reviewRow(
+                  theme,
+                  LucideIcons.bookOpen,
+                  'Passport: ${t.passportC.text}',
+                ),
+                if (t.passportExpiryC.text.isNotEmpty)
+                  _reviewRow(
+                    theme,
+                    LucideIcons.calendarCheck,
+                    'Expires: ${t.passportExpiryC.text}',
+                  ),
                 _reviewRow(theme, LucideIcons.cake, t.dobC.text, isLast: true),
               ],
             ),
@@ -1271,9 +1573,12 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             children: [
               _reviewRow(theme, LucideIcons.creditCard, maskedCard),
               _reviewRow(theme, LucideIcons.user, _cardHolderController.text),
-              _reviewRow(theme, LucideIcons.calendar,
-                  'Exp: ${_cardExpiryController.text}',
-                  isLast: true),
+              _reviewRow(
+                theme,
+                LucideIcons.calendar,
+                'Exp: ${_cardExpiryController.text}',
+                isLast: true,
+              ),
             ],
           ),
         ),
@@ -1290,47 +1595,57 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           ),
           child: Column(
             children: [
-              ...offer.travelerPricings.map((tp) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Traveler ${tp.travelerId} (${tp.travelerType})',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.7)),
+              ...offer.travelerPricings.map(
+                (tp) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Traveler ${tp.travelerId} (${tp.travelerType})',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
-                        Text(
-                          '${tp.currency} ${tp.totalPrice}',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurface),
+                      ),
+                      Text(
+                        '${tp.currency} ${tp.totalPrice}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
                         ),
-                      ],
-                    ),
-                  )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Divider(
-                    color: theme.colorScheme.onSurface.withOpacity(0.1)),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                ),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Total',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface)),
+                  Text(
+                    'Total',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
                   Text(
                     '\$${offer.totalPrice.toStringAsFixed(2)}',
                     style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.accent),
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.accent,
+                    ),
                   ),
                 ],
               ),
@@ -1346,14 +1661,17 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.1),
+              color: Colors.amber.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.withOpacity(0.3)),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.alertTriangle,
-                    size: 16, color: Colors.amber[700]),
+                Icon(
+                  LucideIcons.alertTriangle,
+                  size: 16,
+                  color: Colors.amber[700],
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1376,16 +1694,18 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(LucideIcons.info, size: 14,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4)),
+              Icon(
+                LucideIcons.info,
+                size: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'By proceeding you agree to the airline\'s terms and conditions. '
-                  'In test mode, no actual charge will be made.',
+                  'By proceeding you agree to the airline\'s terms and conditions.',
                   style: TextStyle(
                     fontSize: 11,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     height: 1.4,
                   ),
                 ),
@@ -1405,7 +1725,8 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(_radius)),
+                borderRadius: BorderRadius.circular(_radius),
+              ),
               elevation: 0,
             ),
             icon: _isProcessing
@@ -1413,14 +1734,16 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(LucideIcons.checkCircle, size: 18),
             label: Text(
               _isProcessing
                   ? 'Booking...'
                   : 'Confirm & Pay \$${(_confirmedOffer ?? widget.offer).totalPrice.toStringAsFixed(2)}',
-              style:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -1442,7 +1765,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: theme.colorScheme.onSurface.withOpacity(0.4),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
         letterSpacing: 1.2,
       ),
     );
@@ -1463,7 +1786,8 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radius)),
+            borderRadius: BorderRadius.circular(_radius),
+          ),
           elevation: 0,
         ),
         icon: isLoading
@@ -1471,29 +1795,42 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
             : Icon(icon ?? LucideIcons.arrowRight, size: 18),
-        label: Text(label,
-            style:
-                const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
 
-  Widget _reviewRow(ThemeData theme, IconData icon, String text,
-      {bool isLast = false}) {
+  Widget _reviewRow(
+    ThemeData theme,
+    IconData icon,
+    String text, {
+    bool isLast = false,
+  }) {
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
       child: Row(
         children: [
-          Icon(icon, size: 14,
-              color: theme.colorScheme.onSurface.withOpacity(0.4)),
+          Icon(
+            icon,
+            size: 14,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                  fontSize: 13, color: theme.colorScheme.onSurface),
+                fontSize: 13,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ),
         ],
@@ -1510,7 +1847,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
 class _CardNumberFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final digits = newValue.text.replaceAll(' ', '');
     if (digits.length > 16) return oldValue;
 
@@ -1532,7 +1871,9 @@ class _CardNumberFormatter extends TextInputFormatter {
 class _ExpiryDateFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     final digits = newValue.text.replaceAll('/', '');
     if (digits.length > 4) return oldValue;
 

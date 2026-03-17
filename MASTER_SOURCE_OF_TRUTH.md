@@ -65,9 +65,11 @@ A user's **Trust Score (0-100)** is a mathematical representation of their commu
 
 - **The HTS Ledger (Human Trust System)**:
     - Points and Score are tracked in a verifiable ledger.
-    - **General Activities**: $DIASPORA and PoCT are awarded in real-time **from the beginning** for general PoA activities (like referrals, chatting, hostings) — achieving +1 PoCT and standard $DIASPORA rates individually per action.
-    - **Connection Milestones (The 10× Rule)**: For the 4 core connection categories (Family, Friends, QR Exchange, and Vouch/Verify combined), you earn 1,000 $DIASPORA **instantly** per connection. However, the +10 PoCT is awarded only in batches at 10× intervals (10, 100, 1000 unique connections).
-    - **Profile Completion (The Genesis Exception)**: The only milestone that delays both $DIASPORA and PoCT is the Profile Completion. It pays nothing until fully complete (10 fields), at which point it releases a 10,000 $DIASPORA lump sum and +10 PoCT at once.
+    - **Genesis Milestones (One-Time +10 PoCT)**: Each of the 5 Genesis categories awards **+10 PoCT once** when reaching **10 unique users/fields** (Family, Friends, QR Exchange, Vouch/Verify, Profile). After the first 10, activities continue to earn $DIASPORA but **no more PoCT**. Max from Genesis Milestones = **50 PoCT** (5 × 10).
+    - **Connection DSP**: For connections (Family, Friends, QR, Trust), you earn 1,000 $DIASPORA **instantly** per connection, regardless of milestone status.
+    - **Profile Completion (The Genesis Exception)**: The only milestone that delays both $DIASPORA and PoCT. It pays nothing until fully complete (10 fields), then releases 10,000 $DIASPORA + 10 PoCT at once.
+    - **Trust Slider Staking (The Only Ongoing PoCT Earner)**: Users rate others via a 0-100 trust slider. Rating anyone earns **1,000 $DIASPORA** (vouch reward). Giving **full trust (>90)** locks that same 1,000 $DIASPORA as a stake — no additional cost. Every **10 unique full-trust voters** awards **+1 PoCT** to the trusted user. **Staker Economics**: For each subsequent rater who also gives full trust, the staker earns +10 $DIASPORA. For each rater who gives ≤90, 10 $DIASPORA is burned from the stake. If the stake reaches 0, the full-trust vouch is auto-removed. The staker can exit anytime by sliding below 91 to reclaim remaining balance. Rating ≤90 earns the 1,000 $DIASPORA free and clear.
+    - **HTS Penalties**: Penalties deduct **-1 PoCT per 10 occurrences** (e.g., blocked by 10 users = -1 PoCT). Referrals, events, and verified solutions earn $DIASPORA only, **not PoCT**.
 - **The Genesis Gate**:
     - Every user must accrue a minimum of **10,000 $DIASPORA** to qualify for their first TGE conversion.
 - **The Decile Efficiency Gate**:

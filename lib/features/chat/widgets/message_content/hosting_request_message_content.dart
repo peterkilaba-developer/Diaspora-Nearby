@@ -64,9 +64,7 @@ class _HostingRequestMessageContentState
   String _countryFlag(String? code) {
     if (code == null || code.length != 2) return '';
     final codeUnits = code.toUpperCase().codeUnits;
-    return String.fromCharCodes(
-      codeUnits.map((c) => 0x1F1E6 - 0x41 + c),
-    );
+    return String.fromCharCodes(codeUnits.map((c) => 0x1F1E6 - 0x41 + c));
   }
 
   Future<void> _handleShowInterest() async {
@@ -89,10 +87,7 @@ class _HostingRequestMessageContentState
             ? e.toString().replaceFirst('Exception: ', '')
             : 'Something went wrong. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -109,8 +104,11 @@ class _HostingRequestMessageContentState
 
     // Watch the hosting request for live interest count
     final requestAsync = _requestId != null && _requestId!.isNotEmpty
-        ? ref.watch(communityHostingRequestsProvider(
-            _meta['communityId'] as String? ?? ''))
+        ? ref.watch(
+            communityHostingRequestsProvider(
+              _meta['communityId'] as String? ?? '',
+            ),
+          )
         : null;
 
     // Find this specific request in the stream
@@ -118,12 +116,13 @@ class _HostingRequestMessageContentState
     bool alreadyInterested = false;
     bool isMatched = false;
     if (requestAsync != null) {
-      final requests = requestAsync.valueOrNull ?? [];
+      final requests = requestAsync.value ?? [];
       final thisReq = requests.where((r) => r.id == _requestId).firstOrNull;
       if (thisReq != null) {
         interestedCount = thisReq.interestedHostIds.length;
         alreadyInterested =
-            currentUserId != null && thisReq.interestedHostIds.contains(currentUserId);
+            currentUserId != null &&
+            thisReq.interestedHostIds.contains(currentUserId);
         isMatched = thisReq.status != HostingRequestStatus.pending;
       }
     }
@@ -169,11 +168,7 @@ class _HostingRequestMessageContentState
             ),
             child: Row(
               children: [
-                const Icon(
-                  LucideIcons.plane,
-                  size: 18,
-                  color: AppTheme.accent,
-                ),
+                const Icon(LucideIcons.plane, size: 18, color: AppTheme.accent),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -186,7 +181,10 @@ class _HostingRequestMessageContentState
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.accent,
                     borderRadius: BorderRadius.circular(12),
@@ -264,7 +262,9 @@ class _HostingRequestMessageContentState
                                 style: GoogleFonts.outfit(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
                                 ),
                               ),
                             ),
@@ -308,7 +308,8 @@ class _HostingRequestMessageContentState
                 _detailRow(
                   icon: LucideIcons.calendar,
                   label: 'Dates',
-                  value: '${_formatDate(arrivalDate)} → ${_formatDate(departureDate)}',
+                  value:
+                      '${_formatDate(arrivalDate)} → ${_formatDate(departureDate)}',
                 ),
                 const SizedBox(height: 6),
                 if (_purpose != null && _purpose!.isNotEmpty) ...[
@@ -342,7 +343,10 @@ class _HostingRequestMessageContentState
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -466,9 +470,10 @@ class _HostingRequestMessageContentState
                 child: ElevatedButton.icon(
                   onPressed: () {
                     // Find the actual HostingRequest object to pass to the sheet
-                    final requests = requestAsync?.valueOrNull ?? [];
-                    final thisReq =
-                        requests.where((r) => r.id == _requestId).firstOrNull;
+                    final requests = requestAsync?.value ?? [];
+                    final thisReq = requests
+                        .where((r) => r.id == _requestId)
+                        .firstOrNull;
                     if (thisReq != null) {
                       showModalBottomSheet(
                         context: context,

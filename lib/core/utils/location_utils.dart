@@ -14,7 +14,8 @@ LocationParsed? parseLocationComponents(
 
   for (final component in components) {
     final types = component.types;
-    if (types.contains('sublocality') || types.contains('sublocality_level_1')) {
+    if (types.contains('sublocality') ||
+        types.contains('sublocality_level_1')) {
       sublocality ??= component.name;
     } else if (types.contains('neighborhood')) {
       sublocality ??= component.name; // fallback if no sublocality
@@ -82,7 +83,8 @@ LocationParsed? parseLocationComponents(
 }
 
 class LocationParsed {
-  final String? sublocality; // neighborhood / sub-locality for precise marketplace locations
+  final String?
+  sublocality; // neighborhood / sub-locality for precise marketplace locations
   final String? city;
   final String? state;
   final String country;

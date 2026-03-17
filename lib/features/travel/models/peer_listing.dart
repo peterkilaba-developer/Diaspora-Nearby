@@ -23,11 +23,11 @@ class PeerListing {
   final String? address;
 
   // Structured location for community-based search
-  final String? locality;      // City (e.g. "Houston")
-  final String? subLocality;   // Neighborhood/area (e.g. "Midtown")
-  final String? state;         // State/province (e.g. "Texas")
+  final String? locality; // City (e.g. "Houston")
+  final String? subLocality; // Neighborhood/area (e.g. "Midtown")
+  final String? state; // State/province (e.g. "Texas")
   final String? localityLower; // Lowercase for Firestore queries
-  final String? stateLower;    // Lowercase for Firestore queries
+  final String? stateLower; // Lowercase for Firestore queries
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -46,17 +46,34 @@ class PeerListing {
   final String? make;
   final String? model;
   final int? year;
+  final String? vin;
   final String? transmission; // automatic, manual
   final int? seats;
   final String? fuelType; // petrol, diesel, electric, hybrid
   final String? drivetrain; // FWD, RWD, AWD, 4WD
+  final String? bodyType; // sedan, suv, etc.
+  final String? trim;
+  final String? series;
+  final int? doors;
+  final String? engineSize; // e.g. "2.5L 4-cyl (203 hp)"
+  final String? engineHP;
+  final String? engineLabel; // e.g. "2.5L I4"
+  final int? mileage;
+  final String? vehicleType;
+  final String? abs;
+  final String? airbagLocations;
+  final String? gvwr;
+  final String? electrificationType;
+  final String? batteryKWh;
+  final String? plantCountry;
+  final String? plantCity;
   final List<String>? features; // GPS, AC, bluetooth, etc.
 
   // Hotel-specific
-  final int? starRating;        // 1–5 stars
-  final String? hotelCategory;  // boutique, resort, business, hostel, etc.
-  final String? checkInTime;    // e.g. "15:00"
-  final String? checkOutTime;   // e.g. "11:00"
+  final int? starRating; // 1–5 stars
+  final String? hotelCategory; // boutique, resort, business, hostel, etc.
+  final String? checkInTime; // e.g. "15:00"
+  final String? checkOutTime; // e.g. "11:00"
 
   PeerListing({
     required this.id,
@@ -95,10 +112,27 @@ class PeerListing {
     this.make,
     this.model,
     this.year,
+    this.vin,
     this.transmission,
     this.seats,
     this.fuelType,
     this.drivetrain,
+    this.bodyType,
+    this.trim,
+    this.series,
+    this.doors,
+    this.engineSize,
+    this.engineHP,
+    this.engineLabel,
+    this.mileage,
+    this.vehicleType,
+    this.abs,
+    this.airbagLocations,
+    this.gvwr,
+    this.electrificationType,
+    this.batteryKWh,
+    this.plantCountry,
+    this.plantCity,
     this.features,
     // Hotel
     this.starRating,
@@ -133,7 +167,8 @@ class PeerListing {
       stateLower: json['stateLower'],
       createdAt: json['createdAt'] is Timestamp
           ? (json['createdAt'] as Timestamp).toDate()
-          : DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+          : DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+                DateTime.now(),
       updatedAt: json['updatedAt'] is Timestamp
           ? (json['updatedAt'] as Timestamp).toDate()
           : null,
@@ -151,10 +186,27 @@ class PeerListing {
       make: json['make'],
       model: json['model'],
       year: json['year'],
+      vin: json['vin'],
       transmission: json['transmission'],
       seats: json['seats'],
       fuelType: json['fuelType'],
       drivetrain: json['drivetrain'],
+      bodyType: json['bodyType'],
+      trim: json['trim'],
+      series: json['series'],
+      doors: json['doors'],
+      engineSize: json['engineSize'],
+      engineHP: json['engineHP'],
+      engineLabel: json['engineLabel'],
+      mileage: json['mileage'],
+      vehicleType: json['vehicleType'],
+      abs: json['abs'],
+      airbagLocations: json['airbagLocations'],
+      gvwr: json['gvwr'],
+      electrificationType: json['electrificationType'],
+      batteryKWh: json['batteryKWh'],
+      plantCountry: json['plantCountry'],
+      plantCity: json['plantCity'],
       features: json['features'] != null
           ? List<String>.from(json['features'])
           : null,
@@ -182,24 +234,40 @@ class PeerListing {
     String formatName(String name) {
       if (name.isEmpty) return name;
       if (name == name.toUpperCase() && name.length > 3) {
-        return name.split(' ').map((w) {
-          if (w.isEmpty || w.length <= 2) return w;
-          return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
-        }).join(' ');
+        return name
+            .split(' ')
+            .map((w) {
+              if (w.isEmpty || w.length <= 2) return w;
+              return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+            })
+            .join(' ');
       }
       return name;
     }
 
     // Map chain codes to readable names
     const chainNames = {
-      'HY': 'Hyatt', 'HI': 'Holiday Inn', 'BW': 'Best Western',
-      'MC': 'Marriott', 'HH': 'Hilton', 'SI': 'Sheraton',
-      'WI': 'Westin', 'RT': 'Ritz-Carlton', 'IC': 'InterContinental',
-      'AK': 'Accor', 'YX': 'IHG', 'WH': 'Wyndham',
-      'CW': 'Crowne Plaza', 'EM': 'Embassy Suites',
-      'HL': 'Hilton Garden Inn', 'FN': 'Fairfield Inn',
-      'CI': 'Comfort Inn', 'RA': 'Ramada', 'DI': 'Days Inn',
-      'SB': 'Novotel', 'PH': 'Park Hyatt',
+      'HY': 'Hyatt',
+      'HI': 'Holiday Inn',
+      'BW': 'Best Western',
+      'MC': 'Marriott',
+      'HH': 'Hilton',
+      'SI': 'Sheraton',
+      'WI': 'Westin',
+      'RT': 'Ritz-Carlton',
+      'IC': 'InterContinental',
+      'AK': 'Accor',
+      'YX': 'IHG',
+      'WH': 'Wyndham',
+      'CW': 'Crowne Plaza',
+      'EM': 'Embassy Suites',
+      'HL': 'Hilton Garden Inn',
+      'FN': 'Fairfield Inn',
+      'CI': 'Comfort Inn',
+      'RA': 'Ramada',
+      'DI': 'Days Inn',
+      'SB': 'Novotel',
+      'PH': 'Park Hyatt',
     };
 
     final chainName = hotel.chainCode != null
@@ -299,10 +367,27 @@ class PeerListing {
       if (make != null) 'make': make,
       if (model != null) 'model': model,
       if (year != null) 'year': year,
+      if (vin != null) 'vin': vin,
       if (transmission != null) 'transmission': transmission,
       if (seats != null) 'seats': seats,
       if (fuelType != null) 'fuelType': fuelType,
       if (drivetrain != null) 'drivetrain': drivetrain,
+      if (bodyType != null) 'bodyType': bodyType,
+      if (trim != null) 'trim': trim,
+      if (series != null) 'series': series,
+      if (doors != null) 'doors': doors,
+      if (engineSize != null) 'engineSize': engineSize,
+      if (engineHP != null) 'engineHP': engineHP,
+      if (engineLabel != null) 'engineLabel': engineLabel,
+      if (mileage != null) 'mileage': mileage,
+      if (vehicleType != null) 'vehicleType': vehicleType,
+      if (abs != null) 'abs': abs,
+      if (airbagLocations != null) 'airbagLocations': airbagLocations,
+      if (gvwr != null) 'gvwr': gvwr,
+      if (electrificationType != null) 'electrificationType': electrificationType,
+      if (batteryKWh != null) 'batteryKWh': batteryKWh,
+      if (plantCountry != null) 'plantCountry': plantCountry,
+      if (plantCity != null) 'plantCity': plantCity,
       if (features != null) 'features': features,
       // Hotel
       if (starRating != null) 'starRating': starRating,
@@ -334,7 +419,7 @@ class PeerListing {
   String get subtitleLabel {
     if (type == 'hotel') {
       final parts = <String>[];
-      if (starRating != null) parts.add('${'★' * starRating!}');
+      if (starRating != null) parts.add('★' * starRating!);
       if (hotelCategory != null) parts.add(hotelCategory!);
       if (maxGuests != null) parts.add('Up to $maxGuests guests');
       if (beds != null) parts.add('$beds room${beds! > 1 ? 's' : ''}');
@@ -415,10 +500,12 @@ class PeerBooking {
       hostName: json['hostName'] ?? '',
       startDate: json['startDate'] is Timestamp
           ? (json['startDate'] as Timestamp).toDate()
-          : DateTime.tryParse(json['startDate']?.toString() ?? '') ?? DateTime.now(),
+          : DateTime.tryParse(json['startDate']?.toString() ?? '') ??
+                DateTime.now(),
       endDate: json['endDate'] is Timestamp
           ? (json['endDate'] as Timestamp).toDate()
-          : DateTime.tryParse(json['endDate']?.toString() ?? '') ?? DateTime.now(),
+          : DateTime.tryParse(json['endDate']?.toString() ?? '') ??
+                DateTime.now(),
       guests: json['guests'],
       totalPrice: (json['totalPrice'] ?? 0).toDouble(),
       currency: json['currency'] ?? 'USD',

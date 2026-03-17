@@ -20,7 +20,7 @@ describe("DiasporaToken Proxy", function () {
     describe("Deployment", function () {
         it("Should set the right name and symbol", async function () {
             expect(await token.name()).to.equal("Diaspora");
-            expect(await token.symbol()).to.equal("DSP");
+            expect(await token.symbol()).to.equal("DIASPORA");
         });
 
         it("Should set roles correctly", async function () {

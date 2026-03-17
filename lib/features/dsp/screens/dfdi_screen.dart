@@ -109,11 +109,10 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'assets/icons/logo-original.png',
+                'assets/icons/logo-orange-transparent-80.png',
                 width: 100,
                 height: 100,
                 fit: BoxFit.contain,
-                color: Colors.orange,
               ),
               const SizedBox(height: 32),
               const Text(
@@ -145,7 +144,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.accent.withOpacity(0.1),
+                    color: AppTheme.accent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(color: AppTheme.accent),
                   ),

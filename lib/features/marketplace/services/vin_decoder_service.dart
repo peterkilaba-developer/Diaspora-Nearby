@@ -7,6 +7,8 @@ class VinDecodedData {
   final String? make;
   final String? model;
   final String? year;
+  final String? trim;
+  final String? series;
   final String? fuelType;
   final String? transmission;
   final String? bodyClass;
@@ -19,12 +21,19 @@ class VinDecodedData {
   final String? plantCountry;
   final String? plantCity;
   final String? vehicleType;
+  final String? abs;
+  final String? airbagLocations;
+  final String? gvwr;
+  final String? electrificationType;
+  final String? batteryKWh;
   final String? errorMessage;
 
   const VinDecodedData({
     this.make,
     this.model,
     this.year,
+    this.trim,
+    this.series,
     this.fuelType,
     this.transmission,
     this.bodyClass,
@@ -37,6 +46,11 @@ class VinDecodedData {
     this.plantCountry,
     this.plantCity,
     this.vehicleType,
+    this.abs,
+    this.airbagLocations,
+    this.gvwr,
+    this.electrificationType,
+    this.batteryKWh,
     this.errorMessage,
   });
 
@@ -90,11 +104,15 @@ class VinDecodedData {
   static String _configPrefix(String? config, int cylinders) {
     if (config != null && config.isNotEmpty) {
       final lower = config.toLowerCase();
-      if (lower.contains('in-line') || lower.contains('inline') || lower.contains('straight')) {
+      if (lower.contains('in-line') ||
+          lower.contains('inline') ||
+          lower.contains('straight')) {
         return 'I';
       }
       if (lower.startsWith('v') || lower.contains('v-')) return 'V';
-      if (lower.contains('flat') || lower.contains('opposed') || lower.contains('boxer')) {
+      if (lower.contains('flat') ||
+          lower.contains('opposed') ||
+          lower.contains('boxer')) {
         return 'F';
       }
       if (lower.startsWith('w')) return 'W';
@@ -123,9 +141,7 @@ class VinDecoderService {
 
     try {
       final url = Uri.parse('$_baseUrl/$vin?format=json');
-      final response = await http.get(url).timeout(
-            const Duration(seconds: 10),
-          );
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
         return VinDecodedData(
@@ -165,6 +181,8 @@ class VinDecoderService {
         make: _getString(data, 'Make'),
         model: _getString(data, 'Model'),
         year: _getString(data, 'ModelYear'),
+        trim: _getString(data, 'Trim'),
+        series: _getString(data, 'Series'),
         fuelType: _mapFuelType(_getString(data, 'FuelTypePrimary')),
         transmission: _mapTransmission(rawTransmission),
         bodyClass: _mapBodyClass(_getString(data, 'BodyClass')),
@@ -177,6 +195,22 @@ class VinDecoderService {
         plantCountry: _getString(data, 'PlantCountry'),
         plantCity: _getString(data, 'PlantCity'),
         vehicleType: _getString(data, 'VehicleType'),
+        abs: _getString(data, 'ABS'),
+        airbagLocations: _getString(data, 'AirBagLocFront') != null
+            ? [
+                if (_getString(data, 'AirBagLocFront') != null)
+                  'Front: ${_getString(data, 'AirBagLocFront')}',
+                if (_getString(data, 'AirBagLocSide') != null)
+                  'Side: ${_getString(data, 'AirBagLocSide')}',
+                if (_getString(data, 'AirBagLocCurtain') != null)
+                  'Curtain: ${_getString(data, 'AirBagLocCurtain')}',
+                if (_getString(data, 'AirBagLocKnee') != null)
+                  'Knee: ${_getString(data, 'AirBagLocKnee')}',
+              ].join(', ')
+            : null,
+        gvwr: _getString(data, 'GVWR'),
+        electrificationType: _getString(data, 'ElectrificationLevel'),
+        batteryKWh: _getString(data, 'BatteryKWh'),
       );
     } catch (e) {
       debugPrint('VIN decode error: $e');
@@ -222,8 +256,7 @@ class VinDecoderService {
     if (nhtsaTransmission == null) return null;
     final lower = nhtsaTransmission.toLowerCase();
 
-    if (lower.contains('cvt') ||
-        lower.contains('continuously variable')) {
+    if (lower.contains('cvt') || lower.contains('continuously variable')) {
       return 'CVT';
     }
     if (lower.contains('automatic') ||
@@ -276,7 +309,9 @@ class VinDecoderService {
     final lower = nhtsaDrive.toLowerCase();
 
     // AWD first ("AWD/All-Wheel Drive")
-    if (lower.contains('awd') || lower.contains('all-wheel') || lower.contains('all wheel')) {
+    if (lower.contains('awd') ||
+        lower.contains('all-wheel') ||
+        lower.contains('all wheel')) {
       return 'AWD';
     }
     // 4WD / 4x4

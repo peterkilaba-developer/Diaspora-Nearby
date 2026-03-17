@@ -9,9 +9,7 @@ final unreadNotificationCountProvider = StreamProvider.autoDispose<int>((ref) {
   final user = ref.watch(authRepositoryProvider).currentUser;
   if (user == null) return Stream.value(0);
 
-  return ref
-      .watch(notificationsRepositoryProvider)
-      .watchUnreadCount(user.uid);
+  return ref.watch(notificationsRepositoryProvider).watchUnreadCount(user.uid);
 });
 
 /// Streams the count of pending action-required notifications.
@@ -29,21 +27,32 @@ final pendingActionCountProvider = StreamProvider.autoDispose<int>((ref) {
 /// Streams all notifications for the current user (newest first).
 final notificationsStreamProvider =
     StreamProvider.autoDispose<List<NotificationItem>>((ref) {
-  final user = ref.watch(authRepositoryProvider).currentUser;
-  if (user == null) return Stream.value([]);
+      final user = ref.watch(authRepositoryProvider).currentUser;
+      if (user == null) return Stream.value([]);
 
-  return ref
-      .watch(notificationsRepositoryProvider)
-      .watchNotifications(user.uid);
-});
+      return ref
+          .watch(notificationsRepositoryProvider)
+          .watchNotifications(user.uid);
+    });
 
 /// Streams only action-required notifications (pending user action).
 final actionRequiredNotificationsProvider =
     StreamProvider.autoDispose<List<NotificationItem>>((ref) {
-  final user = ref.watch(authRepositoryProvider).currentUser;
-  if (user == null) return Stream.value([]);
+      final user = ref.watch(authRepositoryProvider).currentUser;
+      if (user == null) return Stream.value([]);
 
-  return ref
-      .watch(notificationsRepositoryProvider)
-      .watchActionRequired(user.uid);
-});
+      return ref
+          .watch(notificationsRepositoryProvider)
+          .watchActionRequired(user.uid);
+    });
+
+/// Streams completed action-required notifications.
+final completedActionsProvider =
+    StreamProvider.autoDispose<List<NotificationItem>>((ref) {
+      final user = ref.watch(authRepositoryProvider).currentUser;
+      if (user == null) return Stream.value([]);
+
+      return ref
+          .watch(notificationsRepositoryProvider)
+          .watchCompletedActions(user.uid);
+    });

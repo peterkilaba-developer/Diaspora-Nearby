@@ -31,7 +31,7 @@ contract DiasporaToken is Initializable, ERC20Upgradeable, ERC20BurnableUpgradea
     }
 
     function initialize(address defaultAdmin, address minter, address upgrader) initializer public {
-        __ERC20_init("Diaspora", "DSP");
+        __ERC20_init("Diaspora", "DIASPORA");
         __ERC20Burnable_init();
         __AccessControl_init();
         __ERC20Permit_init("Diaspora");

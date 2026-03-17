@@ -39,9 +39,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
 
   bool _isSearching = false;
   List<HotelOfferResult> _hotelOffers = [];
-  List<PeerListing> _peerHotels = [];  // community (peer-listed) hotels
-  bool _showSearchForm = false;  // hidden by default — browse-first
-  bool _initialLoading = true;   // tracks first auto-load
+  List<PeerListing> _peerHotels = []; // community (peer-listed) hotels
+  bool _showSearchForm = false; // hidden by default — browse-first
+  bool _initialLoading = true; // tracks first auto-load
 
   // Location data from Google Places
   double? _selectedLat;
@@ -81,8 +81,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   String _toApiDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
-  String _toDisplayDate(DateTime dt) =>
-      '${dt.month}/${dt.day}/${dt.year}';
+  String _toDisplayDate(DateTime dt) => '${dt.month}/${dt.day}/${dt.year}';
 
   @override
   void dispose() {
@@ -93,8 +92,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
     super.dispose();
   }
 
-
-
   /// Auto-loads hotels near the user's current location on screen open.
   /// Falls back to home location if current location is unavailable.
   Future<void> _autoLoadNearbyHotels() async {
@@ -104,7 +101,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       return;
     }
 
-    final profileData = await ref.read(profileRepositoryProvider).getUserProfile(userId);
+    final profileData = await ref
+        .read(profileRepositoryProvider)
+        .getUserProfile(userId);
     if (profileData == null || !mounted) {
       if (mounted) setState(() => _initialLoading = false);
       return;
@@ -156,7 +155,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
           checkInDate: _checkInDateApi,
           checkOutDate: _checkOutDateApi,
           adults: guests,
-          radius: 50,      // wider radius for browse mode
+          radius: 50, // wider radius for browse mode
           maxResults: 30,
         ),
         peerRepo.searchListings(
@@ -198,7 +197,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       }
     }
   }
-
 
   Future<void> _searchPlaces(String query) async {
     if (query.length < 2) {
@@ -262,14 +260,18 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   void _handleSearch() async {
     if (_selectedLat == null || _selectedLng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a destination from the suggestions')),
+        const SnackBar(
+          content: Text('Please select a destination from the suggestions'),
+        ),
       );
       return;
     }
 
     if (_checkInDateApi.isEmpty || _checkOutDateApi.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select check-in and check-out dates')),
+        const SnackBar(
+          content: Text('Please select check-in and check-out dates'),
+        ),
       );
       return;
     }
@@ -294,10 +296,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
           adults: guests,
           maxResults: 15,
         ),
-        peerRepo.searchListings(
-          type: 'hotel',
-          city: _selectedPlaceDescription,
-        ),
+        peerRepo.searchListings(type: 'hotel', city: _selectedPlaceDescription),
       ]);
 
       if (!mounted) return;
@@ -327,22 +326,30 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
 
       if (_hotelOffers.isEmpty && _peerHotels.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No hotels found for this location and dates')),
+          const SnackBar(
+            content: Text('No hotels found for this location and dates'),
+          ),
         );
-        setState(() { _showSearchForm = true; });
+        setState(() {
+          _showSearchForm = true;
+        });
       }
     } on AmadeusException catch (e) {
       if (!mounted) return;
-      setState(() { _isSearching = false; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Search error: ${e.message}')),
-      );
+      setState(() {
+        _isSearching = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Search error: ${e.message}')));
     } catch (e) {
       if (!mounted) return;
-      setState(() { _isSearching = false; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection error: $e')),
-      );
+      setState(() {
+        _isSearching = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Connection error: $e')));
     }
   }
 
@@ -367,7 +374,10 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
     _autoLoadNearbyHotels();
   }
 
-  Future<void> _pickDate(TextEditingController controller, {required bool isCheckIn}) async {
+  Future<void> _pickDate(
+    TextEditingController controller, {
+    required bool isCheckIn,
+  }) async {
     final now = DateTime.now();
 
     DateTime firstDate = now;
@@ -375,7 +385,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
 
     if (isCheckIn) {
       if (_checkInDateApi.isNotEmpty) {
-        try { initialDate = DateTime.parse(_checkInDateApi); } catch (_) {}
+        try {
+          initialDate = DateTime.parse(_checkInDateApi);
+        } catch (_) {}
       }
     } else {
       // Check-out must be after check-in
@@ -383,7 +395,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
         try {
           final checkIn = DateTime.parse(_checkInDateApi);
           firstDate = checkIn.add(const Duration(days: 1));
-          initialDate = checkIn.add(const Duration(days: 1)); // Default to day after check-in
+          initialDate = checkIn.add(
+            const Duration(days: 1),
+          ); // Default to day after check-in
           if (_checkOutDateApi.isNotEmpty) {
             final existing = DateTime.parse(_checkOutDateApi);
             if (existing.isAfter(firstDate)) initialDate = existing;
@@ -438,28 +452,36 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       hintText: 'Where? (city, neighborhood, address)',
-      prefixIcon: Icon(LucideIcons.mapPin, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+      prefixIcon: Icon(
+        LucideIcons.mapPin,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+      ),
       suffixIcon: _isLoadingSuggestions
           ? const Padding(
               padding: EdgeInsets.all(12),
               child: SizedBox(
-                width: 16, height: 16,
+                width: 16,
+                height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
           : _destController.text.isNotEmpty
-              ? IconButton(
-                  icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
-                  onPressed: () => setState(() {
-                    _destController.clear();
-                    _selectedLat = null;
-                    _selectedLng = null;
-                    _selectedPlaceDescription = '';
-                    _placeSuggestions = [];
-                    _showPlaceSuggestions = false;
-                  }),
-                )
-              : null,
+          ? IconButton(
+              icon: Icon(
+                LucideIcons.x,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+              onPressed: () => setState(() {
+                _destController.clear();
+                _selectedLat = null;
+                _selectedLng = null;
+                _selectedPlaceDescription = '';
+                _placeSuggestions = [];
+                _showPlaceSuggestions = false;
+              }),
+            )
+          : null,
     );
 
     return Column(
@@ -481,7 +503,11 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
             padding: const EdgeInsets.only(top: 4, left: 4),
             child: Row(
               children: [
-                Icon(LucideIcons.checkCircle, size: 12, color: Colors.green.shade600),
+                Icon(
+                  LucideIcons.checkCircle,
+                  size: 12,
+                  color: Colors.green.shade600,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   'Location confirmed',
@@ -536,19 +562,29 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                 }
                 return ListTile(
                   dense: true,
-                  leading: Icon(icon, size: 16,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                  leading: Icon(
+                    icon,
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                   title: Text(
                     prediction.primaryText,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: prediction.secondaryText.isNotEmpty
                       ? Text(
                           prediction.secondaryText,
-                          style: TextStyle(fontSize: 11,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
                         )
                       : null,
                   onTap: () => _selectPlace(prediction),
@@ -561,7 +597,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   }
 
   Widget _buildSearchForm() {
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -609,7 +644,12 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   }
 
   /// Builds a section header label (e.g. "Community Hotels", "Partner Hotels")
-  Widget _sectionHeader(ThemeData theme, IconData icon, String label, int count) {
+  Widget _sectionHeader(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    int count,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 6, left: 4),
       child: Row(
@@ -651,11 +691,11 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
     final theme = Theme.of(context);
     final bool showAppBarSearch = !_showSearchForm;
 
-
     // Total results = peer hotels + optional header + API hotels + optional header
     final hasPeer = _peerHotels.isNotEmpty;
     final hasApi = _hotelOffers.isNotEmpty;
-    final totalItems = (hasPeer ? _peerHotels.length + 1 : 0) +
+    final totalItems =
+        (hasPeer ? _peerHotels.length + 1 : 0) +
         (hasApi ? _hotelOffers.length + 1 : 0);
     final hasAnyResults = hasPeer || hasApi;
 
@@ -718,7 +758,11 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                   if (hasPeer) {
                     if (index == cursor) {
                       return _sectionHeader(
-                          theme, LucideIcons.users, 'Community Hotels', _peerHotels.length);
+                        theme,
+                        LucideIcons.users,
+                        'Community Hotels',
+                        _peerHotels.length,
+                      );
                     }
                     cursor++;
                     if (index < cursor + _peerHotels.length) {
@@ -742,7 +786,11 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                   if (hasApi) {
                     if (index == cursor) {
                       return _sectionHeader(
-                          theme, LucideIcons.building2, 'Partner Hotels', _hotelOffers.length);
+                        theme,
+                        LucideIcons.building2,
+                        'Partner Hotels',
+                        _hotelOffers.length,
+                      );
                     }
                     cursor++;
                     if (index < cursor + _hotelOffers.length) {
@@ -757,7 +805,8 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => PeerListingDetailScreen(listing: listing),
+                              builder: (_) =>
+                                  PeerListingDetailScreen(listing: listing),
                             ),
                           );
                         },

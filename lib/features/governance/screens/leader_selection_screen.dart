@@ -22,7 +22,6 @@ import '../../trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-import '../services/mock_election_data.dart';
 
 class LeaderSelectionScreen extends ConsumerStatefulWidget {
   final String unitId;
@@ -41,7 +40,7 @@ class LeaderSelectionScreen extends ConsumerStatefulWidget {
 
 class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
   bool _isSubmitting = false;
-  final bool _isSeedingMock = false;
+
   List<UserPoints>? _cachedQualified;
   Future<List<UserPoints>>? _qualifiedFuture;
 
@@ -88,71 +87,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
         foregroundColor:
             Theme.of(context).appBarTheme.foregroundColor ??
             Theme.of(context).colorScheme.onSurface,
-        actions: [
-          if (MockElectionData.enabled)
-            _isSeedingMock
-                ? const Padding(
-                    padding: EdgeInsets.all(12.0),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : PopupMenuButton<String>(
-                    icon: const Icon(LucideIcons.flaskConical, size: 20),
-                    tooltip: 'Mock Election Data',
-                    onSelected: (value) {
-                      if (value == 'seed') {
-                        MockElectionData.seedAll();
-                        _qualifiedFuture = null;
-                        _cachedQualified = null;
-                        _loadQualifiedCandidates();
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Mock data seeded'),    
-                            backgroundColor: AppTheme.accent,
-                          ),
-                        );
-                      } else if (value == 'clean') {
-                        MockElectionData.cleanAll();
-                        _qualifiedFuture = null;
-                        _cachedQualified = null;
-                        _loadQualifiedCandidates();
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Mock data cleaned'),  
-                            backgroundColor: AppTheme.warning,
-                          ),
-                        );
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'seed',
-                        child: Row(
-                          children: [
-                            Icon(LucideIcons.sprout, size: 18),   
-                            SizedBox(width: 8),
-                            Text('Seed Mock Data'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'clean',
-                        child: Row(
-                          children: [
-                            Icon(LucideIcons.trash2, size: 18),   
-                            SizedBox(width: 8),
-                            Text('Clean Mock Data'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-        ],
+        actions: const [],
       ),
       body: StreamBuilder<GovernanceUnit?>(
         stream: governanceUnitAsync,
@@ -192,10 +127,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                 isActiveElection: true, // Continuous voting = always active
               );
 
-          // Inject mock candidates if mock data is seeded
-          final displayUnit = MockElectionData.isSeeded
-              ? MockElectionData.injectMockCandidates(activeUnit)
-              : activeUnit;
+          final displayUnit = activeUnit;
           final currentUser = ref.watch(authRepositoryProvider).currentUser;
           final profileAsync = currentUser != null
               ? ref
@@ -218,72 +150,72 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                   await Future.delayed(const Duration(milliseconds: 500));
                 },
                 child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    key: const ValueKey('governance-header'),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16.0,
-                        horizontal: AppTheme.pageHorizontalPadding,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [_buildHeader(displayUnit, profile)],
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    key: const ValueKey('governance-content'),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.pageHorizontalPadding,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ⑤ TOP — Elected leaders
-                          const SizedBox(height: 16),
-                          _buildCurrentCouncil(displayUnit),
-
-                          // ④ Election progress — top 3 per role
-                          const SizedBox(height: 24),
-                          _buildElectionProgress(displayUnit),
-
-                          // ③ Election tally / running candidates
-                          const SizedBox(height: 24),
-                          _buildRunningCandidatesSection(
-                            displayUnit,
-                            currentUser?.uid,
-                          ),
-
-                          // ② Qualified candidates pool
-                          const SizedBox(height: 24),
-                          _buildQualifiedCandidatesPool(
-                            displayUnit,
-                            currentUser?.uid,
-                          ),
-
-                          // ① Election rules
-                          const SizedBox(height: 24),
-                          _buildElectionValiditySection(displayUnit, profile),
-
-                          // ① Candidate eligibility (auto-qualified)
-                          const SizedBox(height: 24),
-                          _buildCandidateEligibilitySection(
-                            displayUnit,
-                            profile,
-                          ),
-
-                          SizedBox(
-                            height:
-                                MediaQuery.of(context).padding.bottom + 16,
-                          ),
-                        ],
+                  slivers: [
+                    SliverToBoxAdapter(
+                      key: const ValueKey('governance-header'),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16.0,
+                          horizontal: AppTheme.pageHorizontalPadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [_buildHeader(displayUnit, profile)],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    SliverToBoxAdapter(
+                      key: const ValueKey('governance-content'),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.pageHorizontalPadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ⑤ TOP — Elected leaders
+                            const SizedBox(height: 16),
+                            _buildCurrentCouncil(displayUnit),
+
+                            // ④ Election progress — top 3 per role
+                            const SizedBox(height: 24),
+                            _buildElectionProgress(displayUnit),
+
+                            // ③ Election tally / running candidates
+                            const SizedBox(height: 24),
+                            _buildRunningCandidatesSection(
+                              displayUnit,
+                              currentUser?.uid,
+                            ),
+
+                            // ② Qualified candidates pool
+                            const SizedBox(height: 24),
+                            _buildQualifiedCandidatesPool(
+                              displayUnit,
+                              currentUser?.uid,
+                            ),
+
+                            // ① Election rules
+                            const SizedBox(height: 24),
+                            _buildElectionValiditySection(displayUnit, profile),
+
+                            // ① Candidate eligibility (auto-qualified)
+                            const SizedBox(height: 24),
+                            _buildCandidateEligibilitySection(
+                              displayUnit,
+                              profile,
+                            ),
+
+                            SizedBox(
+                              height:
+                                  MediaQuery.of(context).padding.bottom + 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -481,24 +413,20 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _buildEligibilityCriterion(
-                  '100% Complete Profile (+10 PoCT)',
+                  '100+ Days on App',
+                  isMet: profile?.createdAt != null &&
+                      DateTime.now()
+                              .difference(profile!.createdAt!)
+                              .inDays >=
+                          100,
+                ),
+                _buildEligibilityCriterion(
+                  'Admin of 100+ Member Group Chat',
                   isMet: trustData?.isCouncilEligible ?? false,
                 ),
                 _buildEligibilityCriterion(
-                  '10+ Family Connections (+10 PoCT)',
-                  isMet: (trustData?.uniqueFamilyCount ?? 0) >= 10,
-                ),
-                _buildEligibilityCriterion(
-                  '10+ Trust Vouches (+10 PoCT)',
-                  isMet: (trustData?.uniqueVouchCount ?? 0) >= 10,
-                ),
-                _buildEligibilityCriterion(
-                  '10+ Verifications (+10 PoCT)',
-                  isMet: (trustData?.uniqueVerificationCount ?? 0) >= 10,
-                ),
-                _buildEligibilityCriterion(
-                  '10+ QR Connections (+10 PoCT)',
-                  isMet: (trustData?.uniqueQrCount ?? 0) >= 10,
+                  'PoCT Score ≥ 90',
+                  isMet: (trustData?.trustScore ?? 0) >= 90,
                 ),
               ],
             );
@@ -608,7 +536,8 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
       content = _buildSectionEmptyState(
         icon: LucideIcons.barChart3,
         title: 'No Election Data',
-        message: 'Once candidates declare their candidacy, the top contenders for each role will appear here.',
+        message:
+            'Once candidates declare their candidacy, the top contenders for each role will appear here.',
       );
     } else {
       content = Column(
@@ -627,7 +556,11 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(roleIcon, size: 14, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    roleIcon,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     roleName,
@@ -646,26 +579,19 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                     .watch(governanceServiceProvider)
                     .watchRoleCandidateVotes(widget.unitId, role),
                 builder: (context, voteSnapshot) {
-                  final firestoreVotes = voteSnapshot.data ?? {};
-                  // Merge mock vote summaries for mock candidates
-                  final voteSummaries = MockElectionData.isSeeded
-                      ? {...firestoreVotes, ...MockElectionData.getMockVoteSummaries(role)}
-                      : firestoreVotes;
+                  final voteSummaries = voteSnapshot.data ?? {};
 
                   // Build sorted list of candidates by favorable rate
-                  final ranked = candidateIds.map((id) {
-                    return voteSummaries[id] ??
-                        VoteSummary(
-                          candidateId: id,
-                          role: role,
-                        );
-                  }).toList()
-                    ..sort((a, b) {
-                      // Sort by favorable rate desc, then total votes desc
-                      final cmp = b.favorableRate.compareTo(a.favorableRate);
-                      if (cmp != 0) return cmp;
-                      return b.totalVotes.compareTo(a.totalVotes);
-                    });
+                  final ranked =
+                      candidateIds.map((id) {
+                        return voteSummaries[id] ??
+                            VoteSummary(candidateId: id, role: role);
+                      }).toList()..sort((a, b) {
+                        // Sort by favorable rate desc, then total votes desc
+                        final cmp = b.favorableRate.compareTo(a.favorableRate);
+                        if (cmp != 0) return cmp;
+                        return b.totalVotes.compareTo(a.totalVotes);
+                      });
 
                   // Take top 3
                   final top3 = ranked.take(3).toList();
@@ -696,8 +622,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
         title: 'Election Progress',
         icon: LucideIcons.barChart3,
       ),
-      description:
-          'Live leaderboard showing top 3 candidates for each role.',
+      description: 'Live leaderboard showing top 3 candidates for each role.',
       child: content,
     );
   }
@@ -742,8 +667,8 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               title: 'No Qualified Candidates',
               message:
                   'No members currently meet all eligibility criteria. '
-                  'Members must complete their profile, and reach 10+ connections '
-                  'in Family, QR, Trust Vouches and Verifications.',
+                  'Members must be on the app for 100+ days, be an admin of a '
+                  'group chat with 100+ members, and have a PoCT score of 90+.',
             );
           }
 
@@ -788,10 +713,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.2),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -812,10 +736,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                 'Your candidacy will be announced to the community.',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(height: 24),
@@ -830,9 +753,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                       : () => _confirmRoleSelection(unit, userId, role),
                 );
               }),
-              SizedBox(
-                height: MediaQuery.of(context).padding.bottom + 8,
-              ),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
             ],
           ),
         );
@@ -891,9 +812,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
         _loadQualifiedCandidates(); // Refresh qualified pool
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              '🗳️ Your candidacy for $roleName has been announced!',
-            ),
+            content: Text('Your candidacy for $roleName has been announced!'),
             backgroundColor: AppTheme.accent,
           ),
         );
@@ -901,9 +820,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -949,7 +868,11 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(roleIcon, size: 14, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    roleIcon,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     roleName,
@@ -969,11 +892,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                     .watch(governanceServiceProvider)
                     .watchRoleCandidateVotes(widget.unitId, role),
                 builder: (context, voteSnapshot) {
-                  final firestoreVotes = voteSnapshot.data ?? {};
-                  // Merge mock vote summaries for mock candidates
-                  final voteSummaries = MockElectionData.isSeeded
-                      ? {...firestoreVotes, ...MockElectionData.getMockVoteSummaries(role)}
-                      : firestoreVotes;
+                  final voteSummaries = voteSnapshot.data ?? {};
 
                   return Column(
                     children: candidateIds.map((candidateId) {
@@ -1012,7 +931,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
         icon: LucideIcons.vote,
       ),
       description:
-          'Candidates who declared their candidacy. Cast your vote: Yay, Nay, or Hold.',
+          'Candidates who declared their candidacy. Cast your vote: Yay, Abstain, or Nay.',
       child: content,
     );
   }
@@ -1039,15 +958,11 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
           _buildEligibilityCriterion(
             'Minimum 4 community members to enable voting',
           ),
-          _buildEligibilityCriterion(
-            '>50% Yay votes required for winner',
-          ),
+          _buildEligibilityCriterion('>50% Yay votes required for winner'),
           _buildEligibilityCriterion(
             'Leaders below 50% favorable are automatically voted out',
           ),
-          _buildEligibilityCriterion(
-            'Continuous voting — no election windows',
-          ),
+          _buildEligibilityCriterion('Continuous voting — no election windows'),
           _buildEligibilityCriterion(
             isLocal
                 ? 'Candidates are qualified, trusted community members'
@@ -1067,38 +982,23 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
   ) async {
     setState(() => _isSubmitting = true);
     try {
-      if (MockElectionData.isSeeded && MockElectionData.isMockId(candidateId)) {
-        // Mock candidate — record vote in-memory only
-        MockElectionData.castMockVote(role, candidateId, verdict);
-      } else if (MockElectionData.enabled) {
-        // Real candidate in test mode — use timestamped voterId
-        final testVoterId =
-            '${voterId}_${DateTime.now().millisecondsSinceEpoch}';
-        await ref.read(governanceServiceProvider).castRoleVote(
-          unitId: unit.id,
-          voterId: testVoterId,
-          candidateId: candidateId,
-          role: role,
-          verdict: verdict,
-        );
-      } else {
-        // Production — normal 1-vote-per-user
-        await ref.read(governanceServiceProvider).castRoleVote(
-          unitId: unit.id,
-          voterId: voterId,
-          candidateId: candidateId,
-          role: role,
-          verdict: verdict,
-        );
-      }
+      await ref
+          .read(governanceServiceProvider)
+          .castRoleVote(
+            unitId: unit.id,
+            voterId: voterId,
+            candidateId: candidateId,
+            role: role,
+            verdict: verdict,
+          );
 
       if (mounted) {
         setState(() => _isSubmitting = false);
         final verdictLabel = verdict == VoteVerdict.yay
-            ? 'Yay ✅'
+            ? 'Yay'
             : verdict == VoteVerdict.nay
-            ? 'Nay ❌'
-            : 'Hold ⏸️';
+            ? 'Nay'
+            : 'Abstain';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Vote recorded: $verdictLabel'),
@@ -1109,9 +1009,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error casting vote: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error casting vote: $e')));
       }
     }
   }
@@ -1133,7 +1033,8 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
     return Container(
       key: key,
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 20),
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(
         color: AppTheme.cardDecoration(context).color,
         borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
@@ -1248,7 +1149,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 8),
@@ -1257,7 +1160,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.35),
             ),
           ),
         ],
@@ -1270,32 +1175,26 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
 // HELPER WIDGETS
 // ════════════════════════════════════════════
 
-enum LeaderTileVariant { council, candidate, signer, default_t }
+enum LeaderTileVariant { council, candidate, signer, defaultVariant }
 
 /// Tile for displaying a leader / council member.
 class _LeaderTile extends ConsumerWidget {
   final String userId;
-  final UserPoints? userPoints;
-  final bool isSelected;
-  final ValueChanged<String?>? onChanged;
   final bool showCheckmark;
   final LeaderTileVariant variant;
-  final Widget? trailing;
   final String? subtitle;
 
   const _LeaderTile({
     required this.userId,
     this.showCheckmark = false,
-    this.variant = LeaderTileVariant.default_t,
+    this.variant = LeaderTileVariant.defaultVariant,
     this.subtitle,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileByIdProvider(userId));
-    final pointsAsync = userPoints != null
-        ? AsyncValue.data(userPoints)
-        : ref.watch(userPointsProvider(userId));
+    final pointsAsync = ref.watch(userPointsProvider(userId));
 
     final isSigner = variant == LeaderTileVariant.signer;
     final isCandidate = variant == LeaderTileVariant.candidate;
@@ -1308,7 +1207,7 @@ class _LeaderTile extends ConsumerWidget {
         final theme = Theme.of(context);
         return pointsAsync.when(
           data: (points) {
-            final up = points ?? userPoints;
+            final up = points;
             final flag = profile.homeCountryCode != null
                 ? getCountryByCode(profile.homeCountryCode!)?.flag ?? '🗺️'
                 : '🗺️';
@@ -1316,18 +1215,12 @@ class _LeaderTile extends ConsumerWidget {
 
             return _buildTileContainer(
               context,
-              isSelected: isSelected,
+              isSelected: false,
               background: isSigner
-                  ? (isSelected
-                        ? AppTheme.warning.withValues(alpha: 0.2)
-                        : AppTheme.warning.withValues(alpha: 0.05))
+                  ? AppTheme.warning.withValues(alpha: 0.05)
                   : null,
-              borderColor: isSigner
-                  ? (isSelected
-                      ? Colors.amber.shade800
-                      : Colors.amber.shade200)
-                  : null,
-              onTap: onChanged != null ? () => onChanged!(userId) : null,
+              borderColor: isSigner ? Colors.amber.shade200 : null,
+              onTap: null,
               child: Row(
                 children: [
                   _buildAvatar(context, profile, isSigner: isSigner),
@@ -1392,8 +1285,9 @@ class _LeaderTile extends ConsumerWidget {
                                   fontSize: 12,
                                   color: isSigner
                                       ? AppTheme.warning.withValues(alpha: 0.8)
-                                      : theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.6),
+                                      : theme.colorScheme.onSurface.withValues(
+                                          alpha: 0.6,
+                                        ),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1403,9 +1297,7 @@ class _LeaderTile extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  if (trailing != null)
-                    trailing!
-                  else if (showCheckmark)
+                  if (showCheckmark)
                     Icon(
                       LucideIcons.checkCircle2,
                       size: 20,
@@ -1506,11 +1398,7 @@ class _QualifiedCandidateTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // For mock candidates, use in-memory profile instead of Firestore
-    final mockProfile = MockElectionData.getMockProfile(userId);
-    final profileAsync = mockProfile != null
-        ? AsyncValue.data(mockProfile)
-        : ref.watch(userProfileByIdProvider(userId));
+    final profileAsync = ref.watch(userProfileByIdProvider(userId));
     final pointsAsync = userPoints != null
         ? AsyncValue.data(userPoints)
         : ref.watch(userPointsProvider(userId));
@@ -1555,8 +1443,9 @@ class _QualifiedCandidateTile extends ConsumerWidget {
                           )
                         : CircleAvatar(
                             radius: 24,
-                            backgroundColor:
-                                AppTheme.accent.withValues(alpha: 0.1),
+                            backgroundColor: AppTheme.accent.withValues(
+                              alpha: 0.1,
+                            ),
                             child: Text(
                               profile.firstName[0],
                               style: const TextStyle(
@@ -1625,8 +1514,9 @@ class _QualifiedCandidateTile extends ConsumerWidget {
                                 '${up?.trustScore ?? 0} PoCT · Qualified',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1720,7 +1610,11 @@ class _RoleSelectionTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(roleIcon, size: 28, color: Theme.of(context).colorScheme.primary),
+            Icon(
+              roleIcon,
+              size: 28,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -1793,17 +1687,13 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // For mock candidates, use in-memory profile instead of Firestore
-    final mockProfile = MockElectionData.getMockProfile(candidateId);
-    final profileAsync = mockProfile != null
-        ? AsyncValue.data(mockProfile)
-        : ref.watch(userProfileByIdProvider(candidateId));
+    final profileAsync = ref.watch(userProfileByIdProvider(candidateId));
     final theme = Theme.of(context);
 
     final yay = voteSummary?.yayCount ?? 0;
     final nay = voteSummary?.nayCount ?? 0;
-    final hold = voteSummary?.holdCount ?? 0;
-    final total = yay + nay + hold;
+    final abstain = voteSummary?.abstainCount ?? 0;
+    final total = yay + nay + abstain;
     final favorableRate = voteSummary?.favorableRate ?? 0.0;
     final isWinning = voteSummary?.isWinning ?? false;
 
@@ -1821,10 +1711,10 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(
-              AppTheme.standardBorderRadius,
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.4,
             ),
+            borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1841,8 +1731,9 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
                         )
                       : CircleAvatar(
                           radius: 22,
-                          backgroundColor:
-                              AppTheme.accent.withValues(alpha: 0.1),
+                          backgroundColor: AppTheme.accent.withValues(
+                            alpha: 0.1,
+                          ),
                           child: Text(
                             profile.firstName[0],
                             style: const TextStyle(
@@ -1858,8 +1749,7 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            Text(flag,
-                                style: const TextStyle(fontSize: 14)),
+                            Text(flag, style: const TextStyle(fontSize: 14)),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
@@ -1904,8 +1794,9 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
                               fontSize: 12,
                               color: isWinning
                                   ? Colors.green
-                                  : theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.5),
+                                  : theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.5,
+                                    ),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -1926,26 +1817,20 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
                       if (yay > 0)
                         Expanded(
                           flex: yay,
-                          child: Container(
-                            height: 1,
-                            color: Colors.green,
-                          ),
+                          child: Container(height: 0.5, color: Colors.green),
                         ),
                       if (nay > 0)
                         Expanded(
                           flex: nay,
                           child: Container(
-                            height: 1,
+                            height: 0.5,
                             color: Colors.redAccent,
                           ),
                         ),
-                      if (hold > 0)
+                      if (abstain > 0)
                         Expanded(
-                          flex: hold,
-                          child: Container(
-                            height: 1,
-                            color: Colors.amber,
-                          ),
+                          flex: abstain,
+                          child: Container(height: 0.5, color: Colors.amber),
                         ),
                     ],
                   ),
@@ -1953,9 +1838,7 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
               ],
 
               // Vote action buttons — Yay left, Abstain center, Nay right
-              // When mock data is enabled, allow self-voting for testing.
-              if (currentUserId != null &&
-                  (MockElectionData.enabled || !isSelf)) ...[
+              if (currentUserId != null && !isSelf) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -1971,10 +1854,10 @@ class _RoleCandidateVoteCard extends ConsumerWidget {
                     _VoteButton(
                       label: 'Abstain',
                       icon: LucideIcons.minus,
-                      count: hold,
+                      count: abstain,
                       color: Colors.amber,
                       isSubmitting: isSubmitting,
-                      onTap: () => onVote(VoteVerdict.hold),
+                      onTap: () => onVote(VoteVerdict.abstain),
                     ),
                     const SizedBox(width: 8),
                     _VoteButton(
@@ -2012,10 +1895,7 @@ class _ElectionProgressRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mockProfile = MockElectionData.getMockProfile(candidateId);
-    final profileAsync = mockProfile != null
-        ? AsyncValue.data(mockProfile)
-        : ref.watch(userProfileByIdProvider(candidateId));
+    final profileAsync = ref.watch(userProfileByIdProvider(candidateId));
     final theme = Theme.of(context);
 
     // Rank labels
@@ -2042,7 +1922,9 @@ class _ElectionProgressRow extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.4,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -2064,8 +1946,9 @@ class _ElectionProgressRow extends ConsumerWidget {
                 backgroundImage: profile.profileImage.isNotEmpty
                     ? NetworkImage(profile.profileImage)
                     : null,
-                backgroundColor:
-                    theme.colorScheme.primary.withValues(alpha: 0.15),
+                backgroundColor: theme.colorScheme.primary.withValues(
+                  alpha: 0.15,
+                ),
                 child: profile.profileImage.isEmpty
                     ? Text(
                         profile.firstName.substring(0, 1).toUpperCase(),
@@ -2100,9 +1983,10 @@ class _ElectionProgressRow extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(2),
                       child: LinearProgressIndicator(
                         value: voteSummary.favorableRate,
-                        minHeight: 1,
-                        backgroundColor:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                        minHeight: 0.5,
+                        backgroundColor: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.08,
+                        ),
                         valueColor: AlwaysStoppedAnimation<Color>(
                           isWinning ? AppTheme.accent : AppTheme.warning,
                         ),
@@ -2165,7 +2049,9 @@ class _VoteButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final buttonBg = theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5);
+    final buttonBg = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.5,
+    );
     return Expanded(
       child: GestureDetector(
         onTap: isSubmitting ? null : onTap,
@@ -2173,9 +2059,7 @@ class _VoteButton extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSubmitting
-                ? buttonBg.withValues(alpha: 0.3)
-                : buttonBg,
+            color: isSubmitting ? buttonBg.withValues(alpha: 0.3) : buttonBg,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
@@ -2193,15 +2077,36 @@ class _VoteButton extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(icon, size: 14, color: color),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       Text(
-                        count > 0 ? '$label $count' : label,
+                        label,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurface,
                         ),
                       ),
+                      if (count > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            count.toString(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
           ),

@@ -16,11 +16,14 @@
     "dependencies": {
         "ethers": "^6.16.0",
         "firebase-admin": "^11.8.0",
-        "firebase-functions": "^4.6.0"
+        "firebase-functions": "^4.6.0",
+        "googleapis": "^171.4.0",
+        "stripe": "^20.4.0"
     },
     "devDependencies": {
         "eslint": "^8.15.0",
-        "eslint-config-google": "^0.14.0"
+        "eslint-config-google": "^0.14.0",
+        "sharp": "^0.34.5"
     },
     "private": true
 }

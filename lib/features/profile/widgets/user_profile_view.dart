@@ -15,9 +15,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/profile/widgets/relationship_card.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 
-
-
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 
 
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
@@ -32,11 +31,16 @@ import 'package:diaspora_nearby/features/profile/widgets/relationship_response_m
 
 import 'package:diaspora_nearby/features/profile/widgets/profile_qr_code_dialog.dart';
 
+import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
+import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
+
 class UserProfileView extends ConsumerWidget {
   final ProfileData profile;
   final bool isSelf;
   final bool isEnforced;
   final VoidCallback onEdit;
+  final Future<bool?> Function(List<String> missingFields)?
+  onShowCompleteProfile;
 
   final double? distanceKm;
   final VoidCallback onRefresh;
@@ -78,7 +82,7 @@ class UserProfileView extends ConsumerWidget {
     required this.isSelf,
     this.isEnforced = false,
     required this.onEdit,
-
+    this.onShowCompleteProfile,
     this.distanceKm,
     required this.onRefresh,
     this.src,
@@ -105,6 +109,8 @@ class UserProfileView extends ConsumerWidget {
           if (isSelf)
             IconButton(
               onPressed: () {
+                // Always open QR dialog directly — it has its own
+                // built-in profile completion flow if fields are missing.
                 showDialog(
                   context: context,
                   builder: (context) => ProfileQRCodeDialog(profile: profile),
@@ -156,7 +162,10 @@ class UserProfileView extends ConsumerWidget {
                 children: [
                   if (!isSelf && profile.uid != null)
                     _PendingRequestMonitor(profileUserId: profile.uid!),
-                  // User Card (Safe)
+
+                  // ══════════════════════════════════
+                  // 🔝 GLOBAL USER CARD (stays on top)
+                  // ══════════════════════════════════
                   UserCardView(
                     key: const ValueKey('view_UserCard'),
                     user: profile,
@@ -166,16 +175,20 @@ class UserProfileView extends ConsumerWidget {
                     onChatTap: isSelf
                         ? null
                         : () => context.push('/chat/direct/${profile.uid}'),
-                    isStatic: true, // We are in View mode
+                    isStatic: true,
                     distanceKm: distanceKm,
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(AppTheme.standardBorderRadius),
                     ),
                   ),
 
-                  // const SizedBox(height: 16), // REMOVED GAP
+                  // 🎚️ TRUST SLIDER — removed from profile page.
+                  // Vouching is only available on the chat "show more"
+                  // page where users have had prior interaction.
 
-                  // [NEW] Public DSP Balance Card (Visible to others)
+                  // ══════════════════════════════════
+                  // 📊 COMMUNITY STATUS CARD (no onTap)
+                  // ══════════════════════════════════
                   if (!isSelf && profile.uid != null) ...[
                     Consumer(
                       builder: (context, ref, child) {
@@ -193,26 +206,21 @@ class UserProfileView extends ConsumerWidget {
                               '#,###',
                             ).format(points);
 
-                            // Get trust score (default to 0 if loading/error)
                             final double trustScore =
                                 trustAsync.value?.trustScore ?? 0;
                             final double progress = trustScore / 100.0;
 
-                            // Determine Color based on Trust Score
                             Color trustColor;
                             if (trustScore <= 20) {
-                              trustColor = AppTheme.error; // Red (0-20)
+                              trustColor = AppTheme.error;
                             } else if (trustScore <= 40) {
-                              trustColor =
-                                  Colors.deepOrange; // Deep Orange (21-40)
+                              trustColor = Colors.deepOrange;
                             } else if (trustScore <= 60) {
-                              trustColor = Colors.amber; // Amber (41-60)
+                              trustColor = Colors.amber;
                             } else if (trustScore <= 80) {
-                              trustColor =
-                                  Colors.lightGreen; // Light Green (61-80)
+                              trustColor = Colors.lightGreen;
                             } else {
-                              trustColor =
-                                  AppTheme.accent; // Green/Accent (81-100)
+                              trustColor = AppTheme.accent;
                             }
 
                             return Container(
@@ -227,7 +235,6 @@ class UserProfileView extends ConsumerWidget {
                                     AppTheme.standardBorderRadius,
                                   ),
                                 ),
-                                // Border removed as per request
                               ),
                               child: Row(
                                 children: [
@@ -238,16 +245,16 @@ class UserProfileView extends ConsumerWidget {
                                     child: Stack(
                                       alignment: Alignment.center,
                                       children: [
-                                        // Background Track
                                         CircularProgressIndicator(
                                           value: 1.0,
                                           strokeWidth: 4,
                                           valueColor:
                                               AlwaysStoppedAnimation<Color>(
-                                                trustColor.withValues(alpha: 0.2),
+                                                trustColor.withValues(
+                                                  alpha: 0.2,
+                                                ),
                                               ),
                                         ),
-                                        // Progress Indicator
                                         CircularProgressIndicator(
                                           value: progress,
                                           strokeWidth: 4,
@@ -257,7 +264,6 @@ class UserProfileView extends ConsumerWidget {
                                               ),
                                           strokeCap: StrokeCap.round,
                                         ),
-                                        // Text Percentage
                                         Text(
                                           '${trustScore.toInt()}',
                                           style: TextStyle(
@@ -270,12 +276,10 @@ class UserProfileView extends ConsumerWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  // Labels Grid
                                   Expanded(
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // Top Row: Community Status & Balance
                                         Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
@@ -292,8 +296,8 @@ class UserProfileView extends ConsumerWidget {
                                             Text(
                                               'Balance',
                                               style: TextStyle(
-                                                color: trustColor.withValues(alpha: 
-                                                  0.8,
+                                                color: trustColor.withValues(
+                                                  alpha: 0.8,
                                                 ),
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w500,
@@ -302,7 +306,6 @@ class UserProfileView extends ConsumerWidget {
                                           ],
                                         ),
                                         const SizedBox(height: 4),
-                                        // Middle Row: PoCT Score & Balance Amount
                                         Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
@@ -327,7 +330,6 @@ class UserProfileView extends ConsumerWidget {
                                           ],
                                         ),
                                         const SizedBox(height: 4),
-                                        // Bottom Row: Days Active
                                         Builder(
                                           builder: (context) {
                                             final signupDate =
@@ -336,13 +338,13 @@ class UserProfileView extends ConsumerWidget {
                                             final daysActive = DateTime.now()
                                                 .difference(signupDate)
                                                 .inDays;
+                                            final formattedDate =
+                                                DateFormat('MMM d, yyyy')
+                                                    .format(signupDate);
                                             return Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
                                               children: [
                                                 Text(
-                                                  'Active: $daysActive days',
+                                                  'Member Since: $formattedDate · $daysActive Days',
                                                   style: TextStyle(
                                                     color: trustColor
                                                         .withValues(alpha: 0.8),
@@ -350,7 +352,6 @@ class UserProfileView extends ConsumerWidget {
                                                     fontStyle: FontStyle.italic,
                                                   ),
                                                 ),
-                                                const SizedBox(),
                                               ],
                                             );
                                           },
@@ -372,16 +373,55 @@ class UserProfileView extends ConsumerWidget {
 
                   const SizedBox(height: 16),
 
-                  // [NEW] In-Person QR Connection (Priority)
-                  if (profile.firstQrConnection != null)
+                  // ══════════════════════════════════════════
+                  // 📍 GENESIS MILESTONES — Section Header
+                  // ══════════════════════════════════════════
+                  _buildPoctSectionHeader(
+                    context,
+                    title: 'Genesis Milestones',
+                    subtitle: 'One-time +10 PoCT at first 10 unique',
+                    icon: LucideIcons.trophy,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ─────────────────────────────────────
+                  // 1️⃣ PROFILE COMPLETION (X/12)
+                  // ─────────────────────────────────────
+                  _buildMilestoneSubHeader(
+                    context,
+                    title: 'Profile Completion',
+                    icon: LucideIcons.userCheck,
+                    current: profile.completedMilestoneFieldCount,
+                    target: profile.totalMilestoneFields,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // -- Bio --
+                  if (profile.bio != null && profile.bio!.isNotEmpty)
                     _safelyBuild(
-                      () => _buildQRConnectionSection(context, ref),
-                      label: 'QRConnection',
+                      () => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionHeader(
+                            context,
+                            'About Me',
+                            icon: LucideIcons.info,
+                          ),
+                          if (flaggedFields.contains('Bio'))
+                            _buildFlagWarning(),
+                          _buildSectionContainer(
+                            context,
+                            child: Text(
+                              profile.bio!,
+                              style: const TextStyle(height: 1.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                      label: 'Bio',
                     ),
 
-                  const SizedBox(height: 16),
-
-                  // Residency & Location
+                  // -- Residency & Location --
                   if ((profile.yearsInHostCountry != null &&
                           profile.yearsInHostCountry!.isNotEmpty) ||
                       (profile.pastLocations?.isNotEmpty ?? false))
@@ -410,47 +450,7 @@ class UserProfileView extends ConsumerWidget {
                       label: 'LocationSection',
                     ),
 
-                  // Business Profile
-                  if (profile.businessProfile?.isBusinessVerified == true)
-                    _safelyBuild(
-                      () =>
-                          _buildBusinessCard(context, profile.businessProfile!),
-                      label: 'BusinessCard',
-                    ),
-
-                  // [NEW] Related to
-                  _safelyBuild(
-                    () => _buildRelationshipsSection(context, ref),
-                    label: 'Relationships',
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Bio
-                  if (profile.bio != null && profile.bio!.isNotEmpty)
-                    _safelyBuild(
-                      () => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionHeader(
-                            context,
-                            'About Me',
-                            icon: LucideIcons.info,
-                          ),
-                          if (flaggedFields.contains('Bio'))
-                            _buildFlagWarning(),
-                          _buildSectionContainer(
-                            context,
-                            child: Text(
-                              profile.bio!,
-                              style: const TextStyle(height: 1.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                      label: 'Bio',
-                    ),
-
-                  // Professional Info
+                  // -- Professional Info --
                   if ((profile.profession?.isNotEmpty ?? false) ||
                       (profile.industry?.isNotEmpty ?? false))
                     _safelyBuild(
@@ -473,30 +473,7 @@ class UserProfileView extends ConsumerWidget {
                       label: 'Profession',
                     ),
 
-                  // Languages
-                  if (profile.languages?.isNotEmpty ?? false)
-                    _safelyBuild(
-                      () => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionHeader(
-                            context,
-                            'Languages',
-                            icon: LucideIcons.languages,
-                          ),
-                          _buildSectionContainer(
-                            context,
-                            child: _buildTagsDisplay(
-                              context,
-                              profile.languages!,
-                            ),
-                          ),
-                        ],
-                      ),
-                      label: 'Languages',
-                    ),
-
-                  // Education
+                  // -- Education --
                   if (profile.education != null &&
                       profile.education!.isNotEmpty)
                     _safelyBuild(
@@ -536,7 +513,30 @@ class UserProfileView extends ConsumerWidget {
                       label: 'Education',
                     ),
 
-                  // Interests
+                  // -- Languages --
+                  if (profile.languages?.isNotEmpty ?? false)
+                    _safelyBuild(
+                      () => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionHeader(
+                            context,
+                            'Languages',
+                            icon: LucideIcons.languages,
+                          ),
+                          _buildSectionContainer(
+                            context,
+                            child: _buildTagsDisplay(
+                              context,
+                              profile.languages!,
+                            ),
+                          ),
+                        ],
+                      ),
+                      label: 'Languages',
+                    ),
+
+                  // -- Interests --
                   if (profile.interests?.isNotEmpty ?? false)
                     _safelyBuild(
                       () => Column(
@@ -559,7 +559,7 @@ class UserProfileView extends ConsumerWidget {
                       label: 'Interests',
                     ),
 
-                  // Community Support
+                  // -- Community Support --
                   if ((profile.servicesOffered?.isNotEmpty ?? false) ||
                       (profile.lookingFor?.isNotEmpty ?? false))
                     _safelyBuild(
@@ -616,7 +616,7 @@ class UserProfileView extends ConsumerWidget {
                       label: 'CommunitySupport',
                     ),
 
-                  // Availability
+                  // -- Availability --
                   if (profile.availability?.isNotEmpty ?? false)
                     _safelyBuild(
                       () => Column(
@@ -639,7 +639,7 @@ class UserProfileView extends ConsumerWidget {
                       label: 'Availability',
                     ),
 
-                  // Meeting Preferences
+                  // -- Meeting Preferences --
                   if (profile.meetingPreferences?.isNotEmpty ?? false)
                     _safelyBuild(
                       () => Column(
@@ -662,7 +662,7 @@ class UserProfileView extends ConsumerWidget {
                       label: 'MeetingPrefs',
                     ),
 
-                  // Social Media
+                  // -- Social Media --
                   if (profile.socialLinks != null)
                     _safelyBuild(
                       () => Column(
@@ -713,6 +713,266 @@ class UserProfileView extends ConsumerWidget {
                       label: 'SocialMedia',
                     ),
 
+                  // -- Business Profile --
+                  if (profile.businessProfile?.isBusinessVerified == true)
+                    _safelyBuild(
+                      () =>
+                          _buildBusinessCard(context, profile.businessProfile!),
+                      label: 'BusinessCard',
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 2️⃣ FAMILY CONNECTIONS (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final familyCount = trust?.uniqueFamilyCount ?? 0;
+                        final genesisFamilyIds = trust?.genesisFamilyIds ?? [];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'Family Connections',
+                              icon: LucideIcons.heartHandshake,
+                              current: familyCount > 10 ? 10 : familyCount,
+                              target: 10,
+                            ),
+                            const SizedBox(height: 8),
+                            if (genesisFamilyIds.isNotEmpty)
+                              _buildMilestoneUserCards(
+                                context,
+                                ref,
+                                userIds: genesisFamilyIds,
+                                emptyMessage: 'No family connections yet',
+                              )
+                            else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                'No family connections yet',
+                                LucideIcons.heartHandshake,
+                              ),
+                            // Incoming/Sent requests (self only)
+                            if (isSelf) _buildIncomingRequests(context, ref),
+                            if (isSelf) _buildSentRequests(context, ref),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 3️⃣ VERIFY / VOUCH (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final vouchVerifyCount =
+                            (trust?.uniqueVouchCount ?? 0) +
+                            (trust?.uniqueVerificationCount ?? 0);
+                        final capped = vouchVerifyCount > 10
+                            ? 10
+                            : vouchVerifyCount;
+                        final genesisTrustIds = trust?.genesisTrustIds ?? [];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'Verify & Vouch',
+                              icon: LucideIcons.shieldCheck,
+                              current: capped,
+                              target: 10,
+                            ),
+                            const SizedBox(height: 8),
+                            // Show only genesis-qualifying trust user cards
+                            if (genesisTrustIds.isNotEmpty)
+                              _buildMilestoneUserCards(
+                                context,
+                                ref,
+                                userIds: genesisTrustIds,
+                                emptyMessage: 'No verifications or vouches yet',
+                              )
+                            else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                'No verifications or vouches yet',
+                                LucideIcons.shieldCheck,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 4️⃣ FRIENDS (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final friendCount = trust?.uniqueFriendCount ?? 0;
+                        final genesisFriendIds = trust?.genesisFriendIds ?? [];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'Friend Connections',
+                              icon: LucideIcons.users,
+                              current: friendCount > 10 ? 10 : friendCount,
+                              target: 10,
+                            ),
+                            const SizedBox(height: 8),
+                            if (genesisFriendIds.isNotEmpty)
+                              _buildMilestoneUserCards(
+                                context,
+                                ref,
+                                userIds: genesisFriendIds,
+                                emptyMessage: 'No friend connections yet',
+                              )
+                            else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                'No friend connections yet',
+                                LucideIcons.users,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 5️⃣ QR CONNECTIONS (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final qrCount = trust?.uniqueQrCount ?? 0;
+                        final genesisQrIds = trust?.genesisQrIds ?? [];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'QR Identity Exchanges',
+                              icon: LucideIcons.qrCode,
+                              current: qrCount > 10 ? 10 : qrCount,
+                              target: 10,
+                            ),
+                            const SizedBox(height: 8),
+                            // Show QR exchange cards with location/timestamp
+                            if (genesisQrIds.isNotEmpty)
+                              _buildQrExchangeCards(
+                                context,
+                                ref,
+                                userIds: genesisQrIds,
+                                profileUid: profile.uid!,
+                              )
+                            else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                'No QR identity exchanges yet',
+                                LucideIcons.qrCode,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // ══════════════════════════════════════════
+                  // 🔄 TRUST SLIDER VOUCHES — Section Header
+                  // ══════════════════════════════════════════
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        return trustAsync.when(
+                          data: (trust) {
+                            if (trust == null) return const SizedBox.shrink();
+                            return _buildTrustSliderVouchesSection(
+                              context,
+                              trust,
+                            );
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // ══════════════════════════════════════════
+                  // 🕐 SENIORITY — Section
+                  // ══════════════════════════════════════════
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final pointsAsync = ref.watch(
+                          userPointsProvider(profile.uid!),
+                        );
+                        return pointsAsync.when(
+                          data: (userPoints) {
+                            if (userPoints == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return _buildSenioritySection(context, userPoints);
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // ══════════════════════════════════════════
+                  // ⚠️ PENALTIES — Section
+                  // ══════════════════════════════════════════
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        return trustAsync.when(
+                          data: (trust) {
+                            if (trust == null) return const SizedBox.shrink();
+                            return _buildPenaltiesSection(context, trust);
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
 
                   const SizedBox(height: 8),
                 ],
@@ -792,7 +1052,10 @@ class UserProfileView extends ConsumerWidget {
               const SizedBox(width: 8),
               Text(
                 isSinceBirth ? 'Birth' : '$yearText$durationText',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
             ],
           ),
@@ -844,11 +1107,18 @@ class UserProfileView extends ConsumerWidget {
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: AppTheme.innerDecoration(context),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.mapPin, size: 16, color: Colors.grey),
+                    const Icon(
+                      LucideIcons.mapPin,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                     if (flag != null) ...[
                       const SizedBox(width: 8),
                       Text(flag, style: const TextStyle(fontSize: 18)),
@@ -897,9 +1167,9 @@ class UserProfileView extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
-      decoration: AppTheme.cardDecoration(context).copyWith(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: AppTheme.cardDecoration(
+        context,
+      ).copyWith(borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -959,7 +1229,9 @@ class UserProfileView extends ConsumerWidget {
                       ? Colors.green.shade900
                       : Colors.green.shade100,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Text(
                   'Verified Business',
@@ -1028,7 +1300,10 @@ class UserProfileView extends ConsumerWidget {
     );
   }
 
-  // [NEW] Trust Section
+
+
+
+  // ignore: unused_element
   Widget _buildQRConnectionSection(BuildContext context, WidgetRef ref) {
     final info = profile.firstQrConnection!;
 
@@ -1095,29 +1370,31 @@ class UserProfileView extends ConsumerWidget {
                       ),
                       error: (_, _) => const SizedBox.shrink(),
                     ),
-                if (info.locationAddress != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          LucideIcons.mapPin,
-                          size: 14,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Connected in ${formatFullAddress(info.locationAddress!)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        LucideIcons.mapPin,
+                        size: 14,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          info.locationAddress != null &&
+                                  info.locationAddress != 'Location Unavailable'
+                              ? 'Connected in ${info.locationAddress!}'
+                              : 'Location not recorded',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -1141,9 +1418,9 @@ class UserProfileView extends ConsumerWidget {
                       ],
                     ),
                     const Text(
-                      '10,000 DSP EARNED',
+                      '100 DSP EARNED',
                       style: TextStyle(
-                        color: Color(0xFFFFD700), // Gold
+                        color: AppTheme.accent,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -1301,14 +1578,12 @@ class UserProfileView extends ConsumerWidget {
     );
   }
 
-
   // [NEW] Relationship Section Builder
+  // ignore: unused_element
   Widget _buildRelationshipsSection(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(context, 'Relationships'),
-
         // Incoming Requests (Self Only)
         if (isSelf) _buildIncomingRequests(context, ref),
 
@@ -1389,8 +1664,9 @@ class UserProfileView extends ConsumerWidget {
               ...snapshot.data!.map(
                 (req) => Card(
                   elevation: 0,
-                  color: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.5),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.5,
+                  ),
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -1401,19 +1677,19 @@ class UserProfileView extends ConsumerWidget {
                             // Profile photo avatar
                             CircleAvatar(
                               radius: 22,
-                              backgroundColor:
-                                  theme.colorScheme.primary.withValues(alpha: 0.15),
+                              backgroundColor: theme.colorScheme.primary
+                                  .withValues(alpha: 0.15),
                               backgroundImage:
                                   req.toUserPhoto != null &&
-                                          req.toUserPhoto!.isNotEmpty
-                                      ? NetworkImage(req.toUserPhoto!)
-                                      : null,
-                              child: req.toUserPhoto == null ||
+                                      req.toUserPhoto!.isNotEmpty
+                                  ? NetworkImage(req.toUserPhoto!)
+                                  : null,
+                              child:
+                                  req.toUserPhoto == null ||
                                       req.toUserPhoto!.isEmpty
                                   ? Text(
                                       req.toUserName.isNotEmpty
-                                          ? req.toUserName[0]
-                                              .toUpperCase()
+                                          ? req.toUserName[0].toUpperCase()
                                           : '?',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
@@ -1440,8 +1716,7 @@ class UserProfileView extends ConsumerWidget {
                                     'As: ${req.relationshipType}',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color:
-                                          theme.colorScheme.onSurfaceVariant,
+                                      color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -1465,10 +1740,10 @@ class UserProfileView extends ConsumerWidget {
                                     color: Colors.orange.withValues(alpha: 0.4),
                                   ),
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 8),
+                                    vertical: 8,
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                               ),
@@ -1477,21 +1752,21 @@ class UserProfileView extends ConsumerWidget {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () =>
-                                    _handleCancelSentRequest(
-                                        context, ref, req),
+                                    _handleCancelSentRequest(context, ref, req),
                                 icon: const Icon(LucideIcons.x, size: 14),
                                 label: const Text('Cancel'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: theme.colorScheme.error,
                                   side: BorderSide(
-                                    color: theme.colorScheme.error
-                                        .withValues(alpha: 0.5),
+                                    color: theme.colorScheme.error.withValues(
+                                      alpha: 0.5,
+                                    ),
                                   ),
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 8),
+                                    vertical: 8,
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                               ),
@@ -1511,7 +1786,10 @@ class UserProfileView extends ConsumerWidget {
   }
 
   // [NEW] Grouped Relationships Widget
-  Widget _buildGroupedRelationships(BuildContext context, List<Relationship> relationships) {
+  Widget _buildGroupedRelationships(
+    BuildContext context,
+    List<Relationship> relationships,
+  ) {
     final Map<String, List<Relationship>> grouped = {
       'Immediate Family': [],
       'Extended Family': [],
@@ -1573,26 +1851,11 @@ class UserProfileView extends ConsumerWidget {
       children: [
         for (final entry in grouped.entries)
           if (entry.value.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 8.0,
-                horizontal: 4.0,
-              ),
-              child: Text(
-                entry.key.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
             ...entry.value.map(
               (rel) =>
                   RelationshipCard(relationship: rel, enableActions: isSelf),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
           ],
       ],
     );
@@ -1631,8 +1894,9 @@ class UserProfileView extends ConsumerWidget {
               ...snapshot.data!.map(
                 (req) => Card(
                   elevation: 0,
-                  color: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.5),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.5,
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: Column(
@@ -1642,19 +1906,20 @@ class UserProfileView extends ConsumerWidget {
                             // Profile photo avatar
                             CircleAvatar(
                               radius: 22,
-                              backgroundColor:
-                                  Colors.orange.withValues(alpha: 0.15),
+                              backgroundColor: Colors.orange.withValues(
+                                alpha: 0.15,
+                              ),
                               backgroundImage:
                                   req.fromUserPhoto != null &&
-                                          req.fromUserPhoto!.isNotEmpty
-                                      ? NetworkImage(req.fromUserPhoto!)
-                                      : null,
-                              child: req.fromUserPhoto == null ||
+                                      req.fromUserPhoto!.isNotEmpty
+                                  ? NetworkImage(req.fromUserPhoto!)
+                                  : null,
+                              child:
+                                  req.fromUserPhoto == null ||
                                       req.fromUserPhoto!.isEmpty
                                   ? Text(
                                       req.fromUserName.isNotEmpty
-                                          ? req.fromUserName[0]
-                                              .toUpperCase()
+                                          ? req.fromUserName[0].toUpperCase()
                                           : '?',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
@@ -1667,15 +1932,13 @@ class UserProfileView extends ConsumerWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     req.fromUserName,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      color:
-                                          theme.colorScheme.onSurface,
+                                      color: theme.colorScheme.onSurface,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -1684,16 +1947,15 @@ class UserProfileView extends ConsumerWidget {
                                       text: 'Wants to add you as ',
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: theme.colorScheme
-                                            .onSurfaceVariant,
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
                                       ),
                                       children: [
                                         TextSpan(
                                           text: req.relationshipType,
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            color: theme
-                                                .colorScheme.primary,
+                                            color: theme.colorScheme.primary,
                                           ),
                                         ),
                                       ],
@@ -1711,23 +1973,21 @@ class UserProfileView extends ConsumerWidget {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () =>
-                                    _handleRejectRequest(
-                                        context, ref, req),
-                                icon: const Icon(LucideIcons.x,
-                                    size: 14),
+                                    _handleRejectRequest(context, ref, req),
+                                icon: const Icon(LucideIcons.x, size: 14),
                                 label: const Text('Decline'),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor:
-                                      theme.colorScheme.error,
+                                  foregroundColor: theme.colorScheme.error,
                                   side: BorderSide(
-                                    color: theme.colorScheme.error
-                                        .withValues(alpha: 0.5),
+                                    color: theme.colorScheme.error.withValues(
+                                      alpha: 0.5,
+                                    ),
                                   ),
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 8),
+                                    vertical: 8,
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                               ),
@@ -1736,19 +1996,17 @@ class UserProfileView extends ConsumerWidget {
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () =>
-                                    _handleAcceptRequest(
-                                        context, ref, req),
-                                icon: const Icon(LucideIcons.check,
-                                    size: 14),
+                                    _handleAcceptRequest(context, ref, req),
+                                icon: const Icon(LucideIcons.check, size: 14),
                                 label: const Text('Accept'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.green,
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
-                                      vertical: 8),
+                                    vertical: 8,
+                                  ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                               ),
@@ -1797,19 +2055,20 @@ class UserProfileView extends ConsumerWidget {
               builder: (context, setState) {
                 return AlertDialog(
                   title: const Text('Accept as...'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: possibleTypes
-                        .map(
-                          (type) => RadioListTile<String>(
-                            title: Text(type),
-                            value: type,
-                            groupValue: tempSelected,
-                            onChanged: (val) =>
-                                setState(() => tempSelected = val),
-                          ),
-                        )
-                        .toList(),
+                  content: RadioGroup<String>(
+                    groupValue: tempSelected,
+                    onChanged: (val) => setState(() => tempSelected = val),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: possibleTypes
+                          .map(
+                            (type) => RadioListTile<String>(
+                              title: Text(type),
+                              value: type,
+                            ),
+                          )
+                          .toList(),
+                    ),
                   ),
                   actions: [
                     TextButton(
@@ -1932,19 +2191,17 @@ class UserProfileView extends ConsumerWidget {
 
     if (confirm == true) {
       try {
-        await ref
-            .read(relationshipRepositoryProvider)
-            .cancelSentRequest(req);
+        await ref.read(relationshipRepositoryProvider).cancelSentRequest(req);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Request cancelled.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Request cancelled.')));
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error cancelling: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error cancelling: $e')));
         }
       }
     }
@@ -2019,6 +2276,795 @@ class UserProfileView extends ConsumerWidget {
           }
         });
   }
+
+  // ══════════════════════════════════════════════════════
+  //  PoCT SECTION BUILDERS
+  // ══════════════════════════════════════════════════════
+
+  /// Main section header — plain text, no card wrapper
+  Widget _buildPoctSectionHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+    final fg = theme.colorScheme.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.pageHorizontalPadding,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: fg.withValues(alpha: 0.7)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.toUpperCase(),
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.5),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Milestone sub-header with progress bar — uses theme colors
+  Widget _buildMilestoneSubHeader(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required int current,
+    required int target,
+  }) {
+    final theme = Theme.of(context);
+    final fg = theme.colorScheme.onSurface;
+    final progress = (current / target).clamp(0.0, 1.0);
+    final isComplete = current >= target;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.pageHorizontalPadding,
+        vertical: 4,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: fg.withValues(alpha: 0.6)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (isComplete)
+                const Icon(
+                  LucideIcons.checkCircle,
+                  size: 16,
+                  color: AppTheme.accent,
+                )
+              else
+                Text(
+                  '$current / $target',
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.6),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 4,
+              backgroundColor: fg.withValues(alpha: 0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isComplete
+                    ? AppTheme.accent
+                    : AppTheme.accent.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build QR exchange cards with location and timestamp
+  Widget _buildQrExchangeCards(
+    BuildContext context,
+    WidgetRef ref, {
+    required List<String> userIds,
+    required String profileUid,
+  }) {
+    if (userIds.isEmpty) {
+      return _buildEmptyMilestoneCard(
+        context,
+        'No QR identity exchanges yet',
+        LucideIcons.qrCode,
+      );
+    }
+
+    return FutureBuilder<Map<String, Map<String, dynamic>>>(
+      future: ref.read(trustRepositoryProvider).getQrExchangeRecords(profileUid),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? {};
+
+        return Container(
+          margin: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+          ),
+          child: Column(
+            children: userIds.map((uid) {
+              final exchangeData = records[uid];
+              return Consumer(
+                builder: (context, ref, _) {
+                  final profileAsync = ref.watch(userProfileByIdProvider(uid));
+                  return profileAsync.when(
+                    data: (userProfile) {
+                      if (userProfile == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            UserCardView(
+                              user: userProfile,
+                              searchQuery: '',
+                              onNameTap: () => context.push('/profile/$uid'),
+                              onChatTap: () => context.push('/chat/direct/$uid'),
+                              isStatic: false,
+                            ),
+                            if (exchangeData != null)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 12, right: 12, bottom: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Location
+                                    if (exchangeData['locationAddress'] != null &&
+                                        exchangeData['locationAddress'] != 'Location Unavailable') ...[
+                                      const Icon(
+                                        LucideIcons.mapPin,
+                                        size: 12,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          exchangeData['locationAddress'] as String,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    // Timestamp
+                                    if (exchangeData['timestamp'] != null) ...[
+                                      const Icon(
+                                        LucideIcons.calendar,
+                                        size: 12,
+                                        color: Colors.grey,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _formatExchangeTimestamp(exchangeData['timestamp']),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                    loading: () => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Container(
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: AppTheme.elevationColor(context, 1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Center(
+                          child: SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                    error: (_, _) => const SizedBox.shrink(),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatExchangeTimestamp(dynamic timestamp) {
+    try {
+      if (timestamp is Timestamp) {
+        return DateFormat.yMMMd().format(timestamp.toDate());
+      } else if (timestamp is String) {
+        return DateFormat.yMMMd().format(DateTime.parse(timestamp));
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// Build milestone user cards for a list of user IDs
+  Widget _buildMilestoneUserCards(
+    BuildContext context,
+    WidgetRef ref, {
+    required List<String> userIds,
+    required String emptyMessage,
+  }) {
+    if (userIds.isEmpty) {
+      return _buildEmptyMilestoneCard(context, emptyMessage, LucideIcons.users);
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppTheme.pageHorizontalPadding,
+      ),
+      child: Column(
+        children: userIds.map((uid) {
+          return Consumer(
+            builder: (context, ref, _) {
+              final profileAsync = ref.watch(userProfileByIdProvider(uid));
+              return profileAsync.when(
+                data: (profile) {
+                  if (profile == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: UserCardView(
+                      user: profile,
+                      searchQuery: '',
+                      onNameTap: () => context.push('/profile/$uid'),
+                      onChatTap: () => context.push('/chat/direct/$uid'),
+                      isStatic: false,
+                    ),
+                  );
+                },
+                loading: () => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Container(
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: AppTheme.elevationColor(context, 1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                ),
+                error: (_, _) => const SizedBox.shrink(),
+              );
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// Empty state placeholder for milestones
+  Widget _buildEmptyMilestoneCard(
+    BuildContext context,
+    String message,
+    IconData icon,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppTheme.pageHorizontalPadding,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: AppTheme.elevationColor(context, 1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Trust Slider Vouches Stats section
+  Widget _buildTrustSliderVouchesSection(
+    BuildContext context,
+    TrustData trust,
+  ) {
+    final totalRatings = trust.vouchedByCount;
+    final avgRating = trust.averageRating;
+    // Full-trust voters: those who rated >90 (approximation from available data)
+    final fullTrustVoters = trust.vouchedBy.length; // Those in vouchedBy list
+    final poctFromVouches = (totalRatings ~/ 10); // +1 PoCT per 10 unique
+    final nextMilestone = ((totalRatings ~/ 10) + 1) * 10;
+    final progressToNext = totalRatings % 10;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPoctSectionHeader(
+          context,
+          title: 'Continuous Trust Score',
+          subtitle: '+1 PoCT per 10 unique full-trust voters',
+          icon: LucideIcons.barChart3,
+        ),
+        const SizedBox(height: 12),
+        Container(
+          margin: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+          ),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.elevationColor(context, 1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            children: [
+              // Stats row
+              Row(
+                children: [
+                  _buildStatBadge(
+                    context,
+                    label: 'Total Ratings',
+                    value: '$totalRatings',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildStatBadge(
+                    context,
+                    label: 'Avg Rating',
+                    value: avgRating.toStringAsFixed(1),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildStatBadge(
+                    context,
+                    label: 'Full Trust',
+                    value: '$fullTrustVoters',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // PoCT earned + progress to next
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PoCT Earned: $poctFromVouches',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Next award at $nextMilestone ratings ($progressToNext/10)',
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progressToNext / 10.0,
+                  minHeight: 4,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.1),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Helper: compact stat badge — theme colors only
+  Widget _buildStatBadge(
+    BuildContext context, {
+    required String label,
+    required String value,
+  }) {
+    final fg = Theme.of(context).colorScheme.onSurface;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: fg.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: fg,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(color: fg.withValues(alpha: 0.5), fontSize: 10),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Seniority section — days active with progress to next award
+  Widget _buildSenioritySection(BuildContext context, UserPoints userPoints) {
+    final daysActive = DateTime.now().difference(userPoints.signupDate).inDays;
+    final poctFromSeniority = daysActive ~/ 100; // +1 PoCT per 100 days
+    final progressDays = daysActive % 100;
+    final nextMilestone = ((daysActive ~/ 100) + 1) * 100;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPoctSectionHeader(
+          context,
+          title: 'Seniority',
+          subtitle: '+1 PoCT per 100 active days',
+          icon: LucideIcons.clock,
+        ),
+        const SizedBox(height: 12),
+        Container(
+          margin: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+          ),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.elevationColor(context, 1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.calendarDays,
+                        size: 16,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$daysActive Days Active',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '+$poctFromSeniority PoCT',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Next award at $nextMilestone days ($progressDays/100)',
+                style: TextStyle(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progressDays / 100.0,
+                  minHeight: 4,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.1),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Penalties section — breakdown of all penalty types
+  Widget _buildPenaltiesSection(BuildContext context, TrustData trust) {
+    final penalties = <_PenaltyItem>[
+      _PenaltyItem(
+        label: 'Blocked by Users',
+        count: trust.blockedByCount,
+        icon: LucideIcons.ban,
+      ),
+      _PenaltyItem(
+        label: 'Flagged Messages',
+        count: trust.flaggedMessagesCount,
+        icon: LucideIcons.flag,
+      ),
+      _PenaltyItem(
+        label: 'Reported Fraud',
+        count: trust.reportedFraudCount,
+        icon: LucideIcons.alertTriangle,
+      ),
+      _PenaltyItem(
+        label: 'Fake Verifications',
+        count: trust.fakeVerificationsCount,
+        icon: LucideIcons.shieldOff,
+      ),
+      _PenaltyItem(
+        label: 'Event No-Shows',
+        count: trust.eventNoShowCount,
+        icon: LucideIcons.calendarX,
+      ),
+      _PenaltyItem(
+        label: 'Rejected Family',
+        count: trust.rejectedFamilyConnectionsCount,
+        icon: LucideIcons.userX,
+      ),
+      _PenaltyItem(
+        label: 'Banned Vouchees',
+        count: trust.bannedVoucheeCount,
+        icon: LucideIcons.userMinus,
+      ),
+    ];
+
+    // Total penalty: -10 PoCT per 10 of each type
+    final totalPenaltyPoCT = penalties.fold<int>(
+      0,
+      (acc, p) => acc + ((p.count ~/ 10) * 10),
+    );
+
+    final hasPenalties = penalties.any((p) => p.count > 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildPoctSectionHeader(
+          context,
+          title: 'Penalties',
+          subtitle: '-10 PoCT per 10 infractions of each type',
+          icon: LucideIcons.alertOctagon,
+        ),
+        const SizedBox(height: 12),
+        Container(
+          margin: const EdgeInsets.symmetric(
+            horizontal: AppTheme.pageHorizontalPadding,
+          ),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.elevationColor(context, 1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: hasPenalties
+              ? Column(
+                  children: [
+                    ...penalties
+                        .where((p) => p.count > 0)
+                        .map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  p.icon,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.5),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    p.label,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${p.count}',
+                                  style: const TextStyle(
+                                    color: AppTheme.error,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '-${(p.count ~/ 10) * 10} PoCT',
+                                  style: TextStyle(
+                                    color: AppTheme.error.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total Penalty',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '-$totalPenaltyPoCT PoCT',
+                          style: const TextStyle(
+                            color: AppTheme.error,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : const Row(
+                  children: [
+                    Icon(
+                      LucideIcons.checkCircle,
+                      size: 16,
+                      color: AppTheme.accent,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'No penalties — clean record!',
+                      style: TextStyle(
+                        color: AppTheme.accent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Helper class for penalty breakdown items
+class _PenaltyItem {
+  final String label;
+  final int count;
+  final IconData icon;
+  const _PenaltyItem({
+    required this.label,
+    required this.count,
+    required this.icon,
+  });
 }
 
 // [NEW] Monitor for pending requests from this profile

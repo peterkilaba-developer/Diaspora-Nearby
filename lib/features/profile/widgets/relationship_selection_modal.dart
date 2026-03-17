@@ -5,8 +5,10 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
+import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-import 'package:diaspora_nearby/core/data/countries.dart';
+import 'package:diaspora_nearby/features/shared/utils/country_utils.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_confirmation_sheet.dart';
 
 class RelationshipSelectionModal extends ConsumerStatefulWidget {
   final String otherUserId;
@@ -32,15 +34,31 @@ class RelationshipSelectionModal extends ConsumerStatefulWidget {
 class _RelationshipSelectionModalState
     extends ConsumerState<RelationshipSelectionModal> {
   final Map<String, List<String>> _relationships = {
-    'Immediate Family (Fund Eligible)': ['Wife', 'Husband', 'Daughter', 'Son'],
-    'Close Family (Fund Eligible)': ['Mother', 'Father', 'Sister', 'Brother'],
-    'Extended Family (Fund Eligible)': [
+    'Immediate Family (Emergency Fund Eligible)': ['Wife', 'Husband', 'Daughter', 'Son'],
+    'Close Family (Emergency Fund Eligible)': ['Mother', 'Father', 'Sister', 'Brother'],
+    'Extended Family': [
       'Aunt',
       'Uncle',
       'Nephew',
       'Niece',
       'Cousin',
     ],
+  };
+
+  static const Set<String> _familyTypes = {
+    'wife',
+    'husband',
+    'daughter',
+    'son',
+    'mother',
+    'father',
+    'sister',
+    'brother',
+    'aunt',
+    'uncle',
+    'nephew',
+    'niece',
+    'cousin',
   };
 
   @override
@@ -63,7 +81,9 @@ class _RelationshipSelectionModalState
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.4,
+                  ),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -125,6 +145,13 @@ class _RelationshipSelectionModalState
                     if (widget.includeFriend) ...[
                       const Divider(height: 32),
                       _buildItem(context, 'Friend', theme, isSpecial: true),
+                      const SizedBox(height: 4),
+                      _buildItem(
+                        context,
+                        'Community Member',
+                        theme,
+                        isSpecial: true,
+                      ),
                     ],
                     const SizedBox(height: 20),
                   ],
@@ -137,24 +164,26 @@ class _RelationshipSelectionModalState
     );
   }
 
-
   Widget _buildItem(
     BuildContext context,
     String rel,
     ThemeData theme, {
     bool isSpecial = false,
   }) {
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
         decoration: BoxDecoration(
           color: isSpecial
               ? theme.colorScheme.primary.withValues(alpha: 0.03)
-              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.03),
+              : theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.03,
+                ),
           borderRadius: BorderRadius.circular(12),
           border: isSpecial
-              ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2))
+              ? Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                )
               : null,
         ),
         child: ListTile(
@@ -166,31 +195,32 @@ class _RelationshipSelectionModalState
             ),
           ),
           leading: Icon(
-            isSpecial ? LucideIcons.userCheck : LucideIcons.heart,
+            rel == 'Community Member'
+                ? LucideIcons.users
+                : isSpecial
+                ? LucideIcons.userCheck
+                : LucideIcons.heart,
             size: 20,
             color: theme.colorScheme.primary,
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Earn 1,000 DSP',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.green,
-                    ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Earn 1,000 DSP',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
                   ),
                 ),
+              ),
               const SizedBox(width: 4),
               Icon(
                 LucideIcons.chevronRight,
@@ -209,68 +239,24 @@ class _RelationshipSelectionModalState
             }
 
             // Standard logic for ChatScreen (direct add)
-            final confirmed = await showDialog<bool>(
-              context: context,
-              builder: (context) {
-                return AlertDialog(
-                  title: const Text('Confirm Relationship'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Send a request to ${widget.otherUserName} to add them as your $rel?',
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.green.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(
-                              LucideIcons.heartHandshake,
-                              size: 18,
-                              color: Colors.green,
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Both users earn 1,000 DSP ✓',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Confirm'),
-                    ),
-                  ],
-                );
-              },
-            );
-
-            if (confirmed == true) {
-              await _saveRelationship(rel);
+            if (context.mounted) {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (context) => ChatConfirmationSheet(
+                  title: 'Confirm Relationship',
+                  message:
+                      'Send a request to ${widget.otherUserName} to add them as your $rel?',
+                  actionTitle: 'Confirm Relationship',
+                  subtitle: 'Both users will earn 1,000 DSP upon acceptance',
+                  icon: LucideIcons.heartHandshake,
+                  isDestructive: false,
+                  onAction: () {
+                    Navigator.pop(context); // Close sheet
+                    _saveRelationship(rel);
+                  },
+                ),
+              );
             }
           },
         ),
@@ -294,6 +280,48 @@ class _RelationshipSelectionModalState
           .read(profileRepositoryProvider)
           .getUserProfile(currentUserId);
 
+      // [COI] Block family requests when either party has verified or vouched
+      if (_familyTypes.contains(type.toLowerCase())) {
+        final trustRepo = ref.read(trustRepositoryProvider);
+
+        // Check both directions: A→B and B→A
+        final hasVerifiedThem = await trustRepo.hasVerifiedUser(
+          currentUserId,
+          widget.otherUserId,
+        );
+        final theyVerifiedMe = await trustRepo.hasVerifiedUser(
+          widget.otherUserId,
+          currentUserId,
+        );
+        final hasVouchedThem = await trustRepo.hasVouched(
+          currentUserId,
+          widget.otherUserId,
+        );
+        final theyVouchedMe = await trustRepo.hasVouched(
+          widget.otherUserId,
+          currentUserId,
+        );
+
+        if (hasVerifiedThem ||
+            theyVerifiedMe ||
+            hasVouchedThem ||
+            theyVouchedMe) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Cannot add as family — a verification or vouch already '
+                  'exists between you (Conflict of Interest).',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       // [NEW] Validate Single Parent/Spouse Rule
       if (['Father', 'Mother', 'Wife', 'Husband'].contains(type)) {
         final existingRelationships = await ref
@@ -316,12 +344,9 @@ class _RelationshipSelectionModalState
         }
       }
 
-      String flag = '';
-      if (currentUserProfile?.homeCountryCode != null) {
-        flag =
-            getCountryByCode(currentUserProfile!.homeCountryCode!)?.flag ??
-            '';
-      }
+      final flag = CountryUtils.getCountryFlag(
+        currentUserProfile?.homeCountryCode,
+      );
 
       await ref
           .read(relationshipRepositoryProvider)
@@ -346,7 +371,7 @@ class _RelationshipSelectionModalState
         showExplorationRewardToast(
           context,
           message: 'Relationship request sent',
-          points: 5, // Small bonus for social connection
+          points: 50, // Small bonus for social connection
         );
       }
     } catch (e) {

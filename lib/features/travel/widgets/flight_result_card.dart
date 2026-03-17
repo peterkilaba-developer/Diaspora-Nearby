@@ -8,29 +8,52 @@ class FlightResultCard extends StatelessWidget {
   final FlightOffer offer;
   final VoidCallback? onTap;
 
-  const FlightResultCard({
-    super.key,
-    required this.offer,
-    this.onTap,
-  });
+  const FlightResultCard({super.key, required this.offer, this.onTap});
 
   static const _radius = 15.0;
 
   /// Map common IATA airline codes to display names.
   static const _airlineNames = {
-    'AA': 'American Airlines', 'DL': 'Delta Air Lines', 'UA': 'United Airlines',
-    'WN': 'Southwest Airlines', 'B6': 'JetBlue Airways', 'AS': 'Alaska Airlines',
-    'NK': 'Spirit Airlines', 'F9': 'Frontier Airlines', 'HA': 'Hawaiian Airlines',
-    'SY': 'Sun Country', 'BA': 'British Airways', 'LH': 'Lufthansa',
-    'AF': 'Air France', 'KL': 'KLM', 'EK': 'Emirates', 'QR': 'Qatar Airways',
-    'SQ': 'Singapore Airlines', 'TK': 'Turkish Airlines', 'ET': 'Ethiopian Airlines',
-    'W3': 'Arik Air', 'AT': 'Royal Air Maroc', 'KQ': 'Kenya Airways',
-    'SA': 'South African Airways', 'MS': 'EgyptAir', 'QF': 'Qantas',
-    'AC': 'Air Canada', 'LX': 'Swiss Intl', 'AZ': 'ITA Airways',
-    'IB': 'Iberia', 'VS': 'Virgin Atlantic', 'CX': 'Cathay Pacific',
-    'JL': 'Japan Airlines', 'NH': 'ANA', 'OZ': 'Asiana Airlines',
-    'KE': 'Korean Air', 'SV': 'Saudi Arabian', 'GF': 'Gulf Air',
-    'WB': 'RwandAir', 'HF': 'Air Côte d\'Ivoire', 'P4': 'Air Peace',
+    'AA': 'American Airlines',
+    'DL': 'Delta Air Lines',
+    'UA': 'United Airlines',
+    'WN': 'Southwest Airlines',
+    'B6': 'JetBlue Airways',
+    'AS': 'Alaska Airlines',
+    'NK': 'Spirit Airlines',
+    'F9': 'Frontier Airlines',
+    'HA': 'Hawaiian Airlines',
+    'SY': 'Sun Country',
+    'BA': 'British Airways',
+    'LH': 'Lufthansa',
+    'AF': 'Air France',
+    'KL': 'KLM',
+    'EK': 'Emirates',
+    'QR': 'Qatar Airways',
+    'SQ': 'Singapore Airlines',
+    'TK': 'Turkish Airlines',
+    'ET': 'Ethiopian Airlines',
+    'W3': 'Arik Air',
+    'AT': 'Royal Air Maroc',
+    'KQ': 'Kenya Airways',
+    'SA': 'South African Airways',
+    'MS': 'EgyptAir',
+    'QF': 'Qantas',
+    'AC': 'Air Canada',
+    'LX': 'Swiss Intl',
+    'AZ': 'ITA Airways',
+    'IB': 'Iberia',
+    'VS': 'Virgin Atlantic',
+    'CX': 'Cathay Pacific',
+    'JL': 'Japan Airlines',
+    'NH': 'ANA',
+    'OZ': 'Asiana Airlines',
+    'KE': 'Korean Air',
+    'SV': 'Saudi Arabian',
+    'GF': 'Gulf Air',
+    'WB': 'RwandAir',
+    'HF': 'Air Côte d\'Ivoire',
+    'P4': 'Air Peace',
   };
 
   static String _airlineLogoUrl(String iataCode) {
@@ -84,8 +107,11 @@ class FlightResultCard extends StatelessWidget {
 
     final outbound = offer.itineraries.first;
     final hasReturn = offer.itineraries.length > 1;
-    final airlineCode = offer.validatingAirline ?? 
-        (outbound.segments.isNotEmpty ? outbound.segments.first.carrierCode : '??');
+    final airlineCode =
+        offer.validatingAirline ??
+        (outbound.segments.isNotEmpty
+            ? outbound.segments.first.carrierCode
+            : '??');
 
     return InkWell(
       onTap: onTap,
@@ -114,16 +140,23 @@ class FlightResultCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                     child: Image.network(
                       _airlineLogoUrl(airlineCode),
-                      width: 28, height: 28,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 28, height: 28,
+                      width: 28,
+                      height: 28,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 28,
+                        height: 28,
                         decoration: BoxDecoration(
-                          color: AppTheme.accent.withOpacity(0.15),
+                          color: AppTheme.accent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Center(
-                          child: Text(airlineCode,
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.accent),
+                          child: Text(
+                            airlineCode,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.accent,
+                            ),
                           ),
                         ),
                       ),
@@ -133,19 +166,31 @@ class FlightResultCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       _getAirlineName(airlineCode),
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface,
+                      ),
                     ),
                   ),
                   Text(
                     '\$${offer.totalPrice.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.accent),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.accent,
+                    ),
                   ),
                 ],
               ),
             ),
 
             // Outbound flight
-            _buildItineraryRow(context, outbound, label: hasReturn ? 'Depart' : null),
+            _buildItineraryRow(
+              context,
+              outbound,
+              label: hasReturn ? 'Depart' : null,
+            ),
 
             // Return flight
             if (hasReturn) ...[
@@ -153,10 +198,14 @@ class FlightResultCard extends StatelessWidget {
                 child: Icon(
                   LucideIcons.repeat2,
                   size: 12,
-                  color: theme.colorScheme.onSurface.withOpacity(0.15),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
                 ),
               ),
-              _buildItineraryRow(context, offer.itineraries[1], label: 'Return'),
+              _buildItineraryRow(
+                context,
+                offer.itineraries[1],
+                label: 'Return',
+              ),
             ],
 
             // Bottom info bar
@@ -171,7 +220,11 @@ class FlightResultCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(LucideIcons.armchair, size: 14, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                  Icon(
+                    LucideIcons.armchair,
+                    size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     '${offer.numberOfBookableSeats} seat${offer.numberOfBookableSeats != 1 ? "s" : ""} left',
@@ -179,14 +232,19 @@ class FlightResultCard extends StatelessWidget {
                       fontSize: 11,
                       color: offer.numberOfBookableSeats <= 3
                           ? Colors.red.shade400
-                          : theme.colorScheme.onSurface.withOpacity(0.5),
-                      fontWeight: offer.numberOfBookableSeats <= 3 ? FontWeight.w600 : FontWeight.normal,
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      fontWeight: offer.numberOfBookableSeats <= 3
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                   ),
                   const Spacer(),
                   Text(
                     offer.currency,
-                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
                   ),
                 ],
               ),
@@ -197,7 +255,11 @@ class FlightResultCard extends StatelessWidget {
     );
   }
 
-  Widget _buildItineraryRow(BuildContext context, FlightItinerary itinerary, {String? label}) {
+  Widget _buildItineraryRow(
+    BuildContext context,
+    FlightItinerary itinerary, {
+    String? label,
+  }) {
     final theme = Theme.of(context);
     if (itinerary.segments.isEmpty) return const SizedBox.shrink();
 
@@ -232,10 +294,12 @@ class FlightResultCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (label != null) ...[
-            Text(label,
+            Text(
+              label,
               style: TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 letterSpacing: 0.5,
               ),
             ),
@@ -249,11 +313,21 @@ class FlightResultCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(departTime,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                  Text(
+                    departTime,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
-                  Text(departCode,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  Text(
+                    departCode,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                 ],
               ),
@@ -265,8 +339,14 @@ class FlightResultCard extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(duration,
-                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                      Text(
+                        duration,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Stack(
@@ -275,27 +355,46 @@ class FlightResultCard extends StatelessWidget {
                           Container(
                             height: 2,
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.onSurface.withOpacity(0.15),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.15,
+                              ),
                               borderRadius: BorderRadius.circular(1),
                             ),
                           ),
-                          const Icon(LucideIcons.plane, size: 14, color: AppTheme.accent),
+                          const Icon(
+                            LucideIcons.plane,
+                            size: 14,
+                            color: AppTheme.accent,
+                          ),
                           if (stops > 0)
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: List.generate(stops, (i) => Container(
-                                width: 6, height: 6,
-                                decoration: BoxDecoration(
-                                  color: stopsColor, shape: BoxShape.circle,
-                                  border: Border.all(color: theme.scaffoldBackgroundColor, width: 1),
+                              children: List.generate(
+                                stops,
+                                (i) => Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: stopsColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: theme.scaffoldBackgroundColor,
+                                      width: 1,
+                                    ),
+                                  ),
                                 ),
-                              )),
+                              ),
                             ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(stopsText,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: stopsColor),
+                      Text(
+                        stopsText,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: stopsColor,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -311,8 +410,13 @@ class FlightResultCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(arriveTime,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                      Text(
+                        arriveTime,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
                       ),
                       // Next-day indicator
                       if (daysDiff > 0)
@@ -329,8 +433,13 @@ class FlightResultCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  Text(arriveCode,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  Text(
+                    arriveCode,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                 ],
               ),

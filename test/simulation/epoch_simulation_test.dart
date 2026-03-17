@@ -2,10 +2,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:mockito/mockito.dart';
 
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -22,6 +24,8 @@ class MockSessionService extends Mock implements SessionService {
   }
 }
 
+class FakeFirebaseFunctions extends Fake implements FirebaseFunctions {}
+
 void main() {
   late FakeFirebaseFirestore fakeFirestore;
   late MockSessionService mockSessionService;
@@ -35,8 +39,7 @@ void main() {
     fakeFirestore = FakeFirebaseFirestore();
     mockSessionService = MockSessionService();
 
-    // Instantiate manually with fake deps
-    pointsRepository = PointsRepository(fakeFirestore);
+    pointsRepository = PointsRepository(fakeFirestore, FakeFirebaseFunctions());
     trustRepository = TrustRepository(fakeFirestore);
     profileRepository = ProfileRepository(fakeFirestore, mockSessionService);
 
@@ -53,210 +56,168 @@ void main() {
     container.dispose();
   });
 
-  group('Epoch 1 Simulation (Target: 10,000 DSP, 50 PoCT)', () {
-    test('UserA earns 12,000 DSP -> Triggers Treasury Distribution', () async {
-      // 1. Setup UserA (Tanzania)
-      final userId = 'user_a';
-      final countryCode = 'TZ';
-      await profileRepository.saveUserProfile(
-        userId,
-        ProfileData(
-            uid: userId,
-            firstName: 'User',
-            lastName: 'A',
-            phone: '+1234567890',
-            profileImage: 'https://example.com/avatar.jpg',
-            homeCountryCode: countryCode, 
-            hostCountryCode: 'US',
-            homeLocation: const UserLocation(formattedAddress: 'Dar es Salaam, Tanzania', placeId: 'tz_1', countryCode: 'TZ'),
-            hostLocation: const UserLocation(formattedAddress: 'New York, USA', placeId: 'us_1', countryCode: 'US'),
-        ),
+  // ──────────────────────────────────────────────────────────────────────────
+  // Current TGE Model:
+  //   Gate  = DSP-only (minDspRequired = 10,000)
+  //   PoCT  = Affects efficiency via decile scale, NOT a gate
+  //           efficiency = ceil(trustScore / 10) / 10
+  //   Swap  = DSP balance × efficiency
+  // ──────────────────────────────────────────────────────────────────────────
+
+  ProfileData _testProfile(String userId) => ProfileData(
+    uid: userId,
+    firstName: 'Test',
+    lastName: 'User',
+    phone: '+1234567890',
+    profileImage: 'https://example.com/avatar.jpg',
+    homeCountryCode: 'TZ',
+    hostCountryCode: 'US',
+    homeLocation: const UserLocation(
+      formattedAddress: 'Dar es Salaam, Tanzania',
+      placeId: 'tz_1',
+      countryCode: 'TZ',
+    ),
+    hostLocation: const UserLocation(
+      formattedAddress: 'New York, USA',
+      placeId: 'us_1',
+      countryCode: 'US',
+    ),
+  );
+
+  group('TGE Eligibility (DSP-Only Gate, 10k minimum)', () {
+    test('User with >= 10k DSP is eligible regardless of PoCT', () async {
+      final userId = 'user_dsp_pass';
+      await profileRepository.saveUserProfile(userId, _testProfile(userId));
+
+      final pointsService = container.read(pointsServiceProvider);
+      await pointsService.awardManualPoints(userId, 10000, 'Grant');
+
+      // Low PoCT should NOT block eligibility:
+      await trustRepository.saveTrustData(
+        TrustData(uid: userId, trustScore: 5.0, lastUpdated: DateTime.now()),
       );
 
-      // 2. Simulate UserA Activity: 10 Referrals (1000 each + bonuses likely)
-      final pointsService = container.read(pointsServiceProvider);
-      
-      for (int i = 0; i < 10; i++) {
-         await pointsService.awardManualPoints(userId, 1000, 'Referral Bonus');
-      }
-      // Add check-in for good measure (100)
-      await pointsService.awardManualPoints(userId, 100, 'Daily Check-in');
-      
-      // 3. Verify User Balance
-      final userPoints = await pointsRepository.getUserPoints(userId);
-      print('UserA Total Points: ${userPoints?.totalPoints}');
-      expect(userPoints?.totalPoints, greaterThanOrEqualTo(10000));
+      final trustService = container.read(trustServiceProvider);
+      final isEligible = await trustService.checkUserTgeEligibility(userId, 1);
 
-      // 4. Trigger Sync 
-      await pointsRepository.syncTreasuryBalances();
-
-      // Check Tanzania Treasury
-      final countryTreasury = await fakeFirestore.collection('communities').doc('home_country_tz').get();
-      final countryPoints = countryTreasury.data()?['points'] ?? 0;
-      final countryCumulative = countryTreasury.data()?['cumulativeEarnings'] ?? 0;
-      
-      print('Tanzania Treasury Points initial: $countryPoints');
-      print('Tanzania Cumulative initial: $countryCumulative');
-
-      // 5. Earn MORE to hit milestone
-      // We need cumulative distribution of 10,000 to hit 1 milestone.
-      // If distribution is (UserTotal / 5), then to get 10,000 distribution, User needs 50,000 Total.
-      await pointsService.awardManualPoints(userId, 40000, 'Mega Bonus');
-      
-      await pointsRepository.syncTreasuryBalances();
-      
-      final countryTreasury2 = await fakeFirestore.collection('communities').doc('home_country_tz').get();
-      final countryPoints2 = countryTreasury2.data()?['points'] ?? 0;
-      final countryCumulative2 = countryTreasury2.data()?['cumulativeEarnings'] ?? 0;
-      
-      print('Tanzania Treasury Points (After 50k): $countryPoints2');
-      print('Tanzania Cumulative (After 50k): $countryCumulative2');
-      
-      // Expectation: 10,000 points visible
-      expect(countryPoints2, 10000); 
+      expect(isEligible, true, reason: 'DSP >= 10k → eligible (PoCT is not a gate)');
     });
 
-    test('TGE Eligibility: Standard User', () async {
-       final userId = 'user_tge';
+    test('User with < 10k DSP is NOT eligible even with max PoCT', () async {
+      final userId = 'user_dsp_fail';
+      await profileRepository.saveUserProfile(userId, _testProfile(userId));
 
-       await profileRepository.saveUserProfile(
-        userId,
-        ProfileData(
-            uid: userId,
-            firstName: 'TGE',
-            lastName: 'User',
-            phone: '+1234567890',
-            profileImage: 'https://example.com/avatar.jpg',
-            homeCountryCode: 'TZ', 
-            hostCountryCode: 'US',
-            homeLocation: const UserLocation(formattedAddress: 'Dar es Salaam, Tanzania', placeId: 'tz_1', countryCode: 'TZ'),
-            hostLocation: const UserLocation(formattedAddress: 'New York, USA', placeId: 'us_1', countryCode: 'US'),
-        ),
+      final pointsService = container.read(pointsServiceProvider);
+      await pointsService.awardManualPoints(userId, 1000, 'Small Grant');
+
+      await trustRepository.saveTrustData(
+        TrustData(uid: userId, trustScore: 100.0, lastUpdated: DateTime.now()),
       );
-       
-       final pointsService = container.read(pointsServiceProvider);
-       await pointsService.awardManualPoints(userId, 10000, 'TGE Grant');
-       
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 50.0, lastUpdated: DateTime.now()));
-       
-       final trustService = container.read(trustServiceProvider);
-       final isEligible = await trustService.checkUserTgeEligibility(userId, 1);
-       
-       print('User is Eligible for Epoch 1: $isEligible');
-       expect(isEligible, true);
-       
-       final isEligible2 = await trustService.checkUserTgeEligibility(userId, 2);
-       print('User is Eligible for Epoch 2: $isEligible2');
-       expect(isEligible2, false);
+
+      final trustService = container.read(trustServiceProvider);
+      final isEligible = await trustService.checkUserTgeEligibility(userId, 1);
+
+      expect(isEligible, false, reason: '1k DSP < 10k → ineligible');
+    });
+
+    test('Epoch parameter has no effect (flat gate across all epochs)', () async {
+      final userId = 'user_flat_gate';
+      await profileRepository.saveUserProfile(userId, _testProfile(userId));
+
+      final pointsService = container.read(pointsServiceProvider);
+      await pointsService.awardManualPoints(userId, 10000, 'Grant');
+
+      final trustService = container.read(trustServiceProvider);
+      for (int epoch = 1; epoch <= 10; epoch++) {
+        final isEligible = await trustService.checkUserTgeEligibility(userId, epoch);
+        expect(isEligible, true, reason: 'All epochs use same 10k gate');
+      }
     });
   });
 
-  group('Epoch 2-7 Simulations (Escalating Thresholds)', () {
-    const userId = 'user_sim_growth';
+  group('Decile PoCT Efficiency (swap rate, NOT a gate)', () {
+    test('Efficiency scales with trust score decile', () {
+      final epochService = EpochService();
 
-    setUp(() async {
-      // Create a fresh user for this group
-       await profileRepository.saveUserProfile(
-        userId,
-        ProfileData(
-            uid: userId,
-            firstName: 'Growth',
-            lastName: 'User',
-            phone: '+1999999999',
-            profileImage: 'https://example.com/avatar.jpg',
-            homeCountryCode: 'TZ', 
-            hostCountryCode: 'US',
-            homeLocation: const UserLocation(formattedAddress: 'Dar es Salaam, Tanzania', placeId: 'tz_1', countryCode: 'TZ'),
-            hostLocation: const UserLocation(formattedAddress: 'New York, USA', placeId: 'us_1', countryCode: 'US'),
+      // Decile table: ceil(score/10) / 10
+      expect(epochService.calculateEfficiency(0), 0.0);   // D0: 0%
+      expect(epochService.calculateEfficiency(1), 0.1);   // D1: 10%
+      expect(epochService.calculateEfficiency(10), 0.1);  // D1: 10%
+      expect(epochService.calculateEfficiency(11), 0.2);  // D2: 20%
+      expect(epochService.calculateEfficiency(20), 0.2);  // D2: 20%
+      expect(epochService.calculateEfficiency(50), 0.5);  // D5: 50%
+      expect(epochService.calculateEfficiency(51), 0.6);  // D6: 60%
+      expect(epochService.calculateEfficiency(80), 0.8);  // D8: 80%
+      expect(epochService.calculateEfficiency(81), 0.9);  // D9: 90%
+      expect(epochService.calculateEfficiency(91), 1.0);  // D10: 100%
+      expect(epochService.calculateEfficiency(100), 1.0); // D10: 100%
+    });
+
+    test('TGE swap = DSP × efficiency', () {
+      final epochService = EpochService();
+
+      // 10k DSP, trust 50 → efficiency 50% → 5k tokens
+      expect(
+        epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: 10000,
+          trustScore: 50,
         ),
+        5000.0,
+      );
+
+      // 10k DSP, trust 91 → efficiency 100% → 10k tokens
+      expect(
+        epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: 10000,
+          trustScore: 91,
+        ),
+        10000.0,
+      );
+
+      // 5k DSP → below gate → 0 tokens
+      expect(
+        epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: 5000,
+          trustScore: 100,
+        ),
+        0.0,
       );
     });
+  });
 
-    test('Epoch 2 Verification (100k DSP, 60 PoCT)', () async {
-       final pointsService = container.read(pointsServiceProvider);
-       final trustService = container.read(trustServiceProvider);
-       
-       // Case 1: Insufficient DSP (50k), Sufficient PoCT (60)
-       await pointsService.awardManualPoints(userId, 50000, 'Epoch 1 Earnings');
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 60.0, lastUpdated: DateTime.now()));
-       
-       expect(await trustService.checkUserTgeEligibility(userId, 2), false);
-       
-       // Case 2: Sufficient DSP (100k), Insufficient PoCT (50)
-       await pointsService.awardManualPoints(userId, 50000, 'Epoch 2 Earnings'); // Total 100k
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 50.0, lastUpdated: DateTime.now()));
-       
-       expect(await trustService.checkUserTgeEligibility(userId, 2), false);
+  group('Treasury Distribution', () {
+    test('syncTreasuryBalances distributes correctly for a single user', () async {
+      final userId = 'user_treasury';
 
-       // Case 3: Sufficient Both
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 60.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 2), true);
-    });
+      await fakeFirestore.collection('users').doc(userId).set({
+        'communityMemberships': [
+          'global_community',
+          'home_continent_africa',
+          'home_country_tz',
+          'home_city_dar',
+          'host_continent_namerica',
+          'host_country_us',
+          'host_city_nyc',
+        ],
+      });
 
-    test('Epoch 3 Verification (100k DSP, 70 PoCT)', () async {
-       final pointsService = container.read(pointsServiceProvider);
-       final trustService = container.read(trustServiceProvider);
-       
-       await pointsService.awardManualPoints(userId, 100000, 'Life Savings');
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 69.0, lastUpdated: DateTime.now()));
-       
-       expect(await trustService.checkUserTgeEligibility(userId, 3), false);
-       
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 70.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 3), true);
-    });
+      await pointsRepository.initializeUserPoints(userId);
+      
+      final pointsService = container.read(pointsServiceProvider);
+      await pointsService.awardManualPoints(userId, 10000, 'Initial Grant');
 
-    test('Epoch 4 Verification (100k DSP, 80 PoCT)', () async {
-       final pointsService = container.read(pointsServiceProvider);
-       final trustService = container.read(trustServiceProvider);
-       
-       await pointsService.awardManualPoints(userId, 100000, 'Life Savings');
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 79.9, lastUpdated: DateTime.now()));
-       
-       expect(await trustService.checkUserTgeEligibility(userId, 4), false);
-       
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 80.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 4), true);
-    });
+      await pointsRepository.syncTreasuryBalances();
 
-    test('Epoch 5 Verification (100k DSP, 90 PoCT)', () async {
-       final pointsService = container.read(pointsServiceProvider);
-       final trustService = container.read(trustServiceProvider);
-       
-       await pointsService.awardManualPoints(userId, 100000, 'Life Savings');
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 89.9, lastUpdated: DateTime.now()));
-       
-       expect(await trustService.checkUserTgeEligibility(userId, 5), false);
-       
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 90.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 5), true);
-    });
-    
-    test('Epoch 6 Verification (100k DSP, 95 PoCT)', () async {
-       final pointsService = container.read(pointsServiceProvider);
-       final trustService = container.read(trustServiceProvider);
-       
-       await pointsService.awardManualPoints(userId, 100000, 'Life Savings');
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 94.9, lastUpdated: DateTime.now()));
-       
-       expect(await trustService.checkUserTgeEligibility(userId, 6), false);
-       
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 95.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 6), true);
-    });
+      final treasuryStats = await fakeFirestore.collection('system_stats').doc('treasury').get();
+      final data = treasuryStats.data()!;
 
-    test('Epoch 7 Verification (100k DSP, 100 PoCT - Pillar Status)', () async {
-       final pointsService = container.read(pointsServiceProvider);
-       final trustService = container.read(trustServiceProvider);
-       
-       await pointsService.awardManualPoints(userId, 100000, 'Life Savings');
-       
-       // Max Trust Score is 100
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 99.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 7), false);
-       
-       await trustRepository.saveTrustData(TrustData(uid: userId, trustScore: 100.0, lastUpdated: DateTime.now()));
-       expect(await trustService.checkUserTgeEligibility(userId, 7), true);
+      // 10% each: founders, investors, burn
+      expect(data['foundersPoints'], greaterThan(0));
+      expect(data['investorsPoints'], greaterThan(0));
+      expect(data['burnedPoints'], greaterThan(0));
     });
   });
 }

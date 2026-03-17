@@ -139,7 +139,7 @@ class _RemittancesScreenState extends ConsumerState<RemittancesScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.accent.withOpacity(0.1),
+                    color: AppTheme.accent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(color: AppTheme.accent),
                   ),

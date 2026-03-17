@@ -44,7 +44,6 @@ class _CreateHotelListingScreenState
   List<AutocompletePrediction> _predictions = [];
   bool _isSearching = false;
   bool _isFetchingDetails = false;
-  String? _selectedPlaceId;
   double? _lat;
   double? _lng;
   String? _countryCode;
@@ -121,7 +120,7 @@ class _CreateHotelListingScreenState
   }
 
   void _prefillFromProfile() {
-    final profile = ref.read(userProfileProvider).valueOrNull;
+    final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
     _cityC.text = profile.hostLocation.city ?? '';
     _stateC.text = profile.hostLocation.state ?? '';
@@ -177,7 +176,6 @@ class _CreateHotelListingScreenState
       _predictions = [];
       _isFetchingDetails = true;
       _searchC.text = prediction.primaryText;
-      _selectedPlaceId = prediction.placeId;
     });
 
     try {
@@ -272,22 +270,22 @@ class _CreateHotelListingScreenState
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(LucideIcons.sparkles, color: Colors.white, size: 16),
-                const SizedBox(width: 8),
+                Icon(LucideIcons.sparkles, color: Colors.white, size: 16),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Auto-filled from Google Places! Review and adjust details.',
-                    style: const TextStyle(fontSize: 13),
+                    style: TextStyle(fontSize: 13),
                   ),
                 ),
               ],
             ),
             behavior: SnackBarBehavior.floating,
             backgroundColor: AppTheme.accent,
-            duration: const Duration(seconds: 3),
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -353,7 +351,7 @@ class _CreateHotelListingScreenState
     });
 
     try {
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user == null || profile == null) {
         throw Exception('Not logged in');
@@ -364,8 +362,8 @@ class _CreateHotelListingScreenState
       for (int i = 0; i < _selectedImages.length; i++) {
         final file = File(_selectedImages[i].path);
         final storageRef = FirebaseStorage.instance.ref().child(
-              'hotels/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-            );
+          'hotels/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+        );
         await storageRef.putFile(file);
         final url = await storageRef.getDownloadURL();
         imageUrls.add(url);
@@ -499,23 +497,27 @@ class _CreateHotelListingScreenState
                       label: Text(t),
                       selected: selected,
                       onSelected: (_) => setState(() => _hotelCategory = t),
-                      selectedColor: AppTheme.accent.withOpacity(0.2),
+                      selectedColor: AppTheme.accent.withValues(alpha: 0.2),
                       backgroundColor: AppTheme.elevationColor(context, 2),
                       labelStyle: TextStyle(
                         color: selected
                             ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withOpacity(0.7),
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w500,
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.7,
+                              ),
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         fontSize: 13,
                       ),
                       side: BorderSide(
                         color: selected
-                            ? AppTheme.accent.withOpacity(0.4)
+                            ? AppTheme.accent.withValues(alpha: 0.4)
                             : Colors.transparent,
                       ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -538,7 +540,9 @@ class _CreateHotelListingScreenState
                           size: 32,
                           color: star <= _starRating
                               ? Colors.amber
-                              : theme.colorScheme.onSurface.withOpacity(0.2),
+                              : theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.2,
+                                ),
                         ),
                       ),
                     );
@@ -632,9 +636,10 @@ class _CreateHotelListingScreenState
                 const SizedBox(height: 12),
                 Builder(
                   builder: (context) {
-                    final profile = ref.read(userProfileProvider).valueOrNull;
+                    final profile = ref.read(userProfileProvider).value;
                     final cc = _countryCode ?? profile?.hostCountryCode ?? '';
-                    final hasState = country_data.hasStateLevelHierarchyFromData(cc);
+                    final hasState = country_data
+                        .hasStateLevelHierarchyFromData(cc);
                     final stateTerm = country_data.getStateTerminology(cc);
 
                     if (hasState) {
@@ -682,15 +687,19 @@ class _CreateHotelListingScreenState
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Row(
                       children: [
-                        Icon(LucideIcons.locate,
-                            size: 12,
-                            color: AppTheme.accent.withOpacity(0.6)),
+                        Icon(
+                          LucideIcons.locate,
+                          size: 12,
+                          color: AppTheme.accent.withValues(alpha: 0.6),
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'GPS: ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}',
                           style: TextStyle(
                             fontSize: 11,
-                            color: theme.colorScheme.onSurface.withOpacity(0.4),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
                         ),
                       ],
@@ -749,20 +758,23 @@ class _CreateHotelListingScreenState
                           }
                         });
                       },
-                      selectedColor: AppTheme.accent.withOpacity(0.15),
+                      selectedColor: AppTheme.accent.withValues(alpha: 0.15),
                       backgroundColor: AppTheme.elevationColor(context, 2),
                       checkmarkColor: AppTheme.accent,
                       labelStyle: TextStyle(
                         fontSize: 12,
                         color: selected
                             ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withOpacity(0.6),
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                       ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                       side: BorderSide(
                         color: selected
-                            ? AppTheme.accent.withOpacity(0.3)
+                            ? AppTheme.accent.withValues(alpha: 0.3)
                             : Colors.transparent,
                       ),
                     );
@@ -788,7 +800,7 @@ class _CreateHotelListingScreenState
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: _selectedImages.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return GestureDetector(
@@ -800,7 +812,7 @@ class _CreateHotelListingScreenState
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: _selectedImages.length < 10
-                                    ? AppTheme.accent.withOpacity(0.4)
+                                    ? AppTheme.accent.withValues(alpha: 0.4)
                                     : Colors.transparent,
                                 width: 1.5,
                                 style: BorderStyle.solid,
@@ -809,11 +821,13 @@ class _CreateHotelListingScreenState
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(LucideIcons.imagePlus,
-                                    size: 28,
-                                    color: _selectedImages.length < 10
-                                        ? AppTheme.accent
-                                        : theme.hintColor),
+                                Icon(
+                                  LucideIcons.imagePlus,
+                                  size: 28,
+                                  color: _selectedImages.length < 10
+                                      ? AppTheme.accent
+                                      : theme.hintColor,
+                                ),
                                 const SizedBox(height: 6),
                                 Text(
                                   'Add Photos',
@@ -856,7 +870,9 @@ class _CreateHotelListingScreenState
                             left: 4,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.black54,
                                 borderRadius: BorderRadius.circular(8),
@@ -864,7 +880,9 @@ class _CreateHotelListingScreenState
                               child: Text(
                                 '$index',
                                 style: const TextStyle(
-                                    color: Colors.white, fontSize: 10),
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                ),
                               ),
                             ),
                           ),
@@ -874,7 +892,8 @@ class _CreateHotelListingScreenState
                             right: 4,
                             child: GestureDetector(
                               onTap: () => setState(
-                                  () => _selectedImages.removeAt(index - 1)),
+                                () => _selectedImages.removeAt(index - 1),
+                              ),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
@@ -906,7 +925,8 @@ class _CreateHotelListingScreenState
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       elevation: 0,
                     ),
                     child: _isSaving
@@ -942,8 +962,7 @@ class _CreateHotelListingScreenState
                           ),
                   ),
                 ),
-                SizedBox(
-                    height: MediaQuery.of(context).padding.bottom + 20),
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
               ],
             ),
           ),
@@ -952,17 +971,19 @@ class _CreateHotelListingScreenState
           if (_isFetchingDetails)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 24),
+                      horizontal: 32,
+                      vertical: 24,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.cardColor,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 20,
                         ),
                       ],
@@ -970,7 +991,7 @@ class _CreateHotelListingScreenState
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
+                        const SizedBox(
                           width: 32,
                           height: 32,
                           child: CircularProgressIndicator(
@@ -992,7 +1013,9 @@ class _CreateHotelListingScreenState
                           'Auto-filling from Google Places',
                           style: TextStyle(
                             fontSize: 12,
-                            color: theme.colorScheme.onSurface.withOpacity(0.5),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                         ),
                       ],
@@ -1018,23 +1041,20 @@ class _CreateHotelListingScreenState
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                AppTheme.accent.withOpacity(0.08),
-                AppTheme.accent.withOpacity(0.03),
+                AppTheme.accent.withValues(alpha: 0.08),
+                AppTheme.accent.withValues(alpha: 0.03),
               ],
             ),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppTheme.accent.withOpacity(0.15),
-            ),
+            border: Border.all(color: AppTheme.accent.withValues(alpha: 0.15)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              const Row(
                 children: [
-                  Icon(LucideIcons.sparkles,
-                      size: 16, color: AppTheme.accent),
-                  const SizedBox(width: 8),
+                  Icon(LucideIcons.sparkles, size: 16, color: AppTheme.accent),
+                  SizedBox(width: 8),
                   Text(
                     'SEARCH & AUTO-FILL',
                     style: TextStyle(
@@ -1051,7 +1071,7 @@ class _CreateHotelListingScreenState
                 'Search for your hotel on Google to auto-fill details.',
                 style: TextStyle(
                   fontSize: 12,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1063,13 +1083,16 @@ class _CreateHotelListingScreenState
                   hintText: 'Search hotel name or address...',
                   hintStyle: TextStyle(
                     fontSize: 13,
-                    color: theme.colorScheme.onSurface.withOpacity(0.35),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
                   ),
-                  prefixIcon: Icon(LucideIcons.search,
-                      size: 18, color: AppTheme.accent.withOpacity(0.6)),
+                  prefixIcon: Icon(
+                    LucideIcons.search,
+                    size: 18,
+                    color: AppTheme.accent.withValues(alpha: 0.6),
+                  ),
                   suffixIcon: _isSearching
-                      ? Padding(
-                          padding: const EdgeInsets.all(12),
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
                           child: SizedBox(
                             width: 16,
                             height: 16,
@@ -1080,17 +1103,20 @@ class _CreateHotelListingScreenState
                           ),
                         )
                       : _searchC.text.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(LucideIcons.x,
-                                  size: 16,
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.4)),
-                              onPressed: () {
-                                _searchC.clear();
-                                setState(() => _predictions = []);
-                              },
-                            )
-                          : null,
+                      ? IconButton(
+                          icon: Icon(
+                            LucideIcons.x,
+                            size: 16,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.4,
+                            ),
+                          ),
+                          onPressed: () {
+                            _searchC.clear();
+                            setState(() => _predictions = []);
+                          },
+                        )
+                      : null,
                   filled: true,
                   fillColor: AppTheme.elevationColor(context, 2),
                   border: OutlineInputBorder(
@@ -1098,7 +1124,9 @@ class _CreateHotelListingScreenState
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 onChanged: _onSearchChanged,
               ),
@@ -1115,10 +1143,11 @@ class _CreateHotelListingScreenState
               color: theme.cardColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: theme.dividerColor.withOpacity(0.3)),
+                color: theme.dividerColor.withValues(alpha: 0.3),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1128,42 +1157,38 @@ class _CreateHotelListingScreenState
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(vertical: 4),
               itemCount: _predictions.length,
-              separatorBuilder: (_, __) => Divider(
+              separatorBuilder: (_, _) => Divider(
                 height: 1,
                 indent: 48,
-                color: theme.dividerColor.withOpacity(0.2),
+                color: theme.dividerColor.withValues(alpha: 0.2),
               ),
               itemBuilder: (context, index) {
                 final p = _predictions[index];
-                final isHotelType = p.placeTypes?.any((t) =>
-                        t == 'lodging' ||
-                        t == 'hotel' ||
-                        t == 'resort_hotel') ??
+                final isHotelType =
+                    p.placeTypes?.any(
+                      (t) =>
+                          t == 'lodging' || t == 'hotel' || t == 'resort_hotel',
+                    ) ??
                     false;
 
                 return ListTile(
                   dense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   leading: Container(
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
                       color: isHotelType
-                          ? AppTheme.accent.withOpacity(0.12)
-                          : theme.colorScheme.onSurface
-                              .withOpacity(0.06),
+                          ? AppTheme.accent.withValues(alpha: 0.12)
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
-                      isHotelType
-                          ? LucideIcons.hotel
-                          : LucideIcons.mapPin,
+                      isHotelType ? LucideIcons.hotel : LucideIcons.mapPin,
                       size: 16,
                       color: isHotelType
                           ? AppTheme.accent
-                          : theme.colorScheme.onSurface
-                              .withOpacity(0.5),
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                   title: Text(
@@ -1181,8 +1206,9 @@ class _CreateHotelListingScreenState
                           p.secondaryText,
                           style: TextStyle(
                             fontSize: 11,
-                            color: theme.colorScheme.onSurface
-                                .withOpacity(0.5),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1191,8 +1217,7 @@ class _CreateHotelListingScreenState
                   trailing: Icon(
                     LucideIcons.arrowRight,
                     size: 14,
-                    color:
-                        theme.colorScheme.onSurface.withOpacity(0.3),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                   ),
                   onTap: () => _onPlaceSelected(p),
                 );
@@ -1242,8 +1267,10 @@ class _CreateHotelListingScreenState
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -1269,7 +1296,7 @@ class _CreateHotelListingScreenState
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 6),
@@ -1311,7 +1338,7 @@ class _CreateHotelListingScreenState
         height: 28,
         decoration: BoxDecoration(
           color: enabled
-              ? AppTheme.accent.withOpacity(0.12)
+              ? AppTheme.accent.withValues(alpha: 0.12)
               : Colors.transparent,
           shape: BoxShape.circle,
         ),
@@ -1320,7 +1347,7 @@ class _CreateHotelListingScreenState
           size: 14,
           color: enabled
               ? AppTheme.accent
-              : Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
         ),
       ),
     );

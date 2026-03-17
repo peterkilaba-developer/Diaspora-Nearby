@@ -1,10 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// ignore: constant_identifier_names
 enum MembershipStatus {
   active,
   inactive,
+  // ignore: constant_identifier_names
   pending_proxy, // Waiting for proxy to accept
+  // ignore: constant_identifier_names
   pending_payment, // Proxy accepted, waiting for payment
+  // ignore: constant_identifier_names
   grace_period,
 }
 
@@ -82,7 +86,14 @@ class BereavementMembership {
   }
 }
 
-enum ClaimStatus { submitted, under_review, approved, rejected, paid }
+enum ClaimStatus {
+  submitted,
+  // ignore: constant_identifier_names
+  under_review,
+  approved,
+  rejected,
+  paid,
+}
 
 class BereavementClaim {
   final String id;

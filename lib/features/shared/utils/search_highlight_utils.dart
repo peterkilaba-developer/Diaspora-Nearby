@@ -41,8 +41,8 @@ class SearchHighlightUtils {
         TextSpan(
           text: text.substring(indexOfMatch, indexOfMatch + lowerQuery.length),
           style: TextStyle(
-            backgroundColor: theme.colorScheme.primaryContainer.withOpacity(
-              0.7,
+            backgroundColor: theme.colorScheme.primaryContainer.withValues(
+              alpha: 0.7,
             ),
             color: theme.colorScheme.onPrimaryContainer,
             fontWeight: FontWeight.bold,

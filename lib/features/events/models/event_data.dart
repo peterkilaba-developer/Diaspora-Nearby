@@ -181,8 +181,7 @@ class Event {
       creatorId: creatorId ?? this.creatorId,
       attendees: attendees ?? this.attendees,
       attendeeCount: attendeeCount ?? this.attendeeCount,
-      confirmedAttendees:
-          confirmedAttendees ?? this.confirmedAttendees,
+      confirmedAttendees: confirmedAttendees ?? this.confirmedAttendees,
       interested: interested ?? this.interested,
       invitedUserIds: invitedUserIds ?? this.invitedUserIds,
       isPaid: isPaid ?? this.isPaid,

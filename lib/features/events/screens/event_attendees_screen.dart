@@ -79,9 +79,10 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer.withOpacity(0.3),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.3),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -111,12 +112,14 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
               }
 
               return ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 16,
+                padding: EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  top: 16,
+                  bottom: 16 + MediaQuery.of(context).padding.bottom,
                 ),
                 itemCount: profiles.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final profile = profiles[index];
                   return ListTile(

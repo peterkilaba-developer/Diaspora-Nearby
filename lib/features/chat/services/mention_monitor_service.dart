@@ -109,8 +109,10 @@ class MentionMonitorService {
         // Fetch Chat Name for "Mention in [Community Name]"
         String chatName = 'Chat';
         try {
-          final chatDoc =
-              await _firestore.collection('chats').doc(chatId).get();
+          final chatDoc = await _firestore
+              .collection('chats')
+              .doc(chatId)
+              .get();
           if (chatDoc.exists) {
             chatName = chatDoc.data()?['name']?.toString() ?? 'Chat';
           }
@@ -164,10 +166,10 @@ class MentionMonitorService {
     );
 
     await _notificationsPlugin.show(
-      id,
-      title,
-      body,
-      platformChannelSpecifics,
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: platformChannelSpecifics,
       payload: payload,
     );
   }

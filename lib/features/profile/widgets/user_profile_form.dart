@@ -69,8 +69,8 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   final TextEditingController _eduYearController = TextEditingController();
 
   // State
-  List<String> _selectedProfessions = [];
-  List<String> _selectedIndustries = [];
+  String? _selectedProfession;
+  String? _selectedIndustry;
   List<String> _selectedAvailability = [];
   List<String> _selectedServices = [];
   List<String> _selectedLookingFor = [];
@@ -93,114 +93,246 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     'Part-time',
     'Weekends only',
     'Evenings only',
+    'Flexible schedule',
     'Open to collaborate',
     'Remote only',
     'Not available',
   ];
   static const List<String> _industryOptions = [
-    'Technology',
-    'Healthcare',
-    'Finance',
-    'Education',
-    'Construction',
-    'Retail',
-    'Art & Design',
-    'Hospitality',
-    'Legal',
-    'Government',
-    'Non-Profit',
+    'Accounting & Auditing',
+    'Aerospace & Defense',
+    'Agriculture & Farming',
+    'Architecture & Planning',
+    'Arts & Entertainment',
+    'Automotive',
+    'Banking & Financial Services',
+    'Biotechnology',
+    'Broadcasting & Media',
+    'Construction & Building',
+    'Consulting & Advisory',
+    'E-Commerce',
+    'Education & Training',
+    'Energy & Utilities',
+    'Engineering',
+    'Environmental Services',
+    'Fashion & Apparel',
+    'Food & Beverage',
+    'Government & Public Sector',
+    'Healthcare & Medical',
+    'Hospitality & Tourism',
+    'Human Resources',
+    'Import & Export',
+    'Information Technology',
+    'Insurance',
+    'Legal Services',
+    'Logistics & Supply Chain',
+    'Manufacturing',
+    'Marketing & Advertising',
+    'Mining & Metals',
+    'Non-Profit & NGO',
+    'Pharmaceuticals',
+    'Real Estate & Property',
+    'Retail & Consumer Goods',
+    'Sports & Recreation',
+    'Telecommunications',
+    'Transportation',
     'Other',
   ];
   static const List<String> _professionOptions = [
-    'Software Engineer',
-    'Doctor',
-    'Teacher',
-    'Lawyer',
     'Accountant',
-    'Nurse',
-    'Designer',
-    'Project Manager',
+    'Architect',
+    'Business Analyst',
+    'Chef / Cook',
+    'Civil Engineer',
+    'Content Creator',
+    'Data Scientist',
+    'Dentist',
+    'Designer (Graphic / UI / UX)',
+    'Doctor / Physician',
+    'Economist',
+    'Electrician',
+    'Entrepreneur / Business Owner',
+    'Farmer / Agriculturist',
+    'Financial Advisor',
+    'Firefighter / EMT',
+    'HR Professional',
+    'Journalist / Writer',
+    'Lawyer / Attorney',
+    'Logistics Coordinator',
     'Marketing Specialist',
+    'Mechanic',
+    'Nurse',
+    'Pharmacist',
+    'Photographer / Videographer',
+    'Pilot',
+    'Plumber',
+    'Product Manager',
+    'Professor / Lecturer',
+    'Project Manager',
+    'Real Estate Agent',
+    'Researcher / Scientist',
     'Sales Professional',
-    'Analyst',
-    'Entrepreneur',
+    'Social Worker',
+    'Software Engineer / Developer',
     'Student',
-    'Researcher',
+    'Teacher / Educator',
+    'Technician',
+    'Translator / Interpreter',
+    'Truck Driver',
+    'Veterinarian',
     'Other',
   ];
   static const List<String> _languageOptions = [
+    'Afrikaans',
     'Amharic',
     'Arabic',
     'Bengali',
+    'Bulgarian',
+    'Burmese',
+    'Chinese (Cantonese)',
     'Chinese (Mandarin)',
+    'Croatian',
+    'Czech',
+    'Danish',
+    'Dutch',
     'English',
+    'Farsi / Persian',
+    'Filipino / Tagalog',
+    'Finnish',
     'French',
     'German',
+    'Greek',
     'Hausa',
+    'Hebrew',
     'Hindi',
+    'Hungarian',
     'Igbo',
     'Indonesian',
     'Italian',
     'Japanese',
+    'Javanese',
+    'Kannada',
     'Korean',
+    'Malay',
+    'Marathi',
+    'Nepali',
+    'Norwegian',
     'Oromo',
+    'Pashto',
+    'Polish',
     'Portuguese',
     'Punjabi',
+    'Romanian',
     'Russian',
+    'Serbian',
+    'Shona',
+    'Sinhala',
     'Somali',
     'Spanish',
     'Swahili',
+    'Swedish',
     'Tamil',
     'Telugu',
+    'Thai',
+    'Tigrinya',
     'Turkish',
+    'Ukrainian',
     'Urdu',
     'Vietnamese',
+    'Wolof',
     'Yoruba',
     'Zulu',
     'Other',
   ];
   static const List<String> _servicesOptions = [
-    'Mentorship',
-    'Career Advice',
-    'Legal Assistance',
-    'Financial Planning',
-    'Housing Help',
-    'Technical Support',
-    'Translation',
+    'Airport Pickup',
     'Business Partnership',
+    'Career Coaching',
+    'Childcare Support',
+    'Community Organizing',
+    'Cultural Orientation',
+    'Document Translation',
+    'Driving Lessons',
+    'Event Planning',
+    'Financial Planning',
     'Freelancing',
+    'Government Paperwork Help',
+    'Health & Wellness Guidance',
+    'Housing Help',
+    'Immigration Guidance',
+    'IT & Technical Support',
+    'Language Tutoring',
+    'Legal Assistance',
+    'Mentorship',
+    'Moving & Settling Help',
+    'Networking Introductions',
+    'Resume & Interview Prep',
+    'Spiritual Guidance',
+    'Tax Filing Assistance',
     'Other',
   ];
   static const List<String> _lookingForOptions = [
-    'Job Opportunities',
     'Business Partners',
-    'Friends',
+    'Community Events',
+    'Cultural Groups',
+    'Friends & Social Circle',
+    'Housing Leads',
+    'Job Opportunities',
     'Language Exchange',
+    'Local Advice & Tips',
+    'Mentors & Coaches',
     'Networking',
-    'Local Advice',
-    'Mentors',
-    'Events',
+    'Professional Development',
+    'Relocation Support',
+    'Roommates',
+    'Study Groups',
+    'Volunteer Opportunities',
     'Other',
   ];
   static const List<String> _interestsOptions = [
-    'Technology',
-    'Sports',
-    'Music',
-    'Travel',
-    'Food',
-    'Art',
-    'Reading',
+    'Artificial Intelligence',
+    'Board Games',
+    'Camping & Outdoors',
+    'Cars & Motorsport',
+    'Coding & Open Source',
+    'Cooking & Recipes',
+    'Crypto & Blockchain',
+    'Dance',
+    'DIY & Crafts',
+    'Entrepreneurship',
+    'Fashion & Style',
+    'Film & Cinema',
+    'Fitness & Gym',
     'Gaming',
-    'Fitness',
+    'Gardening',
+    'History & Culture',
+    'Investing & Stocks',
+    'Languages',
+    'Music',
+    'Pets & Animals',
     'Photography',
+    'Podcasts',
+    'Politics & Current Events',
+    'Reading & Books',
+    'Real Estate',
+    'Running & Marathon',
+    'Science & Space',
+    'Social Media',
+    'Sports',
+    'Technology & Gadgets',
+    'Travel',
+    'Volunteering',
+    'Yoga & Meditation',
     'Other',
   ];
   static const List<String> _meetingTypeOptions = [
-    'Virtual / Online',
+    'Virtual / Video Call',
+    'Phone Call',
     'Coffee / In-Person',
     'Group Meetup',
     'Professional Setting',
-    'Casual',
+    'Co-Working Space',
+    'Casual Hangout',
     'Other',
   ];
 
@@ -211,12 +343,14 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     'Master\'s Degree',
     'Doctoral Degree (PhD)',
     'Professional Degree (MD, JD, etc.)',
-    'Vocational/Technical Certificate',
+    'Vocational / Technical Certificate',
+    'Trade Certification',
+    'Diploma / Foundation',
     'Other',
   ];
 
   late List<String> _gradYearRange;
-  bool _noSchool = false;
+  // _noSchool removed — education is always required
 
   @override
   void initState() {
@@ -237,9 +371,10 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     _lastNameController.addListener(() => remove('Last Name'));
     _bioController.addListener(() => remove('Bio'));
     _occupationController.addListener(() => remove('Occupation'));
-    _eduInstController.addListener(
-      () {if (mounted) setState(() {}); if (!_noSchool) remove('Education');},
-    );
+    _eduInstController.addListener(() {
+      if (mounted) setState(() {});
+      remove('Education');
+    });
   }
 
   void _initializeData() {
@@ -267,12 +402,17 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       _eduYearController.text = '';
     }
 
+    // Clear legacy "No School" value
     if (_eduInstController.text == 'No School') {
-      _noSchool = true;
+      _eduInstController.clear();
     }
 
-    _selectedProfessions = List.from(p.profession ?? []);
-    _selectedIndustries = List.from(p.industry ?? []);
+    _selectedProfession = (p.profession != null && p.profession!.isNotEmpty)
+        ? p.profession!.first
+        : null;
+    _selectedIndustry = (p.industry != null && p.industry!.isNotEmpty)
+        ? p.industry!.first
+        : null;
     _selectedAvailability = List.from(p.availability ?? []);
     _selectedLanguages = List.from(p.languages ?? []);
     _selectedInterests = List.from(p.interests ?? []);
@@ -333,12 +473,22 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       hasError = true;
     }
 
+    // Validate text fields highlighted state
+    if (_bioController.text.trim().isEmpty) {
+      setState(() => _activeHighlights.add('Bio'));
+      hasError = true;
+    }
+    if (_occupationController.text.trim().isEmpty) {
+      setState(() => _activeHighlights.add('Occupation'));
+      hasError = true;
+    }
+
     // Validate Select/Chip Fields
-    if (_selectedProfessions.isEmpty) {
+    if (_selectedProfession == null || _selectedProfession!.isEmpty) {
       setState(() => _activeHighlights.add('Profession'));
       hasError = true;
     }
-    if (_selectedIndustries.isEmpty) {
+    if (_selectedIndustry == null || _selectedIndustry!.isEmpty) {
       setState(() => _activeHighlights.add('Industry'));
       hasError = true;
     }
@@ -368,6 +518,11 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     }
     if (_selectedYearsInHost.isEmpty) {
       setState(() => _activeHighlights.add('Years in Host Country'));
+      hasError = true;
+    }
+    // Education: school name is always required
+    if (_eduInstController.text.trim().isEmpty) {
+      setState(() => _activeHighlights.add('Education'));
       hasError = true;
     }
 
@@ -404,8 +559,8 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         bio: _bioController.text.trim(),
-        profession: _selectedProfessions,
-        industry: _selectedIndustries,
+        profession: _selectedProfession != null ? [_selectedProfession!] : [],
+        industry: _selectedIndustry != null ? [_selectedIndustry!] : [],
         occupation: _occupationController.text.trim(),
         availability: _selectedAvailability,
         languages: _selectedLanguages,
@@ -562,7 +717,9 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
       );
       final distanceKm = loc_utils.calculateDistance(
         position.latitude,
@@ -708,6 +865,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
                   _bioController,
                   hintText: 'Write something about yourself...',
                   maxLines: 4,
+                  highlightKey: 'Bio',
                 ),
               ),
 
@@ -715,25 +873,35 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
               _buildSectionContainer(
                 child: Column(
                   children: [
-                    _buildMultiSelectDropdown(
-                      title: 'Profession',
+                    _buildValueDropdown(
+                      label: 'Profession',
+                      value: _selectedProfession,
                       options: _professionOptions,
-                      selectedValues: _selectedProfessions,
-                      onChanged: (v) =>
-                          setState(() => _selectedProfessions = v),
+                      onChanged: (v) {
+                        setState(() {
+                          _selectedProfession = v;
+                          _activeHighlights.remove('Profession');
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
-                    _buildMultiSelectDropdown(
-                      title: 'Industry',
+                    _buildValueDropdown(
+                      label: 'Industry',
+                      value: _selectedIndustry,
                       options: _industryOptions,
-                      selectedValues: _selectedIndustries,
-                      onChanged: (v) => setState(() => _selectedIndustries = v),
+                      onChanged: (v) {
+                        setState(() {
+                          _selectedIndustry = v;
+                          _activeHighlights.remove('Industry');
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
                       'Occupation',
                       _occupationController,
                       hintText: 'Current job title or role',
+                      highlightKey: 'Occupation',
                     ),
                   ],
                 ),
@@ -743,81 +911,56 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
               _buildSectionContainer(
                 child: Column(
                   children: [
-                    if (_eduInstController.text.isEmpty || _noSchool)
-                      CheckboxListTile(
-                        title: const Text('No School'),
-                        value: _noSchool,
-                        onChanged: (v) {
-                          setState(() {
-                            _noSchool = v ?? false;
-                            if (_noSchool) {
-                              _eduInstController.text = 'No School';
-                              _eduDegController.clear();
-                              _eduYearController.clear();
-                              _activeHighlights.remove('Education');
-                            } else {
-                              _eduInstController.clear();
-                            }
-                          });
-                        },
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    if (!_noSchool) ...[
-                      GooglePlacesAutocompleteField(
-                        label: 'School/College/University',
-                        controller: _eduInstController,
-                        isHighlighted: _activeHighlights.contains('Education'),
-                        filter: PlaceTypeFilter.SCHOOLS,
-                        onSelected: (desc, id) {
-                          setState(() {
-                            _eduInstController.text = desc;
-                            _noSchool = false;
-                            _activeHighlights.remove('Education');
-                          });
-                        },
-                        validator: (v) =>
-                            (!_noSchool && (v == null || v.trim().isEmpty))
-                            ? 'Required'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildValueDropdown(
-                              label: 'Degree',
-                              value: _eduDegController.text.isNotEmpty
-                                  ? _eduDegController.text
-                                  : null,
-                              options: _degreeOptions,
-                              onChanged: (v) => setState(
-                                () => _eduDegController.text = v ?? '',
-                              ),
+                    GooglePlacesAutocompleteField(
+                      label: 'School / College / University',
+                      controller: _eduInstController,
+                      isHighlighted: _activeHighlights.contains('Education'),
+                      filter: PlaceTypeFilter.SCHOOLS,
+                      onSelected: (desc, id) {
+                        setState(() {
+                          _eduInstController.text = desc;
+                          _activeHighlights.remove('Education');
+                        });
+                      },
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildValueDropdown(
+                            label: 'Degree',
+                            value: _eduDegController.text.isNotEmpty
+                                ? _eduDegController.text
+                                : null,
+                            options: _degreeOptions,
+                            onChanged: (v) => setState(
+                              () => _eduDegController.text = v ?? '',
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildValueDropdown(
-                              label: 'Year',
-                              value: _eduYearController.text.isNotEmpty
-                                  ? _eduYearController.text
-                                  : null,
-                              options: _gradYearRange,
-                              onChanged: (v) {
-                                setState(() {
-                                  _eduYearController.text = v ?? '';
-                                  if (_eduInstController.text.isNotEmpty &&
-                                      _eduDegController.text.isNotEmpty) {
-                                    _activeHighlights.remove('Education');
-                                  }
-                                });
-                              },
-                            ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildValueDropdown(
+                            label: 'Year',
+                            value: _eduYearController.text.isNotEmpty
+                                ? _eduYearController.text
+                                : null,
+                            options: _gradYearRange,
+                            onChanged: (v) {
+                              setState(() {
+                                _eduYearController.text = v ?? '';
+                                if (_eduInstController.text.isNotEmpty &&
+                                    _eduDegController.text.isNotEmpty) {
+                                  _activeHighlights.remove('Education');
+                                }
+                              });
+                            },
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -1015,7 +1158,9 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+          color: Theme.of(
+            context,
+          ).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
           letterSpacing: 1.0,
         ),
       ),
@@ -1037,22 +1182,35 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     String? hintText,
     int maxLines = 1,
     String? Function(String?)? validator,
+    String? highlightKey,
   }) {
-    if (label == 'Education' && _noSchool) return const SizedBox.shrink();
+    final bool isHighlighted =
+        highlightKey != null && _activeHighlights.contains(highlightKey);
 
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       textCapitalization: TextCapitalization.sentences,
+      onChanged: (v) {
+        if (highlightKey != null &&
+            v.trim().isNotEmpty &&
+            _activeHighlights.contains(highlightKey)) {
+          setState(() => _activeHighlights.remove(highlightKey));
+        }
+      },
       validator:
           validator ??
           (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
-        // filled/fillColor removed to use AppTheme defaults
         border: InputBorder.none,
-        enabledBorder: InputBorder.none,
+        enabledBorder: isHighlighted
+            ? OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+              )
+            : InputBorder.none,
         focusedBorder: InputBorder.none,
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1090,16 +1248,18 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         labelText: label,
-        // filled/fillColor removed to use AppTheme defaults
         border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        errorBorder: isHighlighted
+        enabledBorder: isHighlighted
             ? OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: Colors.red, width: 1.5),
               )
             : InputBorder.none,
+        focusedBorder: InputBorder.none,
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: 12,
@@ -1109,6 +1269,10 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   }
 
   Widget _buildResidencyEdit() {
+    final bool isHighlighted = _activeHighlights.contains(
+      'Years in Host Country',
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1118,9 +1282,15 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         ),
         const SizedBox(height: 8),
         Container(
-          decoration: AppTheme.innerDecoration(context),
+          decoration: isHighlighted
+              ? AppTheme.innerDecoration(
+                  context,
+                ).copyWith(border: Border.all(color: Colors.red, width: 1.5))
+              : AppTheme.innerDecoration(context),
           child: DropdownButtonFormField<String>(
-            initialValue: _selectedYearsInHost.isNotEmpty ? _selectedYearsInHost : null,
+            initialValue: _selectedYearsInHost.isNotEmpty
+                ? _selectedYearsInHost
+                : null,
             onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
             items: _yearRange
                 .map((y) => DropdownMenuItem(value: y, child: Text(y)))
@@ -1136,12 +1306,10 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              errorBorder: _activeHighlights.contains('Years in Host Country')
-                  ? OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.red, width: 1.5),
-                    )
-                  : InputBorder.none,
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,
@@ -1174,11 +1342,18 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
               }
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: AppTheme.innerDecoration(context),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.mapPin, size: 16, color: Colors.grey),
+                    const Icon(
+                      LucideIcons.mapPin,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                     if (flag != null) ...[
                       const SizedBox(width: 8),
                       Text(flag, style: const TextStyle(fontSize: 18)),
@@ -1365,33 +1540,33 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   Widget _buildLocationPrivacyToggle() {
     return SwitchListTile(
       title: const Text('Show my current city name'),
-      subtitle: !_showCurrentLocationName
+      subtitle: _showCurrentLocationName
           ? Text(
-              '1,000 DSP deducted for hiding',
-              style: TextStyle(fontSize: 11, color: Colors.orange[400]),
+              '+10 PoCT for transparency',
+              style: TextStyle(fontSize: 11, color: Colors.green[400]),
             )
           : null,
       value: _showCurrentLocationName,
       onChanged: (v) {
-        if (!v) {
-          // User wants to hide — confirm DSP deduction
-          _showHideCityConfirmation();
+        if (v) {
+          // User wants to show city — this is a trust-building action
+          _showCityConfirmation();
         } else {
-          // User re-enables showing — no cost
-          setState(() => _showCurrentLocationName = true);
+          // User hides city — no penalty, just toggle
+          setState(() => _showCurrentLocationName = false);
         }
       },
       contentPadding: EdgeInsets.zero,
     );
   }
 
-  Future<void> _showHideCityConfirmation() async {
+  Future<void> _showCityConfirmation() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hide Current City?'),
+        title: const Text('Show Your City?'),
         content: const Text(
-          'Hiding your current city name will permanently deduct 1,000 DSP from your balance.\n\nThis action cannot be reversed.',
+          'Showing your current city builds trust with the community.\n\nYou will earn +10 PoCT for transparency.',
         ),
         actions: [
           TextButton(
@@ -1399,42 +1574,21 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.green),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Deduct 1,000 DSP & Hide'),
+            child: const Text('Show City (+10 PoCT)'),
           ),
         ],
       ),
     );
 
     if (confirmed == true && mounted) {
-      try {
-        final user = ref.read(authRepositoryProvider).currentUser;
-        if (user == null) return;
-
-        await ref.read(pointsServiceProvider).deductPoints(
-              userId: user.uid,
-              amount: 1000,
-              reason: 'hide_city_name',
-            );
-
-        if (mounted) {
-          setState(() => _showCurrentLocationName = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('1,000 DSP deducted. Your city will be hidden.'),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to deduct DSP: $e')),
-          );
-        }
-      }
+      setState(() => _showCurrentLocationName = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('City is now visible. +10 PoCT for transparency!'),
+        ),
+      );
     }
   }
 }

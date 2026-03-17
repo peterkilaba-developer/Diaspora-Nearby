@@ -62,7 +62,7 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // The specific search form injected by the parent
           widget.searchForm,
 
@@ -72,10 +72,16 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
             children: [
               TextButton.icon(
                 onPressed: widget.onClear,
-                icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                icon: Icon(
+                  LucideIcons.x,
+                  size: 18,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
                 label: Text(
                   'Clear',
-                  style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                 ),
               ),
               ElevatedButton.icon(
@@ -86,14 +92,20 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   elevation: 0,
                 ),
-                icon: widget.isSearching 
+                icon: widget.isSearching
                     ? const SizedBox(
-                        width: 18, 
-                        height: 18, 
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
                       )
                     : const Icon(LucideIcons.search, size: 18),
                 label: const Text('Search'),
@@ -128,55 +140,59 @@ class _TravelSearchInterfaceState extends State<TravelSearchInterface> {
         if (!widget.showSearchForm || !widget.isSearching)
           Expanded(
             child: widget.isSearching
-                ? const TravelApiSkeletonLoader(
-                    label: 'Searching...',
-                  )
+                ? const TravelApiSkeletonLoader(label: 'Searching...')
                 : widget.results.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                widget.icon,
-                                size: 48,
-                                color: theme.colorScheme.onSurface.withOpacity(0.15),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                widget.emptyStateMessage,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSurface.withOpacity(0.4),
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            widget.icon,
+                            size: 48,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.15,
+                            ),
                           ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: EdgeInsets.only(
-                          left: 8, right: 8, top: 8,
-                          bottom: MediaQuery.of(context).padding.bottom + 16,
-                        ),
-                        itemCount: widget.customResultBuilder != null
-                            ? (widget.customResultCount ?? widget.results.length)
-                            : widget.results.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: widget.customResultBuilder != null
-                                ? widget.customResultBuilder!(context, index)
-                                : TravelSearchResultCard(
-                                    result: widget.results[index],
-                                    onTap: () {},
-                                  ),
-                          );
-                        },
+                          const SizedBox(height: 16),
+                          Text(
+                            widget.emptyStateMessage,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.4,
+                              ),
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.only(
+                      left: 8,
+                      right: 8,
+                      top: 8,
+                      bottom: MediaQuery.of(context).padding.bottom + 16,
+                    ),
+                    itemCount: widget.customResultBuilder != null
+                        ? (widget.customResultCount ?? widget.results.length)
+                        : widget.results.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: widget.customResultBuilder != null
+                            ? widget.customResultBuilder!(context, index)
+                            : TravelSearchResultCard(
+                                result: widget.results[index],
+                                onTap: () {},
+                              ),
+                      );
+                    },
+                  ),
           ),
       ],
     );

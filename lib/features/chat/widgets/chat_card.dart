@@ -57,7 +57,9 @@ final chatPartnerProvider = FutureProvider.family<ProfileData?, String>((
         occupation: 'Organization',
       );
     }
-  } catch (e) {}
+  } catch (e) {
+    debugPrint('Could not fetch organization profile: $e');
+  }
 
   return null;
 });
@@ -75,6 +77,9 @@ class ChatCard extends ConsumerWidget {
     required this.onTap,
     this.searchQuery,
   });
+
+  /// Whether this chat is an auto-created Family Group Chat
+  bool get _isFamilyGroup => chat.metadata?['isFamilyGroup'] == true;
 
   String _getCountryFlag(String? countryCode) {
     if (countryCode == null || countryCode.isEmpty) return '';
@@ -133,7 +138,7 @@ class ChatCard extends ConsumerWidget {
               fontStyle: FontStyle.italic,
             ),
           ),
-          error: (_, __) => Text(
+          error: (_, _) => Text(
             'typing...',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.primary,
@@ -173,13 +178,13 @@ class ChatCard extends ConsumerWidget {
           Icon(
             LucideIcons.ban,
             size: 14,
-            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(width: 4),
           Text(
             'Message deleted',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -196,7 +201,8 @@ class ChatCard extends ConsumerWidget {
     // Check for hosting request/arrangement system messages
     final systemType = lastMessage.metadata?['systemType'] as String?;
     if (lastMessage.type == 'system' &&
-        (systemType == 'hosting_request' || systemType == 'hosting_arrangement')) {
+        (systemType == 'hosting_request' ||
+            systemType == 'hosting_arrangement')) {
       icon = LucideIcons.plane;
       text = lastMessage.content;
       customIconColor = AppTheme.accent;
@@ -227,10 +233,42 @@ class ChatCard extends ConsumerWidget {
           text = 'Document message';
           break;
         case 'dsp_transfer': // [NEW]
-          icon = LucideIcons.coins;
-          text = 'Transfer message';
-          customIconColor = theme.colorScheme.tertiary; // Sage Green
-          break;
+          final assetType = lastMessage.metadata?['assetType'] as String?;
+          final isTokenTransfer = assetType == 'token';
+          final amount = lastMessage.metadata?['amount']?.toString() ?? '';
+          final currentUserId = ref.watch(authStateProvider).value?.uid;
+          final isSent = lastMessage.senderId == currentUserId;
+          final direction = isSent ? 'Sent' : 'Received';
+          final assetLabel = isTokenTransfer ? r'$DIASPORA' : 'DSP';
+          final assetColor = isTokenTransfer ? AppTheme.tokenColor : AppTheme.dspColor;
+
+          // Build a rich Row widget directly for transfers
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isTokenTransfer)
+                Image.asset(
+                  'assets/icons/logo-orange-transparent-32.png',
+                  width: 28,
+                  height: 28,
+                  color: assetColor,
+                )
+              else
+                Icon(LucideIcons.coins, size: 20, color: assetColor),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '$amount $assetLabel $direction',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: assetColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          );
         case 'money-transfer':
           icon = LucideIcons.banknote;
           text = 'Money transfer';
@@ -257,6 +295,15 @@ class ChatCard extends ConsumerWidget {
             icon,
             size: 16,
             color: customIconColor ?? theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+        ] else if (isMedia && icon == null && customIconColor != null) ...[
+          // Token transfer — show logo image
+          Image.asset(
+            'assets/icons/logo-orange-transparent-24.png',
+            width: 16,
+            height: 16,
+            color: customIconColor,
           ),
           const SizedBox(width: 4),
         ],
@@ -415,7 +462,7 @@ class ChatCard extends ConsumerWidget {
             ),
           ),
         ),
-        error: (_, __) => CircleAvatar(
+        error: (_, _) => CircleAvatar(
           radius: 28,
           backgroundColor: Colors.transparent,
           child: Text(
@@ -436,6 +483,25 @@ class ChatCard extends ConsumerWidget {
         chat: chat,
         size: 56,
         context: context,
+      );
+    }
+
+    // Family Group Chat — heartHandshake avatar
+    if (_isFamilyGroup) {
+      return Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Icon(
+            LucideIcons.heartHandshake,
+            color: Colors.blue.shade600,
+            size: 26,
+          ),
+        ),
       );
     }
 
@@ -716,12 +782,16 @@ class ChatCard extends ConsumerWidget {
                                     ),
                                   ),
                                 if (chat.isGroup)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 6.0),
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6.0),
                                     child: Icon(
-                                      LucideIcons.users,
+                                      _isFamilyGroup
+                                          ? LucideIcons.heartHandshake
+                                          : LucideIcons.users,
                                       size: 16,
-                                      color: Colors.green,
+                                      color: _isFamilyGroup
+                                          ? Colors.blue.shade600
+                                          : Colors.green,
                                     ),
                                   ),
                                 Flexible(

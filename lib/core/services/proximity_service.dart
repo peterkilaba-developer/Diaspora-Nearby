@@ -1,21 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ProximityService {
-  final FirebaseFirestore _firestore;
-  final FlutterLocalNotificationsPlugin _notificationsPlugin;
-  final SharedPreferences? _prefs;
-
-  ProximityService({
-    FirebaseFirestore? firestore,
-    FlutterLocalNotificationsPlugin? notificationsPlugin,
-    SharedPreferences? prefs,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _notificationsPlugin =
-           notificationsPlugin ?? FlutterLocalNotificationsPlugin(),
-       _prefs = prefs;
+  ProximityService();
 
   Future<void> checkAndNotify(String userId) async {
     // [REFACTORED] Proximity logic has moved to Firebase Cloud Functions.

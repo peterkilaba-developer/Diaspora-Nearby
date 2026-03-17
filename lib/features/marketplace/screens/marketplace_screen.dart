@@ -4,11 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/travel/widgets/country_filter_toggle.dart';
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.dart';
 import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
-import 'package:diaspora_nearby/features/marketplace/utils/marketplace_seeder.dart';
 import 'package:diaspora_nearby/features/marketplace/data/vehicle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/data/motorcycle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
@@ -98,7 +96,8 @@ IconData categoryIcon(String id) {
 }
 
 class MarketplaceScreen extends ConsumerStatefulWidget {
-  const MarketplaceScreen({super.key});
+  final String? initialType;
+  const MarketplaceScreen({super.key, this.initialType});
 
   @override
   ConsumerState<MarketplaceScreen> createState() => _MarketplaceScreenState();
@@ -106,7 +105,7 @@ class MarketplaceScreen extends ConsumerStatefulWidget {
 
 class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   String? _selectedCategory;
-  String _selectedType = 'all';
+  late String _selectedType = widget.initialType ?? 'all';
   String _selectedCountryFilter = 'all';
 
   // Deep category-specific filters
@@ -183,7 +182,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final profileAsync = ref.watch(userProfileProvider);
-    final profile = profileAsync.valueOrNull;
+    final profile = profileAsync.value;
     // final isBusiness = profile?.businessProfile?.isBusinessVerified == true; // [COMMENTED] Re-add for verified business gate later
     final communityIds = profile?.communityMemberships;
 
@@ -240,8 +239,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           clipBehavior: Clip.none,
           children: [
             IconButton(
-              icon: Icon(LucideIcons.filter, size: 20,
-                  color: _hasActiveFilters ? AppTheme.accent : null),
+              icon: Icon(
+                LucideIcons.filter,
+                size: 20,
+                color: _hasActiveFilters ? AppTheme.accent : null,
+              ),
               onPressed: () => _showFilterSheet(theme, isDark),
               tooltip: 'Filters',
             ),
@@ -255,7 +257,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     color: AppTheme.accent,
                     shape: BoxShape.circle,
                   ),
-                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
                   child: Text(
                     '$_activeFilterCount',
                     textAlign: TextAlign.center,
@@ -273,14 +278,18 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         PopupMenuButton<String>(
           icon: const Icon(LucideIcons.moreVertical, size: 20),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+            borderRadius: BorderRadius.circular(12),
+          ),
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'saved',
               child: Row(
                 children: [
-                  Icon(LucideIcons.bookmark, size: 16,
-                      color: theme.colorScheme.onSurface),
+                  Icon(
+                    LucideIcons.bookmark,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 10),
                   const Text('Saved Listings'),
                 ],
@@ -291,8 +300,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               value: 'my_listings',
               child: Row(
                 children: [
-                  Icon(LucideIcons.shoppingBag, size: 16,
-                      color: theme.colorScheme.onSurface),
+                  Icon(
+                    LucideIcons.shoppingBag,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 10),
                   const Text('My Listings'),
                 ],
@@ -303,8 +315,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               value: 'sell_product',
               child: Row(
                 children: [
-                  Icon(LucideIcons.packagePlus, size: 16,
-                      color: theme.colorScheme.onSurface),
+                  Icon(
+                    LucideIcons.packagePlus,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 10),
                   const Text('Sell Products'),
                 ],
@@ -314,8 +329,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               value: 'find_clients',
               child: Row(
                 children: [
-                  Icon(LucideIcons.users, size: 16,
-                      color: theme.colorScheme.onSurface),
+                  Icon(
+                    LucideIcons.users,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 10),
                   const Text('Find Clients'),
                 ],
@@ -325,50 +343,27 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               value: 'hire_candidates',
               child: Row(
                 children: [
-                  Icon(LucideIcons.userPlus, size: 16,
-                      color: theme.colorScheme.onSurface),
+                  Icon(
+                    LucideIcons.userPlus,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
                   const SizedBox(width: 10),
                   const Text('Hire Candidates'),
-                ],
-              ),
-            ),
-            const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'seed',
-              child: Row(
-                children: [
-                  Icon(LucideIcons.database, size: 16,
-                      color: theme.colorScheme.onSurface),
-                  const SizedBox(width: 10),
-                  const Text('Seed Mock Listings'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'clear_seed',
-              child: Row(
-                children: [
-                  Icon(LucideIcons.trash2, size: 16,
-                      color: theme.colorScheme.onSurface),
-                  const SizedBox(width: 10),
-                  const Text('Clear Mock Listings'),
                 ],
               ),
             ),
           ],
           onSelected: (value) => _handleMenuAction(
             value,
-            profile: ref.read(userProfileProvider).valueOrNull,
+            profile: ref.read(userProfileProvider).value,
           ),
         ),
       ],
     );
   }
 
-
-
   // ─── Host / Home Country Toggle ─────────────────────────────────────────
-
 
   // ─── Active Filter Pills ────────────────────────────────────────────────
   Widget _buildActiveFilters(ThemeData theme, bool isDark) {
@@ -381,19 +376,18 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               spacing: 6,
               runSpacing: 4,
               children: [
-
                 if (_selectedType != 'all')
                   _filterPill(
                     icon: _selectedType == 'product'
                         ? LucideIcons.package
                         : _selectedType == 'job'
-                            ? LucideIcons.briefcase
-                            : LucideIcons.wrench,
+                        ? LucideIcons.briefcase
+                        : LucideIcons.wrench,
                     label: _selectedType == 'product'
                         ? 'Products'
                         : _selectedType == 'job'
-                            ? 'Jobs'
-                            : 'Services',
+                        ? 'Jobs'
+                        : 'Services',
                     onRemove: () => setState(() => _selectedType = 'all'),
                     isDark: isDark,
                   ),
@@ -451,7 +445,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   _filterPill(
                     icon: LucideIcons.clock,
                     label: _filterEmploymentType!,
-                    onRemove: () => setState(() => _filterEmploymentType = null),
+                    onRemove: () =>
+                        setState(() => _filterEmploymentType = null),
                     isDark: isDark,
                   ),
                 if (_filterWorkMode != null)
@@ -465,7 +460,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   _filterPill(
                     icon: LucideIcons.award,
                     label: _filterExperienceLevel!,
-                    onRemove: () => setState(() => _filterExperienceLevel = null),
+                    onRemove: () =>
+                        setState(() => _filterExperienceLevel = null),
                     isDark: isDark,
                   ),
                 if (_filterBedrooms != null)
@@ -479,7 +475,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   _filterPill(
                     icon: LucideIcons.home,
                     label: _filterListingPurpose!,
-                    onRemove: () => setState(() => _filterListingPurpose = null),
+                    onRemove: () =>
+                        setState(() => _filterListingPurpose = null),
                     isDark: isDark,
                   ),
                 if (_filterBrand != null)
@@ -495,9 +492,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           const SizedBox(width: 8),
           GestureDetector(
             onTap: _resetAllFilters,
-            child: Text('Clear all',
-                style: TextStyle(
-                    fontSize: 11, color: AppTheme.accent.withValues(alpha: 0.8))),
+            child: Text(
+              'Clear all',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.accent.withValues(alpha: 0.8),
+              ),
+            ),
           ),
         ],
       ),
@@ -521,16 +522,22 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         children: [
           Icon(icon, size: 12, color: AppTheme.accent),
           const SizedBox(width: 4),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.accent)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.accent,
+            ),
+          ),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onRemove,
-            child:
-                Icon(LucideIcons.x, size: 12, color: AppTheme.accent.withValues(alpha: 0.6)),
+            child: Icon(
+              LucideIcons.x,
+              size: 12,
+              color: AppTheme.accent.withValues(alpha: 0.6),
+            ),
           ),
         ],
       ),
@@ -539,7 +546,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   // ─── Listings Stream ────────────────────────────────────────────────────
   Widget _buildListingsStream(
-      ThemeData theme, bool isDark, List<String>? communityIds, dynamic profile) {
+    ThemeData theme,
+    bool isDark,
+    List<String>? communityIds,
+    dynamic profile,
+  ) {
     final repo = ref.watch(marketplaceRepositoryProvider);
 
     return StreamBuilder<List<MarketplaceListing>>(
@@ -557,12 +568,19 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.alertCircle,
-                      size: 40, color: theme.colorScheme.error.withValues(alpha: 0.5)),
+                  Icon(
+                    LucideIcons.alertCircle,
+                    size: 40,
+                    color: theme.colorScheme.error.withValues(alpha: 0.5),
+                  ),
                   const SizedBox(height: 12),
-                  Text('Error loading listings',
-                      style: TextStyle(
-                          color: theme.colorScheme.error, fontSize: 14)),
+                  Text(
+                    'Error loading listings',
+                    style: TextStyle(
+                      color: theme.colorScheme.error,
+                      fontSize: 14,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -571,7 +589,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: AppTheme.accent));
+            child: CircularProgressIndicator(color: AppTheme.accent),
+          );
         }
 
         var listings = snapshot.data ?? [];
@@ -583,10 +602,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               : profile.homeCountryCode as String?;
           if (filterCode != null) {
             listings = listings.where((l) {
-              final listingCountry = l.sellerCountryCode ??
-                  l.location?.countryCode;
-              return listingCountry?.toLowerCase() ==
-                  filterCode.toLowerCase();
+              final listingCountry =
+                  l.sellerCountryCode ?? l.location?.countryCode;
+              return listingCountry?.toLowerCase() == filterCode.toLowerCase();
             }).toList();
           }
         }
@@ -635,7 +653,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           }).toList();
         }
         if (_filterCondition != null) {
-          listings = listings.where((l) => l.condition == _filterCondition).toList();
+          listings = listings
+              .where((l) => l.condition == _filterCondition)
+              .toList();
         }
 
         if (listings.isEmpty) return _buildEmptyState(theme);
@@ -651,7 +671,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   // ─── Listing Card (Single Column, Horizontal) ──────────────────────────
   Widget _buildListingCard(
-      MarketplaceListing listing, ThemeData theme, bool isDark) {
+    MarketplaceListing listing,
+    ThemeData theme,
+    bool isDark,
+  ) {
     // For vehicles, use vertical hero-photo card like car rental cards
     if (listing.category == MarketplaceCategory.vehicles) {
       return _buildVehicleCard(listing, theme, isDark);
@@ -702,7 +725,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     const Spacer(),
                     LocalPriceRow(
                       listing: listing,
-                      viewerCountryCode: ref.read(userProfileProvider).valueOrNull?.hostCountryCode,
+                      viewerCountryCode: ref
+                          .read(userProfileProvider)
+                          .value
+                          ?.hostCountryCode,
                     ),
                     const Spacer(),
                     QuickSpecs(listing: listing),
@@ -720,7 +746,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   // ─── Vehicle Card (vertical hero layout, matching car rental cards) ─────
   Widget _buildVehicleCard(
-      MarketplaceListing listing, ThemeData theme, bool isDark) {
+    MarketplaceListing listing,
+    ThemeData theme,
+    bool isDark,
+  ) {
     final v = listing.vehicleDetails ?? {};
     const radius = 15.0;
 
@@ -750,32 +779,42 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           placeholder: (_, _) => Container(
                             color: AppTheme.accent.withValues(alpha: 0.05),
                             child: Center(
-                              child: Icon(LucideIcons.car,
-                                  size: 40,
-                                  color: AppTheme.accent.withValues(alpha: 0.3)),
+                              child: Icon(
+                                LucideIcons.car,
+                                size: 40,
+                                color: AppTheme.accent.withValues(alpha: 0.3),
+                              ),
                             ),
                           ),
-                          errorWidget: (_, _, ___) => Container(
+                          errorWidget: (_, _, _) => Container(
                             color: AppTheme.accent.withValues(alpha: 0.05),
                             child: Center(
-                              child: Icon(LucideIcons.car,
-                                  size: 40,
-                                  color: AppTheme.accent.withValues(alpha: 0.3)),
+                              child: Icon(
+                                LucideIcons.car,
+                                size: 40,
+                                color: AppTheme.accent.withValues(alpha: 0.3),
+                              ),
                             ),
                           ),
                         )
                       : Container(
-                          color: AppTheme.accent.withValues(alpha: 
-                              isDark ? 0.08 : 0.05),
+                          color: AppTheme.accent.withValues(
+                            alpha: isDark ? 0.08 : 0.05,
+                          ),
                           child: Center(
-                            child: Icon(LucideIcons.car,
-                                size: 40,
-                                color: AppTheme.accent.withValues(alpha: 0.3)),
+                            child: Icon(
+                              LucideIcons.car,
+                              size: 40,
+                              color: AppTheme.accent.withValues(alpha: 0.3),
+                            ),
                           ),
                         ),
                   // Gradient overlay
                   Positioned(
-                    bottom: 0, left: 0, right: 0, height: 80,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 80,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -791,10 +830,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   ),
                   // Price badge (top-right)
                   Positioned(
-                    top: 10, right: 10,
+                    top: 10,
+                    right: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: marketplaceSageGreen,
                         borderRadius: BorderRadius.circular(8),
@@ -811,7 +853,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                         sellerCountryCode: listing.sellerCountryCode,
                         viewerCountryCode: ref
                             .read(userProfileProvider)
-                            .valueOrNull
+                            .value
                             ?.hostCountryCode,
                         compact: true,
                         primaryStyle: const TextStyle(
@@ -824,10 +866,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   ),
                   // "For Sale" badge (top-left)
                   Positioned(
-                    top: 10, left: 10,
+                    top: 10,
+                    left: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(6),
@@ -835,9 +880,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.car,
-                              size: 10,
-                              color: Colors.white.withValues(alpha: 0.9)),
+                          Icon(
+                            LucideIcons.car,
+                            size: 10,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'For Sale',
@@ -853,7 +900,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   ),
                   // Title overlay (bottom-left)
                   Positioned(
-                    bottom: 10, left: 12, right: 80,
+                    bottom: 10,
+                    left: 12,
+                    right: 80,
                     child: Text(
                       listing.title,
                       style: const TextStyle(
@@ -880,10 +929,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   if (listing.sellerCity != null) ...[
                     Row(
                       children: [
-                        Icon(LucideIcons.mapPin,
-                            size: 12,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.4)),
+                        Icon(
+                          LucideIcons.mapPin,
+                          size: 12,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -892,8 +944,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                           ),
                         ),
@@ -907,20 +960,35 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     runSpacing: 6,
                     children: [
                       if (v['year'] != null)
-                        _vehicleInfoChip(theme, LucideIcons.calendar,
-                            v['year'].toString()),
+                        _vehicleInfoChip(
+                          theme,
+                          LucideIcons.calendar,
+                          v['year'].toString(),
+                        ),
                       if (v['transmission'] != null)
-                        _vehicleInfoChip(theme, LucideIcons.settings,
-                            v['transmission'].toString()),
+                        _vehicleInfoChip(
+                          theme,
+                          LucideIcons.settings,
+                          v['transmission'].toString(),
+                        ),
                       if (v['fuelType'] != null)
-                        _vehicleInfoChip(theme, LucideIcons.fuel,
-                            v['fuelType'].toString()),
+                        _vehicleInfoChip(
+                          theme,
+                          LucideIcons.fuel,
+                          v['fuelType'].toString(),
+                        ),
                       if (v['driveType'] != null)
-                        _vehicleInfoChip(theme, LucideIcons.gauge,
-                            v['driveType'].toString()),
+                        _vehicleInfoChip(
+                          theme,
+                          LucideIcons.gauge,
+                          v['driveType'].toString(),
+                        ),
                       if (v['mileage'] != null)
-                        _vehicleInfoChip(theme, LucideIcons.gauge,
-                            '${v['mileage']} km'),
+                        _vehicleInfoChip(
+                          theme,
+                          LucideIcons.gauge,
+                          '${v['mileage']} km',
+                        ),
                     ],
                   ),
                   // Condition badge
@@ -928,10 +996,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: conditionColor(listing.condition!)
-                            .withValues(alpha: 0.12),
+                        color: conditionColor(
+                          listing.condition!,
+                        ).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -954,8 +1025,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
                       ),
                     ),
                   ],
@@ -965,8 +1037,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
             // ── Bottom Bar ──
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: AppTheme.elevationColor(context, 2),
                 borderRadius: const BorderRadius.only(
@@ -978,9 +1049,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 children: [
                   CircleAvatar(
                     radius: 10,
-                    backgroundColor: marketplaceSageGreen.withValues(alpha: 0.1),
-                    child: const Icon(LucideIcons.user,
-                        size: 10, color: marketplaceSageGreen),
+                    backgroundColor: marketplaceSageGreen.withValues(
+                      alpha: 0.1,
+                    ),
+                    child: const Icon(
+                      LucideIcons.user,
+                      size: 10,
+                      color: marketplaceSageGreen,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -991,7 +1067,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   ),
@@ -1004,8 +1082,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                     const SizedBox(width: 4),
                     Text(
                       listing.sellerCountryCode!.toUpperCase(),
-                      style: TextStyle(
-                          fontSize: 10, color: theme.hintColor),
+                      style: TextStyle(fontSize: 10, color: theme.hintColor),
                     ),
                   ],
                 ],
@@ -1021,9 +1098,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon,
-            size: 14,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.45)),
+        Icon(
+          icon,
+          size: 14,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+        ),
         const SizedBox(width: 4),
         Text(
           label,
@@ -1038,12 +1117,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   String _countryFlagEmoji(String code) {
     final codeUnits = code.toUpperCase().codeUnits;
-    return String.fromCharCodes(
-      codeUnits.map((c) => 0x1F1E6 - 0x41 + c),
-    );
+    return String.fromCharCodes(codeUnits.map((c) => 0x1F1E6 - 0x41 + c));
   }
-
-
 
   // ─── Search Results ─────────────────────────────────────────────────────
 
@@ -1092,7 +1167,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   // ─── Filter Bottom Sheet ────────────────────────────────────────────────
   void _showFilterSheet(ThemeData theme, bool isDark) {
-
     var tempType = _selectedType;
     String? tempCategory = _selectedCategory;
     String? tempMake = _filterMake;
@@ -1124,23 +1198,24 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             final categories = tempType == 'service'
                 ? MarketplaceCategory.serviceCategories
                 : tempType == 'product'
-                    ? MarketplaceCategory.productCategories
-                    : tempType == 'job'
-                        ? MarketplaceCategory.jobCategories
-                        : [
-                            ...MarketplaceCategory.productCategories,
-                            ...MarketplaceCategory.jobCategories,
-                            ...MarketplaceCategory.serviceCategories,
-                          ];
+                ? MarketplaceCategory.productCategories
+                : tempType == 'job'
+                ? MarketplaceCategory.jobCategories
+                : [
+                    ...MarketplaceCategory.productCategories,
+                    ...MarketplaceCategory.jobCategories,
+                    ...MarketplaceCategory.serviceCategories,
+                  ];
 
             // Show make/model for vehicle categories
             final showMakeModel =
                 tempCategory == MarketplaceCategory.vehicles ||
-                    tempCategory == MarketplaceCategory.motorcycles ||
-                    tempCategory == MarketplaceCategory.carParts;
+                tempCategory == MarketplaceCategory.motorcycles ||
+                tempCategory == MarketplaceCategory.carParts;
 
             // Show condition only for product categories (not jobs or services)
-            final isProductCategory = tempCategory != null &&
+            final isProductCategory =
+                tempCategory != null &&
                 MarketplaceCategory.productCategories.contains(tempCategory);
             final showCondition = isProductCategory;
 
@@ -1153,7 +1228,8 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                 tempCategory == MarketplaceCategory.electronics;
 
             // Show job-specific filters
-            final isJobCategory = tempCategory != null &&
+            final isJobCategory =
+                tempCategory != null &&
                 MarketplaceCategory.jobCategories.contains(tempCategory);
             final showJobFilters = isJobCategory || tempType == 'job';
 
@@ -1178,7 +1254,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
             final currentYear = DateTime.now().year;
             final years = List.generate(
-                currentYear - 1979, (i) => (currentYear - i).toString());
+              currentYear - 1979,
+              (i) => (currentYear - i).toString(),
+            );
 
             // ── Count temp-active filters ──
             int tempCount = 0;
@@ -1198,48 +1276,63 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
             // ── Helpers ──
             Widget sectionLabel(String text) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10, top: 4),
-                  child: Text(text,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1,
-                          color: theme.hintColor)),
-                );
+              padding: const EdgeInsets.only(bottom: 10, top: 4),
+              child: Text(
+                text,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1,
+                  color: theme.hintColor,
+                ),
+              ),
+            );
 
             InputDecoration dropdownDeco(String hint) => InputDecoration(
-                  hintText: hint,
-                  hintStyle: TextStyle(
-                      color: theme.hintColor.withValues(alpha: 0.6), fontSize: 13),
-                  filled: true,
-                  fillColor: isDark
-                      ? Colors.white.withValues(alpha: 0.04)
-                      : Colors.black.withValues(alpha: 0.03),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.06)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.06)),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  isDense: true,
-                );
+              hintText: hint,
+              hintStyle: TextStyle(
+                color: theme.hintColor.withValues(alpha: 0.6),
+                fontSize: 13,
+              ),
+              filled: true,
+              fillColor: isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.03),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06),
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              isDense: true,
+            );
 
             // ── Active-filter chip builder (inside modal) ──
-            Widget activeChip(IconData icon, String label, VoidCallback onRemove) {
+            Widget activeChip(
+              IconData icon,
+              String label,
+              VoidCallback onRemove,
+            ) {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppTheme.accent.withValues(alpha: isDark ? 0.15 : 0.08),
+                  color: AppTheme.accent.withValues(
+                    alpha: isDark ? 0.15 : 0.08,
+                  ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -1247,17 +1340,22 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   children: [
                     Icon(icon, size: 11, color: AppTheme.accent),
                     const SizedBox(width: 4),
-                    Text(label,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.accent)),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.accent,
+                      ),
+                    ),
                     const SizedBox(width: 3),
                     GestureDetector(
                       onTap: onRemove,
-                      child: Icon(LucideIcons.x,
-                          size: 11,
-                          color: AppTheme.accent.withValues(alpha: 0.6)),
+                      child: Icon(
+                        LucideIcons.x,
+                        size: 11,
+                        color: AppTheme.accent.withValues(alpha: 0.6),
+                      ),
                     ),
                   ],
                 ),
@@ -1294,11 +1392,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           Stack(
                             clipBehavior: Clip.none,
                             children: [
-                              Icon(LucideIcons.filter,
-                                  size: 18,
-                                  color: tempCount > 0
-                                      ? AppTheme.accent
-                                      : theme.colorScheme.onSurface),
+                              Icon(
+                                LucideIcons.filter,
+                                size: 18,
+                                color: tempCount > 0
+                                    ? AppTheme.accent
+                                    : theme.colorScheme.onSurface,
+                              ),
                               if (tempCount > 0)
                                 Positioned(
                                   right: -6,
@@ -1310,7 +1410,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                                       shape: BoxShape.circle,
                                     ),
                                     constraints: const BoxConstraints(
-                                        minWidth: 14, minHeight: 14),
+                                      minWidth: 14,
+                                      minHeight: 14,
+                                    ),
                                     child: Text(
                                       '$tempCount',
                                       textAlign: TextAlign.center,
@@ -1350,9 +1452,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                                 tempListingPurpose = null;
                                 tempBrand = null;
                               }),
-                              child: const Text('Reset',
-                                  style: TextStyle(
-                                      color: AppTheme.accent, fontSize: 13)),
+                              child: const Text(
+                                'Reset',
+                                style: TextStyle(
+                                  color: AppTheme.accent,
+                                  fontSize: 13,
+                                ),
+                              ),
                             ),
                         ],
                       ),
@@ -1369,13 +1475,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                                 tempType == 'product'
                                     ? LucideIcons.package
                                     : tempType == 'job'
-                                        ? LucideIcons.briefcase
-                                        : LucideIcons.wrench,
+                                    ? LucideIcons.briefcase
+                                    : LucideIcons.wrench,
                                 tempType == 'product'
                                     ? 'Products'
                                     : tempType == 'job'
-                                        ? 'Jobs'
-                                        : 'Services',
+                                    ? 'Jobs'
+                                    : 'Services',
                                 () => setSheetState(() {
                                   tempType = 'all';
                                   tempCategory = null;
@@ -1394,8 +1500,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             if (tempCategory != null)
                               activeChip(
                                 categoryIcon(tempCategory!),
-                                MarketplaceCategory.displayName(
-                                    tempCategory!),
+                                MarketplaceCategory.displayName(tempCategory!),
                                 () => setSheetState(() {
                                   tempCategory = null;
                                   tempMake = null;
@@ -1423,65 +1528,61 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               activeChip(
                                 LucideIcons.tag,
                                 tempModel!,
-                                () => setSheetState(
-                                    () => tempModel = null),
+                                () => setSheetState(() => tempModel = null),
                               ),
                             if (tempYear != null)
                               activeChip(
                                 LucideIcons.calendar,
                                 tempYear!,
-                                () => setSheetState(
-                                    () => tempYear = null),
+                                () => setSheetState(() => tempYear = null),
                               ),
                             if (tempCondition != null)
                               activeChip(
                                 LucideIcons.checkCircle,
-                                ItemCondition.displayName(
-                                    tempCondition!),
-                                () => setSheetState(
-                                    () => tempCondition = null),
+                                ItemCondition.displayName(tempCondition!),
+                                () => setSheetState(() => tempCondition = null),
                               ),
                             if (tempEmploymentType != null)
                               activeChip(
                                 LucideIcons.clock,
                                 tempEmploymentType!,
                                 () => setSheetState(
-                                    () => tempEmploymentType = null),
+                                  () => tempEmploymentType = null,
+                                ),
                               ),
                             if (tempWorkMode != null)
                               activeChip(
                                 LucideIcons.building,
                                 tempWorkMode!,
-                                () => setSheetState(
-                                    () => tempWorkMode = null),
+                                () => setSheetState(() => tempWorkMode = null),
                               ),
                             if (tempExperienceLevel != null)
                               activeChip(
                                 LucideIcons.award,
                                 tempExperienceLevel!,
                                 () => setSheetState(
-                                    () => tempExperienceLevel = null),
+                                  () => tempExperienceLevel = null,
+                                ),
                               ),
                             if (tempBedrooms != null)
                               activeChip(
                                 LucideIcons.bed,
                                 '${tempBedrooms}BR',
-                                () => setSheetState(
-                                    () => tempBedrooms = null),
+                                () => setSheetState(() => tempBedrooms = null),
                               ),
                             if (tempListingPurpose != null)
                               activeChip(
                                 LucideIcons.home,
                                 tempListingPurpose!,
                                 () => setSheetState(
-                                    () => tempListingPurpose = null),
+                                  () => tempListingPurpose = null,
+                                ),
                               ),
                             if (tempBrand != null)
                               activeChip(
                                 LucideIcons.cpu,
                                 tempBrand!,
-                                () => setSheetState(
-                                    () => tempBrand = null),
+                                () => setSheetState(() => tempBrand = null),
                               ),
                           ],
                         ),
@@ -1512,19 +1613,25 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               tempBrand = null;
                             });
                           }),
-                          _sheetChip('Products', 'product', tempType, isDark,
-                              (v) {
-                            setSheetState(() {
-                              tempType = v;
-                              tempCategory = null;
-                              tempMake = null;
-                              tempModel = null;
-                              tempYear = null;
-                              tempEmploymentType = null;
-                              tempWorkMode = null;
-                              tempExperienceLevel = null;
-                            });
-                          }, icon: LucideIcons.package),
+                          _sheetChip(
+                            'Products',
+                            'product',
+                            tempType,
+                            isDark,
+                            (v) {
+                              setSheetState(() {
+                                tempType = v;
+                                tempCategory = null;
+                                tempMake = null;
+                                tempModel = null;
+                                tempYear = null;
+                                tempEmploymentType = null;
+                                tempWorkMode = null;
+                                tempExperienceLevel = null;
+                              });
+                            },
+                            icon: LucideIcons.package,
+                          ),
                           _sheetChip('Jobs', 'job', tempType, isDark, (v) {
                             setSheetState(() {
                               tempType = v;
@@ -1538,26 +1645,31 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               tempBrand = null;
                             });
                           }, icon: LucideIcons.briefcase),
-                          _sheetChip('Services', 'service', tempType, isDark,
-                              (v) {
-                            setSheetState(() {
-                              tempType = v;
-                              tempCategory = null;
-                              tempMake = null;
-                              tempModel = null;
-                              tempYear = null;
-                              tempCondition = null;
-                              tempBedrooms = null;
-                              tempListingPurpose = null;
-                              tempBrand = null;
-                              tempEmploymentType = null;
-                              tempWorkMode = null;
-                              tempExperienceLevel = null;
-                            });
-                          }, icon: LucideIcons.wrench),
+                          _sheetChip(
+                            'Services',
+                            'service',
+                            tempType,
+                            isDark,
+                            (v) {
+                              setSheetState(() {
+                                tempType = v;
+                                tempCategory = null;
+                                tempMake = null;
+                                tempModel = null;
+                                tempYear = null;
+                                tempCondition = null;
+                                tempBedrooms = null;
+                                tempListingPurpose = null;
+                                tempBrand = null;
+                                tempEmploymentType = null;
+                                tempWorkMode = null;
+                                tempExperienceLevel = null;
+                              });
+                            },
+                            icon: LucideIcons.wrench,
+                          ),
                         ],
                       ),
-
 
                       // ═══════════════════════════════════════
                       // ── CATEGORY (revealed once type chosen) ──
@@ -1649,17 +1761,26 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           isExpanded: true,
                           menuMaxHeight: 300,
                           style: TextStyle(
-                              fontSize: 13,
-                              color: theme.colorScheme.onSurface),
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface,
+                          ),
                           items: [
                             const DropdownMenuItem(
-                                value: null,
-                                child: Text('Any Make',
-                                    style: TextStyle(fontSize: 13))),
-                            ...makes.map((m) => DropdownMenuItem(
+                              value: null,
+                              child: Text(
+                                'Any Make',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            ...makes.map(
+                              (m) => DropdownMenuItem(
                                 value: m,
-                                child: Text(m,
-                                    style: const TextStyle(fontSize: 13)))),
+                                child: Text(
+                                  m,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ),
                           ],
                           onChanged: (v) => setSheetState(() {
                             tempMake = v;
@@ -1679,8 +1800,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                                 '__all__',
                                 tempModel ?? '__all__',
                                 isDark,
-                                (_) =>
-                                    setSheetState(() => tempModel = null),
+                                (_) => setSheetState(() => tempModel = null),
                               ),
                               for (final model in models)
                                 _sheetChip(
@@ -1688,8 +1808,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                                   model,
                                   tempModel ?? '',
                                   isDark,
-                                  (v) =>
-                                      setSheetState(() => tempModel = v),
+                                  (v) => setSheetState(() => tempModel = v),
                                 ),
                             ],
                           ),
@@ -1703,20 +1822,28 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           isExpanded: true,
                           menuMaxHeight: 300,
                           style: TextStyle(
-                              fontSize: 13,
-                              color: theme.colorScheme.onSurface),
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface,
+                          ),
                           items: [
                             const DropdownMenuItem(
-                                value: null,
-                                child: Text('Any Year',
-                                    style: TextStyle(fontSize: 13))),
-                            ...years.map((y) => DropdownMenuItem(
+                              value: null,
+                              child: Text(
+                                'Any Year',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            ...years.map(
+                              (y) => DropdownMenuItem(
                                 value: y,
-                                child: Text(y,
-                                    style: const TextStyle(fontSize: 13)))),
+                                child: Text(
+                                  y,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ),
                           ],
-                          onChanged: (v) =>
-                              setSheetState(() => tempYear = v),
+                          onChanged: (v) => setSheetState(() => tempYear = v),
                         ),
                       ],
 
@@ -1735,16 +1862,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               '__all__',
                               tempCondition ?? '__all__',
                               isDark,
-                              (_) => setSheetState(
-                                  () => tempCondition = null),
+                              (_) => setSheetState(() => tempCondition = null),
                             ),
                             _sheetChip(
                               'New',
                               ItemCondition.brandNew,
                               tempCondition ?? '',
                               isDark,
-                              (v) => setSheetState(
-                                  () => tempCondition = v),
+                              (v) => setSheetState(() => tempCondition = v),
                               icon: LucideIcons.sparkles,
                             ),
                             _sheetChip(
@@ -1752,8 +1877,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               ItemCondition.likeNew,
                               tempCondition ?? '',
                               isDark,
-                              (v) => setSheetState(
-                                  () => tempCondition = v),
+                              (v) => setSheetState(() => tempCondition = v),
                               icon: LucideIcons.checkCircle,
                             ),
                             _sheetChip(
@@ -1761,8 +1885,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               ItemCondition.usedGood,
                               tempCondition ?? '',
                               isDark,
-                              (v) => setSheetState(
-                                  () => tempCondition = v),
+                              (v) => setSheetState(() => tempCondition = v),
                               icon: LucideIcons.thumbsUp,
                             ),
                             _sheetChip(
@@ -1770,8 +1893,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               ItemCondition.usedFair,
                               tempCondition ?? '',
                               isDark,
-                              (v) => setSheetState(
-                                  () => tempCondition = v),
+                              (v) => setSheetState(() => tempCondition = v),
                               icon: LucideIcons.alertTriangle,
                             ),
                           ],
@@ -1788,20 +1910,33 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _sheetChip('Any', '__all__',
-                                tempListingPurpose ?? '__all__', isDark,
-                                (_) => setSheetState(
-                                    () => tempListingPurpose = null)),
-                            _sheetChip('For Sale', 'For Sale',
-                                tempListingPurpose ?? '', isDark,
-                                (v) => setSheetState(
-                                    () => tempListingPurpose = v),
-                                icon: LucideIcons.badgeDollarSign),
-                            _sheetChip('For Rent', 'For Rent',
-                                tempListingPurpose ?? '', isDark,
-                                (v) => setSheetState(
-                                    () => tempListingPurpose = v),
-                                icon: LucideIcons.key),
+                            _sheetChip(
+                              'Any',
+                              '__all__',
+                              tempListingPurpose ?? '__all__',
+                              isDark,
+                              (_) => setSheetState(
+                                () => tempListingPurpose = null,
+                              ),
+                            ),
+                            _sheetChip(
+                              'For Sale',
+                              'For Sale',
+                              tempListingPurpose ?? '',
+                              isDark,
+                              (v) =>
+                                  setSheetState(() => tempListingPurpose = v),
+                              icon: LucideIcons.badgeDollarSign,
+                            ),
+                            _sheetChip(
+                              'For Rent',
+                              'For Rent',
+                              tempListingPurpose ?? '',
+                              isDark,
+                              (v) =>
+                                  setSheetState(() => tempListingPurpose = v),
+                              icon: LucideIcons.key,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -1810,18 +1945,22 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _sheetChip('Any', '__all__',
-                                tempBedrooms ?? '__all__', isDark,
-                                (_) => setSheetState(
-                                    () => tempBedrooms = null)),
-                            for (final br in [
-                              '1', '2', '3', '4', '5+'
-                            ])
-                              _sheetChip(br, br,
-                                  tempBedrooms ?? '', isDark,
-                                  (v) => setSheetState(
-                                      () => tempBedrooms = v),
-                                  icon: LucideIcons.bed),
+                            _sheetChip(
+                              'Any',
+                              '__all__',
+                              tempBedrooms ?? '__all__',
+                              isDark,
+                              (_) => setSheetState(() => tempBedrooms = null),
+                            ),
+                            for (final br in ['1', '2', '3', '4', '5+'])
+                              _sheetChip(
+                                br,
+                                br,
+                                tempBedrooms ?? '',
+                                isDark,
+                                (v) => setSheetState(() => tempBedrooms = v),
+                                icon: LucideIcons.bed,
+                              ),
                           ],
                         ),
                       ],
@@ -1836,10 +1975,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _sheetChip('Any', '__all__',
-                                tempBrand ?? '__all__', isDark,
-                                (_) => setSheetState(
-                                    () => tempBrand = null)),
+                            _sheetChip(
+                              'Any',
+                              '__all__',
+                              tempBrand ?? '__all__',
+                              isDark,
+                              (_) => setSheetState(() => tempBrand = null),
+                            ),
                             for (final b in [
                               'Apple',
                               'Samsung',
@@ -1853,13 +1995,15 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               'Xiaomi',
                               'Other',
                             ])
-                              if (tempBrand == null ||
-                                  tempBrand == b)
-                                _sheetChip(b, b,
-                                    tempBrand ?? '', isDark,
-                                    (v) => setSheetState(
-                                        () => tempBrand = v),
-                                    icon: LucideIcons.cpu),
+                              if (tempBrand == null || tempBrand == b)
+                                _sheetChip(
+                                  b,
+                                  b,
+                                  tempBrand ?? '',
+                                  isDark,
+                                  (v) => setSheetState(() => tempBrand = v),
+                                  icon: LucideIcons.cpu,
+                                ),
                           ],
                         ),
                       ],
@@ -1874,10 +2018,15 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _sheetChip('Any', '__all__',
-                                tempEmploymentType ?? '__all__', isDark,
-                                (_) => setSheetState(
-                                    () => tempEmploymentType = null)),
+                            _sheetChip(
+                              'Any',
+                              '__all__',
+                              tempEmploymentType ?? '__all__',
+                              isDark,
+                              (_) => setSheetState(
+                                () => tempEmploymentType = null,
+                              ),
+                            ),
                             for (final et in [
                               'Full-time',
                               'Part-time',
@@ -1885,11 +2034,15 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               'Freelance',
                               'Internship',
                             ])
-                              _sheetChip(et, et,
-                                  tempEmploymentType ?? '', isDark,
-                                  (v) => setSheetState(
-                                      () => tempEmploymentType = v),
-                                  icon: LucideIcons.clock),
+                              _sheetChip(
+                                et,
+                                et,
+                                tempEmploymentType ?? '',
+                                isDark,
+                                (v) =>
+                                    setSheetState(() => tempEmploymentType = v),
+                                icon: LucideIcons.clock,
+                              ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -1898,24 +2051,26 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _sheetChip('Any', '__all__',
-                                tempWorkMode ?? '__all__', isDark,
-                                (_) => setSheetState(
-                                    () => tempWorkMode = null)),
-                            for (final wm in [
-                              'Remote',
-                              'On-site',
-                              'Hybrid',
-                            ])
-                              _sheetChip(wm, wm,
-                                  tempWorkMode ?? '', isDark,
-                                  (v) => setSheetState(
-                                      () => tempWorkMode = v),
-                                  icon: wm == 'Remote'
-                                      ? LucideIcons.wifi
-                                      : wm == 'On-site'
-                                          ? LucideIcons.building
-                                          : LucideIcons.split),
+                            _sheetChip(
+                              'Any',
+                              '__all__',
+                              tempWorkMode ?? '__all__',
+                              isDark,
+                              (_) => setSheetState(() => tempWorkMode = null),
+                            ),
+                            for (final wm in ['Remote', 'On-site', 'Hybrid'])
+                              _sheetChip(
+                                wm,
+                                wm,
+                                tempWorkMode ?? '',
+                                isDark,
+                                (v) => setSheetState(() => tempWorkMode = v),
+                                icon: wm == 'Remote'
+                                    ? LucideIcons.wifi
+                                    : wm == 'On-site'
+                                    ? LucideIcons.building
+                                    : LucideIcons.split,
+                              ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -1924,10 +2079,15 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _sheetChip('Any', '__all__',
-                                tempExperienceLevel ?? '__all__', isDark,
-                                (_) => setSheetState(
-                                    () => tempExperienceLevel = null)),
+                            _sheetChip(
+                              'Any',
+                              '__all__',
+                              tempExperienceLevel ?? '__all__',
+                              isDark,
+                              (_) => setSheetState(
+                                () => tempExperienceLevel = null,
+                              ),
+                            ),
                             for (final el in [
                               'Entry-level',
                               'Mid-level',
@@ -1935,11 +2095,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               'Lead / Manager',
                               'Executive',
                             ])
-                              _sheetChip(el, el,
-                                  tempExperienceLevel ?? '', isDark,
-                                  (v) => setSheetState(
-                                      () => tempExperienceLevel = v),
-                                  icon: LucideIcons.award),
+                              _sheetChip(
+                                el,
+                                el,
+                                tempExperienceLevel ?? '',
+                                isDark,
+                                (v) => setSheetState(
+                                  () => tempExperienceLevel = v,
+                                ),
+                                icon: LucideIcons.award,
+                              ),
                           ],
                         ),
                       ],
@@ -1951,7 +2116,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                         child: ElevatedButton(
                           onPressed: () {
                             setState(() {
-
                               _selectedType = tempType;
                               _selectedCategory = tempCategory;
                               _filterMake = tempMake;
@@ -1970,10 +2134,10 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.accent,
                             foregroundColor: Colors.white,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             elevation: 0,
                           ),
                           child: const Row(
@@ -1981,10 +2145,13 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             children: [
                               Icon(LucideIcons.search, size: 18),
                               SizedBox(width: 8),
-                              Text('Show Me Listings',
-                                  style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold)),
+                              Text(
+                                'Show Me Listings',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -2001,9 +2168,14 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
     );
   }
 
-  Widget _sheetChip(String label, String value, String selected, bool isDark,
-      ValueChanged<String> onTap,
-      {IconData? icon}) {
+  Widget _sheetChip(
+    String label,
+    String value,
+    String selected,
+    bool isDark,
+    ValueChanged<String> onTap, {
+    IconData? icon,
+  }) {
     final isSelected = selected == value;
     return GestureDetector(
       onTap: () => onTap(value),
@@ -2014,24 +2186,26 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
           color: isSelected
               ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
               : isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : Colors.black.withValues(alpha: 0.03),
+              ? Colors.white.withValues(alpha: 0.04)
+              : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? AppTheme.accent.withValues(alpha: 0.5)
                 : isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.black.withValues(alpha: 0.06),
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon,
-                  size: 14,
-                  color: isSelected ? AppTheme.accent : Colors.grey),
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? AppTheme.accent : Colors.grey,
+              ),
               const SizedBox(width: 6),
             ],
             Text(
@@ -2051,7 +2225,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   // ─── Helpers ────────────────────────────────────────────────────────────
   void _handleMenuAction(String value, {dynamic profile}) async {
     switch (value) {
-
       case 'saved':
         context.push('/marketplace/saved');
         break;
@@ -2067,48 +2240,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       case 'hire_candidates':
         context.push('/marketplace/create', extra: ListingType.job);
         break;
-      case 'seed':
-        try {
-          final userId =
-              ref.read(authRepositoryProvider).currentUser?.uid ?? '';
-          final name = profile?.fullName ?? 'Diaspora Seller';
-          await MarketplaceSeeder.seed(userId, name);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('20 mock listings seeded'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Seed failed: $e')),
-            );
-          }
-        }
-        break;
-      case 'clear_seed':
-        try {
-          await MarketplaceSeeder.clearSeeded();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Mock listings cleared'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Clear failed: $e')),
-            );
-          }
-        }
-        break;
     }
   }
-
 }

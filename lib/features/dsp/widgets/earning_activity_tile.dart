@@ -47,10 +47,10 @@ class EarningActivityTile extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: isCompleted
-                        ? AppTheme.accent.withOpacity(0.1)
+                        ? AppTheme.accent.withValues(alpha: 0.1)
                         : (progress != null && progress! > 0)
-                        ? iconColor.withOpacity(0.1)
-                        : Colors.grey.withOpacity(0.05),
+                        ? iconColor.withValues(alpha: 0.1)
+                        : Colors.grey.withValues(alpha: 0.05),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -76,9 +76,8 @@ class EarningActivityTile extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                           color: isCompleted
-                              ? Theme.of(
-                                  context,
-                                ).textTheme.bodyLarge?.color?.withOpacity(0.7)
+                              ? Theme.of(context).textTheme.bodyLarge?.color
+                                    ?.withValues(alpha: 0.7)
                               : null,
                           decoration: isCompleted
                               ? TextDecoration.lineThrough
@@ -94,7 +93,7 @@ class EarningActivityTile extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.accent.withOpacity(0.1),
+                              color: AppTheme.accent.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -115,7 +114,7 @@ class EarningActivityTile extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
+                                color: Colors.green.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -151,7 +150,9 @@ class EarningActivityTile extends StatelessWidget {
                                 child: LinearProgressIndicator(
                                   value: progress,
                                   minHeight: 6,
-                                  backgroundColor: Colors.grey.withOpacity(0.1),
+                                  backgroundColor: Colors.grey.withValues(
+                                    alpha: 0.1,
+                                  ),
                                   valueColor: AlwaysStoppedAnimation(iconColor),
                                 ),
                               ),

@@ -81,7 +81,7 @@ class _CreateRealEstateListingScreenState
   LandSurveyResult? _surveyResult;
   String? _surveyCountry;
   String? _surveyCountryCode;
-  int _aerialViewMode = 0; // 0 = Property, 1 = Neighborhood
+  int _aerialViewMode = 0; // 0 = Property aerial, 1 = Location map, 2 = Neighborhood aerial
 
   // Photos
   final List<XFile> _selectedImages = [];
@@ -92,25 +92,63 @@ class _CreateRealEstateListingScreenState
   bool _isSaving = false;
 
   static const _zoningTypes = [
-    'Residential', 'Commercial', 'Agricultural', 'Industrial', 'Mixed',
+    'Residential',
+    'Commercial',
+    'Agricultural',
+    'Industrial',
+    'Mixed',
   ];
   static const _terrainTypes = [
-    'Flat', 'Hilly', 'Sloped', 'Waterfront', 'Forested',
+    'Flat',
+    'Hilly',
+    'Sloped',
+    'Waterfront',
+    'Forested',
   ];
   static const _soilTypes = [
-    'Loam', 'Clay', 'Sandy', 'Silt', 'Peat', 'Volcanic',
+    'Loam',
+    'Clay',
+    'Sandy',
+    'Silt',
+    'Peat',
+    'Volcanic',
   ];
   static const _cropTypes = [
-    'Maize', 'Wheat', 'Rice', 'Coffee', 'Tea', 'Sugarcane',
-    'Vegetables', 'Fruits', 'Flowers', 'Livestock', 'Poultry', 'Fish',
+    'Maize',
+    'Wheat',
+    'Rice',
+    'Coffee',
+    'Tea',
+    'Sugarcane',
+    'Vegetables',
+    'Fruits',
+    'Flowers',
+    'Livestock',
+    'Poultry',
+    'Fish',
   ];
   static const _houseConditions = [
-    'New Build', 'Renovated', 'Good Condition', 'Needs Work', 'Shell',
+    'New Build',
+    'Renovated',
+    'Good Condition',
+    'Needs Work',
+    'Shell',
   ];
   static const _houseAmenities = [
-    'Wi-Fi', 'Water Tank', 'Solar', 'Borehole', 'Security',
-    'CCTV', 'Swimming Pool', 'Gym', 'Parking', 'Servant Quarters',
-    'Garden', 'Balcony', 'Rooftop', 'Backup Generator',
+    'Wi-Fi',
+    'Water Tank',
+    'Solar',
+    'Borehole',
+    'Security',
+    'CCTV',
+    'Swimming Pool',
+    'Gym',
+    'Parking',
+    'Servant Quarters',
+    'Garden',
+    'Balcony',
+    'Rooftop',
+    'Backup Generator',
   ];
 
   @override
@@ -177,7 +215,7 @@ class _CreateRealEstateListingScreenState
   }
 
   void _prefillFromProfile() {
-    final profile = ref.read(userProfileProvider).valueOrNull;
+    final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
     _cityC.text = profile.homeLocation.city ?? '';
     _stateC.text = profile.homeLocation.state ?? '';
@@ -215,8 +253,8 @@ class _CreateRealEstateListingScreenState
     final typeLabel = _listingType == 'sale'
         ? 'for Sale'
         : _listingType == 'rent'
-            ? 'for Rent'
-            : 'for Lease';
+        ? 'for Rent'
+        : 'for Lease';
 
     switch (_category) {
       case 'house':
@@ -260,7 +298,8 @@ class _CreateRealEstateListingScreenState
 
   Future<void> _pickImages() async {
     final maxPhotos = _category == 'house' ? 20 : 10;
-    final remaining = maxPhotos - _selectedImages.length - _existingPhotoUrls.length;
+    final remaining =
+        maxPhotos - _selectedImages.length - _existingPhotoUrls.length;
     if (remaining <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -313,9 +352,7 @@ class _CreateRealEstateListingScreenState
       if (totalPhotos < 10) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Please add at least 10 photos ($totalPhotos/10)',
-            ),
+            content: Text('Please add at least 10 photos ($totalPhotos/10)'),
             behavior: SnackBarBehavior.floating,
             backgroundColor: Colors.red.shade700,
           ),
@@ -331,7 +368,7 @@ class _CreateRealEstateListingScreenState
     });
 
     try {
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user == null || profile == null) throw Exception('Not logged in');
 
@@ -340,8 +377,8 @@ class _CreateRealEstateListingScreenState
       for (int i = 0; i < _selectedImages.length; i++) {
         final file = File(_selectedImages[i].path);
         final storageRef = FirebaseStorage.instance.ref().child(
-              'real_estate/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-            );
+          'real_estate/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+        );
         await storageRef.putFile(file);
         final url = await storageRef.getDownloadURL();
         newImageUrls.add(url);
@@ -366,22 +403,22 @@ class _CreateRealEstateListingScreenState
         photos: allPhotos,
         price: double.tryParse(_priceC.text.trim()) ?? 0,
         city: _cityC.text.trim(),
-        country: _surveyCountry ?? profile.homeCountry,
-        countryCode: _surveyCountryCode ?? profile.homeCountryCode,
+        country: _surveyCountry ?? widget.existing?.country ?? profile.homeCountry,
+        countryCode: _surveyCountryCode ?? widget.existing?.countryCode ?? profile.homeCountryCode,
         address: _addressC.text.trim(),
         locality: _cityC.text.trim(),
         subLocality: _subLocalityC.text.trim(),
         state: _stateC.text.trim(),
         localityLower: _cityC.text.trim().toLowerCase(),
         stateLower: _stateC.text.trim().toLowerCase(),
-        lat: _surveyResult?.centerLat,
-        lng: _surveyResult?.centerLng,
+        lat: _surveyResult?.centerLat ?? widget.existing?.lat,
+        lng: _surveyResult?.centerLng ?? widget.existing?.lng,
         // GPS Survey data
-        boundaryPoints: _surveyResult?.boundaryPoints,
-        centerLat: _surveyResult?.centerLat,
-        centerLng: _surveyResult?.centerLng,
-        calculatedAreaSqm: _surveyResult?.areaSqm,
-        locationVerified: _surveyResult != null,
+        boundaryPoints: _surveyResult?.boundaryPoints ?? widget.existing?.boundaryPoints,
+        centerLat: _surveyResult?.centerLat ?? widget.existing?.centerLat,
+        centerLng: _surveyResult?.centerLng ?? widget.existing?.centerLng,
+        calculatedAreaSqm: _surveyResult?.areaSqm ?? widget.existing?.calculatedAreaSqm,
+        locationVerified: _surveyResult != null || (widget.existing?.locationVerified ?? false),
         // Common
         size: double.tryParse(_sizeC.text.trim()),
         sizeUnit: _sizeUnit,
@@ -463,8 +500,9 @@ class _CreateRealEstateListingScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error: $e'),
-              behavior: SnackBarBehavior.floating),
+            content: Text('Error: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -495,7 +533,9 @@ class _CreateRealEstateListingScreenState
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.accent),
+                      strokeWidth: 2,
+                      color: AppTheme.accent,
+                    ),
                   )
                 : Text(
                     isEditing ? 'Save' : 'Publish',
@@ -510,259 +550,322 @@ class _CreateRealEstateListingScreenState
       body: Stack(
         children: [
           Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            left: AppTheme.pageHorizontalPadding,
-            right: AppTheme.pageHorizontalPadding,
-            top: 8,
-            bottom: MediaQuery.of(context).padding.bottom + 24,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Category selector ──
-              _sectionLabel(theme, 'Category'),
-              const SizedBox(height: 8),
-              _buildCategorySelector(theme, isDark),
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: AppTheme.pageHorizontalPadding,
+                right: AppTheme.pageHorizontalPadding,
+                top: 8,
+                bottom: MediaQuery.of(context).padding.bottom + 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Category selector ──
+                  _sectionLabel(theme, 'Category'),
+                  const SizedBox(height: 8),
+                  _buildCategorySelector(theme, isDark),
 
-              const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-              // ── GPS Land Survey (first, before anything else) ──
-              _sectionLabel(theme, 'Location (GPS Survey)'),
-              const SizedBox(height: 8),
-              if (widget.existing == null) ...[
-                if (_surveyResult == null)
-                  _buildSurveyButton(theme, isDark)
-                else
-                  _buildSurveyResultCard(theme, isDark),
-              ] else ...[
-                _buildReadOnlyLocationCard(theme, isDark),
-              ],
+                  // ── GPS Land Survey (first, before anything else) ──
+                  _sectionLabel(theme, 'Location (GPS Survey)'),
+                  const SizedBox(height: 8),
+                  if (widget.existing == null) ...[
+                    if (_surveyResult == null)
+                      _buildSurveyButton(theme, isDark)
+                    else
+                      _buildSurveyResultCard(theme, isDark),
+                  ] else ...[
+                    // Edit mode: show new survey result if redone,
+                    // otherwise show existing location with redo option
+                    if (_surveyResult != null)
+                      _buildSurveyResultCard(theme, isDark)
+                    else ...[
+                      _buildReadOnlyLocationCard(theme, isDark),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final result =
+                                await Navigator.push<LandSurveyResult>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LandSurveyScreen(),
+                              ),
+                            );
+                            if (result != null) {
+                              _applySurveyResult(result);
+                            }
+                          },
+                          icon: const Icon(
+                            LucideIcons.rotateCcw,
+                            size: 16,
+                          ),
+                          label: const Text('Redo GPS Survey'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.accent,
+                            side: BorderSide(
+                              color: AppTheme.accent.withValues(alpha: 0.4),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
 
-              const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-              // ── Basic info ──
-              _sectionLabel(theme, 'Basic Information'),
-              const SizedBox(height: 8),
+                  // ── Basic info ──
+                  _sectionLabel(theme, 'Basic Information'),
+                  const SizedBox(height: 8),
 
-              // Auto-generated title (read-only, no customize)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.elevationColor(context, 1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppTheme.accent.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(LucideIcons.type, size: 14,
-                            color: theme.hintColor),
-                        const SizedBox(width: 6),
-                        Text('Title (auto-generated)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: theme.hintColor,
-                              fontWeight: FontWeight.w500,
-                            )),
-                        const Spacer(),
-                        Icon(LucideIcons.lock, size: 12,
-                            color: theme.hintColor.withValues(alpha: 0.4)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _generateTitle(),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
+                  // Auto-generated title (read-only, no customize)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.elevationColor(context, 1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.accent.withValues(alpha: 0.3),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _descC,
-                label: 'Description',
-                hint: 'Describe the property...',
-                icon: LucideIcons.alignLeft,
-                maxLines: 3,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _buildTextField(
-                      controller: _priceC,
-                      label: 'Price',
-                      hint: '0',
-                      icon: LucideIcons.dollarSign,
-                      keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          v == null || v.trim().isEmpty ? 'Required' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildDropdown(
-                      theme: theme,
-                      isDark: isDark,
-                      label: 'Type',
-                      value: _listingType,
-                      items: const ['sale', 'rent', 'lease'],
-                      labels: const ['Sale', 'Rent', 'Lease'],
-                      onChanged: (v) => setState(() => _listingType = v!),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              // ── Property details ──
-              _sectionLabel(theme, 'Property Details'),
-              const SizedBox(height: 8),
-
-              // Size row (read-only, auto-populated from GPS survey)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppTheme.elevationColor(context, 1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.maximize2, size: 16, color: theme.hintColor),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Land Size',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              LucideIcons.type,
+                              size: 14,
+                              color: theme.hintColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Title (auto-generated)',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: theme.hintColor,
                                 fontWeight: FontWeight.w500,
-                              )),
-                          const SizedBox(height: 2),
-                          Text(
-                            _sizeC.text.trim().isNotEmpty
-                                ? '${_sizeC.text.trim()} $_sizeUnit'
-                                : 'Auto-calculated from GPS survey',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: _sizeC.text.trim().isNotEmpty
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: _sizeC.text.trim().isNotEmpty
-                                  ? theme.colorScheme.onSurface
-                                  : theme.hintColor,
+                              ),
                             ),
+                            const Spacer(),
+                            Icon(
+                              LucideIcons.lock,
+                              size: 12,
+                              color: theme.hintColor.withValues(alpha: 0.4),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _generateTitle(),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    controller: _descC,
+                    label: 'Description',
+                    hint: 'Describe the property...',
+                    icon: LucideIcons.alignLeft,
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildTextField(
+                          controller: _priceC,
+                          label: 'Price',
+                          hint: '0',
+                          icon: LucideIcons.dollarSign,
+                          keyboardType: TextInputType.number,
+                          validator: (v) =>
+                              v == null || v.trim().isEmpty ? 'Required' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildDropdown(
+                          theme: theme,
+                          isDark: isDark,
+                          label: 'Type',
+                          value: _listingType,
+                          items: const ['sale', 'rent', 'lease'],
+                          labels: const ['Sale', 'Rent', 'Lease'],
+                          onChanged: (v) => setState(() => _listingType = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Property details ──
+                  _sectionLabel(theme, 'Property Details'),
+                  const SizedBox(height: 8),
+
+                  // Size row (read-only, auto-populated from GPS survey)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.elevationColor(context, 1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.1,
+                        ),
                       ),
                     ),
-                    Icon(LucideIcons.lock, size: 14,
-                        color: theme.hintColor.withValues(alpha: 0.4)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Zoning
-              _buildChipSelector(
-                theme: theme,
-                isDark: isDark,
-                label: 'Zoning',
-                options: _zoningTypes,
-                selected: _zoning,
-                onSelected: (v) =>
-                    setState(() => _zoning = _zoning == v ? null : v),
-              ),
-              const SizedBox(height: 12),
-
-              // Title deed toggle
-              _buildSwitch(
-                theme: theme,
-                label: 'Has Title Deed',
-                icon: LucideIcons.fileCheck,
-                value: _hasTitle,
-                onChanged: (v) => setState(() => _hasTitle = v),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ── Category-specific fields ──
-              if (_category == 'plot') _buildPlotFields(theme, isDark),
-              if (_category == 'farm') _buildFarmFields(theme, isDark),
-              if (_category == 'house') _buildHouseFields(theme, isDark),
-
-              const SizedBox(height: 20),
-
-              // ── Photos Section ──
-              _buildPhotosSection(theme, isDark),
-
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
-      // Upload progress overlay
-      if (_isUploading)
-        Positioned.fill(
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.5),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: AppTheme.elevationColor(context, 3),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(
-                      color: AppTheme.accent,
-                      strokeWidth: 3,
+                    child: Row(
+                      children: [
+                        Icon(
+                          LucideIcons.maximize2,
+                          size: 16,
+                          color: theme.hintColor,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Land Size',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.hintColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _sizeC.text.trim().isNotEmpty
+                                    ? '${_sizeC.text.trim()} $_sizeUnit'
+                                    : 'Auto-calculated from GPS survey',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: _sizeC.text.trim().isNotEmpty
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: _sizeC.text.trim().isNotEmpty
+                                      ? theme.colorScheme.onSurface
+                                      : theme.hintColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          LucideIcons.lock,
+                          size: 14,
+                          color: theme.hintColor.withValues(alpha: 0.4),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Uploading photos...',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$_uploadedCount / ${_selectedImages.length}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Zoning
+                  _buildChipSelector(
+                    theme: theme,
+                    isDark: isDark,
+                    label: 'Zoning',
+                    options: _zoningTypes,
+                    selected: _zoning,
+                    onSelected: (v) =>
+                        setState(() => _zoning = _zoning == v ? null : v),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Title deed toggle
+                  _buildSwitch(
+                    theme: theme,
+                    label: 'Has Title Deed',
+                    icon: LucideIcons.fileCheck,
+                    value: _hasTitle,
+                    onChanged: (v) => setState(() => _hasTitle = v),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Category-specific fields ──
+                  if (_category == 'plot') _buildPlotFields(theme, isDark),
+                  if (_category == 'farm') _buildFarmFields(theme, isDark),
+                  if (_category == 'house') _buildHouseFields(theme, isDark),
+
+                  const SizedBox(height: 20),
+
+                  // ── Photos Section ──
+                  _buildPhotosSection(theme, isDark),
+
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
           ),
-        ),
-      ],
-    ),
+          // Upload progress overlay
+          if (_isUploading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(28),
+                    decoration: BoxDecoration(
+                      color: AppTheme.elevationColor(context, 3),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(
+                          color: AppTheme.accent,
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Uploading photos...',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$_uploadedCount / ${_selectedImages.length}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -779,15 +882,15 @@ class _CreateRealEstateListingScreenState
         final isSelected = _category == cat.$1;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(
-              right: cat.$1 != 'house' ? 8 : 0,
-            ),
+            padding: EdgeInsets.only(right: cat.$1 != 'house' ? 8 : 0),
             child: GestureDetector(
               onTap: () => setState(() => _category = cat.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding:
-                    const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
@@ -814,11 +917,14 @@ class _CreateRealEstateListingScreenState
                       cat.$3,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: isSelected
                             ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                       ),
                     ),
                   ],
@@ -957,14 +1063,32 @@ class _CreateRealEstateListingScreenState
         const SizedBox(height: 8),
 
         // Bedrooms, bathrooms, floors steppers
-        _stepper(theme, 'Bedrooms', _bedrooms, 1, 20,
-            (v) => setState(() => _bedrooms = v)),
+        _stepper(
+          theme,
+          'Bedrooms',
+          _bedrooms,
+          1,
+          20,
+          (v) => setState(() => _bedrooms = v),
+        ),
         const SizedBox(height: 8),
-        _stepper(theme, 'Bathrooms', _bathrooms, 1, 10,
-            (v) => setState(() => _bathrooms = v)),
+        _stepper(
+          theme,
+          'Bathrooms',
+          _bathrooms,
+          1,
+          10,
+          (v) => setState(() => _bathrooms = v),
+        ),
         const SizedBox(height: 8),
-        _stepper(theme, 'Floors', _floors, 1, 10,
-            (v) => setState(() => _floors = v)),
+        _stepper(
+          theme,
+          'Floors',
+          _floors,
+          1,
+          10,
+          (v) => setState(() => _floors = v),
+        ),
         const SizedBox(height: 12),
 
         // Living area
@@ -1014,7 +1138,8 @@ class _CreateRealEstateListingScreenState
           options: _houseConditions,
           selected: _propertyCondition,
           onSelected: (v) => setState(
-              () => _propertyCondition = _propertyCondition == v ? null : v),
+            () => _propertyCondition = _propertyCondition == v ? null : v,
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -1069,9 +1194,7 @@ class _CreateRealEstateListingScreenState
           children: [
             _sectionLabel(
               theme,
-              isHouse
-                  ? 'Photos (min 10, max 20)'
-                  : 'Photos (optional, max 10)',
+              isHouse ? 'Photos (min 10, max 20)' : 'Photos (optional, max 10)',
             ),
             const Spacer(),
             Text(
@@ -1152,18 +1275,24 @@ class _CreateRealEstateListingScreenState
           children: [
             Icon(LucideIcons.plus, size: 24, color: AppTheme.accent),
             SizedBox(height: 4),
-            Text('Add',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.accent,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              'Add',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _photoThumbnail({required Widget child, required VoidCallback onRemove}) {
+  Widget _photoThumbnail({
+    required Widget child,
+    required VoidCallback onRemove,
+  }) {
     return Stack(
       children: [
         ClipRRect(
@@ -1198,14 +1327,15 @@ class _CreateRealEstateListingScreenState
         decoration: BoxDecoration(
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppTheme.accent.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
-            Icon(LucideIcons.camera, size: 32,
-                color: AppTheme.accent.withValues(alpha: 0.7)),
+            Icon(
+              LucideIcons.camera,
+              size: 32,
+              color: AppTheme.accent.withValues(alpha: 0.7),
+            ),
             const SizedBox(height: 8),
             Text(
               _category == 'house'
@@ -1220,10 +1350,7 @@ class _CreateRealEstateListingScreenState
             const SizedBox(height: 4),
             Text(
               'Tap to select from gallery',
-              style: TextStyle(
-                fontSize: 11,
-                color: theme.hintColor,
-              ),
+              style: TextStyle(fontSize: 11, color: theme.hintColor),
             ),
           ],
         ),
@@ -1276,8 +1403,10 @@ class _CreateRealEstateListingScreenState
         ),
         filled: true,
         fillColor: AppTheme.elevationColor(context, 1),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         isDense: true,
       ),
     );
@@ -1313,15 +1442,12 @@ class _CreateRealEstateListingScreenState
             value: value,
             isExpanded: true,
             underline: const SizedBox(),
-            style: TextStyle(
-              fontSize: 13,
-              color: theme.colorScheme.onSurface,
-            ),
+            style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
             dropdownColor: AppTheme.elevationColor(context, 3),
             items: List.generate(
-                items.length,
-                (i) => DropdownMenuItem(
-                    value: items[i], child: Text(labels[i]))),
+              items.length,
+              (i) => DropdownMenuItem(value: items[i], child: Text(labels[i])),
+            ),
             onChanged: onChanged,
             isDense: true,
           ),
@@ -1341,11 +1467,14 @@ class _CreateRealEstateListingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
@@ -1355,8 +1484,10 @@ class _CreateRealEstateListingScreenState
             return GestureDetector(
               onTap: () => onSelected(t),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
@@ -1368,14 +1499,16 @@ class _CreateRealEstateListingScreenState
                         : Colors.transparent,
                   ),
                 ),
-                child: Text(t,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                      color: sel
-                          ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    )),
+                child: Text(
+                  t,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -1395,11 +1528,14 @@ class _CreateRealEstateListingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
@@ -1409,8 +1545,10 @@ class _CreateRealEstateListingScreenState
             return GestureDetector(
               onTap: () => onToggle(a),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
@@ -1422,14 +1560,16 @@ class _CreateRealEstateListingScreenState
                         : Colors.transparent,
                   ),
                 ),
-                child: Text(a,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                      color: sel
-                          ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    )),
+                child: Text(
+                  a,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -1449,23 +1589,29 @@ class _CreateRealEstateListingScreenState
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+          Icon(
+            icon,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                )),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
           ),
           Transform.scale(
             scale: 0.8,
             child: Switch.adaptive(
               value: value,
               activeTrackColor: AppTheme.accent,
-              thumbColor: WidgetStateProperty.resolveWith((states) =>
-                states.contains(WidgetState.selected) ? Colors.white : null,
+              thumbColor: WidgetStateProperty.resolveWith(
+                (states) =>
+                    states.contains(WidgetState.selected) ? Colors.white : null,
               ),
               onChanged: onChanged,
             ),
@@ -1491,11 +1637,13 @@ class _CreateRealEstateListingScreenState
       ),
       child: Row(
         children: [
-          Text(label,
-              style: TextStyle(
-                fontSize: 13,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              )),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
           const Spacer(),
           _stepperButton(
             icon: LucideIcons.minus,
@@ -1535,10 +1683,7 @@ class _CreateRealEstateListingScreenState
           size: 14,
           color: onTap != null
               ? AppTheme.accent
-              : Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.2),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
         ),
       ),
     );
@@ -1562,7 +1707,10 @@ class _CreateRealEstateListingScreenState
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [AppTheme.accent.withValues(alpha: 0.1), AppTheme.accent.withValues(alpha: 0.05)],
+            colors: [
+              AppTheme.accent.withValues(alpha: 0.1),
+              AppTheme.accent.withValues(alpha: 0.05),
+            ],
           ),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
@@ -1577,7 +1725,11 @@ class _CreateRealEstateListingScreenState
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Icon(LucideIcons.mapPin, color: AppTheme.accent, size: 22),
+              child: const Icon(
+                LucideIcons.mapPin,
+                color: AppTheme.accent,
+                size: 22,
+              ),
             ),
             const SizedBox(height: 12),
             const Text(
@@ -1607,7 +1759,11 @@ class _CreateRealEstateListingScreenState
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.shieldAlert, size: 12, color: theme.colorScheme.error),
+                  Icon(
+                    LucideIcons.shieldAlert,
+                    size: 12,
+                    color: theme.colorScheme.error,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Required for fraud prevention',
@@ -1640,14 +1796,20 @@ class _CreateRealEstateListingScreenState
         children: [
           Row(
             children: [
-              Icon(LucideIcons.checkCircle, size: 16, color: Colors.green.shade500),
+              Icon(
+                LucideIcons.checkCircle,
+                size: 16,
+                color: Colors.green.shade500,
+              ),
               const SizedBox(width: 8),
-              Text('GPS-Verified Location',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.green.shade500,
-                  )),
+              Text(
+                'GPS-Verified Location',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.green.shade500,
+                ),
+              ),
               const Spacer(),
               GestureDetector(
                 onTap: () async {
@@ -1659,12 +1821,14 @@ class _CreateRealEstateListingScreenState
                     _applySurveyResult(result);
                   }
                 },
-                child: const Text('Redo Survey',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.accent,
-                      fontWeight: FontWeight.w600,
-                    )),
+                child: const Text(
+                  'Redo Survey',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1681,19 +1845,20 @@ class _CreateRealEstateListingScreenState
           // View mode toggle
           Row(
             children: [
-              _aerialChip(theme, 0, 'Property', LucideIcons.maximize),
+              _aerialChip(theme, 0, 'Aerial', LucideIcons.satellite),
               const SizedBox(width: 8),
-              _aerialChip(theme, 1, 'Neighborhood', LucideIcons.map),
+              _aerialChip(theme, 1, 'Map', LucideIcons.map),
+              const SizedBox(width: 8),
+              _aerialChip(theme, 2, 'Area', LucideIcons.maximize),
             ],
           ),
           const SizedBox(height: 8),
           GestureDetector(
             onTap: () {
-              final z = _aerialViewMode == 0 ? 18 : 15;
+              final z = _aerialViewMode == 2 ? 15 : 18;
               final url =
                   'https://www.google.com/maps/@${r.centerLat.toStringAsFixed(6)},${r.centerLng.toStringAsFixed(6)},${z}z/data=!3m1!1e1';
-              launchUrl(Uri.parse(url),
-                  mode: LaunchMode.externalApplication);
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
             },
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
@@ -1702,14 +1867,16 @@ class _CreateRealEstateListingScreenState
                 width: double.infinity,
                 child: Stack(
                   children: [
-                    // Zoomable satellite image
+                    // Zoomable satellite / map image
                     InteractiveViewer(
                       minScale: 1.0,
                       maxScale: 4.0,
                       child: Image.network(
                         _aerialViewMode == 0
                             ? _buildSatelliteUrl(r)
-                            : _buildNeighborhoodUrl(r),
+                            : _aerialViewMode == 1
+                                ? _buildMapUrl(r)
+                                : _buildNeighborhoodUrl(r),
                         width: double.infinity,
                         height: 200,
                         fit: BoxFit.cover,
@@ -1727,7 +1894,7 @@ class _CreateRealEstateListingScreenState
                             ),
                           );
                         },
-                        errorBuilder: (_, _, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           color: isDark
                               ? Colors.grey.shade900
                               : Colors.grey.shade200,
@@ -1735,13 +1902,19 @@ class _CreateRealEstateListingScreenState
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(LucideIcons.satellite,
-                                  size: 24, color: theme.hintColor),
+                              Icon(
+                                LucideIcons.satellite,
+                                size: 24,
+                                color: theme.hintColor,
+                              ),
                               const SizedBox(height: 4),
-                              Text('Satellite image unavailable',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: theme.hintColor)),
+                              Text(
+                                'Satellite image unavailable',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.hintColor,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1753,7 +1926,9 @@ class _CreateRealEstateListingScreenState
                       bottom: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black54,
                           borderRadius: BorderRadius.circular(6),
@@ -1761,14 +1936,19 @@ class _CreateRealEstateListingScreenState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(LucideIcons.satellite,
-                                size: 10, color: Colors.white70),
+                            const Icon(
+                              LucideIcons.satellite,
+                              size: 10,
+                              color: Colors.white70,
+                            ),
                             const SizedBox(width: 4),
-                            Text('Tap to open in Maps',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                )),
+                            Text(
+                              'Tap to open in Maps',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.white.withValues(alpha: 0.8),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1779,7 +1959,9 @@ class _CreateRealEstateListingScreenState
                       bottom: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 3),
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black45,
                           borderRadius: BorderRadius.circular(4),
@@ -1787,15 +1969,19 @@ class _CreateRealEstateListingScreenState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.zoomIn,
-                                size: 10,
-                                color: Colors.white.withValues(alpha: 0.7)),
+                            Icon(
+                              LucideIcons.zoomIn,
+                              size: 10,
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
                             const SizedBox(width: 3),
-                            Text('Pinch to zoom',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                )),
+                            Text(
+                              'Pinch to zoom',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1808,53 +1994,69 @@ class _CreateRealEstateListingScreenState
 
           const Divider(height: 16),
           // Dual unit area display (m and ft)
-          Builder(builder: (_) {
-            final sqm = r.areaSqm;
-            final sqft = (sqm * 10.7639).toStringAsFixed(0);
-            final sqmStr = sqm.toStringAsFixed(0);
+          Builder(
+            builder: (_) {
+              final sqm = r.areaSqm;
+              final sqft = (sqm * 10.7639).toStringAsFixed(0);
+              final sqmStr = sqm.toStringAsFixed(0);
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(LucideIcons.ruler,
-                        size: 14, color: Colors.green.shade600),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Area: $sqmStr m\u00B2  ·  $sqft ft\u00B2',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green.shade600,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.ruler,
+                        size: 14,
+                        color: Colors.green.shade600,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Area: $sqmStr m\u00B2  ·  $sqft ft\u00B2',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green.shade600,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(LucideIcons.navigation, size: 14,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
-                    const SizedBox(width: 4),
-                    Text('${r.boundaryPoints.length} corners',
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.navigation,
+                        size: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.4,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${r.boundaryPoints.length} corners',
                         style: TextStyle(
                           fontSize: 12,
-                          color:
-                              theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                        )),
-                  ],
-                ),
-              ],
-            );
-          }),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(LucideIcons.lock, size: 12,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+              Icon(
+                LucideIcons.lock,
+                size: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              ),
               const SizedBox(width: 6),
               Text(
                 'Location is locked from GPS coordinates',
@@ -1878,15 +2080,19 @@ class _CreateRealEstateListingScreenState
         children: [
           SizedBox(
             width: 60,
-            child: Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -1901,7 +2107,8 @@ class _CreateRealEstateListingScreenState
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1931,8 +2138,11 @@ class _CreateRealEstateListingScreenState
                 ),
               ),
               const Spacer(),
-              Icon(LucideIcons.lock, size: 14,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+              Icon(
+                LucideIcons.lock,
+                size: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1974,20 +2184,24 @@ class _CreateRealEstateListingScreenState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 13,
+            Icon(
+              icon,
+              size: 13,
+              color: selected
+                  ? AppTheme.accent
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 color: selected
                     ? AppTheme.accent
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.5)),
-            const SizedBox(width: 5),
-            Text(label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  color: selected
-                      ? AppTheme.accent
-                      : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                )),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
           ],
         ),
       ),
@@ -1998,13 +2212,18 @@ class _CreateRealEstateListingScreenState
   String _buildSatelliteUrl(LandSurveyResult r, {int zoom = 18}) {
     // Create polygon path string
     final pathPoints = r.boundaryPoints
-        .map((p) => '${p['lat']!.toStringAsFixed(6)},${p['lng']!.toStringAsFixed(6)}')
+        .map(
+          (p) =>
+              '${p['lat']!.toStringAsFixed(6)},${p['lng']!.toStringAsFixed(6)}',
+        )
         .join('|');
     // Close the polygon by repeating the first point
     final firstPt = r.boundaryPoints.first;
-    final closedPath = '$pathPoints|${firstPt['lat']!.toStringAsFixed(6)},${firstPt['lng']!.toStringAsFixed(6)}';
+    final closedPath =
+        '$pathPoints|${firstPt['lat']!.toStringAsFixed(6)},${firstPt['lng']!.toStringAsFixed(6)}';
 
-    final center = '${r.centerLat.toStringAsFixed(6)},${r.centerLng.toStringAsFixed(6)}';
+    final center =
+        '${r.centerLat.toStringAsFixed(6)},${r.centerLng.toStringAsFixed(6)}';
 
     // Use Google Maps Static API — polygon is drawn server-side
     return 'https://maps.googleapis.com/maps/api/staticmap'
@@ -2020,7 +2239,8 @@ class _CreateRealEstateListingScreenState
 
   /// Build a wider aerial view to show the neighborhood / surroundings.
   String _buildNeighborhoodUrl(LandSurveyResult r) {
-    final center = '${r.centerLat.toStringAsFixed(6)},${r.centerLng.toStringAsFixed(6)}';
+    final center =
+        '${r.centerLat.toStringAsFixed(6)},${r.centerLng.toStringAsFixed(6)}';
     return 'https://maps.googleapis.com/maps/api/staticmap'
         '?center=$center'
         '&zoom=15'
@@ -2028,6 +2248,31 @@ class _CreateRealEstateListingScreenState
         '&scale=2'
         '&maptype=satellite'
         '&markers=color:red|label:P|$center'
+        '&key=${Env.googleMapsApiKey}';
+  }
+
+  /// Build a road-map style static map URL with boundary polygon overlay.
+  String _buildMapUrl(LandSurveyResult r, {int zoom = 16}) {
+    final pathPoints = r.boundaryPoints
+        .map(
+          (p) =>
+              '${p['lat']!.toStringAsFixed(6)},${p['lng']!.toStringAsFixed(6)}',
+        )
+        .join('|');
+    final firstPt = r.boundaryPoints.first;
+    final closedPath =
+        '$pathPoints|${firstPt['lat']!.toStringAsFixed(6)},${firstPt['lng']!.toStringAsFixed(6)}';
+    final center =
+        '${r.centerLat.toStringAsFixed(6)},${r.centerLng.toStringAsFixed(6)}';
+
+    return 'https://maps.googleapis.com/maps/api/staticmap'
+        '?center=$center'
+        '&zoom=$zoom'
+        '&size=600x400'
+        '&scale=2'
+        '&maptype=roadmap'
+        '&path=color:0xFFFF6B35|weight:3|fillcolor:0x30FF6B35|$closedPath'
+        '&markers=size:small|color:red|$center'
         '&key=${Env.googleMapsApiKey}';
   }
 }

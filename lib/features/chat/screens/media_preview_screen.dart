@@ -162,8 +162,8 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
                       shape: BoxShape.circle,
                       color: _currentIndex == index
                           ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurface.withOpacity(
-                              0.2,
+                          : theme.colorScheme.onSurface.withValues(
+                              alpha: 0.2,
                             ), // [FIX] Visible on white
                     ),
                   );
@@ -180,14 +180,20 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
               // [FIX] Removed redundant SafeArea (MessageInput handles it)
               chatId: 'preview', // Dummy ID
               controller: _captionController,
-              onSendMessage: (text, {type, metadata}) =>
-                  _handleSend(), // Send text from controller
-              onSendMedia: (_, __, ___) {}, // Disabled here
-              onSendAudio: (_, __, {caption}) {}, // Disabled
-              onSendAudioFile: (_, __) {},
-              onSendDocument: (_, __) {},
+              onSendMessage: (text, {type, metadata}) {
+                // [FIX] Use `text` directly — it was captured by MessageInput
+                // BEFORE clearing the shared controller. Re-reading
+                // _captionController here would return '' due to the race.
+                widget.onSend(
+                    widget.files, text.isNotEmpty ? text : null);
+                Navigator.pop(context);
+              },
+              onSendMedia: (_, _, _) {}, // Disabled here
+              onSendAudio: (_, _, {caption}) {}, // Disabled
+              onSendAudioFile: (_, _) {},
+              onSendDocument: (_, _) {},
               // onSendLocation: null, // Optional now
-              onSendDSP: (_, __, ___) {},
+              onSendDSP: (_, _, _) {},
               onCancelReply: () {},
               showAttachmentButton: false, // Hide attachments
               showAudioRecording: false, // Hide audio
@@ -223,7 +229,7 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
                     ? Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(

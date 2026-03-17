@@ -21,11 +21,11 @@ class FakeLocalNotifications extends Mock implements FlutterLocalNotificationsPl
   String? lastBody;
 
   @override
-  Future<void> show(
-    int id,
+  Future<void> show({
+    required int id,
     String? title,
     String? body,
-    NotificationDetails? notificationDetails, {
+    NotificationDetails? notificationDetails,
     String? payload,
   }) async {
     showCalled = true;
@@ -35,8 +35,8 @@ class FakeLocalNotifications extends Mock implements FlutterLocalNotificationsPl
   }
 
   @override
-  Future<bool> initialize(
-    InitializationSettings initializationSettings, {
+  Future<bool?> initialize({
+    required InitializationSettings settings,
     onDidReceiveNotificationResponse,
     onDidReceiveBackgroundNotificationResponse,
   }) async => true;
@@ -202,11 +202,7 @@ void main() {
     fakeNotifications = FakeLocalNotifications();
     fakePrefs = FakeSharedPreferences();
     
-    proximityService = ProximityService(
-      firestore: fakeFirestore,
-      notificationsPlugin: fakeNotifications,
-      prefs: fakePrefs,
-    );
+    proximityService = ProximityService();
   });
 
   group('ProximityService Tests (Manual Fakes)', () {
@@ -320,8 +316,7 @@ void main() {
         'lastName': 'Man',
       };
 
-      const chatId = 'chat_abc';
-      const mentionedUserId = 'mentioned_user_999';
+      // chatId and mentionedUserId would be used in a full integration test
 
       // Note: This test verifies the service can be constructed without RTDB
       // and that the sendTextMessage API accepts mentions.

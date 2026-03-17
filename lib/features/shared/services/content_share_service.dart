@@ -5,10 +5,10 @@ import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/events/widgets/share_event_dialog.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-// [NEW]
-// [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 final contentShareServiceProvider = Provider<ContentShareService>((ref) {
   return ContentShareService(ref);
@@ -30,20 +30,45 @@ class ContentShareService {
             'Location: ${message.location!.address}\nGoogle Maps: https://www.google.com/maps/search/?api=1&query=${message.location!.lat},${message.location!.lng}';
       } else {
         content = 'Shared a ${message.type} via Diaspora Nearby';
-        // If file/image, we might want to share files, but for now specific requirement was "Share" option.
-        // share_plus supports files too (XFile).
-        // Given complexity of downloading and resharing message media, we'll start with text/links.
       }
     }
 
     if (content.isEmpty) return;
 
-    // Add App Footer
-    content += '\n\nSent via Diaspora Nearby';
+    // Build referral invite link for footer
+    String inviteLink = 'https://diasporanearby.com/invite';
+    try {
+      final user = _ref.read(authRepositoryProvider).currentUser;
+      if (user != null) {
+        final pointsRepo = _ref.read(pointsRepositoryProvider);
+        String? code = await pointsRepo.getReferralCode(user.uid);
+        if (code == null) {
+          final userProfile = await _ref
+              .read(profileRepositoryProvider)
+              .getUserProfile(user.uid);
+          if (userProfile != null) {
+            final countryCode = userProfile.homeCountryCode ?? 'US';
+            code = await pointsRepo.generateReferralCode(
+              user.uid,
+              userProfile.firstName,
+              countryCode,
+            );
+          }
+        }
+        if (code != null) {
+          inviteLink = '$inviteLink?code=$code';
+        }
+      }
+    } catch (e) {
+      debugPrint('Error getting referral code for share: $e');
+    }
+
+    // Add App Footer with referral link
+    content += '\n\nSent via Diaspora Nearby $inviteLink';
 
     // Show share sheet
     try {
-      await Share.share(content);
+      await SharePlus.instance.share(ShareParams(text: content));
 
       // Award points (Assuming sheet opened successfully)
       final rewarded = await _awardPoints('message_share');

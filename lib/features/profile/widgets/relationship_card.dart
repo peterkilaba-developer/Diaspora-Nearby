@@ -106,7 +106,7 @@ class RelationshipCard extends ConsumerWidget {
         height: 60,
         child: Center(child: LinearProgressIndicator()),
       ),
-      error: (_, __) => const SizedBox.shrink(), // Hides error items
+      error: (_, _) => const SizedBox.shrink(), // Hides error items
     );
   }
 

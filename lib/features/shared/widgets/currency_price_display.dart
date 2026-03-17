@@ -67,7 +67,9 @@ class _CurrencyPriceDisplayState extends State<CurrencyPriceDisplay> {
   bool _showConverted = false;
 
   bool get _sameCurrency => CurrencyHelper.isSameCurrency(
-      widget.sellerCountryCode, widget.viewerCountryCode);
+    widget.sellerCountryCode,
+    widget.viewerCountryCode,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -88,8 +90,8 @@ class _CurrencyPriceDisplayState extends State<CurrencyPriceDisplay> {
       fontSize: widget.compact ? 11 : 12,
       fontWeight: FontWeight.w500,
       color: isDark
-          ? Colors.white.withOpacity(0.5)
-          : Colors.black.withOpacity(0.45),
+          ? Colors.white.withValues(alpha: 0.5)
+          : Colors.black.withValues(alpha: 0.45),
     );
 
     // If same currency, just show the primary price
@@ -120,8 +122,8 @@ class _CurrencyPriceDisplayState extends State<CurrencyPriceDisplay> {
               Icons.swap_horiz_rounded,
               size: widget.compact ? 14 : 16,
               color: isDark
-                  ? Colors.white.withOpacity(0.35)
-                  : Colors.black.withOpacity(0.25),
+                  ? Colors.white.withValues(alpha: 0.35)
+                  : Colors.black.withValues(alpha: 0.25),
             ),
           ],
         ),

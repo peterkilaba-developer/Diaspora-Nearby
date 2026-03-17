@@ -9,6 +9,7 @@ import 'package:diaspora_nearby/features/dsp/services/bereavement_service.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/widgets/relationship_card.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
@@ -82,7 +83,12 @@ class _OverviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(AppTheme.cardPadding),
+      padding: EdgeInsets.only(
+        left: AppTheme.cardPadding,
+        right: AppTheme.cardPadding,
+        top: AppTheme.cardPadding,
+        bottom: MediaQuery.of(context).padding.bottom + 24,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,72 +96,91 @@ class _OverviewTab extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
-            decoration: AppTheme.cardDecoration(context).copyWith(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Column(
+            decoration: AppTheme.cardDecoration(
+              context,
+            ).copyWith(borderRadius: BorderRadius.circular(20)),
+            child: Column(
               children: [
-                Icon(LucideIcons.heart, size: 64, color: AppTheme.accent),
-                SizedBox(height: 16),
-                Text(
+                const Icon(LucideIcons.heart, size: 48, color: AppTheme.accent),
+                const SizedBox(height: 12),
+                const Text(
                   'Dignity in Repatriation',
                   style: TextStyle(
-                    fontSize: 26,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
-                  'Ensuring every member returns home with honor. We pool resources for repatriation and travel costs for you and your loved ones.',
-                  style: TextStyle(fontSize: 16, height: 1.5),
+                  'Community-pooled resources for repatriation and travel costs.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 20),
 
           const Text(
-            'Community Support Benefits',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            'Support Benefits',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           _buildFeatureItem(
             context,
             icon: LucideIcons.plane,
             title: 'Full Repatriation',
-            description:
-                'Up to \$50,000 for repatriation costs to your home country.',
+            description: 'Up to \$50,000 for repatriation costs.',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           _buildFeatureItem(
             context,
             icon: LucideIcons.users,
             title: 'Family Travel',
-            description:
-                'Round-trip flights for up to 4 fellow members to accompany the remains.',
+            description: 'Round-trip flights for up to 4 members.',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           _buildFeatureItem(
             context,
             icon: LucideIcons.home,
             title: 'Funeral Expenses',
-            description:
-                'Support for funeral home services and supplies back home.',
+            description: 'Funeral home services and supplies.',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           _buildFeatureItem(
             context,
             icon: LucideIcons.coins,
             title: 'Earn Rewards',
-            description:
-                'Receive 1,000 DSP annually for contributing to the community fund.',
+            description: '100 DSP annually for contributing.',
           ),
-          // Add extra padding at the bottom to ensure scrollability
-          const SizedBox(height: 80),
+          const SizedBox(height: 16),
+
+          // Learn More link
+          Center(
+            child: GestureDetector(
+              onTap: () => launchUrl(
+                Uri.parse('https://diasporanearby.com/#bereavement'),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: Text(
+                'Learn more about the Bereavement Fund →',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -182,7 +207,7 @@ class _OverviewTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -215,7 +240,7 @@ class _OverviewTab extends StatelessWidget {
                 style: TextStyle(
                   color: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  ).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                 ),
               ),
             ],
@@ -319,7 +344,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Membership Activated! Welcome to the Fund.'),
+            content: Text('Beta Access Activated! Welcome to the Fund.'),
           ),
         );
       }
@@ -439,7 +464,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -528,11 +553,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              LucideIcons.creditCard,
-              size: 64,
-              color: AppTheme.accent,
-            ),
+            const Icon(LucideIcons.sparkles, size: 64, color: AppTheme.accent),
             const SizedBox(height: 24),
             const Text(
               'Ready to Activate',
@@ -540,11 +561,42 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Your proxy has accepted. Please pay the annual contribution to activate your coverage.',
+              'Your proxy has accepted. Activate your free beta coverage below.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.sparkles,
+                    color: Colors.amber.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Free Beta Access — No payment required during beta. '
+                      'Annual contribution (\$100) will apply after launch.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.amber.shade800,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -555,7 +607,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                 ),
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Pay \$100.00'),
+                    : const Text('Activate Free Beta Access'),
               ),
             ),
           ],
@@ -629,11 +681,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                 result.isProfileVerified,
                 'Complete identity verification.',
               ),
-              _buildChecklistItem(
-                'Financial Stake (10,000 DSP)',
-                result.hasEnoughPoints,
-                'Accumulate more DSP.',
-              ),
+
               _buildChecklistItem(
                 'Community Trust (>67)',
                 result.hasEnoughTrust,
@@ -658,7 +706,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: AppTheme.accent,
-                    disabledBackgroundColor: Colors.grey.withOpacity(0.2),
+                    disabledBackgroundColor: Colors.grey.withValues(alpha: 0.2),
                   ),
                   child: const Text('Setup Coverage'),
                 ),
@@ -688,13 +736,13 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isMet
-            ? Colors.green.withOpacity(0.05)
-            : Colors.red.withOpacity(0.05),
+            ? Colors.green.withValues(alpha: 0.05)
+            : Colors.red.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isMet
-              ? Colors.green.withOpacity(0.3)
-              : Colors.red.withOpacity(0.3),
+              ? Colors.green.withValues(alpha: 0.3)
+              : Colors.red.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -762,9 +810,9 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
+        color: statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusColor.withOpacity(0.5)),
+        border: Border.all(color: statusColor.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
@@ -781,7 +829,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
           const SizedBox(height: 8),
           Text(
             'Coverage Status',
-            style: TextStyle(color: statusColor.withOpacity(0.8)),
+            style: TextStyle(color: statusColor.withValues(alpha: 0.8)),
           ),
         ],
       ),
@@ -815,7 +863,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppTheme.accent.withOpacity(0.1),
+            color: AppTheme.accent.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, size: 20, color: AppTheme.accent),
@@ -837,7 +885,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
+              color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: const Text(
@@ -901,7 +949,7 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
                   Icon(
                     LucideIcons.clipboardList,
                     size: 64,
-                    color: Colors.grey.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -913,7 +961,10 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+            padding: EdgeInsets.fromLTRB(
+              16, 16, 16,
+              MediaQuery.of(context).padding.bottom + 80,
+            ),
             itemCount: claims.length,
             itemBuilder: (context, index) {
               final claim = claims[index];
@@ -1015,7 +1066,7 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: step / 4,
-            backgroundColor: Colors.grey.withOpacity(0.2),
+            backgroundColor: Colors.grey.withValues(alpha: 0.2),
             color: AppTheme.accent,
             minHeight: 6,
           ),

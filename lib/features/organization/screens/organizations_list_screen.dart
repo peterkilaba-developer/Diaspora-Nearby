@@ -9,7 +9,7 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 
 import 'package:diaspora_nearby/features/more/widgets/business_registration_modal.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:url_launcher/url_launcher.dart';
+
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 
@@ -30,7 +30,6 @@ class _OrganizationsListScreenState
   String _searchQuery = '';
   bool _isGlobalView =
       false; // Toggle: false = My Community Orgs, true = All Orgs
-  String? _currentUserId; // Current logged in user ID
   String? _userHomeCountryCode; // Current user's home country code
 
   // Animation for logo icon
@@ -67,10 +66,8 @@ class _OrganizationsListScreenState
   Future<void> _loadUserLocation() async {
     try {
       final userProfile = ref.read(userProfileProvider).value;
-      final user = ref.read(authRepositoryProvider).currentUser;
 
-      // Store current user ID and home country code for filtering
-      _currentUserId = user?.uid;
+      // Store home country code for filtering
       _userHomeCountryCode = userProfile?.homeCountryCode;
 
       if (userProfile?.hostLocation.geometry?.location != null) {
@@ -140,8 +137,6 @@ class _OrganizationsListScreenState
     }
   }
 
-
-
   String _formatDistance(double? distance) {
     if (distance == null) return '';
 
@@ -181,35 +176,6 @@ class _OrganizationsListScreenState
 
     // Fallback to location pin
     return 'Ã°ÂŸÂ“Â';
-  }
-
-  Future<void> _openDirections(Map<String, dynamic> org) async {
-    final location = org['location'] as Map<String, dynamic>?;
-    if (location == null) return;
-
-    final lat = location['lat'];
-    final lng = location['lng'];
-
-    // Create Google Maps URL with origin and destination
-    // If we have user location, use it as origin
-    String url;
-    if (_userLat != null && _userLng != null) {
-      url =
-          'https://www.google.com/maps/dir/?api=1&origin=$_userLat,$_userLng&destination=$lat,$lng&travelmode=driving';
-    } else {
-      url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
-    }
-
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Could not open maps')));
-      }
-    }
   }
 
   /// Apply search query and home country filter
@@ -439,7 +405,7 @@ class _OrganizationsListScreenState
                                       ),
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.primary
-                                            .withOpacity(0.1),
+                                            .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
@@ -476,13 +442,13 @@ class _OrganizationsListScreenState
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               LucideIcons.building2,
               size: 64,
-              color: theme.colorScheme.primary.withOpacity(0.5),
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 24),
@@ -500,7 +466,7 @@ class _OrganizationsListScreenState
                 ? 'Try a different search term'
                 : 'Be the first to register your organization!',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
             textAlign: TextAlign.center,
           ),
@@ -529,7 +495,6 @@ class _OrganizationsListScreenState
 
   Widget _buildOrgCard(Map<String, dynamic> org, ThemeData theme) {
     final name = org['businessName'] as String? ?? 'Unknown';
-    final description = org['description'] as String? ?? '';
     final city = org['city'] as String?;
     final state = org['state'] as String?;
     final country = org['country'] as String?;
@@ -555,7 +520,7 @@ class _OrganizationsListScreenState
                     ? Image.network(
                         logoUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(
+                        errorBuilder: (_, _, _) => Icon(
                           LucideIcons.building2,
                           size: 24,
                           color: theme.colorScheme.outline,
@@ -605,11 +570,7 @@ class _OrganizationsListScreenState
                         const SizedBox(width: 4),
                         Flexible(
                           child: SearchHighlightUtils.highlightText(
-                            [
-                              ?city,
-                              ?state,
-                              ?country,
-                            ].join(', '),
+                            [?city, ?state, ?country].join(', '),
                             _searchQuery,
                             theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface.withValues(

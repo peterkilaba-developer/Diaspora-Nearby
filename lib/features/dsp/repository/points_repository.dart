@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -164,46 +165,30 @@ class PointsRepository {
         .collection('system_stats')
         .doc('treasury')
         .snapshots()
-        .map((doc) =>
-            (doc.data()?['totalFiatGdpUsd'] as num?)?.toDouble() ?? 0.0);
+        .map(
+          (doc) => (doc.data()?['totalFiatGdpUsd'] as num?)?.toDouble() ?? 0.0,
+        );
   }
 
   /// Records a completed real-economy transaction's fiat value as GDP output.
-  ///
-  /// [amountUsd] — the transaction's value already converted to USD.
-  /// [activityType] — e.g. 'marketplace_purchase', 'flight_booking', etc.
-  /// [metadata] — optional extra context (listing id, user ids, etc.).
+  /// [SECURITY] Routes through Cloud Function (system_stats writes blocked).
   Future<void> recordFiatGdp(
     double amountUsd,
     String activityType, {
     Map<String, dynamic>? metadata,
   }) async {
     if (amountUsd <= 0) return;
-
-    final batch = _firestore.batch();
-
-    // Increment global fiat GDP counter
-    final treasuryRef = _firestore.collection('system_stats').doc('treasury');
-    batch.set(
-      treasuryRef,
-      {
-        'totalFiatGdpUsd': FieldValue.increment(amountUsd),
-        'lastFiatGdpUpdate': DateTime.now().toUtc().toIso8601String(),
-      },
-      SetOptions(merge: true),
-    );
-
-    // Log individual GDP transaction for audit trail
-    final gdpTxRef = _firestore.collection('gdp_transactions').doc();
-    batch.set(gdpTxRef, {
-      'id': gdpTxRef.id,
-      'amountUsd': amountUsd,
-      'activityType': activityType,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      ...?metadata,
-    });
-
-    await batch.commit();
+    try {
+      final callable = _functions.httpsCallable('recordFiatGdp');
+      await callable.call({
+        'amountUsd': amountUsd,
+        'activityType': activityType,
+        'metadata': metadata,
+      });
+    } catch (e) {
+      debugPrint('[recordFiatGdp] Cloud Function error: $e');
+      rethrow;
+    }
   }
 
   /// Streams all bilateral corridors.
@@ -212,226 +197,16 @@ class PointsRepository {
         .collection('corridors')
         .orderBy('cumulativeGdp', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Corridor.fromJson(doc.data()))
-            .toList());
-  }
-
-  // --- Global Supply Tracker ---
-
-  /// Helper to strictly increment the Global Supply Counter.
-  void _incrementGlobalSupplyBatch(WriteBatch batch, int amount) {
-    if (amount <= 0) return;
-
-    // 7+3 Expansion Model Logic:
-    // User: 100% (Base)
-    // ---------------------------
-    // Community Tribute: 70% (7 slots * 10%)
-    // Founders: 10%
-    // Investors: 10%
-    // Fixed Burn: 10%
-    // ---------------------------
-    // Total Expansion Factor: 2.0x (1:1 Match)
-
-    final int totalMinted = (amount * 2.0).round();
-
-    final supplyRef = _firestore.collection('system_stats').doc('dsp_supply');
-    batch.set(supplyRef, {
-      'totalMinted': FieldValue.increment(totalMinted),
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-    }, SetOptions(merge: true));
-  }
-
-  void _incrementGlobalSupplyTx(Transaction transaction, int amount) {
-    if (amount <= 0) return;
-
-    // 7+3 Expansion Model Logic:
-    // User: 100% (Base)
-    // ---------------------------
-    // Community Tribute: 70% (7 slots * 10%)
-    // Founders: 10%
-    // Investors: 10%
-    // Fixed Burn: 10%
-    // ---------------------------
-    // Total Expansion Factor: 2.0x (1:1 Match)
-
-    final int totalMinted = (amount * 2.0).round();
-
-    final supplyRef = _firestore.collection('system_stats').doc('dsp_supply');
-    transaction.set(supplyRef, {
-      'totalMinted': FieldValue.increment(totalMinted),
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-    }, SetOptions(merge: true));
-  }
-
-  /// Internal helper to distribute points across all treasuries
-  /// Implements the 10-slot community distribution + system treasuries.
-  Future<void> _distributeTreasuryPoints(
-    WriteBatch batch,
-    String userId,
-    int amount,
-  ) async {
-    try {
-      if (amount <= 0) return;
-
-      final int unit = (amount * 0.1).round();
-      if (unit <= 0 && amount > 0) {
-        return; // Ignore micro-earnings for treasury if they round to 0
-      }
-
-      // 1. Identify 7 slots for the user (Global + 3 Home + 3 Host)
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists) return;
-
-      final userData = userDoc.data();
-      final List<dynamic> memberships = userData?['communityMemberships'] ?? [];
-
-      // 2. Identify 7 Community Slots (Tributes)
-      // If a slot is missing (e.g. no city), it defaults to 'global_community'.
-      // This ensures 70% is ALWAYS distributed to community treasuries.
-      final Map<String, int> communityMultipliers = {};
-      void addToSlot(String? id) {
-        final effectiveId = (id == null || id.isEmpty)
-            ? 'global_community'
-            : id;
-        communityMultipliers[effectiveId] =
-            (communityMultipliers[effectiveId] ?? 0) + 1;
-      }
-
-      // Home Hierarchy
-      final homeContinent = memberships.firstWhere(
-        (id) => id.toString().startsWith('home_continent_'),
-        orElse: () => '',
-      );
-      final homeCountry = memberships.firstWhere(
-        (id) => id.toString().startsWith('home_country_'),
-        orElse: () => '',
-      );
-      final homeCity = memberships.firstWhere(
-        (id) => id.toString().startsWith('home_city_'),
-        orElse: () => '',
-      );
-
-      // Host Hierarchy
-      final hostContinent = memberships.firstWhere(
-        (id) => id.toString().startsWith('host_continent_'),
-        orElse: () => '',
-      );
-      final hostCountry = memberships.firstWhere(
-        (id) => id.toString().startsWith('host_country_'),
-        orElse: () => '',
-      );
-      final hostCity = memberships.firstWhere(
-        (id) => id.toString().startsWith('host_city_'),
-        orElse: () => '',
-      );
-
-      // Fill 7 Slots
-      addToSlot('global_community'); // Slot 1: Global
-      addToSlot(homeContinent.toString());
-      addToSlot(homeCountry.toString());
-      addToSlot(homeCity.toString());
-      addToSlot(hostContinent.toString());
-      addToSlot(hostCountry.toString());
-      addToSlot(hostCity.toString());
-
-      // 3. Distribute to Communities
-      communityMultipliers.forEach((commId, multiplier) {
-        final int commUnit = unit * multiplier;
-        final int commBasis = amount * multiplier;
-
-        final tRef = _firestore
-            .collection('communities')
-            .doc(commId)
-            .collection('treasury')
-            .doc('current');
-        batch.set(tRef, {
-          'cumulativeEarnings': FieldValue.increment(commBasis + commUnit),
-          'memberPoints': FieldValue.increment(commBasis),
-          'points': FieldValue.increment(commUnit),
-          'awardedBalance': FieldValue.increment(commUnit.toDouble()),
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        }, SetOptions(merge: true));
-
-        // Sync to Governance
-        final govId = commId == 'global_community'
-            ? 'global_community'
-            : (commId.contains('_')
-                  ? commId.substring(commId.indexOf('_') + 1)
-                  : commId);
-        batch.set(_firestore.collection('governance').doc(govId), {
-          'treasuryBalance': FieldValue.increment(commUnit.toDouble()),
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        }, SetOptions(merge: true));
-
-        // Mirror to top-level community document
-        batch.set(
-          _firestore.collection('communities').doc(commId),
-          {
-            'cumulativeEarnings': FieldValue.increment(commBasis + commUnit),
-            'memberPoints': FieldValue.increment(commBasis),
-            'points': FieldValue.increment(commUnit),
-            'awardedBalance': FieldValue.increment(commUnit.toDouble()),
-            'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-          },
-          SetOptions(merge: true),
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Corridor.fromJson(doc.data()))
+              .toList(),
         );
-      });
-
-      // 4. System Treasuries (Founders + Investors + Fixed Burn)
-      // Total 10 units: 1 F + 1 I + 1 B + 7 C. NO unassigned slots.
-      final int investorsPoints = unit;
-      final int totalBurnAmount = unit; // Fixed 10%
-
-      final treasuryRef = _firestore.collection('system_stats').doc('treasury');
-      batch.set(treasuryRef, {
-        'foundersPoints': FieldValue.increment(unit),
-        'investorsPoints': FieldValue.increment(investorsPoints),
-        'burnedPoints': FieldValue.increment(totalBurnAmount),
-        'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-      }, SetOptions(merge: true));
-
-      // Sync Founders Treasury to Governance
-      final foundersRef = _firestore.collection('governance').doc('founders');
-      batch.set(foundersRef, {
-        'id': 'founders',
-        'name': 'Founders & Core Team',
-        'type': 'system',
-        'treasuryBalance': FieldValue.increment(unit),
-        'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-      }, SetOptions(merge: true));
-
-      // Sync Investors Treasury to Governance
-      final investorsRef = _firestore.collection('governance').doc('investors');
-      batch.set(investorsRef, {
-        'id': 'investors',
-        'name': 'Investors & Partners',
-        'type': 'system',
-        'treasuryBalance': FieldValue.increment(investorsPoints),
-        'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-      }, SetOptions(merge: true));
-
-      // Sync System Treasuries to Governance
-      // Sync System Treasuries to Governance
-      // Ecosystem removed from active distribution, but we keep the doc or stop updating it.
-      // For cleanup, we just stop updating it here since it receives 0 flux.
-
-      // Liquidity removed from active distribution
-
-      batch.set(
-        _firestore.collection('governance').doc('founders'),
-        {
-          'treasuryBalance': FieldValue.increment(unit.toDouble()),
-          'title': 'Founders Treasury',
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        },
-        SetOptions(merge: true),
-      );
-    } catch (e) {
-      // No-log error
-
-    }
   }
+
+  // NOTE: Global supply tracking and treasury distribution are now handled
+  // entirely by Cloud Functions (awardPoints, awardMessagePoints, etc.).
+  // See functions/lib/dsp.js for the server-side implementation.
 
   // Get current Global Supply
   Future<int> getGlobalSupply() async {
@@ -443,214 +218,22 @@ class PointsRepository {
       if (!doc.exists) return 0;
       return doc.data()?['totalMinted'] as int? ?? 0;
     } catch (e) {
-      print('Error fetching global supply: $e');
+      debugPrint('Error fetching global supply: $e');
       return 0;
     }
   }
 
   /// Force sync treasury balances based on total global supply.
+  /// [SECURITY] Routes through Cloud Function (admin-only reconciliation).
   Future<void> syncTreasuryBalances() async {
     try {
-      final userPointsSnap = await _firestore.collection('user_points').get();
-      final usersSnap = await _firestore.collection('users').get();
-
-      final Map<String, Map<String, dynamic>> userProfiles = {};
-      for (var doc in usersSnap.docs) {
-        userProfiles[doc.id] = doc.data();
-      }
-
-      final Map<String, int> communityPointsMap = {};
-      final Map<String, int> communityBasisMap = {};
-      final Map<String, int> communityMemberPointsMap = {};
-      final Map<String, List<double>> communityPoCTs = {};
-
-      int totalUserPoints = 0;
-      int totalFoundersPoints = 0;
-      int totalInvestorsPoints = 0;
-      int totalBurnedPoints = 0;
-
-      for (var doc in userPointsSnap.docs) {
-        final userId = doc.id;
-        final pointsData = doc.data();
-        final int userPoints = pointsData['totalPoints'] as int? ?? 0;
-        final double trustScore = (pointsData['trustScore'] as num? ?? 0.0)
-            .toDouble();
-
-        if (userPoints <= 0) continue;
-
-        totalUserPoints += userPoints;
-
-        final int unit = (userPoints * 0.10).round();
-
-        totalFoundersPoints += unit; // Slot 0: Founders (10%)
-        totalInvestorsPoints += unit; // Slot 1: Investors (10%)
-
-        // Community Hierarchy: 7 Slots (Global + 3 Home + 3 Host)
-        // Missing slots default to Global.
-        final List<String> userSlots = [];
-        final userMemberships =
-            (userProfiles[userId]?['communityMemberships'] as List? ?? []);
-
-        void addUserSlot(String? id) {
-          final effectiveId = (id == null || id.isEmpty)
-              ? 'global_community'
-              : id;
-          userSlots.add(effectiveId);
-        }
-
-        addUserSlot('global_community');
-        addUserSlot(
-          userMemberships
-              .firstWhere(
-                (id) => id.toString().startsWith('home_continent_'),
-                orElse: () => '',
-              )
-              ?.toString(),
-        );
-        addUserSlot(
-          userMemberships
-              .firstWhere(
-                (id) => id.toString().startsWith('home_country_'),
-                orElse: () => '',
-              )
-              ?.toString(),
-        );
-        addUserSlot(
-          userMemberships
-              .firstWhere(
-                (id) => id.toString().startsWith('home_city_'),
-                orElse: () => '',
-              )
-              ?.toString(),
-        );
-        addUserSlot(
-          userMemberships
-              .firstWhere(
-                (id) => id.toString().startsWith('host_continent_'),
-                orElse: () => '',
-              )
-              ?.toString(),
-        );
-        addUserSlot(
-          userMemberships
-              .firstWhere(
-                (id) => id.toString().startsWith('host_country_'),
-                orElse: () => '',
-              )
-              ?.toString(),
-        );
-        addUserSlot(
-          userMemberships
-              .firstWhere(
-                (id) => id.toString().startsWith('host_city_'),
-                orElse: () => '',
-              )
-              ?.toString(),
-        );
-
-        totalBurnedPoints += unit; // Slot 3: Fixed Burn (10%)
-        // Total matched expansion is always 10 units (Founders + Investors + Burn + 7 Community)
-
-        for (final cid in userSlots) {
-          communityPointsMap[cid] = (communityPointsMap[cid] ?? 0) + unit;
-          // Basis Calculation: Pro-rated
-          communityBasisMap[cid] =
-              (communityBasisMap[cid] ?? 0) + userPoints + unit;
-          communityMemberPointsMap[cid] =
-              (communityMemberPointsMap[cid] ?? 0) + userPoints;
-          communityPoCTs.putIfAbsent(cid, () => []).add(trustScore);
-        }
-      }
-
-      final batch = _firestore.batch();
-
-      batch.set(
-        _firestore.collection('system_stats').doc('treasury'),
-        {
-          'foundersPoints': totalFoundersPoints,
-          'investorsPoints': totalInvestorsPoints,
-          'burnedPoints': totalBurnedPoints,
-          'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-        },
-        SetOptions(merge: true),
+      final callable = _functions.httpsCallable(
+        'syncTreasuryBalances',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 300)),
       );
-
-      batch.set(
-        _firestore.collection('governance').doc('founders'),
-        {
-          'treasuryBalance': totalFoundersPoints.toDouble(),
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        },
-        SetOptions(merge: true),
-      );
-
-      batch.set(
-        _firestore.collection('governance').doc('investors'),
-        {
-          'treasuryBalance': totalInvestorsPoints.toDouble(),
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        },
-        SetOptions(merge: true),
-      );
-
-      for (var commId in communityPointsMap.keys) {
-        final treasuryRef = _firestore
-            .collection('communities')
-            .doc(commId)
-            .collection('treasury')
-            .doc('current');
-        final pocts = communityPoCTs[commId] ?? [];
-        double avgPoCT = pocts.isEmpty
-            ? 0
-            : pocts.reduce((a, b) => a + b) / pocts.length;
-
-        batch.set(treasuryRef, {
-          'points': communityPointsMap[commId],
-          'cumulativeEarnings': communityBasisMap[commId],
-          'memberPoints': communityMemberPointsMap[commId],
-          'awardedBalance': communityPointsMap[commId],
-          'averagePoCT': avgPoCT,
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        }, SetOptions(merge: true));
-
-        final govId = commId == 'global_community'
-            ? 'global_community'
-            : (commId.contains('_')
-                  ? commId.substring(commId.indexOf('_') + 1)
-                  : commId);
-        batch.set(_firestore.collection('governance').doc(govId), {
-          'treasuryBalance': (communityPointsMap[commId] ?? 0).toDouble(),
-          'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-        }, SetOptions(merge: true));
-
-        // [FIX] Mirror data to top-level community document for list view efficiency
-        batch.set(
-          _firestore.collection('communities').doc(commId),
-          {
-            'points': communityPointsMap[commId],
-            'cumulativeEarnings': communityBasisMap[commId],
-            'memberPoints': communityMemberPointsMap[commId],
-            'awardedBalance': (communityPointsMap[commId] ?? 0).toDouble(),
-            'averagePoCT': avgPoCT,
-            'updatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-          },
-          SetOptions(merge: true),
-        );
-      }
-
-      batch.set(
-        _firestore.collection('system_stats').doc('dsp_supply'),
-        {
-          'totalMinted': (totalUserPoints * 2.0).round(),
-          'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-        },
-        SetOptions(merge: true),
-      );
-
-      await batch.commit();
+      await callable.call({});
     } catch (e) {
-      // No-log error
-
+      debugPrint('[syncTreasuryBalances] Cloud Function error: $e');
       rethrow;
     }
   }
@@ -684,7 +267,7 @@ class PointsRepository {
         'lastUpdated': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (e) {
-      print('Error updating wallet address: $e');
+      debugPrint('Error updating wallet address: $e');
       rethrow;
     }
   }
@@ -710,7 +293,7 @@ class PointsRepository {
         'liquidity': 'Pending...',
       };
     } catch (e) {
-      print('Error fetching treasury wallets: $e');
+      debugPrint('Error fetching treasury wallets: $e');
       return {
         'ecosystem': 'Error loading...',
         'founders': 'Error loading...',
@@ -770,170 +353,82 @@ class PointsRepository {
         });
   }
 
-  // Initialize points for new user
+  // Initialize points for new user — [SECURITY] Routes through Cloud Function
   Future<void> initializeUserPoints(String userId) async {
-    final doc = await _firestore.collection('user_points').doc(userId).get();
-    if (doc.exists) {
-      // No-log: Already initialized
-
-      return;
+    try {
+      final callable = _functions.httpsCallable('initializeUserPoints');
+      await callable.call({});
+    } catch (e) {
+      debugPrint('[initializeUserPoints] Cloud Function error: $e');
+      rethrow;
     }
-
-    final userDoc = await _firestore.collection('users').doc(userId).get();
-    final countryCode = userDoc.data()?['homeCountryCode'] as String?;
-
-    final batch = _firestore.batch();
-
-    final userPoints = UserPoints(
-      userId: userId,
-      totalPoints: 1000,
-      availablePoints: 1000,
-      currentStreak: 0,
-      lastActivityDate: null,
-      dailyMessageCount: 0,
-      lastUpdated: DateTime.now().toUtc(),
-      completedExplorationActions: [],
-      signupDate: DateTime.now().toUtc(),
-      dailyShareCount: 0,
-      dailyCommunitiesMessaged: [],
-      homeCountryCode: countryCode,
-      verifiedCount: 0,
-      familyConnectionCount: 0,
-      qrConnectionCount: 0,
-      lifetimeEarnings: const {'welcome_bonus': 1000},
-    );
-
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-    batch.set(userPointsRef, userPoints.toMap());
-
-    final transactionRef = _firestore.collection('points_transactions').doc();
-    final transaction = PointsTransaction(
-      id: transactionRef.id,
-      userId: userId,
-      type: 'earn',
-      action: 'welcome_bonus',
-      points: 1000,
-      timestamp: DateTime.now().toUtc(),
-      metadata: const {'description': 'Welcome to Diaspora!'},
-    );
-    batch.set(transactionRef, transaction.toMap());
-
-    await batch.commit();
   }
 
-  // Add points to user
+  // Add points to user — [SECURITY] Routes through Cloud Function
+  // All financial balance writes are now server-side only.
   Future<void> addPoints(
     String userId,
     int points,
     String action, {
     Map<String, dynamic>? metadata,
+    bool skipTreasury = false,
   }) async {
-    final batch = _firestore.batch();
-
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-    batch.set(userPointsRef, {
-      'totalPoints': FieldValue.increment(points),
-      'availablePoints': FieldValue.increment(points),
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-      'lifetimeEarnings.$action': FieldValue.increment(points),
-    }, SetOptions(merge: true));
-
-    final transactionRef = _firestore.collection('points_transactions').doc();
-    final transaction = PointsTransaction(
-      id: transactionRef.id,
-      userId: userId,
-      type: 'earn',
-      action: action,
-      points: points,
-      timestamp: DateTime.now().toUtc(),
-      metadata: metadata,
-    );
-    batch.set(transactionRef, transaction.toMap());
-
-    final userDoc = await _firestore.collection('users').doc(userId).get();
-    final countryCode = userDoc.data()?['homeCountryCode'] as String?;
-
-    if (countryCode != null) {
-      batch.update(userPointsRef, {'homeCountryCode': countryCode});
+    try {
+      final callable = _functions.httpsCallable('awardPoints');
+      await callable.call({
+        'userId': userId,
+        'points': points,
+        'action': action,
+        'metadata': metadata,
+        'skipTreasury': skipTreasury,
+      });
+    } catch (e) {
+      debugPrint('[addPoints] Cloud Function error: $e');
+      rethrow;
     }
-
-    await _distributeTreasuryPoints(batch, userId, points);
-    // 1:1 Expansion: User Points + Treasury Points
-    _incrementGlobalSupplyBatch(batch, points);
-
-    await batch.commit();
   }
 
+  // Add staged (locked) points — [SECURITY] Routes through Cloud Function
   Future<void> addStagedPoints(
     String userId,
     int points,
     String action, {
     Map<String, dynamic>? metadata,
   }) async {
-    final batch = _firestore.batch();
-
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-    batch.set(userPointsRef, {
-      'totalPoints': FieldValue.increment(points),
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-      'lifetimeEarnings.$action': FieldValue.increment(points),
-    }, SetOptions(merge: true));
-
-    final transactionRef = _firestore.collection('points_transactions').doc();
-    final transaction = PointsTransaction(
-      id: transactionRef.id,
-      userId: userId,
-      type: 'earn',
-      action: action,
-      points: points,
-      timestamp: DateTime.now().toUtc(),
-      metadata: {...?metadata, 'staged': true, 'locked': true},
-    );
-    batch.set(transactionRef, transaction.toMap());
-
-    await _distributeTreasuryPoints(batch, userId, points);
-    // 1:1 Expansion. Helper internally applies 2x expansion factor.
-    _incrementGlobalSupplyBatch(batch, points);
-
-    await batch.commit();
+    try {
+      final callable = _functions.httpsCallable('awardPoints');
+      await callable.call({
+        'userId': userId,
+        'points': points,
+        'action': action,
+        'metadata': {...?metadata, 'staged': true, 'locked': true},
+        'skipTreasury': false,
+      });
+    } catch (e) {
+      debugPrint('[addStagedPoints] Cloud Function error: $e');
+      rethrow;
+    }
   }
 
-  // Deduct points from user (Penalty or Sink)
+  // Deduct points from user (Penalty or Sink) — [SECURITY] Routes through Cloud Function
   Future<void> deductPoints(
     String userId,
     int points,
     String action, {
     Map<String, dynamic>? metadata,
   }) async {
-    final batch = _firestore.batch();
-
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-    batch.set(userPointsRef, {
-      'availablePoints': FieldValue.increment(-points),
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-    }, SetOptions(merge: true));
-
-    final transactionRef = _firestore.collection('points_transactions').doc();
-    final transaction = PointsTransaction(
-      id: transactionRef.id,
-      userId: userId,
-      type: 'spend',
-      action: action,
-      points: -points,
-      timestamp: DateTime.now().toUtc(),
-      metadata: metadata,
-    );
-    batch.set(transactionRef, transaction.toMap());
-
-    // [VALUE SINK] Record as Burned Utility and Internal GDP
-    final treasuryRef = _firestore.collection('system_stats').doc('treasury');
-    batch.set(treasuryRef, {
-      'totalInternalGdp': FieldValue.increment(points),
-      'totalBurnedUtility': FieldValue.increment(points),
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-    }, SetOptions(merge: true));
-
-    await batch.commit();
+    try {
+      final callable = _functions.httpsCallable('deductPoints');
+      await callable.call({
+        'userId': userId,
+        'points': points,
+        'action': action,
+        'metadata': metadata,
+      });
+    } catch (e) {
+      debugPrint('[deductPoints] Cloud Function error: $e');
+      rethrow;
+    }
   }
 
   // Update streak
@@ -1046,7 +541,7 @@ class PointsRepository {
       });
       // The function handles the logic. We just await success.
     } catch (e) {
-      print('Error transferring $assetType: $e');
+      debugPrint('Error transferring $assetType: $e');
       rethrow;
     }
   }
@@ -1184,368 +679,61 @@ class PointsRepository {
         });
   }
 
-  // Award points for sending a message
+  // Award points for sending a message — [SECURITY] Routes through Cloud Function
   Future<void> awardMessagePoint(
     String userId,
     int points, {
     int multiplier = 1,
   }) async {
-    final now = DateTime.now().toUtc();
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(userPointsRef);
-      if (!snapshot.exists) return;
-
-      final data = snapshot.data()!;
-      final lastUpdatedStr = data['lastUpdated'] as String?;
-      final lastUpdated = lastUpdatedStr != null
-          ? DateTime.parse(lastUpdatedStr)
-          : null;
-
-      int dailyCount = data['dailyMessageCount'] as int? ?? 0;
-      if (lastUpdated == null || lastUpdated.day != now.day) dailyCount = 0;
-
-      if (dailyCount >= 100) return;
-
-      final pointsToAward = points * multiplier;
-      transaction.update(userPointsRef, {
-        'totalPoints': FieldValue.increment(pointsToAward),
-        'availablePoints': FieldValue.increment(pointsToAward),
-        'dailyMessageCount': dailyCount + 1,
-        'lastUpdated': now.toIso8601String(),
-        'lifetimeEarnings.daily_message': FieldValue.increment(
-          pointsToAward,
-        ), // [FIX] Track lifetime earnings
+    try {
+      final callable = _functions.httpsCallable('awardMessagePoints');
+      await callable.call({
+        'points': points,
+        'multiplier': multiplier,
       });
-
-      final transactionRef = _firestore.collection('points_transactions').doc();
-      transaction.set(
-        transactionRef,
-        PointsTransaction(
-          id: transactionRef.id,
-          userId: userId,
-          type: 'earn',
-          action: 'message_sent',
-          points: pointsToAward,
-          timestamp: now,
-        ).toMap(),
-      );
-
-      // Allocate Treasuries (Multi-community split + Eco/Liq/Founders)
-      // 1:1 Expansion: 10 slots * 10% = 100% Match
-      final int tenPercentShare = (pointsToAward * 0.1).round();
-      if (tenPercentShare > 0) {
-        final userRef = _firestore.collection('users').doc(userId);
-        final userSnap = await transaction.get(userRef);
-        int homeOverflow = 0;
-        int hostOverflow = 0;
-
-        if (userSnap.exists) {
-          final List<dynamic> memberships =
-              userSnap.data()?['communityMemberships'] ?? [];
-          final homePool = memberships
-              .where((id) => id.toString().startsWith('home_'))
-              .toList();
-          final hostPool = memberships
-              .where(
-                (id) =>
-                    id.toString().startsWith('host_') ||
-                    id.toString().startsWith('past_'),
-              )
-              .toList();
-
-          if (homePool.isNotEmpty) {
-            final int pPer = (tenPercentShare / homePool.length).round();
-            int rem = tenPercentShare - (pPer * homePool.length);
-            for (int i = 0; i < homePool.length; i++) {
-              final String cid = homePool[i].toString();
-              final int cPoints = pPer + (i == 0 ? rem : 0);
-              final tRef = _firestore
-                  .collection('communities')
-                  .doc(cid)
-                  .collection('treasury')
-                  .doc('current');
-              transaction.set(tRef, {
-                'cumulativeEarnings': FieldValue.increment(pointsToAward * 2),
-                'memberPoints': FieldValue.increment(pointsToAward),
-                'points': FieldValue.increment(cPoints),
-                'awardedBalance': FieldValue.increment(cPoints),
-                'updatedAt': now.millisecondsSinceEpoch,
-              }, SetOptions(merge: true));
-            }
-          } else {
-            homeOverflow = tenPercentShare;
-          }
-
-          if (hostPool.isNotEmpty) {
-            final int pPer = (tenPercentShare / hostPool.length).round();
-            int rem = tenPercentShare - (pPer * hostPool.length);
-            for (int i = 0; i < hostPool.length; i++) {
-              final String cid = hostPool[i].toString();
-              final int cPoints = pPer + (i == 0 ? rem : 0);
-              final tRef = _firestore
-                  .collection('communities')
-                  .doc(cid)
-                  .collection('treasury')
-                  .doc('current');
-              transaction.set(tRef, {
-                'cumulativeEarnings': FieldValue.increment(pointsToAward * 2),
-                'memberPoints': FieldValue.increment(pointsToAward),
-                'points': FieldValue.increment(cPoints),
-                'awardedBalance': FieldValue.increment(cPoints),
-                'updatedAt': now.millisecondsSinceEpoch,
-              }, SetOptions(merge: true));
-            }
-          } else {
-            hostOverflow = tenPercentShare;
-          }
-        } else {
-          // If no user profile found, all community shares go to Ecosystem
-          homeOverflow = tenPercentShare;
-          hostOverflow = tenPercentShare;
-        }
-
-        final sysTreasuryRef = _firestore
-            .collection('system_stats')
-            .doc('treasury');
-        transaction.set(sysTreasuryRef, {
-          'ecosystemPoints': FieldValue.increment(
-            tenPercentShare + homeOverflow + hostOverflow,
-          ),
-          'liquidityPoints': FieldValue.increment(tenPercentShare),
-          'foundersPoints': FieldValue.increment(tenPercentShare),
-          'lastUpdated': now.toIso8601String(),
-        }, SetOptions(merge: true));
-      }
-
-      // 1:1 Expansion. Helper internally applies 2x expansion factor.
-      _incrementGlobalSupplyTx(transaction, pointsToAward);
-    });
+    } catch (e) {
+      debugPrint('[awardMessagePoint] Cloud Function error: $e');
+      rethrow;
+    }
   }
 
-  // Award exploration points unique per action
+  // Award exploration points unique per action — [SECURITY] Routes through Cloud Function
   Future<void> awardExplorationPoints({
     required String userId,
     required String actionId,
     required int points,
     Map<String, dynamic>? metadata,
   }) async {
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-    final userRef = _firestore.collection('users').doc(userId);
-
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(userPointsRef);
-      final userSnap = await transaction.get(userRef);
-
-      if (!snapshot.exists) {
-        // [SAFETY] Initialize if missing
-        final newUserPoints = UserPoints(
-          userId: userId,
-          totalPoints: 0,
-          availablePoints: 0,
-          currentStreak: 0,
-          lastActivityDate: null,
-          dailyMessageCount: 0,
-          lastUpdated: DateTime.now().toUtc(),
-          signupDate: DateTime.now().toUtc(),
-        );
-        transaction.set(userPointsRef, newUserPoints.toMap());
-      } else {
-        final data = snapshot.data()!;
-        final completedActions = List<String>.from(
-          data['completedExplorationActions'] ?? [],
-        );
-        if (completedActions.contains(actionId)) {
-          throw Exception('Action already completed');
-        }
-      }
-
-      // 1. Update User Points
-      transaction.update(userPointsRef, {
-        'totalPoints': FieldValue.increment(points),
-        'availablePoints': FieldValue.increment(points),
-        'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-        'completedExplorationActions': FieldValue.arrayUnion([actionId]),
-        'lifetimeEarnings.exploration_reward': FieldValue.increment(
-          points,
-        ), // [FIX] Track lifetime earnings
+    try {
+      final callable = _functions.httpsCallable('awardExplorationPoints');
+      await callable.call({
+        'actionId': actionId,
+        'points': points,
+        'metadata': metadata,
       });
-
-      // 2. Create Transaction Record
-      final transactionRef = _firestore.collection('points_transactions').doc();
-      transaction.set(
-        transactionRef,
-        PointsTransaction(
-          id: transactionRef.id,
-          userId: userId,
-          type: 'earn',
-          action: 'exploration_$actionId',
-          points: points,
-          timestamp: DateTime.now().toUtc(),
-          metadata: metadata,
-        ).toMap(),
-      );
-
-      // 3. Allocate Treasuries (1:1 Expansion: 10 slots * 10% = 100% Match)
-      final int unit = (points * 0.1).round();
-      final nowStr = DateTime.now().toUtc().toIso8601String();
-      final nowMillis = DateTime.now().toUtc().millisecondsSinceEpoch;
-
-      int ecosystemOverflow = 0;
-
-      // Slot 1: Global
-      final globalTRef = _firestore
-          .collection('communities')
-          .doc('global_community')
-          .collection('treasury')
-          .doc('current');
-      transaction.set(globalTRef, {
-        'cumulativeEarnings': FieldValue.increment(points + unit),
-        'memberPoints': FieldValue.increment(points),
-        'points': FieldValue.increment(unit),
-        'awardedBalance': FieldValue.increment(unit),
-        'updatedAt': nowMillis,
-      }, SetOptions(merge: true));
-
-      if (userSnap.exists) {
-        final List<dynamic> memberships =
-            userSnap.data()?['communityMemberships'] ?? [];
-
-        // Slots 2-5: Home Hierarchy
-        final homeLevels = [
-          'home_continent_',
-          'home_country_',
-          'home_state_',
-          'home_city_',
-        ];
-        for (final level in homeLevels) {
-          final cid = memberships.firstWhere(
-            (id) => id.toString().startsWith(level),
-            orElse: () => null,
-          );
-          if (cid != null) {
-            final tRef = _firestore
-                .collection('communities')
-                .doc(cid.toString())
-                .collection('treasury')
-                .doc('current');
-            transaction.set(tRef, {
-              'cumulativeEarnings': FieldValue.increment(points + unit),
-              'memberPoints': FieldValue.increment(points),
-              'points': FieldValue.increment(unit),
-              'awardedBalance': FieldValue.increment(unit),
-              'updatedAt': nowMillis,
-            }, SetOptions(merge: true));
-          } else {
-            ecosystemOverflow += unit;
-          }
-        }
-
-        // Slots 6-9: Host Hierarchy
-        final hostLevels = [
-          'host_continent_',
-          'host_country_',
-          'host_state_',
-          'host_city_',
-        ];
-        for (final level in hostLevels) {
-          final cid = memberships.firstWhere(
-            (id) => id.toString().startsWith(level),
-            orElse: () => null,
-          );
-          if (cid != null) {
-            final tRef = _firestore
-                .collection('communities')
-                .doc(cid.toString())
-                .collection('treasury')
-                .doc('current');
-            transaction.set(tRef, {
-              'cumulativeEarnings': FieldValue.increment(points + unit),
-              'memberPoints': FieldValue.increment(points),
-              'points': FieldValue.increment(unit),
-              'awardedBalance': FieldValue.increment(unit),
-              'updatedAt': nowMillis,
-            }, SetOptions(merge: true));
-          } else {
-            ecosystemOverflow += unit;
-          }
-        }
-      } else {
-        // All 8 hierarchy slots overflow
-        ecosystemOverflow += (unit * 8);
-      }
-
-      // Slot 10: Founders + Ecosystem Overflow
-      final sysTreasuryRef = _firestore
-          .collection('system_stats')
-          .doc('treasury');
-      transaction.set(sysTreasuryRef, {
-        'ecosystemPoints': FieldValue.increment(ecosystemOverflow),
-        'foundersPoints': FieldValue.increment(unit),
-        'lastUpdated': nowStr,
-      }, SetOptions(merge: true));
-
-      // 1:1 Expansion. Helper internally applies 2x expansion factor.
-      _incrementGlobalSupplyTx(transaction, points);
-    });
+    } catch (e) {
+      debugPrint('[awardExplorationPoints] Cloud Function error: $e');
+      rethrow;
+    }
   }
 
-  // Award points for sharing content
+  // Award points for sharing content — [SECURITY] Routes through Cloud Function
   Future<bool> awardSharePoints(
     String userId,
     int points,
     String contentType,
   ) async {
-    final now = DateTime.now().toUtc();
-    final userPointsRef = _firestore.collection('user_points').doc(userId);
-    bool rewarded = false;
-
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(userPointsRef);
-      if (!snapshot.exists) return;
-
-      final data = snapshot.data()!;
-      final lastUpdatedStr = data['lastUpdated'] as String?;
-      final lastUpdated = lastUpdatedStr != null
-          ? DateTime.parse(lastUpdatedStr)
-          : null;
-
-      int dailyShareCount = data['dailyShareCount'] as int? ?? 0;
-      if (lastUpdated == null || lastUpdated.day != now.day) {
-        dailyShareCount = 0;
-      }
-
-      if (dailyShareCount >= 12) return;
-
-      transaction.update(userPointsRef, {
-        'totalPoints': FieldValue.increment(points),
-        'availablePoints': FieldValue.increment(points),
-        'dailyShareCount': dailyShareCount + 1,
-        'lastUpdated': now.toIso8601String(),
-        'lifetimeEarnings.content_shared': FieldValue.increment(
-          points,
-        ), // [FIX] Track lifetime earnings
+    try {
+      final callable = _functions.httpsCallable('awardSharePoints');
+      final result = await callable.call({
+        'points': points,
+        'contentType': contentType,
       });
-
-      final transactionRef = _firestore.collection('points_transactions').doc();
-      transaction.set(
-        transactionRef,
-        PointsTransaction(
-          id: transactionRef.id,
-          userId: userId,
-          type: 'earn',
-          action: 'content_shared',
-          points: points,
-          timestamp: now,
-          metadata: {'contentType': contentType},
-        ).toMap(),
-      );
-      _incrementGlobalSupplyTx(transaction, points);
-      rewarded = true;
-    });
-
-    return rewarded;
+      return result.data['rewarded'] == true;
+    } catch (e) {
+      debugPrint('[awardSharePoints] Cloud Function error: $e');
+      return false;
+    }
   }
 
   /// Updates the PoCT score in the user_points collection.

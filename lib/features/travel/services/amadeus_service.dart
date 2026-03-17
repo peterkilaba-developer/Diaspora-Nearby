@@ -1,6 +1,4 @@
-import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import 'package:cloud_functions/cloud_functions.dart';
 
 /// Model representing a single flight offer from Amadeus API.
 class FlightOffer {
@@ -13,7 +11,7 @@ class FlightOffer {
   final List<TravelerPricing> travelerPricings;
   final String? validatingAirline;
   final bool instantTicketingRequired;
-  final Map<String, dynamic>? rawJson; // Preserved for booking pipeline
+  final Map<String, dynamic>? rawJson;
 
   FlightOffer({
     required this.id,
@@ -175,7 +173,7 @@ class HotelListEntry {
   final String hotelId;
   final String name;
   final String? chainCode;
-  final String? iataCode;   // City IATA
+  final String? iataCode; // City IATA
   final double? latitude;
   final double? longitude;
   final String? countryCode;
@@ -244,20 +242,18 @@ class HotelOfferResult {
   /// Cheapest offer price.
   double get cheapestPrice {
     if (offers.isEmpty) return 0;
-    return offers
-        .map((o) => o.totalPrice)
-        .reduce((a, b) => a < b ? a : b);
+    return offers.map((o) => o.totalPrice).reduce((a, b) => a < b ? a : b);
   }
 
   /// Currency from first offer.
-  String get currency =>
-      offers.isNotEmpty ? offers.first.currency : 'USD';
+  String get currency => offers.isNotEmpty ? offers.first.currency : 'USD';
 
   /// Board type from cheapest offer.
   String? get boardType {
     if (offers.isEmpty) return null;
-    final cheapest = offers.reduce((a, b) =>
-        a.totalPrice <= b.totalPrice ? a : b);
+    final cheapest = offers.reduce(
+      (a, b) => a.totalPrice <= b.totalPrice ? a : b,
+    );
     return cheapest.boardType;
   }
 }
@@ -276,7 +272,7 @@ class RoomOffer {
   final String currency;
   final double basePrice;
   final double totalPrice;
-  final String? boardType;      // e.g. ROOM_ONLY, BREAKFAST
+  final String? boardType; // e.g. ROOM_ONLY, BREAKFAST
   final String? paymentType;
   final String? cancellationDeadline;
   final String? cancellationDescription;
@@ -305,7 +301,8 @@ class RoomOffer {
     final room = json['room'] as Map<String, dynamic>? ?? {};
     final typeEstimated = room['typeEstimated'] as Map<String, dynamic>? ?? {};
     final policies = json['policies'] as Map<String, dynamic>? ?? {};
-    final cancellation = policies['cancellation'] as Map<String, dynamic>? ?? {};
+    final cancellation =
+        policies['cancellation'] as Map<String, dynamic>? ?? {};
     final descObj = room['description'] as Map<String, dynamic>?;
 
     return RoomOffer(
@@ -347,12 +344,18 @@ class RoomOffer {
   /// Human-readable board type.
   String get boardTypeDisplay {
     switch (boardType) {
-      case 'ROOM_ONLY': return 'Room Only';
-      case 'BREAKFAST': return 'Breakfast Included';
-      case 'HALF_BOARD': return 'Half Board';
-      case 'FULL_BOARD': return 'Full Board';
-      case 'ALL_INCLUSIVE': return 'All Inclusive';
-      default: return boardType ?? 'Room Only';
+      case 'ROOM_ONLY':
+        return 'Room Only';
+      case 'BREAKFAST':
+        return 'Breakfast Included';
+      case 'HALF_BOARD':
+        return 'Half Board';
+      case 'FULL_BOARD':
+        return 'Full Board';
+      case 'ALL_INCLUSIVE':
+        return 'All Inclusive';
+      default:
+        return boardType ?? 'Room Only';
     }
   }
 
@@ -360,12 +363,19 @@ class RoomOffer {
   String get bedInfo {
     final count = beds ?? 1;
     final type = bedType ?? 'BED';
-    final typeName = type == 'DOUBLE' ? 'Double' :
-        type == 'SINGLE' ? 'Single' :
-        type == 'KING' ? 'King' :
-        type == 'QUEEN' ? 'Queen' :
-        type == 'TWIN' ? 'Twin' :
-        type == 'BED' ? '' : type;
+    final typeName = type == 'DOUBLE'
+        ? 'Double'
+        : type == 'SINGLE'
+        ? 'Single'
+        : type == 'KING'
+        ? 'King'
+        : type == 'QUEEN'
+        ? 'Queen'
+        : type == 'TWIN'
+        ? 'Twin'
+        : type == 'BED'
+        ? ''
+        : type;
     final label = typeName.isEmpty
         ? 'Bed${count > 1 ? 's' : ''}'
         : '$typeName Bed${count > 1 ? 's' : ''}';
@@ -374,57 +384,43 @@ class RoomOffer {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AMADEUS SERVICE
+// AMADEUS SERVICE (Cloud Function Proxy)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Service for interacting with the Amadeus Self-Service API.
-/// Handles OAuth2 authentication, flight search, and hotel search.
+/// Service for interacting with the Amadeus Self-Service API via a
+/// server-side Cloud Function proxy. API credentials never touch the client.
 class AmadeusService {
-  static const String _baseUrl = 'https://test.api.amadeus.com';
-  static const String _tokenUrl = '$_baseUrl/v1/security/oauth2/token';
-  static const String _flightOffersUrl = '$_baseUrl/v2/shopping/flight-offers';
-  static const String _flightPricingUrl = '$_baseUrl/v1/shopping/flight-offers/pricing';
-  static const String _flightOrdersUrl = '$_baseUrl/v1/booking/flight-orders';
-  static const String _hotelListUrl = '$_baseUrl/v1/reference-data/locations/hotels/by-city';
-  static const String _hotelListByGeoUrl = '$_baseUrl/v1/reference-data/locations/hotels/by-geocode';
-  static const String _hotelOffersUrl = '$_baseUrl/v3/shopping/hotel-offers';
-
-  String? _accessToken;
-  DateTime? _tokenExpiry;
-
-  String get _apiKey => dotenv.env['AMADEUS_API_KEY'] ?? '';
-  String get _apiSecret => dotenv.env['AMADEUS_API_SECRET'] ?? '';
-
-  /// Authenticate and obtain an access token via client_credentials grant.
-  Future<void> _authenticate() async {
-    // Reuse valid token
-    if (_accessToken != null &&
-        _tokenExpiry != null &&
-        DateTime.now().isBefore(_tokenExpiry!)) {
-      return;
+  /// Recursively converts all nested maps from `Map<Object?, Object?>` to
+  /// `Map<String, dynamic>` and lists from `List<Object?>` to `List<dynamic>`.
+  /// Firebase callable functions return untyped maps that need deep casting.
+  static dynamic _deepCast(dynamic value) {
+    if (value is Map) {
+      return value.map<String, dynamic>(
+        (key, val) => MapEntry(key.toString(), _deepCast(val)),
+      );
+    } else if (value is List) {
+      return value.map(_deepCast).toList();
     }
+    return value;
+  }
 
-    final response = await http.post(
-      Uri.parse(_tokenUrl),
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {
-        'grant_type': 'client_credentials',
-        'client_id': _apiKey,
-        'client_secret': _apiSecret,
-      },
+  /// Calls the `amadeusProxy` Cloud Function with the given action + params.
+  Future<Map<String, dynamic>> _call(
+    String action,
+    Map<String, dynamic> params,
+  ) async {
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'amadeusProxy',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 55)),
     );
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      _accessToken = data['access_token'];
-      final expiresIn = data['expires_in'] as int? ?? 1799;
-      _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn - 60));
-    } else {
-      throw AmadeusException(
-        'Authentication failed: ${response.statusCode}',
-        response.body,
-      );
-    }
+    final result = await callable.call<dynamic>({
+      'action': action,
+      'params': params,
+    });
+
+    // Deep-cast the entire response tree so nested maps/lists are properly typed
+    return _deepCast(result.data) as Map<String, dynamic>;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -448,43 +444,23 @@ class AmadeusService {
     int maxResults = 10,
     String currencyCode = 'USD',
   }) async {
-    await _authenticate();
-
-    final queryParams = {
-      'originLocationCode': originIata,
-      'destinationLocationCode': destinationIata,
+    final params = <String, dynamic>{
+      'originIata': originIata,
+      'destinationIata': destinationIata,
       'departureDate': departureDate,
-      'adults': adults.toString(),
-      'max': maxResults.toString(),
+      'adults': adults,
+      'maxResults': maxResults,
       'currencyCode': currencyCode,
     };
-
     if (returnDate != null && returnDate.isNotEmpty) {
-      queryParams['returnDate'] = returnDate;
+      params['returnDate'] = returnDate;
     }
 
-    final uri = Uri.parse(_flightOffersUrl).replace(queryParameters: queryParams);
-
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $_accessToken',
-        'Accept': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final offers = (data['data'] as List? ?? [])
-          .map((o) => FlightOffer.fromJson(o))
-          .toList();
-      return offers;
-    } else {
-      throw AmadeusException(
-        'Flight search failed: ${response.statusCode}',
-        response.body,
-      );
-    }
+    final data = await _call('searchFlights', params);
+    final offers = (data['data'] as List? ?? [])
+        .map((o) => FlightOffer.fromJson(Map<String, dynamic>.from(o)))
+        .toList();
+    return offers;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -494,39 +470,18 @@ class AmadeusService {
   /// Confirm the current price of a flight offer before booking.
   ///
   /// Returns the confirmed flight offer with up-to-date pricing.
-  Future<Map<String, dynamic>> confirmFlightPrice(Map<String, dynamic> rawOfferJson) async {
-    await _authenticate();
-
-    final body = json.encode({
-      'data': {
-        'type': 'flight-offers-pricing',
-        'flightOffers': [rawOfferJson],
-      }
+  Future<Map<String, dynamic>> confirmFlightPrice(
+    Map<String, dynamic> rawOfferJson,
+  ) async {
+    final data = await _call('confirmFlightPrice', {
+      'rawOfferJson': rawOfferJson,
     });
 
-    final response = await http.post(
-      Uri.parse(_flightPricingUrl),
-      headers: {
-        'Authorization': 'Bearer $_accessToken',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: body,
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final confirmedOffers = data['data']?['flightOffers'] as List? ?? [];
-      if (confirmedOffers.isEmpty) {
-        throw AmadeusException('No confirmed pricing returned');
-      }
-      return Map<String, dynamic>.from(confirmedOffers.first);
-    } else {
-      throw AmadeusException(
-        'Flight pricing failed: ${response.statusCode}',
-        response.body,
-      );
+    final confirmedOffers = data['data']?['flightOffers'] as List? ?? [];
+    if (confirmedOffers.isEmpty) {
+      throw AmadeusException('No confirmed pricing returned');
     }
+    return Map<String, dynamic>.from(confirmedOffers.first);
   }
 
   /// Create a flight order (booking) with traveler details.
@@ -540,60 +495,45 @@ class AmadeusService {
     Map<String, dynamic>? payment,
     String? remarks,
   }) async {
-    await _authenticate();
-
     final offerId = confirmedOfferJson['id'] ?? '1';
 
-    final data = <String, dynamic>{
+    final orderData = <String, dynamic>{
       'type': 'flight-order',
       'flightOffers': [confirmedOfferJson],
       'travelers': travelers,
       'contacts': [contact],
       'ticketingAgreement': {
         'option': 'DELAY_TO_QUEUE',
-        'dateTime': DateTime.now().add(const Duration(days: 1)).toIso8601String().split('.').first,
+        'dateTime': DateTime.now()
+            .add(const Duration(days: 1))
+            .toIso8601String()
+            .split('.')
+            .first,
       },
     };
 
     // Add payment if provided
     if (payment != null) {
-      data['formOfPayment'] = {
+      orderData['formOfPayment'] = {
         'other': {
           'method': 'CASH',
           'flightOfferIds': [offerId],
-        }
+        },
       };
     }
 
     if (remarks != null) {
-      data['remarks'] = {
+      orderData['remarks'] = {
         'general': [
-          {'subType': 'GENERAL_MISCELLANEOUS', 'text': remarks}
+          {'subType': 'GENERAL_MISCELLANEOUS', 'text': remarks},
         ],
       };
     }
 
-    final body = json.encode({'data': data});
+    final data = await _call('createFlightOrder', {'orderData': orderData});
 
-    final response = await http.post(
-      Uri.parse(_flightOrdersUrl),
-      headers: {
-        'Authorization': 'Bearer $_accessToken',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: body,
-    );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final respData = json.decode(response.body);
-      return FlightOrder.fromJson(respData['data'] ?? respData);
-    } else {
-      throw AmadeusException(
-        'Flight booking failed: ${response.statusCode}',
-        response.body,
-      );
-    }
+    final respData = data['data'] ?? data;
+    return FlightOrder.fromJson(Map<String, dynamic>.from(respData));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -610,38 +550,16 @@ class AmadeusService {
     int radius = 5,
     int maxResults = 20,
   }) async {
-    await _authenticate();
-
-    final queryParams = {
+    final data = await _call('searchHotelsByCity', {
       'cityCode': cityCode.toUpperCase(),
-      'radius': radius.toString(),
-      'radiusUnit': 'KM',
-      'hotelSource': 'ALL',
-    };
+      'radius': radius,
+    });
 
-    final uri = Uri.parse(_hotelListUrl).replace(queryParameters: queryParams);
-
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $_accessToken',
-        'Accept': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final hotels = (data['data'] as List? ?? [])
-          .map((h) => HotelListEntry.fromJson(h))
-          .take(maxResults)
-          .toList();
-      return hotels;
-    } else {
-      throw AmadeusException(
-        'Hotel list search failed: ${response.statusCode}',
-        response.body,
-      );
-    }
+    final hotels = (data['data'] as List? ?? [])
+        .map((h) => HotelListEntry.fromJson(Map<String, dynamic>.from(h)))
+        .take(maxResults)
+        .toList();
+    return hotels;
   }
 
   /// Step 1b: Get a list of hotel IDs near a geographic coordinate.
@@ -656,39 +574,17 @@ class AmadeusService {
     int radius = 5,
     int maxResults = 20,
   }) async {
-    await _authenticate();
+    final data = await _call('searchHotelsByGeocode', {
+      'latitude': latitude,
+      'longitude': longitude,
+      'radius': radius,
+    });
 
-    final queryParams = {
-      'latitude': latitude.toStringAsFixed(5),
-      'longitude': longitude.toStringAsFixed(5),
-      'radius': radius.toString(),
-      'radiusUnit': 'KM',
-      'hotelSource': 'ALL',
-    };
-
-    final uri = Uri.parse(_hotelListByGeoUrl).replace(queryParameters: queryParams);
-
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $_accessToken',
-        'Accept': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final hotels = (data['data'] as List? ?? [])
-          .map((h) => HotelListEntry.fromJson(h))
-          .take(maxResults)
-          .toList();
-      return hotels;
-    } else {
-      throw AmadeusException(
-        'Hotel geocode search failed: ${response.statusCode}',
-        response.body,
-      );
-    }
+    final hotels = (data['data'] as List? ?? [])
+        .map((h) => HotelListEntry.fromJson(Map<String, dynamic>.from(h)))
+        .take(maxResults)
+        .toList();
+    return hotels;
   }
 
   /// Step 2: Get pricing & room offers for specific hotel IDs.
@@ -706,46 +602,25 @@ class AmadeusService {
     int rooms = 1,
     String currencyCode = 'USD',
   }) async {
-    await _authenticate();
-
     // API accepts up to ~50 hotel IDs at a time
     final ids = hotelIds.take(50).toList();
 
-    final queryParams = {
-      'hotelIds': ids.join(','),
+    final data = await _call('getHotelOffers', {
+      'hotelIds': ids,
       'checkInDate': checkInDate,
       'checkOutDate': checkOutDate,
-      'adults': adults.toString(),
-      'roomQuantity': rooms.toString(),
-      'currency': currencyCode,
-      'bestRateOnly': 'true',
-    };
+      'adults': adults,
+      'rooms': rooms,
+      'currencyCode': currencyCode,
+    });
 
-    final uri = Uri.parse(_hotelOffersUrl).replace(queryParameters: queryParams);
-
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $_accessToken',
-        'Accept': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final results = (data['data'] as List? ?? [])
-          .map((h) => HotelOfferResult.fromJson(h))
-          .where((h) => h.available && h.offers.isNotEmpty)
-          .toList();
-      // Sort by cheapest first
-      results.sort((a, b) => a.cheapestPrice.compareTo(b.cheapestPrice));
-      return results;
-    } else {
-      throw AmadeusException(
-        'Hotel offers search failed: ${response.statusCode}',
-        response.body,
-      );
-    }
+    final results = (data['data'] as List? ?? [])
+        .map((h) => HotelOfferResult.fromJson(Map<String, dynamic>.from(h)))
+        .where((h) => h.available && h.offers.isNotEmpty)
+        .toList();
+    // Sort by cheapest first
+    results.sort((a, b) => a.cheapestPrice.compareTo(b.cheapestPrice));
+    return results;
   }
 
   /// Convenience: Search hotels in one call (list → offers).
@@ -797,7 +672,7 @@ class AmadeusService {
     int maxResults = 15,
     String currencyCode = 'USD',
   }) async {
-    // Step 1 — list hotels near the coordinates
+    // Step 1 — list hotels by geocode
     final hotelList = await searchHotelsByGeocode(
       latitude: latitude,
       longitude: longitude,
@@ -821,6 +696,7 @@ class AmadeusService {
     return offers.take(maxResults).toList();
   }
 }
+
 /// A confirmed flight booking order from Create Flight Orders API.
 class FlightOrder {
   final String id;

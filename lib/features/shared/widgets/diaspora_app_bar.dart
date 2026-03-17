@@ -119,7 +119,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                     )
                   else
                     Image.asset(
-                      'assets/icons/logo-original.png',
+                      'assets/icons/logo-transparent-32.png',
                       width: 36,
                       height: 36,
                     ),
@@ -153,7 +153,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                               'action_appbar_community',
                             )
                             .then((rewarded) {
-                              if (rewarded && mounted) {
+                              if (rewarded && context.mounted) {
                                 showExplorationRewardToast(
                                   context,
                                   message: 'Community Network Unlocked',
@@ -305,9 +305,9 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
 
   Widget _buildNotificationBell(BuildContext context, WidgetRef ref) {
     final pendingAsync = ref.watch(pendingActionCountProvider);
-    final pendingCount = pendingAsync.valueOrNull ?? 0;
+    final pendingCount = pendingAsync.value ?? 0;
     final unreadAsync = ref.watch(unreadNotificationCountProvider);
-    final unreadCount = unreadAsync.valueOrNull ?? 0;
+    final unreadCount = unreadAsync.value ?? 0;
 
     // Show the higher of the two counts — pending actions take priority
     final badgeCount = pendingCount > 0 ? pendingCount : unreadCount;
@@ -328,10 +328,7 @@ class _DiasporaAppBarState extends ConsumerState<DiasporaAppBar> {
                   color: AppTheme.accent,
                   shape: BoxShape.circle,
                 ),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Text(
                   badgeCount > 99 ? '99+' : '$badgeCount',
                   style: TextStyle(

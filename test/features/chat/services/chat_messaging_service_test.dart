@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -9,19 +10,19 @@ import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.da
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:image_picker/image_picker.dart';
 
-// Must generate mocks for these classes
-@GenerateMocks([
-  FirebaseStorage,
-  Reference,
-  UploadTask,
-  TaskSnapshot,
-  FirebaseFirestore,
-  CollectionReference,
-  DocumentReference,
-  DocumentSnapshot,
-  User,
-  FirebaseAuth,
-  PointsService,
+// Must generate nice mocks (returns defaults for unstubbed methods)
+@GenerateNiceMocks([
+  MockSpec<FirebaseStorage>(),
+  MockSpec<Reference>(),
+  MockSpec<UploadTask>(),
+  MockSpec<TaskSnapshot>(),
+  MockSpec<FirebaseFirestore>(),
+  MockSpec<CollectionReference<Map<String, dynamic>>>(),
+  MockSpec<DocumentReference<Map<String, dynamic>>>(),
+  MockSpec<DocumentSnapshot<Map<String, dynamic>>>(),
+  MockSpec<User>(),
+  MockSpec<FirebaseAuth>(),
+  MockSpec<PointsService>(),
 ])
 import 'chat_messaging_service_test.mocks.dart';
 
@@ -31,9 +32,16 @@ class FakeUploadTask extends Fake implements UploadTask {
   FakeUploadTask(this._snapshot);
 
   @override
-  Future<S> then<S>(FutureOr<S> Function(TaskSnapshot) onValue, {Function? onError}) async {
-    return Future.value(onValue(_snapshot));
+  Stream<TaskSnapshot> get snapshotEvents => Stream.value(_snapshot);
+
+  @override
+  Future<S> then<S>(FutureOr<S> Function(TaskSnapshot) onValue, {Function? onError}) {
+    return Future.value(_snapshot).then(onValue, onError: onError);
   }
+
+  // Make the task awaitable
+  @override
+  Future<TaskSnapshot> get future => Future.value(_snapshot);
 }
 
 void main() {
@@ -43,6 +51,7 @@ void main() {
   late MockUser mockUser;
   late MockPointsService mockPointsService;
   late ChatMessagingService service;
+  late File tempImageFile;
 
   setUp(() {
     mockStorage = MockFirebaseStorage();
@@ -61,19 +70,29 @@ void main() {
       auth: mockAuth,
       pointsService: mockPointsService,
     );
+
+    // Create a temporary test image file
+    tempImageFile = File('${Directory.systemTemp.path}/test_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    tempImageFile.writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0]); // minimal JPEG header
+  });
+
+  tearDown(() {
+    if (tempImageFile.existsSync()) {
+      tempImageFile.deleteSync();
+    }
   });
 
   group('ChatMessagingService Media Upload', () {
     test('sendImageMessage should upload file and return optimistic message', () async {
       // 1. Setup Data
       final chatId = 'chat_123';
-      final imagePath = 'test_image.jpg';
+      final imagePath = tempImageFile.path;
       
       // 2. Setup Mocks for User Data Fetch
-      final mockUserDocRef = MockDocumentReference<Map<String, dynamic>>();
-      final mockUserDocSnap = MockDocumentSnapshot<Map<String, dynamic>>();
+      final mockUserDocRef = MockDocumentReference();
+      final mockUserDocSnap = MockDocumentSnapshot();
       
-      final mockUsersCollection = MockCollectionReference<Map<String, dynamic>>();
+      final mockUsersCollection = MockCollectionReference();
       when(mockFirestore.collection('users')).thenReturn(mockUsersCollection);
       when(mockUsersCollection.doc(any)).thenReturn(mockUserDocRef);
       when(mockUserDocRef.get()).thenAnswer((_) async => mockUserDocSnap);
@@ -87,6 +106,9 @@ void main() {
       final mockStorageRef = MockReference();
       final mockChildRef = MockReference(); // The file ref
       final mockTaskSnapshot = MockTaskSnapshot();
+      when(mockTaskSnapshot.state).thenReturn(TaskState.success);
+      when(mockTaskSnapshot.bytesTransferred).thenReturn(4);
+      when(mockTaskSnapshot.totalBytes).thenReturn(4);
       final fakeUploadTask = FakeUploadTask(mockTaskSnapshot);
       
       when(mockStorage.ref()).thenReturn(mockStorageRef);
@@ -98,16 +120,18 @@ void main() {
       when(mockChildRef.getDownloadURL()).thenAnswer((_) async => 'http://download.url/image.jpg');
       
       // 4. Setup Firestore Mocks for message creation
-      final mockChatsCollection = MockCollectionReference<Map<String, dynamic>>();
-      final mockChatDocRef = MockDocumentReference<Map<String, dynamic>>();
-      final mockMessagesCollection = MockCollectionReference<Map<String, dynamic>>();
-      final mockNewMsgRef = MockDocumentReference<Map<String, dynamic>>();
+      final mockChatsCollection = MockCollectionReference();
+      final mockChatDocRef = MockDocumentReference();
+      final mockMessagesCollection = MockCollectionReference();
+      final mockNewMsgRef = MockDocumentReference();
       
       when(mockFirestore.collection('chats')).thenReturn(mockChatsCollection);
       when(mockChatsCollection.doc(chatId)).thenReturn(mockChatDocRef);
       when(mockChatDocRef.collection('messages')).thenReturn(mockMessagesCollection);
       when(mockMessagesCollection.doc(any)).thenReturn(mockNewMsgRef);
-      when(mockNewMsgRef.set(any)).thenAnswer((_) async {});
+      when(mockNewMsgRef.set(any)).thenAnswer((_) async {
+        return;
+      });
       
       // 5. Execute
       final result = await service.sendImageMessage(

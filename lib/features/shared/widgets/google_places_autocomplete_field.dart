@@ -138,7 +138,7 @@ class _GooglePlacesAutocompleteFieldState
                       LucideIcons.mapPin,
                       size: 20,
                       color:
-                          theme.iconTheme.color?.withOpacity(0.6) ??
+                          theme.iconTheme.color?.withValues(alpha: 0.6) ??
                           Colors.grey,
                     ),
                     title: Text(
@@ -152,7 +152,7 @@ class _GooglePlacesAutocompleteFieldState
                             secondaryText,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.textTheme.bodySmall?.color
-                                  ?.withOpacity(0.7),
+                                  ?.withValues(alpha: 0.7),
                             ),
                           )
                         : null,
@@ -193,7 +193,7 @@ class _GooglePlacesAutocompleteFieldState
         decoration: InputDecoration(
           labelText: widget.label,
           filled: true,
-          fillColor: Theme.of(context).primaryColor.withOpacity(0.05),
+          fillColor: Theme.of(context).primaryColor.withValues(alpha: 0.05),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: widget.isHighlighted

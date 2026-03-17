@@ -14,7 +14,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 class BusinessRegistrationModal extends ConsumerStatefulWidget {
   final String? communityId; // [NEW] optional community context
@@ -440,8 +439,6 @@ class _BusinessRegistrationModalState
     }
   }
 
-
-
   void _showError(String title, String message) {
     if (!mounted) return;
     showDialog(
@@ -470,7 +467,10 @@ class _BusinessRegistrationModalState
     // Check organization limit (Max 2)
     final orgsCount = ref.read(userOrganizationsProvider).value?.length ?? 0;
     if (orgsCount >= 2) {
-      _showError('Limit Reached', 'You can only manage a maximum of 2 organizations. Please remove or deactivate an existing one to register a new organization.');
+      _showError(
+        'Limit Reached',
+        'You can only manage a maximum of 2 organizations. Please remove or deactivate an existing one to register a new organization.',
+      );
       return;
     }
 
@@ -481,8 +481,6 @@ class _BusinessRegistrationModalState
       if (user == null) {
         throw Exception('User not logged in');
       }
-
-
 
       String? logoUrl;
       if (_logoImage != null) {
@@ -518,7 +516,10 @@ class _BusinessRegistrationModalState
         // Validation for actual address/place
         if (_locationLat == null || _locationLng == null) {
           setState(() => _isLoading = false);
-          _showError('Location Required', 'Please select a valid address from the suggestions.');
+          _showError(
+            'Location Required',
+            'Please select a valid address from the suggestions.',
+          );
           return;
         }
 
@@ -704,7 +705,9 @@ class _BusinessRegistrationModalState
                                     ? Icon(
                                         LucideIcons.image,
                                         size: 30,
-                                        color: _logoError ? Colors.red : Colors.grey,
+                                        color: _logoError
+                                            ? Colors.red
+                                            : Colors.grey,
                                       )
                                     : null,
                               ),
@@ -765,7 +768,7 @@ class _BusinessRegistrationModalState
                                 : null,
                             filled: _isNameLocked,
                             fillColor: _isNameLocked
-                                ? Colors.green.withOpacity(0.05)
+                                ? Colors.green.withValues(alpha: 0.05)
                                 : null,
                           ),
                           validator: (v) =>
@@ -872,7 +875,7 @@ class _BusinessRegistrationModalState
                             ),
                             filled: _isLocationLocked,
                             fillColor: _isLocationLocked
-                                ? Colors.green.withOpacity(0.05)
+                                ? Colors.green.withValues(alpha: 0.05)
                                 : null,
                           ),
                           validator: (v) =>
@@ -931,7 +934,7 @@ class _BusinessRegistrationModalState
                             : null,
                         filled: _isPhoneLocked,
                         fillColor: _isPhoneLocked
-                            ? Colors.green.withOpacity(0.05)
+                            ? Colors.green.withValues(alpha: 0.05)
                             : null,
                       ),
                       keyboardType: TextInputType.phone,
@@ -983,7 +986,7 @@ class _BusinessRegistrationModalState
                             : null,
                         filled: _isWebsiteLocked,
                         fillColor: _isWebsiteLocked
-                            ? Colors.green.withOpacity(0.05)
+                            ? Colors.green.withValues(alpha: 0.05)
                             : null,
                       ),
                       keyboardType: TextInputType.url,
@@ -1018,12 +1021,14 @@ class _BusinessRegistrationModalState
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primaryContainer
-                              .withValues(alpha: 0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.primary
-                                .withValues(alpha: 0.3),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
@@ -1048,7 +1053,7 @@ class _BusinessRegistrationModalState
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'This organization will be exclusively associated with ${ref.read(communityProvider(widget.communityId!)).valueOrNull?.name ?? 'this community'}. Only community members will be able to discover and interact with it.',
+                                    'This organization will be exclusively associated with ${ref.read(communityProvider(widget.communityId!)).value?.name ?? 'this community'}. Only community members will be able to discover and interact with it.',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context)

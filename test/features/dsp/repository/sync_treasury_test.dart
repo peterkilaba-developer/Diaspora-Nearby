@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import '../../../utils/mocks.mocks.dart';
+
+class FakeFirebaseFunctions extends Fake implements FirebaseFunctions {}
 
 // Create a simple mock for QuerySnapshot since generated mocks might carry generics baggage
 class MockQuerySnapshotSimple extends Mock implements QuerySnapshot<Map<String, dynamic>> {
@@ -55,7 +58,7 @@ void main() {
     mockUserPointDoc = MockQueryDocumentSnapshotSimple();
     mockUserDoc = MockQueryDocumentSnapshotSimple();
 
-    repository = PointsRepository(mockFirestore);
+    repository = PointsRepository(mockFirestore, FakeFirebaseFunctions());
 
     when(mockFirestore.batch()).thenReturn(mockBatch);
     // Generic matchers for ALL collections

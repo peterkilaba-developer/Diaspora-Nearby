@@ -76,9 +76,10 @@ class _HostingArrangementMessageContentState
     String sessionStatus = 'confirmed';
     HostingSession? liveSession;
     if (_sessionId != null && currentUserId != null) {
-      final sessionAsync =
-          ref.watch(activeHostingSessionProvider(currentUserId));
-      liveSession = sessionAsync.valueOrNull;
+      final sessionAsync = ref.watch(
+        activeHostingSessionProvider(currentUserId),
+      );
+      liveSession = sessionAsync.value;
       if (liveSession != null && liveSession.id == _sessionId) {
         sessionStatus = liveSession.status.name;
       } else {
@@ -218,7 +219,6 @@ class _HostingArrangementMessageContentState
                       '${_formatDate(arrivalDate)} → ${_formatDate(departureDate)} ($_stayDuration days)',
                 ),
                 const SizedBox(height: 6),
-
               ],
             ),
           ),
@@ -233,9 +233,7 @@ class _HostingArrangementMessageContentState
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.2),
-              ),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -261,7 +259,6 @@ class _HostingArrangementMessageContentState
 
           // ── Action Buttons ──────────────────────────────────
           _buildActionButtons(
-            context: context,
             sessionStatus: sessionStatus,
             isTraveler: isTraveler,
             isHost: isHost,
@@ -285,8 +282,9 @@ class _HostingArrangementMessageContentState
         CircleAvatar(
           radius: 22,
           backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
-          backgroundImage:
-              photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
+          backgroundImage: photo != null && photo.isNotEmpty
+              ? NetworkImage(photo)
+              : null,
           child: photo == null || photo.isEmpty
               ? const Icon(LucideIcons.user, size: 18, color: AppTheme.accent)
               : null,
@@ -431,14 +429,11 @@ class _HostingArrangementMessageContentState
   // =========================================================================
 
   Widget _buildActionButtons({
-    required BuildContext context,
     required String sessionStatus,
     required bool isTraveler,
     required bool isHost,
     HostingSession? session,
   }) {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-
     // No actions for settled/cancelled/completed sessions or non-participants
     if (session == null ||
         sessionStatus == 'settled' ||
@@ -450,10 +445,7 @@ class _HostingArrangementMessageContentState
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Column(
         children: [
-          Divider(
-            height: 1,
-            color: AppTheme.accent.withValues(alpha: 0.2),
-          ),
+          Divider(height: 1, color: AppTheme.accent.withValues(alpha: 0.2)),
           const SizedBox(height: 10),
 
           // ── CONFIRMED: Show QR Check-in button ──
@@ -463,7 +455,7 @@ class _HostingArrangementMessageContentState
               child: ElevatedButton.icon(
                 onPressed: _isProcessing
                     ? null
-                    : () => _openQRScreen(context, session, isHost),
+                    : () => _openQRScreen(session, isHost),
                 icon: Icon(
                   isHost ? LucideIcons.qrCode : LucideIcons.camera,
                   size: 16,
@@ -494,7 +486,7 @@ class _HostingArrangementMessageContentState
               child: ElevatedButton.icon(
                 onPressed: _isProcessing
                     ? null
-                    : () => _requestEndStay(context, session),
+                    : () => _requestEndStay(session),
                 icon: const Icon(LucideIcons.logOut, size: 16),
                 label: Text(
                   _isProcessing ? 'Processing...' : 'End Stay',
@@ -549,12 +541,10 @@ class _HostingArrangementMessageContentState
                 child: ElevatedButton.icon(
                   onPressed: _isProcessing
                       ? null
-                      : () => _settleSession(context, session),
+                      : () => _settleSession(session),
                   icon: const Icon(LucideIcons.checkCircle, size: 16),
                   label: Text(
-                    _isProcessing
-                        ? 'Processing...'
-                        : 'Confirm End of Stay',
+                    _isProcessing ? 'Processing...' : 'Confirm End of Stay',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
@@ -578,14 +568,10 @@ class _HostingArrangementMessageContentState
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _isProcessing
-                    ? null
-                    : () => _settleSession(context, session),
+                onPressed: _isProcessing ? null : () => _settleSession(session),
                 icon: const Icon(LucideIcons.checkCircle, size: 16),
                 label: Text(
-                  _isProcessing
-                      ? 'Processing...'
-                      : 'Complete Stay',
+                  _isProcessing ? 'Processing...' : 'Complete Stay',
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
@@ -609,20 +595,15 @@ class _HostingArrangementMessageContentState
 
   // ── ACTION HANDLERS ─────────────────────────────────────
 
-  void _openQRScreen(
-      BuildContext context, HostingSession session, bool isHost) {
+  void _openQRScreen(HostingSession session, bool isHost) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => HostingQRScreen(
-          session: session,
-          isHost: isHost,
-        ),
+        builder: (_) => HostingQRScreen(session: session, isHost: isHost),
       ),
     );
   }
 
-  Future<void> _requestEndStay(
-      BuildContext context, HostingSession session) async {
+  Future<void> _requestEndStay(HostingSession session) async {
     // Confirm with a dialog first
     final confirmed = await showDialog<bool>(
       context: context,
@@ -677,18 +658,14 @@ class _HostingArrangementMessageContentState
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to request end stay.'),
-            ),
+            const SnackBar(content: Text('Failed to request end stay.')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error requesting end stay.'),
-          ),
+          const SnackBar(content: Text('Error requesting end stay.')),
         );
       }
     } finally {
@@ -696,8 +673,7 @@ class _HostingArrangementMessageContentState
     }
   }
 
-  Future<void> _settleSession(
-      BuildContext context, HostingSession session) async {
+  Future<void> _settleSession(HostingSession session) async {
     setState(() => _isProcessing = true);
 
     try {
@@ -713,9 +689,7 @@ class _HostingArrangementMessageContentState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Hosting session completed successfully!',
-              ),
+              content: Text('Hosting session completed successfully!'),
             ),
           );
         }
@@ -723,9 +697,7 @@ class _HostingArrangementMessageContentState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Failed to complete session. Please try again.',
-              ),
+              content: Text('Failed to complete session. Please try again.'),
             ),
           );
         }
@@ -733,9 +705,7 @@ class _HostingArrangementMessageContentState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error during settlement.'),
-          ),
+          const SnackBar(content: Text('Error during settlement.')),
         );
       }
     } finally {

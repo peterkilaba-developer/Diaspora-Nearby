@@ -15,26 +15,24 @@ final hostingRepositoryProvider = Provider((ref) => HostingRepository());
 /// Stream of open hosting requests for a specific community.
 final communityHostingRequestsProvider =
     StreamProvider.family<List<HostingRequest>, String>((ref, communityId) {
-  return ref
-      .watch(hostingRepositoryProvider)
-      .watchCommunityRequests(communityId);
-});
+      return ref
+          .watch(hostingRepositoryProvider)
+          .watchCommunityRequests(communityId);
+    });
 
 /// Stream of all hosting requests created by a specific traveler.
 final travelerRequestsProvider =
     StreamProvider.family<List<HostingRequest>, String>((ref, travelerId) {
-  return ref
-      .watch(hostingRepositoryProvider)
-      .watchTravelerRequests(travelerId);
-});
+      return ref
+          .watch(hostingRepositoryProvider)
+          .watchTravelerRequests(travelerId);
+    });
 
 /// Stream of active hosting session for a user (as host or traveler).
 final activeHostingSessionProvider =
     StreamProvider.family<HostingSession?, String>((ref, userId) {
-  return ref
-      .watch(hostingRepositoryProvider)
-      .watchActiveSession(userId);
-});
+      return ref.watch(hostingRepositoryProvider).watchActiveSession(userId);
+    });
 
 // ---------------------------------------------------------------------------
 // Repository
@@ -83,12 +81,16 @@ class HostingRepository {
         .where('status', whereIn: ['pending', 'matched'])
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => HostingRequest.fromMap({
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => HostingRequest.fromMap({
                   ...doc.data() as Map<String, dynamic>,
                   'id': doc.id,
-                }))
-            .toList());
+                }),
+              )
+              .toList(),
+        );
   }
 
   /// Watch all requests created by a specific traveler.
@@ -97,12 +99,16 @@ class HostingRepository {
         .where('travelerId', isEqualTo: travelerId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => HostingRequest.fromMap({
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => HostingRequest.fromMap({
                   ...doc.data() as Map<String, dynamic>,
                   'id': doc.id,
-                }))
-            .toList());
+                }),
+              )
+              .toList(),
+        );
   }
 
   /// Host shows interest in a hosting request.
@@ -110,7 +116,9 @@ class HostingRepository {
     final doc = await _requestsCol.doc(requestId).get();
     if (!doc.exists) {
       debugPrint('[Hosting] Request $requestId not found — may have expired.');
-      throw Exception('This hosting request no longer exists. It may have expired.');
+      throw Exception(
+        'This hosting request no longer exists. It may have expired.',
+      );
     }
     await _requestsCol.doc(requestId).update({
       'interestedHostIds': FieldValue.arrayUnion([hostId]),
@@ -142,7 +150,9 @@ class HostingRepository {
     final doc = await _requestsCol.doc(requestId).get();
     if (!doc.exists) {
       debugPrint('[Hosting] Request $requestId not found — may have expired.');
-      throw Exception('This hosting request no longer exists. It may have expired.');
+      throw Exception(
+        'This hosting request no longer exists. It may have expired.',
+      );
     }
     await _requestsCol.doc(requestId).update({
       'matchedHostId': hostId,
@@ -151,7 +161,8 @@ class HostingRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     debugPrint(
-        '[Hosting] Traveler selected host $hostName for request $requestId');
+      '[Hosting] Traveler selected host $hostName for request $requestId',
+    );
   }
 
   /// Cancel a hosting request (traveler only, before check-in).
@@ -169,13 +180,17 @@ class HostingRepository {
 
   /// Create a hosting session after both parties agree.
   Future<HostingSession> createSession(HostingSession session) async {
-    debugPrint('📝 [createSession] Writing session ${session.id} to Firestore...');
+    debugPrint(
+      '📝 [createSession] Writing session ${session.id} to Firestore...',
+    );
     final docRef = _sessionsCol.doc(session.id);
     await docRef.set(session.toMap());
     debugPrint('📝 [createSession] ✅ Session document written');
 
     // Also update the request to 'active' status
-    debugPrint('📝 [createSession] Updating request ${session.requestId} to active...');
+    debugPrint(
+      '📝 [createSession] Updating request ${session.requestId} to active...',
+    );
     await _requestsCol.doc(session.requestId).update({
       'status': HostingRequestStatus.active.name,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -226,15 +241,15 @@ class HostingRepository {
         .limit(1)
         .snapshots()
         .listen((snap) {
-      latestTraveler = snap.docs.isEmpty
-          ? null
-          : HostingSession.fromMap({
-              ...snap.docs.first.data() as Map<String, dynamic>,
-              'id': snap.docs.first.id,
-            });
-      travelerReady = true;
-      emit();
-    });
+          latestTraveler = snap.docs.isEmpty
+              ? null
+              : HostingSession.fromMap({
+                  ...snap.docs.first.data() as Map<String, dynamic>,
+                  'id': snap.docs.first.id,
+                });
+          travelerReady = true;
+          emit();
+        });
 
     final hostSub = _sessionsCol
         .where('hostId', isEqualTo: userId)
@@ -242,15 +257,15 @@ class HostingRepository {
         .limit(1)
         .snapshots()
         .listen((snap) {
-      latestHost = snap.docs.isEmpty
-          ? null
-          : HostingSession.fromMap({
-              ...snap.docs.first.data() as Map<String, dynamic>,
-              'id': snap.docs.first.id,
-            });
-      hostReady = true;
-      emit();
-    });
+          latestHost = snap.docs.isEmpty
+              ? null
+              : HostingSession.fromMap({
+                  ...snap.docs.first.data() as Map<String, dynamic>,
+                  'id': snap.docs.first.id,
+                });
+          hostReady = true;
+          emit();
+        });
 
     controller.onCancel = () {
       travelerSub.cancel();
@@ -267,12 +282,16 @@ class HostingRepository {
         .where('travelerId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => HostingSession.fromMap({
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => HostingSession.fromMap({
                   ...doc.data() as Map<String, dynamic>,
                   'id': doc.id,
-                }))
-            .toList());
+                }),
+              )
+              .toList(),
+        );
   }
 
   /// QR Check-in — activates the session.
@@ -297,7 +316,8 @@ class HostingRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     debugPrint(
-        '✅ [Hosting] End requested for session $sessionId by $requestedByUserId');
+      '✅ [Hosting] End requested for session $sessionId by $requestedByUserId',
+    );
   }
 
   /// Both parties confirmed end — calculates final duration and marks as ended.
@@ -317,8 +337,7 @@ class HostingRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    debugPrint(
-        '✅ [Hosting] Session $sessionId ended: $actualDays days');
+    debugPrint('✅ [Hosting] Session $sessionId ended: $actualDays days');
   }
 
   /// Mark session as settled (both parties confirmed completion).

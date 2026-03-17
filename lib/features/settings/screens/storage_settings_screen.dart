@@ -89,7 +89,12 @@ class _StorageSettingsScreenState extends ConsumerState<StorageSettingsScreen>
       body: Stack(
         children: [
           ListView(
-            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+            padding: EdgeInsets.fromLTRB(
+              AppTheme.pageHorizontalPadding,
+              AppTheme.pageHorizontalPadding,
+              AppTheme.pageHorizontalPadding,
+              AppTheme.pageHorizontalPadding + MediaQuery.of(context).padding.bottom,
+            ),
             children: [
               const Text(
                 'Manage your local data and cache to free up space or fix synchronization issues.',

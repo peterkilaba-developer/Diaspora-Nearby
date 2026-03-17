@@ -276,8 +276,8 @@ class CommunityChatUtils {
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withOpacity(
-                      0.8,
+                    color: theme.colorScheme.surface.withValues(
+                      alpha: 0.8,
                     ), // Themed background for small overlay
                     shape: BoxShape.circle,
                   ),

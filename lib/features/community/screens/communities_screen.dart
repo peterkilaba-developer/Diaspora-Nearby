@@ -65,64 +65,17 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
   @override
   Widget build(BuildContext context) {
     final hierarchyState = ref.watch(communityHierarchyProvider);
-    final userAsync = ref.watch(userProfileProvider);
-    final user = userAsync.value;
+    // Watch profile provider to keep routerNotifier in sync, but don't gate UI on it.
+    // The communityHierarchyProvider reads homeCountryCode directly from Firestore.
+    ref.watch(userProfileProvider);
     final searchQuery = ref.watch(globalSearchProvider);
 
-    if (userAsync.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (userAsync.hasError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Unable to load profile',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () => ref.refresh(userProfileProvider),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Case: Profile is null (not found in DB) but no error thrown
-    if (user == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.person_off,
-              size: 48,
-              color: Theme.of(context).disabledColor,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Profile incomplete or missing.',
-              style: TextStyle(color: Theme.of(context).hintColor),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () => context.go('/profile-setup'),
-              child: const Text('Complete Profile Setup'),
-            ),
-          ],
-        ),
-      );
-    }
+    // Case: Profile is null — this can happen if:
+    // 1. Profile truly doesn't exist (new user)
+    // 2. ProfileData.fromJson() threw a parse error (existing user, data mismatch)
+    // Don't block the entire communities screen for case #2.
+    // The communityHierarchyProvider reads homeCountryCode directly from Firestore,
+    // so it works independently of the ProfileData model.
 
     // Communities is accessed via AppBar modal, needs Scaffold wrapper
     return Scaffold(
@@ -437,46 +390,46 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                   ),
                 if (hasChildren)
                   (isPreExpanded
-                        ? const SizedBox(width: 16)
-                        : IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: Icon(
-                              _isExpanded
-                                  ? LucideIcons.chevronDown
-                                  : LucideIcons.chevronRight,
-                              color: Theme.of(
-                                context,
-                              ).iconTheme.color?.withValues(alpha: 0.5),
-                            ),
-                            onPressed: () {
-                              // [NEW] Track Expand
-                              if (!_isExpanded) {
-                                final user = ref
-                                    .read(authRepositoryProvider)
-                                    .currentUser;
-                                if (user != null) {
-                                  ref
-                                      .read(pointsServiceProvider)
-                                      .trackExplorationReward(
-                                        user.uid,
-                                        'action_community_expand',
-                                      )
-                                      .then((rewarded) {
-                                        if (rewarded && context.mounted) {
-                                          showExplorationRewardToast(
-                                            context,
-                                            message: 'Expansion bonus!',
-                                          );
-                                        }
-                                      });
-                                }
+                      ? const SizedBox(width: 16)
+                      : IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: Icon(
+                            _isExpanded
+                                ? LucideIcons.chevronDown
+                                : LucideIcons.chevronRight,
+                            color: Theme.of(
+                              context,
+                            ).iconTheme.color?.withValues(alpha: 0.5),
+                          ),
+                          onPressed: () {
+                            // [NEW] Track Expand
+                            if (!_isExpanded) {
+                              final user = ref
+                                  .read(authRepositoryProvider)
+                                  .currentUser;
+                              if (user != null) {
+                                ref
+                                    .read(pointsServiceProvider)
+                                    .trackExplorationReward(
+                                      user.uid,
+                                      'action_community_expand',
+                                    )
+                                    .then((rewarded) {
+                                      if (rewarded && context.mounted) {
+                                        showExplorationRewardToast(
+                                          context,
+                                          message: 'Expansion bonus!',
+                                        );
+                                      }
+                                    });
                               }
-                              setState(() {
-                                _isExpanded = !_isExpanded;
-                              });
-                            },
-                          )),
+                            }
+                            setState(() {
+                              _isExpanded = !_isExpanded;
+                            });
+                          },
+                        )),
               ],
             ),
           ),

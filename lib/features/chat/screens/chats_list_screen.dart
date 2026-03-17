@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_card.dart';
@@ -61,13 +60,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     }
   }
 
-  void _precacheChatAvatars(BuildContext context, List<Chat> chats) {
-    for (final chat in chats) {
-      if (chat.photoUrl != null && chat.photoUrl!.isNotEmpty) {
-        precacheImage(CachedNetworkImageProvider(chat.photoUrl!), context);
-      }
-    }
-  }
+  // [PERF] Removed _precacheChatAvatars — CachedNetworkImage already handles
+  // caching internally. Calling precacheImage on every stream emit was redundant.
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +111,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
             itemCount: results.length,
             itemBuilder: (context, index) {
               final chat = results[index];
-              return ChatCard(
+              return RepaintBoundary(
+                child: ChatCard(
                 chat: chat,
                 searchQuery: searchQuery,
                 onTap: () async {
@@ -133,7 +128,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
                       showExplorationRewardToast(
                         context,
                         message: 'Discovered ${chat.name}',
-                        points: 10,
+                        points: 100,
                       );
                     }
                   }
@@ -164,6 +159,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
                     }
                   }
                 },
+              ),
               );
             },
           );
@@ -194,7 +190,6 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
         ),
       ),
       data: (chats) {
-        _precacheChatAvatars(context, chats);
 
         final filteredChats = searchQuery.isEmpty
             ? chats
@@ -221,11 +216,13 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
             itemCount: filteredChats.length,
             itemBuilder: (context, index) {
               final chat = filteredChats[index];
-              return ChatCard(
-                key: ValueKey(chat.id),
-                chat: chat,
-                searchQuery: searchQuery.isNotEmpty ? searchQuery : null,
-                onTap: () => context.push('/chats/${chat.id}'),
+              return RepaintBoundary(
+                child: ChatCard(
+                  key: ValueKey(chat.id),
+                  chat: chat,
+                  searchQuery: searchQuery.isNotEmpty ? searchQuery : null,
+                  onTap: () => context.push('/chats/${chat.id}'),
+                ),
               );
             },
           ),

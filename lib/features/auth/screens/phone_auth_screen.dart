@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,8 +6,9 @@ import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
 import 'package:sms_autofill/sms_autofill.dart';
 import 'auth_controller.dart';
-import 'package:diaspora_nearby/features/community/services/community_service.dart';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 
 class PhoneAuthScreen extends ConsumerStatefulWidget {
   const PhoneAuthScreen({super.key});
@@ -152,8 +152,19 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     final isLoading = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
+    return PopScope(
+      canPop: !kIsWeb,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          // On web, if keyboard is open, unfocus to dismiss it cleanly
+          final currentFocus = FocusManager.instance.primaryFocus;
+          if (currentFocus != null) {
+            currentFocus.unfocus();
+          }
+        }
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: !kIsWeb,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -173,17 +184,12 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
 
                   // Logo - Using the actual app logo with sage green tint
                   Center(
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        theme.colorScheme.primary, // Sage green
-                        BlendMode.srcIn,
-                      ),
-                      child: Image.asset(
-                        'assets/icons/logo-original.png',
+                    child: Image.asset(
+                        'assets/icons/logo-transparent-128.png',
                         width: 120,
                         height: 120,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           width: 120,
                           height: 120,
                           decoration: BoxDecoration(
@@ -199,7 +205,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
                         ),
                       ),
                     ),
@@ -292,7 +297,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                               hintText: 'Phone number',
                               hintStyle: TextStyle(
                                 color: theme.colorScheme.onSurfaceVariant
-                                    .withOpacity(0.6),
+                                    .withValues(alpha: 0.6),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 vertical: 16,
@@ -357,7 +362,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                         ),
                         elevation: 0,
                         disabledBackgroundColor: theme.colorScheme.primary
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                       ),
                       child: isLoading
                           ? const SizedBox(
@@ -377,219 +382,71 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                             ),
                     ),
                   ),
+                  const SizedBox(height: 16),
 
-                  // DEBUG: Reset Database Button
-                  // Only visible in debug mode or for testing convenience
-                  if (kDebugMode) ...[
-                    const SizedBox(height: 24),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          // Default selections
-                          final Map<String, bool> targets = {
-                            'Users': true,
-                            'Communities': true,
-                            'Organizations': true,
-                            'Events': true,
-                            'Radio Health': true,
-                            'Chats (RTDB)': true,
-                            'Storage (Photos)': true,
-                            'Points & Referrals': true,
-                            'Feedback History': true,
-                            'Proximity Cooldown': true,
-                            'Empty Communities':
-                                false, // Default false to avoid accidental deletion of legit empty ones if any (though rule says none)
-                          };
-
-                          final selected = await showDialog<List<String>>(
-                            context: context,
-                            builder: (context) => StatefulBuilder(
-                              builder: (context, setState) {
-                                return AlertDialog(
-                                  title: const Text('Reset Database Options'),
-                                  content: SizedBox(
-                                    width: double.maxFinite,
-                                    child: SingleChildScrollView(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: targets.keys.map((key) {
-                                          return CheckboxListTile(
-                                            title: Text(key),
-                                            value: targets[key],
-                                            onChanged: (val) {
-                                              setState(
-                                                () =>
-                                                    targets[key] = val ?? false,
-                                              );
-                                            },
-                                            activeColor: Colors.red,
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(context), // Refund null
-                                      child: const Text('Cancel'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        // Map display keys to internal keys
-                                        final List<String> result = [];
-                                        if (targets['Users']!) {
-                                          result.add('users');
-                                        }
-                                        if (targets['Communities']!) {
-                                          result.add('communities');
-                                        }
-                                        if (targets['Organizations']!) {
-                                          result.add('organizations');
-                                        }
-                                        if (targets['Events']!) {
-                                          result.add('events');
-                                        }
-                                        if (targets['Radio Health']!) {
-                                          result.add('radio');
-                                        }
-                                        if (targets['Chats (RTDB)']!) {
-                                          result.add('chats');
-                                        }
-                                        if (targets['Storage (Photos)']!) {
-                                          result.add('storage');
-                                        }
-                                        if (targets['Points & Referrals']!) {
-                                          result.add('points');
-                                        }
-                                        if (targets['Feedback History']!) {
-                                          result.add('feedback');
-                                        }
-                                        if (targets['Proximity Cooldown']!) {
-                                          result.add('proximity');
-                                        }
-                                        if (targets['Empty Communities']!) {
-                                          result.add('empty_communities');
-                                        }
-
-                                        Navigator.pop(context, result);
-                                      },
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                      ),
-                                      child: const Text('DELETE SELECTED'),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          );
-
-                          if (selected != null && selected.isNotEmpty) {
-                            try {
-                              // Show loading dialog
-                              if (!context.mounted) return;
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (context) => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              );
-
-                              // Prune Empty Communities if selected
-                              if (selected.contains('empty_communities')) {
-                                await CommunityService()
-                                    .pruneEmptyCommunities();
-                                selected.remove('empty_communities');
-                              }
-
-                              if (selected.isNotEmpty) {
-                                final result = await CommunityService()
-                                    .hardResetDatabase(resetTargets: selected);
-
-                                if (context.mounted) {
-                                  Navigator.pop(context); // Pop loading
-
-                                  final succeeded = result['success'] ?? [];
-                                  final failed = result['failed'] ?? [];
-
-                                  if (failed.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Reset Complete: ${succeeded.join(", ")}',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                  } else {
-                                    // Partial Success
-                                    final sb = StringBuffer();
-                                    if (succeeded.isNotEmpty) {
-                                      sb.writeln(
-                                        'Deleted: ${succeeded.join(", ")}',
-                                      );
-                                    }
-                                    sb.write('Failed: ${failed.join(", ")}');
-
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(sb.toString()),
-                                        backgroundColor: Colors.orange,
-                                      ),
-                                    );
-                                  }
-                                }
-                              } else {
-                                if (context.mounted) {
-                                  Navigator.pop(
-                                    context,
-                                  ); // Pop loading if nothing selected
-                                }
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                Navigator.pop(context); // Pop loading
-
-                                // Check for partial success message from service if thrown (though we switched to map, failsafe)
-                                String message = 'Error: $e';
-                                Color color = Colors.red;
-
-                                if (e.toString().contains('Partial success')) {
-                                  message =
-                                      'Reset Complete (Local Data cleared).\nRemote Data skipped (Not logged in).';
-                                  color = Colors.orange;
-                                }
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(message),
-                                    backgroundColor: color,
-                                  ),
-                                );
-                              }
-                            }
-                          }
-                        },
-                        icon: const Icon(
-                          Icons.delete_forever,
-                          color: Colors.red,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          'Reset App Data (Debug)',
-                          style: TextStyle(color: Colors.red),
-                        ),
+                  // Terms of Service & Privacy Policy
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.7),
+                        height: 1.5,
                       ),
+                      children: [
+                        const TextSpan(
+                          text: 'By continuing, you agree to our ',
+                        ),
+                        WidgetSpan(
+                          child: GestureDetector(
+                            onTap: () => launchUrl(
+                              Uri.parse(
+                                  'https://diasporanearby.com/terms-of-service'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: Text(
+                              'Terms of Service',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                                decorationColor: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const TextSpan(text: ' and '),
+                        WidgetSpan(
+                          child: GestureDetector(
+                            onTap: () => launchUrl(
+                              Uri.parse(
+                                  'https://diasporanearby.com/privacy-policy'),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: Text(
+                              'Privacy Policy',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                                decorationColor: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
 
                   const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -670,7 +527,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(1),
         gradient: LinearGradient(
-          colors: colors.map((c) => c.withOpacity(0.3)).toList(),
+          colors: colors.map((c) => c.withValues(alpha: 0.3)).toList(),
         ),
       ),
     );

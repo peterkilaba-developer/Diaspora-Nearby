@@ -34,7 +34,7 @@ class VerificationAlertModal extends StatelessWidget {
   }) {
     return showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (context) => VerificationAlertModal(
         type: type,
         title: title,
@@ -91,7 +91,7 @@ class VerificationAlertModal extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: alertColor.withOpacity(0.1),
+              color: alertColor.withValues(alpha: 0.1),
               blurRadius: 20,
               spreadRadius: 5,
             ),
@@ -104,7 +104,7 @@ class VerificationAlertModal extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding * 2),
               decoration: BoxDecoration(
-                color: alertColor.withOpacity(0.1),
+                color: alertColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, size: 48, color: alertColor),
@@ -127,7 +127,7 @@ class VerificationAlertModal extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 height: 1.5,
               ),
             ),

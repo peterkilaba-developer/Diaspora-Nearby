@@ -46,7 +46,6 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final baseColor = AppTheme.elevationColor(context, 1);
     final highlightColor = AppTheme.elevationColor(context, 2);
 
@@ -134,9 +133,9 @@ class EventCardSkeleton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
-          decoration: AppTheme.cardDecoration(context).copyWith(
-            borderRadius: BorderRadius.circular(16),
-          ),
+        decoration: AppTheme.cardDecoration(
+          context,
+        ).copyWith(borderRadius: BorderRadius.circular(16)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -191,9 +190,9 @@ class UserCardSkeleton extends StatelessWidget {
       width: 180,
       height: 240,
       margin: const EdgeInsets.only(right: 12),
-      decoration: AppTheme.cardDecoration(context).copyWith(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: AppTheme.cardDecoration(
+        context,
+      ).copyWith(borderRadius: BorderRadius.circular(16)),
       child: Column(
         children: [
           // Avatar
@@ -254,7 +253,7 @@ class SkeletonList extends StatelessWidget {
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           itemCount: itemCount,
-          itemBuilder: (_, __) => skeleton,
+          itemBuilder: (_, _) => skeleton,
         ),
       );
     }
@@ -263,7 +262,7 @@ class SkeletonList extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: itemCount,
-      itemBuilder: (_, __) => skeleton,
+      itemBuilder: (_, _) => skeleton,
     );
   }
 }

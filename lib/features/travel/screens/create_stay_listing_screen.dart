@@ -91,7 +91,7 @@ class _CreateStayListingScreenState
   }
 
   void _prefillFromProfile() {
-    final profile = ref.read(userProfileProvider).valueOrNull;
+    final profile = ref.read(userProfileProvider).value;
     if (profile == null) return;
     _cityC.text = profile.hostLocation.city ?? '';
     _stateC.text = profile.hostLocation.state ?? '';
@@ -115,7 +115,7 @@ class _CreateStayListingScreenState
     setState(() => _isSaving = true);
 
     try {
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user == null || profile == null) {
         throw Exception('Not logged in');
@@ -183,7 +183,10 @@ class _CreateStayListingScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('Error: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -207,7 +210,9 @@ class _CreateStayListingScreenState
         key: _formKey,
         child: ListView(
           padding: EdgeInsets.only(
-            left: 8, right: 8, top: 8,
+            left: 8,
+            right: 8,
+            top: 8,
             bottom: MediaQuery.of(context).padding.bottom + 16,
           ),
           children: [
@@ -223,22 +228,23 @@ class _CreateStayListingScreenState
                   label: Text(t),
                   selected: selected,
                   onSelected: (_) => setState(() => _propertyType = t),
-                  selectedColor: AppTheme.accent.withOpacity(0.2),
+                  selectedColor: AppTheme.accent.withValues(alpha: 0.2),
                   backgroundColor: AppTheme.elevationColor(context, 2),
                   labelStyle: TextStyle(
                     color: selected
                         ? AppTheme.accent
-                        : theme.colorScheme.onSurface.withOpacity(0.7),
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.7),
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 13,
                   ),
                   side: BorderSide(
                     color: selected
-                        ? AppTheme.accent.withOpacity(0.4)
+                        ? AppTheme.accent.withValues(alpha: 0.4)
                         : Colors.transparent,
                   ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 );
               }).toList(),
             ),
@@ -259,7 +265,8 @@ class _CreateStayListingScreenState
             _buildTextField(
               controller: _descC,
               label: 'Description',
-              hint: 'Describe your space, neighborhood, and what makes it special...',
+              hint:
+                  'Describe your space, neighborhood, and what makes it special...',
               icon: LucideIcons.alignLeft,
               maxLines: 4,
               validator: (v) =>
@@ -294,9 +301,11 @@ class _CreateStayListingScreenState
             const SizedBox(height: 12),
             Builder(
               builder: (context) {
-                final profile = ref.read(userProfileProvider).valueOrNull;
+                final profile = ref.read(userProfileProvider).value;
                 final cc = profile?.hostCountryCode ?? '';
-                final hasState = country_data.hasStateLevelHierarchyFromData(cc);
+                final hasState = country_data.hasStateLevelHierarchyFromData(
+                  cc,
+                );
                 final stateTerm = country_data.getStateTerminology(cc);
 
                 if (hasState) {
@@ -345,11 +354,38 @@ class _CreateStayListingScreenState
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _stepper(theme, 'Beds', _beds, 1, 20, (v) => setState(() => _beds = v))),
+                Expanded(
+                  child: _stepper(
+                    theme,
+                    'Beds',
+                    _beds,
+                    1,
+                    20,
+                    (v) => setState(() => _beds = v),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _stepper(theme, 'Baths', _baths, 1, 10, (v) => setState(() => _baths = v))),
+                Expanded(
+                  child: _stepper(
+                    theme,
+                    'Baths',
+                    _baths,
+                    1,
+                    10,
+                    (v) => setState(() => _baths = v),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _stepper(theme, 'Guests', _maxGuests, 1, 30, (v) => setState(() => _maxGuests = v))),
+                Expanded(
+                  child: _stepper(
+                    theme,
+                    'Guests',
+                    _maxGuests,
+                    1,
+                    30,
+                    (v) => setState(() => _maxGuests = v),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -374,20 +410,21 @@ class _CreateStayListingScreenState
                       }
                     });
                   },
-                  selectedColor: AppTheme.accent.withOpacity(0.15),
+                  selectedColor: AppTheme.accent.withValues(alpha: 0.15),
                   backgroundColor: AppTheme.elevationColor(context, 2),
                   checkmarkColor: AppTheme.accent,
                   labelStyle: TextStyle(
                     fontSize: 12,
                     color: selected
                         ? AppTheme.accent
-                        : theme.colorScheme.onSurface.withOpacity(0.6),
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   side: BorderSide(
                     color: selected
-                        ? AppTheme.accent.withOpacity(0.3)
+                        ? AppTheme.accent.withValues(alpha: 0.3)
                         : Colors.transparent,
                   ),
                 );
@@ -405,7 +442,8 @@ class _CreateStayListingScreenState
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 0,
                 ),
                 child: _isSaving
@@ -470,8 +508,10 @@ class _CreateStayListingScreenState
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -497,7 +537,7 @@ class _CreateStayListingScreenState
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 6),
@@ -539,7 +579,7 @@ class _CreateStayListingScreenState
         height: 28,
         decoration: BoxDecoration(
           color: enabled
-              ? AppTheme.accent.withOpacity(0.12)
+              ? AppTheme.accent.withValues(alpha: 0.12)
               : Colors.transparent,
           shape: BoxShape.circle,
         ),
@@ -548,7 +588,7 @@ class _CreateStayListingScreenState
           size: 14,
           color: enabled
               ? AppTheme.accent
-              : Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
         ),
       ),
     );

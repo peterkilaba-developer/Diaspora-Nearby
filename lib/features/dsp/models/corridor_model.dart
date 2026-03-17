@@ -22,7 +22,7 @@ class Corridor {
       receiverCountry: json['receiverCountry'] as String? ?? '',
       cumulativeGdp: json['cumulativeGdp'] as int? ?? 0,
       transactionCount: json['transactionCount'] as int? ?? 0,
-      lastTransactionAt: json['lastTransactionAt'] != null 
+      lastTransactionAt: json['lastTransactionAt'] != null
           ? DateTime.parse(json['lastTransactionAt'] as String)
           : DateTime.now(),
     );

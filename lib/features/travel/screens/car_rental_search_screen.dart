@@ -14,7 +14,6 @@ import 'package:diaspora_nearby/features/travel/services/peer_listing_repository
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/my_listings_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
-import 'package:diaspora_nearby/features/travel/utils/peer_listing_seeder.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 
 class CarRentalSearchScreen extends ConsumerStatefulWidget {
@@ -54,8 +53,15 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
   static const _transmissions = ['Automatic', 'Manual'];
   static const _fuelTypes = ['Petrol', 'Diesel', 'Electric', 'Hybrid'];
   static const _filterFeatures = [
-    'AC', 'GPS', 'Bluetooth', 'USB Charging',
-    'Backup Camera', 'Dashcam', 'Roof Rack', 'Child Seat', 'Toll Pass',
+    'AC',
+    'GPS',
+    'Bluetooth',
+    'USB Charging',
+    'Backup Camera',
+    'Dashcam',
+    'Roof Rack',
+    'Child Seat',
+    'Toll Pass',
   ];
 
   @override
@@ -73,13 +79,26 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
   }
 
   Future<void> _loadListings() async {
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final repo = ref.read(peerListingRepositoryProvider);
       final results = await repo.searchListings(type: 'car', limit: 100);
-      if (mounted) setState(() { _allListings = results; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _allListings = results;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -122,8 +141,13 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
     if (locQuery.isNotEmpty) {
       list = list.where((l) {
         final fields = [
-          l.locality, l.subLocality, l.city, l.state,
-          l.country, l.address, l.localityLower,
+          l.locality,
+          l.subLocality,
+          l.city,
+          l.state,
+          l.country,
+          l.address,
+          l.localityLower,
         ].whereType<String>().map((s) => s.toLowerCase());
         return fields.any((f) => f.contains(locQuery));
       }).toList();
@@ -131,24 +155,30 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
 
     // Transmission
     if (_transmission != null) {
-      list = list.where((l) =>
-          l.transmission?.toLowerCase() == _transmission!.toLowerCase(),
-      ).toList();
+      list = list
+          .where(
+            (l) =>
+                l.transmission?.toLowerCase() == _transmission!.toLowerCase(),
+          )
+          .toList();
     }
 
     // Fuel type
     if (_fuelType != null) {
-      list = list.where((l) =>
-          l.fuelType?.toLowerCase() == _fuelType!.toLowerCase(),
-      ).toList();
+      list = list
+          .where((l) => l.fuelType?.toLowerCase() == _fuelType!.toLowerCase())
+          .toList();
     }
 
     // Price range
     if (_priceFilterActive) {
-      list = list.where((l) =>
-          l.pricePerUnit >= _priceRange.start &&
-          l.pricePerUnit <= _priceRange.end,
-      ).toList();
+      list = list
+          .where(
+            (l) =>
+                l.pricePerUnit >= _priceRange.start &&
+                l.pricePerUnit <= _priceRange.end,
+          )
+          .toList();
     }
 
     // Min seats
@@ -177,12 +207,13 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final profileAsync = ref.watch(userProfileProvider);
-    final profile = profileAsync.valueOrNull;
+    final profile = profileAsync.value;
     final listings = _filteredListings(profile);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: _buildAppBar(theme, isDark),
+      resizeToAvoidBottomInset: true,
       body: Column(
         children: [
           CountryFilterToggle(
@@ -191,8 +222,18 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
             hostCountryCode: profile?.hostCountryCode,
             homeCountryCode: profile?.homeCountryCode,
           ),
-          if (_showSearch) _buildSearchPanel(theme, isDark),
-          Expanded(child: _buildBody(theme, isDark, listings)),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                if (_showSearch)
+                  SliverToBoxAdapter(child: _buildSearchPanel(theme, isDark)),
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  child: _buildBody(theme, isDark, listings),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -208,7 +249,8 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
       title: Text(
         'Rent a Car',
         style: TextStyle(
-          fontSize: 18, fontWeight: FontWeight.bold,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
           color: theme.colorScheme.onSurface,
         ),
       ),
@@ -227,32 +269,23 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
         ),
         PopupMenuButton<String>(
           icon: const Icon(LucideIcons.moreVertical, size: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'my_listings',
-              child: Row(children: [
-                Icon(LucideIcons.layoutList, size: 16, color: theme.colorScheme.onSurface),
-                const SizedBox(width: 10),
-                const Text('My Listings'),
-              ]),
-            ),
-            const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'seed',
-              child: Row(children: [
-                Icon(LucideIcons.database, size: 16, color: theme.colorScheme.onSurface),
-                const SizedBox(width: 10),
-                const Text('Seed Mock Cars'),
-              ]),
-            ),
-            PopupMenuItem(
-              value: 'clear_seed',
-              child: Row(children: [
-                Icon(LucideIcons.trash2, size: 16, color: theme.colorScheme.onSurface),
-                const SizedBox(width: 10),
-                const Text('Clear Mock Data'),
-              ]),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.layoutList,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('My Listings'),
+                ],
+              ),
             ),
           ],
           onSelected: (v) async {
@@ -263,12 +296,6 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                   builder: (_) => const MyListingsScreen(filterType: 'car'),
                 ),
               );
-            } else if (v == 'seed') {
-              await PeerListingSeeder.seed();
-              _loadListings();
-            } else if (v == 'clear_seed') {
-              await PeerListingSeeder.clear();
-              _loadListings();
             }
           },
         ),
@@ -303,40 +330,52 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
             const SizedBox(height: 8),
 
             // Date row
-            Row(children: [
-              Expanded(child: TravelDateField(
-                controller: _pickupDateController,
-                hint: 'Pickup date',
-                icon: LucideIcons.calendarDays,
-                onTap: () => _pickDate(isPickup: true),
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: TravelDateField(
-                controller: _returnDateController,
-                hint: 'Return date',
-                icon: LucideIcons.calendarDays,
-                onTap: () => _pickDate(isPickup: false),
-              )),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: TravelDateField(
+                    controller: _pickupDateController,
+                    hint: 'Pickup date',
+                    icon: LucideIcons.calendarDays,
+                    onTap: () => _pickDate(isPickup: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TravelDateField(
+                    controller: _returnDateController,
+                    hint: 'Return date',
+                    icon: LucideIcons.calendarDays,
+                    onTap: () => _pickDate(isPickup: false),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
 
             // Advanced toggle
             GestureDetector(
               onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-              child: Row(children: [
-                Icon(
-                  _showAdvanced ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                  size: 14, color: AppTheme.accent,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _showAdvanced ? 'Hide filters' : 'More filters',
-                  style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w500,
+              child: Row(
+                children: [
+                  Icon(
+                    _showAdvanced
+                        ? LucideIcons.chevronUp
+                        : LucideIcons.chevronDown,
+                    size: 14,
                     color: AppTheme.accent,
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 4),
+                  Text(
+                    _showAdvanced ? 'Hide filters' : 'More filters',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             if (_showAdvanced) ...[
@@ -352,9 +391,13 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                 alignment: Alignment.centerRight,
                 child: GestureDetector(
                   onTap: _clearFilters,
-                  child: Text('Clear all',
-                    style: TextStyle(fontSize: 11,
-                        color: AppTheme.accent.withOpacity(0.8))),
+                  child: Text(
+                    'Clear all',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.accent.withValues(alpha: 0.8),
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -407,44 +450,70 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
   }
 
   String _formatDate(DateTime d) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
-
-
 
   Widget _buildAdvancedFilters(ThemeData theme, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Transmission chips
-        Text('Transmission',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+        Text(
+          'Transmission',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 6, runSpacing: 6,
+          spacing: 6,
+          runSpacing: 6,
           children: _transmissions.map((t) {
             final sel = _transmission == t;
             return GestureDetector(
               onTap: () => setState(() => _transmission = sel ? null : t),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withOpacity(0.4) : Colors.transparent,
+                    color: sel
+                        ? AppTheme.accent.withValues(alpha: 0.4)
+                        : Colors.transparent,
                   ),
                 ),
-                child: Text(t, style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withOpacity(0.6),
-                )),
+                child: Text(
+                  t,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -452,32 +521,48 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
 
         // Fuel type chips
         const SizedBox(height: 12),
-        Text('Fuel type',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+        Text(
+          'Fuel type',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 6, runSpacing: 6,
+          spacing: 6,
+          runSpacing: 6,
           children: _fuelTypes.map((f) {
             final sel = _fuelType == f;
             return GestureDetector(
               onTap: () => setState(() => _fuelType = sel ? null : f),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withOpacity(0.4) : Colors.transparent,
+                    color: sel
+                        ? AppTheme.accent.withValues(alpha: 0.4)
+                        : Colors.transparent,
                   ),
                 ),
-                child: Text(f, style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withOpacity(0.6),
-                )),
+                child: Text(
+                  f,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -485,21 +570,35 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
 
         // Price range
         const SizedBox(height: 12),
-        Row(children: [
-          Text('Price range',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5))),
-          const Spacer(),
-          if (_priceFilterActive)
-            Text('\$${_priceRange.start.round()} – \$${_priceRange.end.round()}',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                    color: AppTheme.accent)),
-        ]),
+        Row(
+          children: [
+            Text(
+              'Price range',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+            const Spacer(),
+            if (_priceFilterActive)
+              Text(
+                '\$${_priceRange.start.round()} – \$${_priceRange.end.round()}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.accent,
+                ),
+              ),
+          ],
+        ),
         RangeSlider(
           values: _priceRange,
-          min: 0, max: 300, divisions: 30,
+          min: 0,
+          max: 300,
+          divisions: 30,
           activeColor: AppTheme.accent,
-          inactiveColor: AppTheme.accent.withOpacity(0.15),
+          inactiveColor: AppTheme.accent.withValues(alpha: 0.15),
           onChanged: (v) => setState(() {
             _priceRange = v;
             _priceFilterActive = true;
@@ -518,35 +617,54 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
 
         // Features
         const SizedBox(height: 12),
-        Text('Features',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.5))),
+        Text(
+          'Features',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 6, runSpacing: 6,
+          spacing: 6,
+          runSpacing: 6,
           children: _filterFeatures.map((f) {
             final sel = _selectedFeatures.contains(f);
             return GestureDetector(
               onTap: () => setState(() {
-                if (sel) { _selectedFeatures.remove(f); }
-                else { _selectedFeatures.add(f); }
+                if (sel) {
+                  _selectedFeatures.remove(f);
+                } else {
+                  _selectedFeatures.add(f);
+                }
               }),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withOpacity(0.4) : Colors.transparent,
+                    color: sel
+                        ? AppTheme.accent.withValues(alpha: 0.4)
+                        : Colors.transparent,
                   ),
                 ),
-                child: Text(f, style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withOpacity(0.6),
-                )),
+                child: Text(
+                  f,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -569,16 +687,29 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(LucideIcons.alertCircle, size: 40,
-                color: theme.colorScheme.error.withOpacity(0.5)),
-            const SizedBox(height: 12),
-            Text('Error loading cars', style: TextStyle(
-                color: theme.colorScheme.error, fontSize: 14)),
-            const SizedBox(height: 8),
-            TextButton(onPressed: _loadListings,
-                child: const Text('Retry', style: TextStyle(color: AppTheme.accent))),
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.alertCircle,
+                size: 40,
+                color: theme.colorScheme.error.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Error loading cars',
+                style: TextStyle(color: theme.colorScheme.error, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _loadListings,
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: AppTheme.accent),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -593,13 +724,19 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.only(top: 8, bottom: 80),
         itemCount: listings.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (_, i) => PeerListingCard(
           listing: listings[i],
           placeholderIcon: LucideIcons.car,
-          viewerCountryCode: ref.read(userProfileProvider).valueOrNull?.hostCountryCode,
-          onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => PeerListingDetailScreen(listing: listings[i])),
+          viewerCountryCode: ref
+              .read(userProfileProvider)
+              .value
+              ?.hostCountryCode,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PeerListingDetailScreen(listing: listings[i]),
+            ),
           ),
         ),
       ),
@@ -610,23 +747,36 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(LucideIcons.car, size: 48,
-              color: AppTheme.accent.withOpacity(0.3)),
-          const SizedBox(height: 16),
-          Text('No cars found',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6))),
-          const SizedBox(height: 8),
-          Text(
-            _hasActiveSearchFilters
-                ? 'Try adjusting your search filters'
-                : 'No cars are listed yet. Be the first to list!',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12,
-                color: theme.colorScheme.onSurface.withOpacity(0.4)),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              LucideIcons.car,
+              size: 48,
+              color: AppTheme.accent.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No cars found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _hasActiveSearchFilters
+                  ? 'Try adjusting your search filters'
+                  : 'No cars are listed yet. Be the first to list!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

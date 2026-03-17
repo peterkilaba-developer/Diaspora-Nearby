@@ -214,7 +214,8 @@ class EventCard extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: event.isPaid == true &&
+                          color:
+                              event.isPaid == true &&
                                   (event.ticketPrice ?? 0) > 0
                               ? Colors.black.withValues(alpha: 0.65)
                               : Colors.green.withValues(alpha: 0.85),

@@ -63,8 +63,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
       final bookings = await repo.getGuestBookings(user.uid);
 
       // Filter to only the relevant listing type.
-      final filtered =
-          bookings.where((b) => b.listingType == _listingType).toList();
+      final filtered = bookings
+          .where((b) => b.listingType == _listingType)
+          .toList();
 
       if (mounted) {
         setState(() {
@@ -109,7 +110,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel Booking'),
         content: Text(
-            'Cancel your booking for "${booking.listingTitle}"? This action cannot be undone.'),
+          'Cancel your booking for "${booking.listingTitle}"? This action cannot be undone.',
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         actions: [
           TextButton(
@@ -134,8 +136,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
           SnackBar(
             content: const Text('Booking cancelled'),
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
@@ -156,7 +159,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppTheme.accent,
-          unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.5),
+          unselectedLabelColor: theme.colorScheme.onSurface.withValues(
+            alpha: 0.5,
+          ),
           indicatorColor: AppTheme.accent,
           indicatorSize: TabBarIndicatorSize.label,
           tabs: const [
@@ -180,7 +185,10 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   }
 
   Widget _buildBookingsList(
-      BuildContext context, List<PeerBooking> bookings, String tab) {
+    BuildContext context,
+    List<PeerBooking> bookings,
+    String tab,
+  ) {
     final theme = Theme.of(context);
 
     if (bookings.isEmpty) {
@@ -194,23 +202,23 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
                 tab == 'upcoming'
                     ? LucideIcons.calendarDays
                     : tab == 'active'
-                        ? LucideIcons.mapPin
-                        : LucideIcons.history,
+                    ? LucideIcons.mapPin
+                    : LucideIcons.history,
                 size: 48,
-                color: theme.colorScheme.onSurface.withOpacity(0.15),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
               ),
               const SizedBox(height: 16),
               Text(
                 tab == 'upcoming'
                     ? 'No upcoming ${widget.category.toLowerCase()} bookings'
                     : tab == 'active'
-                        ? 'No active ${widget.category.toLowerCase()} trips'
-                        : 'No past ${widget.category.toLowerCase()} bookings',
+                    ? 'No active ${widget.category.toLowerCase()} trips'
+                    : 'No past ${widget.category.toLowerCase()} bookings',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
               ),
               const SizedBox(height: 8),
@@ -219,7 +227,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: theme.colorScheme.onSurface.withOpacity(0.3),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                 ),
               ),
             ],
@@ -232,7 +240,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
       onRefresh: _loadBookings,
       child: ListView.builder(
         padding: EdgeInsets.only(
-          left: 8, right: 8, top: 8,
+          left: 8,
+          right: 8,
+          top: 8,
           bottom: MediaQuery.of(context).padding.bottom + 16,
         ),
         itemCount: bookings.length,
@@ -281,9 +291,9 @@ class _PeerBookingCard extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
-                decoration: AppTheme.innerDecoration(context).copyWith(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                decoration: AppTheme.innerDecoration(
+                  context,
+                ).copyWith(borderRadius: BorderRadius.circular(12)),
                 child: Icon(
                   isStay ? LucideIcons.home : LucideIcons.car,
                   color: AppTheme.accent,
@@ -310,7 +320,9 @@ class _PeerBookingCard extends StatelessWidget {
                       'Hosted by ${booking.hostName}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -330,17 +342,22 @@ class _PeerBookingCard extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Icon(LucideIcons.calendar,
-                          size: 14,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.5)),
+                      Icon(
+                        LucideIcons.calendar,
+                        size: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '${df.format(booking.startDate)} – ${df.format(booking.endDate)}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -381,8 +398,10 @@ class _PeerBookingCard extends StatelessWidget {
                   label: const Text('Cancel', style: TextStyle(fontSize: 12)),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.red.shade400,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -410,7 +429,7 @@ class _DetailChip extends StatelessWidget {
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.accent.withOpacity(0.08),
+        color: AppTheme.accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -423,7 +442,7 @@ class _DetailChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -459,7 +478,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _statusColor().withOpacity(0.12),
+        color: _statusColor().withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

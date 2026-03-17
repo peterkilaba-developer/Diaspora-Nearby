@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.da
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
 import 'package:diaspora_nearby/features/notifications/repository/notifications_repository.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
 /// QR Check-in / Check-out screen for hosting sessions.
@@ -52,7 +53,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
   void initState() {
     super.initState();
     // Host shows QR by default, traveler scans by default
-    _isScanning = !widget.isHost;
+    _isScanning = kIsWeb ? false : !widget.isHost;
     _generateQR();
 
     // If host is showing QR, listen for session status changes
@@ -71,26 +72,26 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
         .doc(widget.session.id)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      if (!snapshot.exists) return;
+          if (!mounted) return;
+          if (!snapshot.exists) return;
 
-      final data = snapshot.data();
-      if (data == null) return;
+          final data = snapshot.data();
+          if (data == null) return;
 
-      final status = data['status'] as String?;
-      if (status == 'active' && _scanSuccess == null) {
-        // Traveler checked in — show confirmation on host's screen
-        setState(() {
-          _scanSuccess = 'Check-in Confirmed!';
-          _isProcessing = false;
+          final status = data['status'] as String?;
+          if (status == 'active' && _scanSuccess == null) {
+            // Traveler checked in — show confirmation on host's screen
+            setState(() {
+              _scanSuccess = 'Check-in Confirmed!';
+              _isProcessing = false;
+            });
+
+            // Auto-dismiss after 2 seconds
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) Navigator.of(context).pop();
+            });
+          }
         });
-
-        // Auto-dismiss after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) Navigator.of(context).pop();
-        });
-      }
-    });
   }
 
   void _generateQR() {
@@ -142,8 +143,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
           final scannedSessionId = payload['sessionId'] as String?;
           if (scannedSessionId == null ||
               scannedSessionId != widget.session.id) {
-            _showError(
-                'This QR code is for a different hosting session.');
+            _showError('This QR code is for a different hosting session.');
             return;
           }
 
@@ -212,7 +212,8 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
 
       for (final n in notifications) {
         final matchesSession = n.payload['sessionId'] == widget.session.id;
-        final matchesRequest = n.payload['requestId'] == widget.session.requestId;
+        final matchesRequest =
+            n.payload['requestId'] == widget.session.requestId;
 
         if ((n.type == NotificationType.hostingSelected && matchesSession) ||
             (n.type == NotificationType.hostingInterest && matchesRequest)) {
@@ -310,15 +311,16 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                     decoration: AppTheme.cardDecoration(context),
                     child: Row(
                       children: [
-                        const Icon(LucideIcons.alertCircle,
-                            color: AppTheme.error, size: 20),
+                        const Icon(
+                          LucideIcons.alertCircle,
+                          color: AppTheme.error,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _scanError!,
-                            style: GoogleFonts.outfit(
-                              color: AppTheme.error,
-                            ),
+                            style: GoogleFonts.outfit(color: AppTheme.error),
                           ),
                         ),
                       ],
@@ -328,13 +330,18 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                 // Session info card
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: AppTheme.cardDecoration(context),
                   child: Row(
                     children: [
-                      const Icon(LucideIcons.plane,
-                          size: 18, color: AppTheme.accent),
+                      const Icon(
+                        LucideIcons.plane,
+                        size: 18,
+                        color: AppTheme.accent,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -376,14 +383,17 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
 
                 // Footer instructions
                 Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 32, left: 24, right: 24),
+                  padding: const EdgeInsets.only(
+                    bottom: 32,
+                    left: 24,
+                    right: 24,
+                  ),
                   child: Text(
                     _isScanning
                         ? 'Align the host\'s QR code within the frame to check in.'
                         : widget.isHost
-                            ? 'Show this code to your guest when they arrive.'
-                            : 'Ask your host to show their QR code, then scan it.',
+                        ? 'Show this code to your guest when they arrive.'
+                        : 'Ask your host to show their QR code, then scan it.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       color: onSurface.withValues(alpha: 0.5),
@@ -408,10 +418,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
           aspectRatio: 1,
           child: Stack(
             children: [
-              MobileScanner(
-                controller: _controller,
-                onDetect: _handleScan,
-              ),
+              MobileScanner(controller: _controller, onDetect: _handleScan),
               // Scanner overlay frame
               Container(
                 decoration: BoxDecoration(
@@ -427,10 +434,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                   width: 200,
                   height: 200,
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color: AppTheme.accent,
-                      width: 2.5,
-                    ),
+                    border: Border.all(color: AppTheme.accent, width: 2.5),
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
@@ -540,8 +544,11 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(LucideIcons.shieldCheck,
-                        size: 16, color: AppTheme.accent),
+                    const Icon(
+                      LucideIcons.shieldCheck,
+                      size: 16,
+                      color: AppTheme.accent,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Verified Hosting Code',
@@ -558,7 +565,10 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                 if (widget.isHost) ...[
                   const SizedBox(height: 24),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: AppTheme.innerDecoration(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

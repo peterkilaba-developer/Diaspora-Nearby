@@ -25,7 +25,7 @@
         android:icon="@mipmap/ic_launcher"
         android:appCategory="social"
         android:enableOnBackInvokedCallback="true"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:allowBackup="false"
         android:fullBackupContent="false">
         <activity
@@ -81,15 +81,25 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="video/*" />
             </intent-filter>
-            <!-- Deep Linking -->
+            <!-- Deep Linking — ONLY handle app-specific paths on the landing page domain.
+                 Do NOT claim the entire domain or Android will intercept landing page
+                 URLs (/#economy, /#ddi, etc.) and route them into the app instead of
+                 opening them in Chrome. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="diasporanearby.com" />
-                <data android:scheme="http" android:host="diasporanearby.com" />
-                <data android:scheme="https" android:host="www.diasporanearby.com" />
-                <data android:scheme="http" android:host="www.diasporanearby.com" />
+                <data android:scheme="https" android:host="diasporanearby.com" android:pathPrefix="/invite" />
+                <data android:scheme="https" android:host="diasporanearby.com" android:pathPrefix="/profile" />
+                <data android:scheme="https" android:host="www.diasporanearby.com" android:pathPrefix="/invite" />
+                <data android:scheme="https" android:host="www.diasporanearby.com" android:pathPrefix="/profile" />
+            </intent-filter>
+            <!-- Web app domain — handle all paths -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.diasporanearby.com" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
@@ -159,6 +169,14 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="fb-messenger" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="twitter" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tg" />
         </intent>
     </queries>
 </manifest>

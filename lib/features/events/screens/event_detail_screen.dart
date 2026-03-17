@@ -30,9 +30,6 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   bool _isRsvpLoading = false;
 
-
-
-
   void _openDirections(String location) async {
     final query = Uri.encodeComponent(location);
     final googleMapsUrl = Uri.parse(
@@ -719,9 +716,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   child: Container(
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(16),
-                                    decoration: AppTheme.cardDecoration(context).copyWith(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
+                                    decoration: AppTheme.cardDecoration(context)
+                                        .copyWith(
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -838,7 +838,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isFull =
         event.maxAttendees != null &&
         (event.attendeeCount ?? 0) >= event.maxAttendees!;
-
 
     // Chat Navigation Logic
     // We navigate to the specific chat based on event.chatId
@@ -987,9 +986,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           : (isFull ? LucideIcons.ban : LucideIcons.ticket),
                     ),
               label: Text(
-                isAttending
-                    ? 'Going'
-                    : (isFull ? 'Sold Out' : 'Attend Event'),
+                isAttending ? 'Going' : (isFull ? 'Sold Out' : 'Attend Event'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

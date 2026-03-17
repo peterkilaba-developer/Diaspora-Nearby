@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/settings/screens/privacy_settings_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/settings/screens/storage_settings_screen.dart'; // [NEW]
 import 'package:diaspora_nearby/features/community/services/community_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class AccountSection extends ConsumerWidget {
   final ProfileData? userProfile;
@@ -210,16 +211,10 @@ class AccountSection extends ConsumerWidget {
               Center(
                 child: Column(
                   children: [
-                    ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        theme.colorScheme.primary,
-                        BlendMode.srcIn,
-                      ),
-                      child: Image.asset(
-                        'assets/icons/logo-original.png',
-                        width: 48,
-                        height: 48,
-                      ),
+                    Image.asset(
+                      'assets/icons/logo-transparent-48.png',
+                      width: 48,
+                      height: 48,
                     ),
                     const SizedBox(height: 8),
                     const Text(
@@ -251,9 +246,24 @@ class AccountSection extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // --- Admin Tools ---
-        if (userProfile?.isAdmin ?? false) ...[
+        // --- Admin Tools (visible in debug mode OR when isAdmin) ---
+        if (kDebugMode || (userProfile?.isAdmin ?? false)) ...[
           _buildSectionHeader('ADMIN TOOLS'),
+          // Bootstrap: Become Admin (only in debug mode when not yet admin)
+          if (kDebugMode && !(userProfile?.isAdmin ?? false))
+            GlassContainer(
+              child: _buildMenuItem(
+                context,
+                icon: LucideIcons.shieldAlert,
+                iconColor: Colors.amber,
+                title: 'Become Admin',
+                subtitle: 'Bootstrap: Set admin claim on your account',
+                onTap: () => _bootstrapAdmin(context, ref),
+                ref: ref,
+              ),
+            ),
+          if (kDebugMode && !(userProfile?.isAdmin ?? false))
+            const SizedBox(height: 8),
           GlassContainer(
             child: _buildMenuItem(
               context,
@@ -293,7 +303,7 @@ class AccountSection extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 2,
                   ),
                 ],
@@ -360,7 +370,7 @@ class AccountSection extends ConsumerWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
+                color: iconColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: iconWidget ?? Icon(icon, color: iconColor, size: 20),
@@ -385,7 +395,9 @@ class AccountSection extends ConsumerWidget {
                         fontSize: 13,
                         color:
                             subtitleColor ??
-                            theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                            theme.textTheme.bodySmall?.color?.withValues(
+                              alpha: 0.7,
+                            ),
                       ),
                     ),
                 ],
@@ -394,7 +406,7 @@ class AccountSection extends ConsumerWidget {
             Icon(
               LucideIcons.chevronRight,
               size: 16,
-              color: theme.iconTheme.color?.withOpacity(0.3),
+              color: theme.iconTheme.color?.withValues(alpha: 0.3),
             ),
           ],
         ),
@@ -505,12 +517,14 @@ class AccountSection extends ConsumerWidget {
               );
               try {
                 await ref.read(authRepositoryProvider).deleteAccount();
-                Navigator.pop(context);
+                if (context.mounted) Navigator.pop(context);
               } catch (e) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error deleting account: $e')),
-                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting account: $e')),
+                  );
+                }
               }
             },
             child: const Text('DELETE PERMANENTLY'),
@@ -542,10 +556,45 @@ class AccountSection extends ConsumerWidget {
       ),
     );
   }
+  void _bootstrapAdmin(BuildContext context, WidgetRef ref) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            const Center(child: CircularProgressIndicator()),
+      );
+
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('setAdminClaim');
+      await callable.call<Map<String, dynamic>>({});
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Admin claim set! Re-open this screen.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   void _showAdminResetDialog(BuildContext context, WidgetRef ref) async {
     final Map<String, bool> targets = {
       'Users': true,
+      'Auth Accounts': true,
       'Communities': true,
       'Organizations': true,
       'Events': true,
@@ -598,6 +647,9 @@ class AccountSection extends ConsumerWidget {
                   final List<String> result = [];
                   if (targets['Users']!) {
                     result.add('users');
+                  }
+                  if (targets['Auth Accounts']!) {
+                    result.add('auth');
                   }
                   if (targets['Communities']!) {
                     result.add('communities');
@@ -679,7 +731,9 @@ class AccountSection extends ConsumerWidget {
           try {
             await DatabaseService().clean();
             await FirebaseFirestore.instance.clearPersistence();
-            debugPrint('🧹 Admin Reset: Local caches cleared (Firestore persistence)');
+            debugPrint(
+              '🧹 Admin Reset: Local caches cleared (Firestore persistence)',
+            );
           } catch (e) {
             debugPrint('⚠️ Admin Reset: Error clearing local cache: $e');
           }

@@ -38,21 +38,27 @@ class TravelSearchResultCard extends StatelessWidget {
                     width: 80,
                     height: 80,
                     decoration: AppTheme.innerDecoration(context),
-                    child: Icon(LucideIcons.image, color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                    child: Icon(
+                      LucideIcons.image,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
             ] else ...[
-               Container(
-                  width: 60,
-                  height: 60,
-                  decoration: AppTheme.innerDecoration(context).copyWith(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(LucideIcons.mapPin, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+              Container(
+                width: 60,
+                height: 60,
+                decoration: AppTheme.innerDecoration(
+                  context,
+                ).copyWith(borderRadius: BorderRadius.circular(12)),
+                child: Icon(
+                  LucideIcons.mapPin,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
-                const SizedBox(width: 16),
+              ),
+              const SizedBox(width: 16),
             ],
             Expanded(
               child: Column(
@@ -71,7 +77,7 @@ class TravelSearchResultCard extends StatelessWidget {
                     result.subtitle,
                     style: TextStyle(
                       fontSize: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                   const SizedBox(height: 8),

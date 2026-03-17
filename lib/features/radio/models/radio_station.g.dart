@@ -7,22 +7,24 @@ part of 'radio_station.dart';
 // **************************************************************************
 
 RadioStation _$RadioStationFromJson(Map<String, dynamic> json) => RadioStation(
-      stationuuid: json['stationuuid'] as String,
-      name: json['name'] as String,
-      url: json['url'] as String,
-      favicon: json['favicon'] as String? ?? '',
-      country: json['country'] as String? ?? '',
-      countrycode: json['countrycode'] as String? ?? '',
-      tags: json['tags'] as String? ?? '',
-      votes: (json['votes'] as num?)?.toInt() ?? 0,
-      bitrate: (json['bitrate'] as num?)?.toInt() ?? 0,
-    );
+  stationuuid: json['stationuuid'] as String,
+  name: json['name'] as String,
+  url: json['url'] as String,
+  urlResolved: json['url_resolved'] as String? ?? '',
+  favicon: json['favicon'] as String? ?? '',
+  country: json['country'] as String? ?? '',
+  countrycode: json['countrycode'] as String? ?? '',
+  tags: json['tags'] as String? ?? '',
+  votes: (json['votes'] as num?)?.toInt() ?? 0,
+  bitrate: (json['bitrate'] as num?)?.toInt() ?? 0,
+);
 
 Map<String, dynamic> _$RadioStationToJson(RadioStation instance) =>
     <String, dynamic>{
       'stationuuid': instance.stationuuid,
       'name': instance.name,
       'url': instance.url,
+      'url_resolved': instance.urlResolved,
       'favicon': instance.favicon,
       'country': instance.country,
       'countrycode': instance.countrycode,

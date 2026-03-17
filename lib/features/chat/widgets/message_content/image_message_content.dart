@@ -18,7 +18,7 @@ class ImageMessageContent extends StatelessWidget {
   void _showFullScreenImage(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.95),
+      barrierColor: Colors.black.withValues(alpha: 0.95),
       builder: (context) => Stack(
         children: [
           Positioned(
@@ -79,7 +79,6 @@ class ImageMessageContent extends StatelessWidget {
     final theme = Theme.of(context);
     final imageUrl = message.imageUrl;
     final isSending = message.status == 'sending';
-    final isLocalFile = imageUrl?.startsWith('file://') ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +117,7 @@ class ImageMessageContent extends StatelessWidget {
                               ),
                             );
                           },
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 200,
                             height: 150,
                             color: theme.colorScheme.surfaceContainerHighest,
@@ -129,7 +128,7 @@ class ImageMessageContent extends StatelessWidget {
                           File(imageUrl.replaceFirst('file://', '')),
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 200,
                             height: 150,
                             color: theme.colorScheme.surfaceContainerHighest,
@@ -140,7 +139,7 @@ class ImageMessageContent extends StatelessWidget {
                 if (isSending)
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       child: const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,

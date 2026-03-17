@@ -63,7 +63,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           children: [
             // Logo
             Image.asset(
-              'assets/icons/logo-original.png',
+              'assets/icons/logo-transparent-128.png',
               width: 150,
               height: 150,
               errorBuilder: (c, o, s) =>

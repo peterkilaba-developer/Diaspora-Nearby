@@ -22,20 +22,15 @@ final bereavementServiceProvider = Provider<BereavementService>((ref) {
 class EligibilityResult {
   final bool isProfileComplete;
   final bool isProfileVerified; // Checked via TrustData
-  final bool hasEnoughPoints;
   final bool hasEnoughTrust;
   final bool hasEnoughRelatives;
 
   bool get isEligible =>
-      isProfileComplete &&
-      hasEnoughPoints &&
-      hasEnoughTrust &&
-      hasEnoughRelatives;
+      isProfileComplete && hasEnoughTrust && hasEnoughRelatives;
 
   EligibilityResult({
     required this.isProfileComplete,
     required this.isProfileVerified,
-    required this.hasEnoughPoints,
     required this.hasEnoughTrust,
     required this.hasEnoughRelatives,
   });
@@ -44,6 +39,7 @@ class EligibilityResult {
 class BereavementService {
   final FirebaseFirestore _firestore;
   final ProfileRepository _profileRepo;
+  // ignore: unused_field
   final PointsRepository _pointsRepo;
   final TrustRepository _trustRepo;
   final ChatRepository _chatRepo;
@@ -64,16 +60,12 @@ class BereavementService {
     final profile = await _profileRepo.getUserProfile(userId);
     final isProfileComplete = profile?.isComplete ?? false;
 
-    // 2. Points Check (>= 10,000 DSP — 10k Genesis Gate)
-    final points = await _pointsRepo.getUserPoints(userId);
-    final hasEnoughPoints = (points?.totalPoints ?? 0) >= 10000;
-
-    // 3. Trust Check (Verified & Score >= 67)
+    // 2. Trust Check (Verified & Score >= 67)
     final trust = await _trustRepo.getTrustData(userId);
     final isVerified = trust?.isVerified ?? false;
     final hasEnoughTrust = (trust?.trustScore ?? 0) >= 67;
 
-    // 4. Relatives Check (>= 2)
+    // 3. Relatives Check (>= 2)
     final relationshipsSnap = await _firestore
         .collection('users')
         .doc(userId)
@@ -86,7 +78,6 @@ class BereavementService {
     return EligibilityResult(
       isProfileComplete: isProfileComplete,
       isProfileVerified: isVerified,
-      hasEnoughPoints: hasEnoughPoints,
       hasEnoughTrust: hasEnoughTrust,
       hasEnoughRelatives: hasEnoughRelatives,
     );
@@ -208,12 +199,30 @@ class BereavementService {
         });
   }
 
+  /// Whether payment processing is in beta (free) mode.
+  /// Set to `false` once Stripe/M-Pesa integration is complete.
+  static const bool isBetaMode = true;
+
   // Step 3: Process Payment
-  // [NOTE] Currently auto-approves as Free Beta Access.
-  // [TODO] Integrate Stripe/M-Pesa payment gateway for production.
+  // [BETA] Auto-approves membership as Free Beta Access.
+  // When isBetaMode is false, this should call a Cloud Function that
+  // processes payment via Stripe/M-Pesa before activating membership.
   Future<void> completeMembershipPayment(String userId) async {
+    if (!isBetaMode) {
+      // TODO: Call Cloud Function to process real payment
+      // e.g., final result = await FirebaseFunctions.instance
+      //   .httpsCallable('processBereavementPayment')
+      //   .call({'userId': userId});
+      throw UnimplementedError(
+        'Real payment processing not yet integrated. '
+        'Set isBetaMode = true for beta access.',
+      );
+    }
+
+    // Beta mode: auto-approve without payment
     await _firestore.collection('bereavement_memberships').doc(userId).update({
       'status': MembershipStatus.active.name,
+      'isBetaAccess': true,
       'nextPaymentDate': Timestamp.fromDate(
         DateTime.now().add(const Duration(days: 365)),
       ),

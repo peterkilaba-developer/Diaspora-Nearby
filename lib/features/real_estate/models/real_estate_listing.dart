@@ -36,23 +36,23 @@ class RealEstateListing {
   final int savedCount;
 
   // Common real estate fields
-  final double? size;           // in square meters (m²)
-  final String? sizeUnit;       // 'm²' (always)
-  final String? listingType;    // 'sale', 'rent', 'lease'
-  final bool? hasTitle;         // has title deed
-  final String? zoning;         // residential, commercial, agricultural, mixed
+  final double? size; // in square meters (m²)
+  final String? sizeUnit; // 'm²' (always)
+  final String? listingType; // 'sale', 'rent', 'lease'
+  final bool? hasTitle; // has title deed
+  final String? zoning; // residential, commercial, agricultural, mixed
 
   // Plot-specific
   final bool? isFenced;
   final bool? hasWater;
   final bool? hasElectricity;
   final bool? hasRoad;
-  final String? terrainType;    // flat, hilly, sloped, waterfront
+  final String? terrainType; // flat, hilly, sloped, waterfront
 
   // Farm-specific
   final double? farmableArea;
-  final String? soilType;       // loam, clay, sandy, etc.
-  final List<String>? crops;    // current or potential crops
+  final String? soilType; // loam, clay, sandy, etc.
+  final List<String>? crops; // current or potential crops
   final bool? hasIrrigation;
   final bool? hasStorage;
   final int? workers;
@@ -167,7 +167,8 @@ class RealEstateListing {
       stateLower: json['stateLower'],
       createdAt: json['createdAt'] is Timestamp
           ? (json['createdAt'] as Timestamp).toDate()
-          : DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+          : DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+                DateTime.now(),
       updatedAt: json['updatedAt'] is Timestamp
           ? (json['updatedAt'] as Timestamp).toDate()
           : null,
@@ -208,10 +209,13 @@ class RealEstateListing {
       // GPS Survey
       boundaryPoints: json['boundaryPoints'] != null
           ? List<Map<String, double>>.from(
-              (json['boundaryPoints'] as List).map((p) => {
-                    'lat': (p['lat'] as num).toDouble(),
-                    'lng': (p['lng'] as num).toDouble(),
-                  }))
+              (json['boundaryPoints'] as List).map(
+                (p) => {
+                  'lat': (p['lat'] as num).toDouble(),
+                  'lng': (p['lng'] as num).toDouble(),
+                },
+              ),
+            )
           : null,
       centerLat: json['centerLat']?.toDouble(),
       centerLng: json['centerLng']?.toDouble(),
@@ -311,12 +315,16 @@ class RealEstateListing {
     if (centerLat == null || centerLng == null) return null;
 
     final pathPoints = boundaryPoints!
-        .map((p) => '${p['lat']!.toStringAsFixed(6)},${p['lng']!.toStringAsFixed(6)}')
+        .map(
+          (p) =>
+              '${p['lat']!.toStringAsFixed(6)},${p['lng']!.toStringAsFixed(6)}',
+        )
         .join('|');
     final first = boundaryPoints!.first;
     final closedPath =
         '$pathPoints|${first['lat']!.toStringAsFixed(6)},${first['lng']!.toStringAsFixed(6)}';
-    final center = '${centerLat!.toStringAsFixed(6)},${centerLng!.toStringAsFixed(6)}';
+    final center =
+        '${centerLat!.toStringAsFixed(6)},${centerLng!.toStringAsFixed(6)}';
 
     return 'https://maps.googleapis.com/maps/api/staticmap'
         '?center=$center'
@@ -325,6 +333,35 @@ class RealEstateListing {
         '&scale=2'
         '&maptype=satellite'
         '&path=color:0xFFFF6B35|weight:3|fillcolor:0x40FF6B35|$closedPath'
+        '&markers=size:small|color:red|$center'
+        '&key=${Env.googleMapsApiKey}';
+  }
+
+  /// Google Maps Static API road-map (location map) URL with boundary overlay.
+  /// Returns null if no boundary points are available.
+  String? get mapImageUrl {
+    if (boundaryPoints == null || boundaryPoints!.isEmpty) return null;
+    if (centerLat == null || centerLng == null) return null;
+
+    final pathPoints = boundaryPoints!
+        .map(
+          (p) =>
+              '${p['lat']!.toStringAsFixed(6)},${p['lng']!.toStringAsFixed(6)}',
+        )
+        .join('|');
+    final first = boundaryPoints!.first;
+    final closedPath =
+        '$pathPoints|${first['lat']!.toStringAsFixed(6)},${first['lng']!.toStringAsFixed(6)}';
+    final center =
+        '${centerLat!.toStringAsFixed(6)},${centerLng!.toStringAsFixed(6)}';
+
+    return 'https://maps.googleapis.com/maps/api/staticmap'
+        '?center=$center'
+        '&zoom=16'
+        '&size=600x400'
+        '&scale=2'
+        '&maptype=roadmap'
+        '&path=color:0xFFFF6B35|weight:3|fillcolor:0x30FF6B35|$closedPath'
         '&markers=size:small|color:red|$center'
         '&key=${Env.googleMapsApiKey}';
   }
@@ -344,16 +381,26 @@ class RealEstateListing {
   String get subtitleLabel {
     final parts = <String>[];
     if (listingType != null) {
-      parts.add('For ${listingType!.substring(0, 1).toUpperCase()}${listingType!.substring(1)}');
+      parts.add(
+        'For ${listingType!.substring(0, 1).toUpperCase()}${listingType!.substring(1)}',
+      );
     }
     if (size != null) parts.add(sizeLabelShort);
 
     if (category == 'house') {
-      if (bedrooms != null) parts.add('$bedrooms bed${bedrooms! > 1 ? 's' : ''}');
-      if (bathrooms != null) parts.add('$bathrooms bath${bathrooms! > 1 ? 's' : ''}');
+      if (bedrooms != null) {
+        parts.add('$bedrooms bed${bedrooms! > 1 ? 's' : ''}');
+      }
+      if (bathrooms != null) {
+        parts.add('$bathrooms bath${bathrooms! > 1 ? 's' : ''}');
+      }
     } else if (category == 'farm') {
-      if (farmableArea != null) parts.add('${farmableArea!.toStringAsFixed(0)} m² farmable');
-      if (crops != null && crops!.isNotEmpty) parts.add(crops!.take(2).join(', '));
+      if (farmableArea != null) {
+        parts.add('${farmableArea!.toStringAsFixed(0)} m² farmable');
+      }
+      if (crops != null && crops!.isNotEmpty) {
+        parts.add(crops!.take(2).join(', '));
+      }
     } else {
       // Plot
       if (zoning != null) parts.add(zoning!);
@@ -364,10 +411,14 @@ class RealEstateListing {
 
   String get categoryLabel {
     switch (category) {
-      case 'plot': return 'Plot';
-      case 'farm': return 'Farm';
-      case 'house': return 'House';
-      default: return category;
+      case 'plot':
+        return 'Plot';
+      case 'farm':
+        return 'Farm';
+      case 'house':
+        return 'House';
+      default:
+        return category;
     }
   }
 }

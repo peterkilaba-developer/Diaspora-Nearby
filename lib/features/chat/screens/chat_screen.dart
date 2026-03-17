@@ -1,13 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter/services.dart'; // [NEW] for Clipboard
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:diaspora_nearby/features/chat/screens/create_group_screen.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:share_plus/share_plus.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/models/message.dart';
@@ -16,14 +16,16 @@ import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart'; // [NEW] Parity utils
 import 'package:diaspora_nearby/features/chat/widgets/message_bubble.dart';
 import 'package:diaspora_nearby/features/chat/widgets/message_input.dart';
+import 'package:diaspora_nearby/features/chat/widgets/message_action_sheet.dart';
+
 import 'package:diaspora_nearby/features/chat/widgets/chat_header_title.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/theme/app_theme.dart'; // [FIXED]
-import 'package:diaspora_nearby/features/chat/screens/create_group_screen.dart';
-import 'package:diaspora_nearby/features/chat/screens/forward_chat_selection_screen.dart'; // [NEW]
+
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart'; // [NEW]
 // [FIXED]
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
@@ -42,7 +44,9 @@ import 'package:diaspora_nearby/features/profile/models/relationship_request.dar
 import 'package:diaspora_nearby/features/chat/providers/pending_message_provider.dart';
 // [NEW]
 // [NEW]
+import 'package:diaspora_nearby/features/chat/widgets/chat_more_menu_sheet.dart';
 import 'package:diaspora_nearby/features/trust/widgets/profile_verification_modal.dart'; // [NEW]
+import 'package:diaspora_nearby/features/trust/widgets/trust_vouch_modal.dart'; // [NEW] Trust Vouch Modal
 import 'package:diaspora_nearby/features/trust/widgets/verification_alert_modal.dart'; // [NEW]
 import 'package:diaspora_nearby/features/governance/repository/governance_repository.dart'; // [NEW]
 
@@ -51,8 +55,18 @@ import 'package:diaspora_nearby/features/governance/models/governance_unit.dart'
 // [NEW]
 import 'package:diaspora_nearby/features/more/widgets/business_registration_modal.dart'; // [NEW]
 import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/screens/ddi_loans_screen.dart'; // [NEW]
 
+import 'package:diaspora_nearby/features/chat/widgets/chat_report_sheet.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_confirmation_sheet.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_date_separator.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_empty_state.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_restriction_view.dart';
 import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart'; // [NEW] Shared Providers
+import 'package:diaspora_nearby/features/shared/utils/country_utils.dart'; // [NEW]
+import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_scroll_to_bottom_fab.dart';
+import 'package:diaspora_nearby/features/chat/widgets/chat_typing_indicator.dart';
 
 // Local providers removed (moved to chat_providers.dart)
 
@@ -115,6 +129,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Current message ID being highlighted (from "Jump to Message")
   String? _highlightedMessageId;
 
+  /// Guard to prevent duplicate "More" menu opens during async loading
+  bool _isShowingMoreMenu = false;
+
   @override
   void initState() {
     super.initState();
@@ -157,8 +174,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 if (rewarded && mounted) {
                   showExplorationRewardToast(
                     context,
-                    message: 'Explored ${chat.name ?? 'Community Chat'}',
-                    points: 10,
+                    message: 'Explored ${chat.name}',
+                    points: 100,
                   );
                 }
               } catch (e) {
@@ -381,7 +398,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to send message: ${e.toString().replaceAll('Exception: ', '')}'),
+                content: Text(
+                  'Failed to send message: ${e.toString().replaceAll('Exception: ', '')}',
+                ),
                 backgroundColor: Theme.of(context).colorScheme.error,
                 duration: const Duration(seconds: 3),
               ),
@@ -648,7 +667,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // Check service status
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (Navigator.canPop(context)) Navigator.pop(context); // Close loader
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context); // Close loader
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -673,7 +694,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       ).timeout(const Duration(seconds: 10));
 
-      if (context.mounted && Navigator.canPop(context)) {
+      if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context); // Close loader
       }
 
@@ -724,7 +745,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendLocationMessage(MessageLocation location) async {
+  Future<void> _sendLocationMessage(MessageLocation location, String? caption) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -750,7 +771,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         senderId: identity?['id'] ?? currentUserId,
         senderName: identity?['name'] ?? 'Me',
         senderImage: identity?['profileImage'],
-        content: '',
+        content: caption?.trim() ?? '',
         type: 'location',
         timestamp: now,
         status: 'sending',
@@ -769,11 +790,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         latitude: location.lat,
         longitude: location.lng,
         address: location.address,
+        caption: caption,
         replyToMessageId: replyToId,
         senderIdOverride: identity?['id'],
         senderNameOverride: identity?['name'],
         senderImageOverride: identity?['profileImage'],
-
         participants: participants,
         replyToSenderId: _replyingTo?.senderId,
       );
@@ -1165,14 +1186,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               fontWeight: FontWeight.w600,
             ),
           ),
-          error: (_, __) => Text(
+          error: (_, _) => Text(
             widget.pendingUserName ?? 'Chat',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           data: (chat) {
-
             if (chat != null && chat.isDirect) {
               final profileAsync = ref.watch(
                 chatScreenUserProfileProvider(chat),
@@ -1184,7 +1204,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   fallbackTitle: displayNameAsync.value ?? chat.name,
                   onTap: () {
                     if (profile?.uid != null) {
-                      context.push('/profile/${profile!.uid}');
+                      TrustVouchModal.show(
+                        context: context,
+                        targetUserId: profile!.uid!,
+                        currentUserId: currentUserId,
+                        displayName: displayNameAsync.value ?? chat.name,
+                      );
                     }
                   },
                 ),
@@ -1194,7 +1219,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                error: (_, __) => Text(
+                error: (_, _) => Text(
                   displayNameAsync.value ?? chat.name,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
@@ -1206,7 +1231,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             // Fallback for non-direct chats
             return displayNameAsync.when(
               loading: () => Text(widget.pendingUserName ?? 'Loading...'),
-              error: (_, __) => Text(widget.pendingUserName ?? 'Chat'),
+              error: (_, _) => Text(widget.pendingUserName ?? 'Chat'),
               data: (displayName) {
                 // [NEW] Fetch live community or event details
                 Community? community;
@@ -1261,6 +1286,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 final showMemberInfo =
                     (chat?.type == 'community' || chat?.type == 'group');
 
+                // Family group chat avatar
+                final isFamilyGroup = chat?.metadata?['isFamilyGroup'] == true;
+                Widget? headerAvatar = communityAvatar;
+                if (isFamilyGroup && headerAvatar == null) {
+                  headerAvatar = Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      LucideIcons.heartHandshake,
+                      color: Colors.blue.shade600,
+                      size: 20,
+                    ),
+                  );
+                }
+
                 return ChatHeaderTitle(
                   profile: null,
                   // [FIX] Use consistent community naming logic with live community data preference
@@ -1278,7 +1323,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ? (event?.imageUrl ?? chat?.photoUrl)
                       : chat?.photoUrl,
                   // Prioritize pre-rendered widget from utils
-                  customAvatarWidget: communityAvatar,
+                  customAvatarWidget: headerAvatar,
                   // Legacy fallback
                   customImage:
                       null, // [FIXED] Type mismatch, handled by customAvatarWidget above
@@ -1302,15 +1347,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         },
                       );
                     } else if (chat?.type == 'direct') {
-                      // Original profile view logic
+                      // [CHANGED] Open Trust Vouch Modal instead of profile
+                      final currentUid = ref
+                          .read(authRepositoryProvider)
+                          .currentUser
+                          ?.uid;
                       final otherId = chat?.participants.firstWhere(
-                        (id) =>
-                            id !=
-                            ref.read(authRepositoryProvider).currentUser?.uid,
+                        (id) => id != currentUid,
                         orElse: () => '',
                       );
-                      if (otherId != null && otherId.isNotEmpty) {
-                        context.push('/profile/$otherId');
+                      if (otherId != null &&
+                          otherId.isNotEmpty &&
+                          currentUid != null) {
+                        TrustVouchModal.show(
+                          context: context,
+                          targetUserId: otherId,
+                          currentUserId: currentUid,
+                          displayName: displayName,
+                          photoUrl: chat?.photoUrl,
+                        );
                       }
                     } else if (chat?.type == 'community' && community != null) {
                       context.push(
@@ -1342,50 +1397,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         ),
                         tooltip: 'Call on WhatsApp',
                         onPressed: () async {
-                          final phone = profile.phone;
-                          // Keep + for app scheme
-                          final appPhone = phone.replaceAll(
-                            RegExp(r'[^\d+]'),
-                            '',
+                          final success = await WhatsAppUtils.launchWhatsApp(
+                            profile.phone,
                           );
-                          // Remove everything including + for web scheme
-                          final webPhone = phone.replaceAll(RegExp(r'\D'), '');
-
-                          final appUrl = Uri.parse(
-                            'whatsapp://send?phone=$appPhone',
-                          );
-                          final webUrl = Uri.parse('https://wa.me/$webPhone');
-
-                          try {
-                            // Try app first
-                            bool launched = false;
-                            if (await canLaunchUrl(appUrl)) {
-                              launched = await launchUrl(
-                                appUrl,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            }
-
-                            // Fallback to web if app fail
-                            if (!launched) {
-                              if (await canLaunchUrl(webUrl)) {
-                                await launchUrl(
-                                  webUrl,
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              } else {
-                                throw 'Could not launch WhatsApp';
-                              }
-                            }
-                          } catch (e) {
-                            debugPrint('WhatsApp Launch Error: $e');
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Could not launch WhatsApp'),
-                                ),
-                              );
-                            }
+                          if (!success && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not launch WhatsApp'),
+                              ),
+                            );
                           }
                         },
                       );
@@ -1393,7 +1413,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     return const SizedBox.shrink();
                   },
                   loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
                 ),
 
           // More Options Menu
@@ -1439,7 +1459,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ],
       ),
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: !kIsWeb,
       body: Column(
         children: [
           // Messages list
@@ -1478,13 +1498,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 final filteredStream = pendingMessages.isEmpty
                     ? streamMessages
                     : streamMessages.where((sm) {
-                        return !pendingMessages.any((pm) =>
-                            pm.senderId == sm.senderId &&
-                            pm.type == sm.type &&
-                            (sm.timestamp - pm.timestamp).abs() < 5000 &&
-                            (pm.content == sm.content ||
-                                pm.content.isEmpty ||
-                                sm.content.isEmpty));
+                        return !pendingMessages.any(
+                          (pm) =>
+                              pm.senderId == sm.senderId &&
+                              pm.type == sm.type &&
+                              (sm.timestamp - pm.timestamp).abs() < 5000 &&
+                              (pm.content == sm.content ||
+                                  pm.content.isEmpty ||
+                                  sm.content.isEmpty),
+                        );
                       }).toList();
 
                 final allMessages = [...pendingMessages, ...filteredStream];
@@ -1539,7 +1561,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               timestamp: 0,
                             ),
                           );
-                          if (repliedMessage.id.isEmpty ?? true) {
+                          if (repliedMessage.id.isEmpty) {
                             repliedMessage = null;
                           }
                         }
@@ -1590,41 +1612,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       },
                     ),
 
-                    // [NEW] WhatsApp-style Scroll to Bottom FAB
-                    if (!_isNearBottom)
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: GestureDetector(
-                          onTap: () => _scrollToBottom(),
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                              border: Border.all(
-                                color: theme.colorScheme.outline.withOpacity(
-                                  0.1,
-                                ),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Icon(
-                              LucideIcons.chevronsDown,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
+                    // WhatsApp-style Scroll to Bottom FAB
+                    ChatScrollToBottomFAB(
+                      onTap: () => _scrollToBottom(),
+                      visible: !_isNearBottom,
+                    ),
                   ],
                 );
               },
@@ -1634,59 +1626,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           // Typing indicator (above input)
           typingAsync.when(
             loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-            data: (typingUsers) {
-              if (typingUsers.isEmpty) return const SizedBox.shrink();
-
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    _buildTypingDots(theme),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Consumer(
-                        builder: (context, ref, child) {
-                          if (typingUsers.length == 1) {
-                            final profileAsync = ref.watch(
-                              userProfileByIdProvider(typingUsers.first),
-                            );
-                            return profileAsync.when(
-                              data: (profile) => Text(
-                                '${profile?.firstName ?? 'Someone'} is typing...',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              loading: () => Text(
-                                'Someone is typing...',
-                                style: theme.textTheme.bodySmall,
-                              ),
-                              error: (_, __) => Text(
-                                'Someone is typing...',
-                                style: theme.textTheme.bodySmall,
-                              ),
-                            );
-                          }
-                          return Text(
-                            '${typingUsers.length} people are typing...',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+            error: (_, _) => const SizedBox.shrink(),
+            data: (typingUsers) =>
+                ChatTypingIndicator(typingUsers: typingUsers),
           ),
           // Message input or restriction message
           Builder(
@@ -1713,82 +1655,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   }
                   // BOARD DISCLOSURE (Restriction Message)
                   // Use chat.isCommunity to show town community specific message
-                  if (!isParticipant &&
-                      (chat.isOrganization == true ||
-                          chat.isCommunity == true)) {
-                    Positioned(
-                      bottom: 80,
-                      left: 16,
-                      right: 16,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface.withOpacity(0.95),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              LucideIcons.lock,
-                              size: 24,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              chat.isCommunity == true
-                                  ? 'Only members of the ${chat.name ?? 'this'} community can post here.'
-                                  : 'Only authorized participants can post to this organization board.',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
+                  // [FIXED] Removed invalid Positioned dead code that was never returned
                 }
               }
 
               // [MODIFIED] Only allow messaging if participant OR it's a direct chat
               if (chat != null && !isParticipant && chat.type != 'direct') {
-                // [NEW] Allow joining Groups
-                if (chat.type == 'group') {
-                  return SafeArea(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        border: Border(
-                          top: BorderSide(color: theme.dividerColor),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      child: FilledButton.icon(
-                        onPressed: () async {
-                          // Join Logic
+                return ChatRestrictionView(
+                  isCommunity: chat.isCommunity,
+                  isOrganization: chat.isOrganization,
+                  isEvent: chat.isEvent,
+                  chatName: chat.name,
+                  chatType: chat.type,
+                  onJoin: (chat.type == 'group')
+                      ? () async {
                           try {
                             await ref
                                 .read(chatRepositoryProvider)
@@ -1797,7 +1677,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Joined group!')),
                               );
-                              // Force refresh
                               ref.invalidate(chatProvider(chat.id));
                             }
                           } catch (e) {
@@ -1807,54 +1686,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               );
                             }
                           }
-                        },
-                        icon: const Icon(LucideIcons.plus),
-                        label: const Text('Join Group'),
-                      ),
-                    ),
-                  );
-                }
-
-                // Default "Locked" view for other types (or restricted)
-                return SafeArea(
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 20,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      border: Border(
-                        top: BorderSide(color: theme.dividerColor),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          LucideIcons.lock,
-                          size: 20,
-                          color: theme.colorScheme.secondary,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          chat.isCommunity
-                              ? 'Only members of the ${chat.name} community can post here.'
-                              : chat.isOrganization
-                              ? 'Only authorized participants can post to this organization board.'
-                              : chat.isEvent
-                              ? 'Only attendees can post to this event chat.'
-                              : 'You are not a participant of this group.',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.secondary,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        }
+                      : null,
                 );
               }
 
@@ -1895,51 +1728,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  void _showDeleteMessageConfirmation(
-    BuildContext context,
-    Message message,
-    ChatRepository chatRepo,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Message?'),
-        content: const Text('Are you sure you want to delete this message?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              chatRepo.deleteMessage(
-                message.chatId,
-                message.id,
-                deleteForEveryone: false,
-              );
-            },
-            child: const Text('Delete for Me'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              chatRepo.deleteMessage(
-                message.chatId,
-                message.id,
-                deleteForEveryone: true,
-              );
-            },
-            child: Text(
-              'Delete for Everyone',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   bool _shouldShowDateSeparator(int prevTimestamp, int currTimestamp) {
     final prevDate = DateTime.fromMillisecondsSinceEpoch(prevTimestamp);
     final currDate = DateTime.fromMillisecondsSinceEpoch(currTimestamp);
@@ -1968,112 +1756,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildDateSeparator(int timestamp, ThemeData theme) {
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    String dateText;
-    if (difference.inDays == 0) {
-      dateText = 'Today';
-    } else if (difference.inDays == 1) {
-      dateText = 'Yesterday';
-    } else if (difference.inDays < 7) {
-      dateText = _getDayName(date.weekday);
-    } else {
-      dateText = '${date.month}/${date.day}/${date.year}';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            dateText,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _getDayName(int weekday) {
-    switch (weekday) {
-      case 1:
-        return 'Monday';
-      case 2:
-        return 'Tuesday';
-      case 3:
-        return 'Wednesday';
-      case 4:
-        return 'Thursday';
-      case 5:
-        return 'Friday';
-      case 6:
-        return 'Saturday';
-      case 7:
-        return 'Sunday';
-      default:
-        return '';
-    }
+    return ChatDateSeparator(timestamp: timestamp);
   }
 
   Widget _buildEmptyState(ThemeData theme) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              LucideIcons.messageCircle,
-              size: 64,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No messages yet',
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Send a message to start the conversation',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build animated typing dots
-  Widget _buildTypingDots(ThemeData theme) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(3, (index) {
-        return Padding(
-          padding: EdgeInsets.only(left: index > 0 ? 3 : 0),
-          child: Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.7),
-              shape: BoxShape.circle,
-            ),
-          ),
-        );
-      }),
-    );
+    return const ChatEmptyState();
   }
 
   void _onMessageVisibilityChanged(
@@ -2125,12 +1812,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     Chat chat,
     WidgetRef ref,
   ) async {
-    final theme = Theme.of(context);
+    // Prevent duplicate opens while async data is loading
+    if (_isShowingMoreMenu) return;
+    _isShowingMoreMenu = true;
+
     final repo = ref.read(chatRepositoryProvider);
+    final currentUserId = repo.currentUserId ?? '';
     final isDirect = chat.isDirect;
-    final isGroup = chat.isGroup;
     final isCommunity = chat.isCommunity;
-    final isEvent = chat.isEvent;
 
     // Fetch display name contextually
     String displayName = chat.name;
@@ -2138,35 +1827,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       displayName = await repo.getDisplayNameForChat(chat);
     } catch (_) {}
 
-    // Extract first name for DMs, keep full name for others
-    final nameToUse = isDirect ? displayName.split(' ').first : displayName;
-
-    // [FIX] Fetch relationship status and pending requests before showing menu
+    // Fetch relationship status and pending requests for DMs
     Relationship? existingRelationship;
     RelationshipRequest? pendingSentRequest;
     RelationshipRequest? pendingIncomingRequest;
 
-    if (isDirect) {
-      final otherUserId = chat.getOtherParticipantId(repo.currentUserId ?? '');
-      if (otherUserId != null && repo.currentUserId != null) {
+    if (isDirect && currentUserId.isNotEmpty) {
+      final otherUserId = chat.getOtherParticipantId(currentUserId);
+      if (otherUserId != null) {
         final relRepo = ref.read(relationshipRepositoryProvider);
-
-        // 1. Check Active Relationship
         existingRelationship = await relRepo.getRelationship(
-          userId: repo.currentUserId!,
+          userId: currentUserId,
           relatedUserId: otherUserId,
         );
 
-        // 2. Check Pending Requests (only if no active relationship)
         if (existingRelationship == null) {
           pendingSentRequest = await relRepo.getPendingSentRequest(
-            fromUserId: repo.currentUserId!,
+            fromUserId: currentUserId,
             toUserId: otherUserId,
           );
 
           if (pendingSentRequest == null) {
             pendingIncomingRequest = await relRepo.getPendingIncomingRequest(
-              userId: repo.currentUserId!,
+              userId: currentUserId,
               fromUserId: otherUserId,
             );
           }
@@ -2174,630 +1857,336 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
 
-    // [NEW] Fetch Governance Unit for Community Chats
-    // [NEW] Fetch Governance Unit & Community for Community Chats
+    // Fetch Governance Unit & Community for Community Chats
     GovernanceUnit? governanceUnit;
     Community? community;
 
     if (isCommunity && chat.communityId != null) {
       try {
-        // Fetch Governance Unit
         governanceUnit = await ref
             .read(governanceRepositoryProvider)
             .getGovernanceUnitByCommunityId(chat.communityId!);
-
-        // Fetch Community (for fallback info)
+      } catch (e) {
+        debugPrint('Error fetching governance: $e');
+      }
+      try {
         community = await ref
             .read(communityRepositoryProvider)
             .getCommunity(chat.communityId!);
       } catch (e) {
-        debugPrint('Error fetching governance/community: $e');
+        debugPrint('Error fetching community: $e');
       }
     }
 
-    // [NEW] Fetch current user's profile for Verify & Vouch gate
+    // Check profile completeness for Verify/Vouch gate
+    // Show "Verify & Vouch" if the user has ANY profile field filled
+    // (not all 12 — that was too strict and hid the menu item)
     bool hasAnyProfileField = false;
-    if (isDirect && repo.currentUserId != null) {
+    bool hasVerifiedTarget = false;
+    if (isDirect && currentUserId.isNotEmpty) {
       try {
         final myProfile = await ref
             .read(profileRepositoryProvider)
-            .getUserProfile(repo.currentUserId!);
-        if (myProfile != null && myProfile.completedMilestoneFieldCount >= 1) {
+            .getUserProfile(currentUserId);
+        if (myProfile != null && myProfile.completedMilestoneFieldCount > 0) {
           hasAnyProfileField = true;
+        }
+        // Check if already verified this user
+        final otherUserId = chat.getOtherParticipantId(currentUserId);
+        if (otherUserId != null) {
+          hasVerifiedTarget = await ref
+              .read(trustRepositoryProvider)
+              .hasVerifiedUser(currentUserId, otherUserId);
         }
       } catch (e) {
         debugPrint('Error fetching profile for verify gate: $e');
       }
     }
 
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      _isShowingMoreMenu = false;
+      return;
+    }
 
-    // Save the widget context before the dialog so it can be used after dialog is dismissed
     final outerContext = context;
 
-    // Use showDialog with column/spacer to position at top
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierColor: Colors.black12, // Subtle barrier
-      builder: (context) {
-        return Stack(
-          children: [
-            Positioned(
-              top:
-                  kToolbarHeight +
-                  MediaQuery.of(context).padding.top, // Below AppBar 0px
-              left: 8,
-              right: 8,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // [NEW] Relationship (Top Priority)
-                      if (isDirect) ...[
-                        if (existingRelationship != null)
-                          _buildSheetItem(
-                            context,
-                            icon: LucideIcons.heart,
-                            iconColor: Colors.pink.shade600,
-                            iconBgColor: Colors.pink.shade50,
-                            title: 'Relationship',
-                            subtitle: existingRelationship.type,
-                            onTap: () {
-                              Navigator.pop(context);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'You are connected as ${existingRelationship!.type}',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          )
-                        else if (pendingSentRequest != null)
-                          _buildSheetItem(
-                            context,
-                            icon: LucideIcons.clock,
-                            iconColor: Colors.orange.shade600,
-                            iconBgColor: Colors.orange.shade50,
-                            title: 'Relationship request waiting',
-                            subtitle: 'Request sent to $nameToUse',
-                            onTap: () {
-                              Navigator.pop(context);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Request is pending acceptance',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          )
-                        else if (pendingIncomingRequest != null)
-                          _buildSheetItem(
-                            context,
-                            icon: LucideIcons.bellRing,
-                            iconColor: Colors.green.shade600,
-                            iconBgColor: Colors.green.shade50,
-                            title: 'Accept Request',
-                            subtitle: '$nameToUse sent you a request',
-                            onTap: () {
-                              Navigator.pop(context);
-                              // Navigate to notifications or show accept dialog?
-                              // For simplicity/safety, just tell them to check notifications page
-                              // or implement a quick accept dialog here?
-                              // Implementing quick navigation to notification page logic or just a toast for now as 'Accept' logic is complex UI.
-                              // Actually, let's just guide them.
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Please check your notifications to accept.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          )
-                        else
-                          _buildSheetItem(
-                            context,
-                            icon: LucideIcons.heartHandshake,
-                            iconColor: Colors.pink.shade600,
-                            iconBgColor: Colors.pink.shade50,
-                            title: 'Add Relationship',
-                            subtitle:
-                                'Define your relationship with $nameToUse',
-                            onTap: () {
-                              Navigator.pop(context);
-                              _showRelationshipPicker(
-                                context,
-                                ref,
-                                chat.getOtherParticipantId(
-                                  repo.currentUserId ?? '',
-                                ),
-                                displayName,
-                              );
-                            },
-                          ),
-                        // Divider between relationship and other items
-                        if (existingRelationship == null)
-                          const Divider(height: 1),
-                      ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatMoreMenuSheet(
+        chat: chat,
+        displayName: displayName,
+        existingRelationship: existingRelationship,
+        pendingSentRequest: pendingSentRequest,
+        pendingIncomingRequest: pendingIncomingRequest,
+        community: community,
+        governanceUnit: governanceUnit,
+        hasAnyProfileField: hasAnyProfileField,
+        hasVerifiedTarget: hasVerifiedTarget,
+        onAddRelationship: () {
+          Navigator.pop(context);
+          _showRelationshipPicker(
+            outerContext,
+            ref,
+            chat.getOtherParticipantId(currentUserId),
+            displayName,
+          );
+        },
+        onVerifyUser: () {
+          Navigator.pop(context);
+          _handleVerifyChatUser(outerContext, ref, chat);
+        },
+        onVouchUser: () {
+          Navigator.pop(context);
+          // Open TrustVouchModal for continuous vouching (already verified)
+          final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
+          final otherId = chat.getOtherParticipantId(currentUid ?? '');
+          if (otherId != null && currentUid != null) {
+            TrustVouchModal.show(
+              context: outerContext,
+              targetUserId: otherId,
+              currentUserId: currentUid,
+              displayName: displayName,
+              photoUrl: chat.photoUrl,
+            );
+          }
+        },
+        onClearChat: () {
+          Navigator.pop(context);
+          _showClearConfirmation(outerContext, repo, chat.id, displayName);
+        },
+        onDeleteChat: () {
+          Navigator.pop(context);
+          _showDeleteConfirmation(
+            outerContext,
+            repo,
+            chat.id,
+            displayName,
+            isLeave: false,
+          );
+        },
+        onLeaveChat: () {
+          Navigator.pop(context);
+          _showDeleteConfirmation(
+            outerContext,
+            repo,
+            chat.id,
+            displayName,
+            isLeave: true,
+            titleOverride: chat.isGroup
+                ? 'Leave Group?'
+                : chat.isEvent
+                ? 'Leave Event?'
+                : 'Unfollow Organization?',
+          );
+        },
+        onBlockUser: () async {
+          Navigator.pop(context);
+          final otherId = chat.getOtherParticipantId(currentUserId);
+          if (otherId == null) return;
 
-                      // Event Attendees
-                      if (isEvent && chat.eventId != null)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.userCheck,
-                          iconColor: Colors.blue.shade700,
-                          iconBgColor: Colors.blue.shade50,
-                          title: 'Event attendees',
-                          subtitle: "View who's attending this event",
-                          onTap: () {
-                            Navigator.pop(context);
-                            context.push('/events/${chat.eventId}/attendees');
-                          },
-                        ),
-
-                      // New Group (Direct Only)
-                      if (isDirect)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.users,
-                          iconColor: Colors.blue.shade700,
-                          iconBgColor: Colors.blue.shade50,
-                          title: 'Start group chat',
-                          subtitle: 'Create a group with $nameToUse',
-                          onTap: () async {
-                            Navigator.pop(context);
-                            final otherId = chat.getOtherParticipantId(
-                              repo.currentUserId ?? '',
-                            );
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                fullscreenDialog: true,
-                                builder: (context) => CreateGroupScreen(
-                                  initialParticipantId: otherId,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
-                      // Group Info (Groups Only - Profile is via Header)
-                      if (!isCommunity && !isEvent && !isDirect)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.settings,
-                          iconColor: Colors.grey.shade700,
-                          iconBgColor: Colors.grey.shade100,
-                          title: 'Group info',
-                          subtitle: 'Manage group settings',
-                          onTap: () {
-                            Navigator.pop(context);
-                            context.push(
-                              '/chats/${chat.id}/info',
-                              extra: {
-                                'name': chat.name,
-                                'image': chat.photoUrl,
-                                'type': chat.type,
-                              },
-                            );
-                          },
-                        ),
-
-                      // Create Group Event
-                      if (!isCommunity && !isEvent && !isDirect)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.calendarPlus,
-                          iconColor: Colors.orange.shade700,
-                          iconBgColor: Colors.orange.shade50,
-                          title: 'Create Group Event',
-                          subtitle: 'Host an event for this group',
-                          onTap: () {
-                            Navigator.pop(context);
-                            context.push(
-                              Uri(
-                                path: '/events/create',
-                                queryParameters: {'groupId': chat.id},
-                              ).toString(),
-                            );
-                          },
-                        ),
-
-                      // ... inside _showMoreMenu ...
-
-                      // Block/Unblock User (Direct Only)
-                      if (isDirect)
-                        Builder(
-                          builder: (context) {
-                            final profile = ref.read(userProfileProvider).value;
-                            final otherId = chat.getOtherParticipantId(
-                              repo.currentUserId ?? '',
-                            );
-
-                            if (otherId == null) return const SizedBox.shrink();
-
-                            final isBlocked =
-                                profile?.blockedUsers?.contains(otherId) ??
-                                false;
-
-                            return _buildSheetItem(
-                              context,
-                              icon: isBlocked
-                                  ? LucideIcons.shieldCheck
-                                  : LucideIcons.ban,
-                              iconColor: isBlocked
-                                  ? Colors.green.shade700
-                                  : Colors.red.shade700,
-                              iconBgColor: isBlocked
-                                  ? Colors.green.shade50
-                                  : Colors.red.shade50,
-                              title: isBlocked ? 'Unblock User' : 'Block User',
-                              subtitle: isBlocked
-                                  ? 'Allow them to message you'
-                                  : 'Block this user',
-                              isDestructive: !isBlocked,
-                              onTap: () async {
-                                Navigator.pop(context);
-                                if (isBlocked) {
-                                  // Unblock Logic
-                                  try {
-                                    await ref
-                                        .read(relationshipRepositoryProvider)
-                                        .unblockUser(
-                                          userId: repo.currentUserId!,
-                                          relatedUserId: otherId,
-                                        );
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('User unblocked'),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(content: Text('Error: $e')),
-                                      );
-                                    }
-                                  }
-                                } else {
-                                  // Block Logic
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Block User?'),
-                                      content: const Text(
-                                        'They will not be able to message you or see your profile.',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, true),
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: AppTheme.error,
-                                          ),
-                                          child: const Text('Block'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-
-                                  if (confirm == true) {
-                                    try {
-                                      await ref
-                                          .read(relationshipRepositoryProvider)
-                                          .blockUser(
-                                            userId: repo.currentUserId!,
-                                            relatedUserId: otherId,
-                                          );
-                                      if (context.mounted) {
-                                        context.pop(); // Go back to list
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('User blocked'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(content: Text('Error: $e')),
-                                        );
-                                      }
-                                    }
-                                  }
-                                }
-                              },
-                            );
-                          },
-                        ),
-
-                      // existing items...
-                      _buildSheetItem(
-                        context,
-                        icon: LucideIcons.eraser,
-                        iconColor: Colors.orange.shade700,
-                        iconBgColor: Colors.orange.shade50,
-                        title: 'Clear chat',
-                        subtitle: 'Clear messages for me',
-                        onTap: () async {
-                          Navigator.pop(context);
-                          _showClearConfirmation(
-                            context,
-                            repo,
-                            chat.id,
-                            nameToUse,
-                          );
-                        },
-                      ),
-
-                      // [UPDATED] Verify & Vouch (Only for DMs, requires at least 1 profile field)
-                      if (chat.isDirect && hasAnyProfileField)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.shieldCheck,
-                          iconColor: AppTheme.accent,
-                          iconBgColor: AppTheme.accent.withOpacity(0.1),
-                          title: 'Verify & Vouch',
-                          subtitle: 'Verify or vouch for this user',
-                          onTap: () {
-                            Navigator.pop(context);
-                            // Use outerContext (widget context) since dialog context
-                            // is unmounted after pop, which would make mounted checks fail
-                            _handleVerifyChatUser(outerContext, ref, chat);
-                          },
-                        ),
-
-                      // Delete / Leave Chat (All types except community)
-                      if (!isCommunity)
-                        _buildSheetItem(
-                          context,
-                          icon: (isGroup || isEvent || chat.isOrganization)
-                              ? LucideIcons.logOut
-                              : LucideIcons.trash2,
-                          iconColor: Colors.red.shade700,
-                          iconBgColor: Colors.red.shade50,
-                          title: isGroup
-                              ? 'Leave group'
-                              : isEvent
-                              ? 'Leave event'
-                              : chat.isOrganization
-                              ? 'Unfollow Organization' // [UPDATED]
-                              : 'Delete chat',
-                          subtitle: (isGroup || isEvent || chat.isOrganization)
-                              ? 'Remove from your list'
-                              : 'Delete from your list',
-                          isDestructive: true,
-                          onTap: () async {
-                            Navigator.pop(context);
-                            // Unified delete/leave confirmation
-                            String dialogTitle = 'Delete Chat?';
-                            if (isGroup) dialogTitle = 'Leave Group?';
-                            if (isEvent) dialogTitle = 'Leave Event?';
-                            if (chat.isOrganization) {
-                              dialogTitle =
-                                  'Unfollow Organization?'; // [UPDATED]
-                            }
-
-                            _showDeleteConfirmation(
-                              context,
-                              repo,
-                              chat.id,
-                              nameToUse,
-                              isLeave:
-                                  isGroup || isEvent || chat.isOrganization,
-                              titleOverride:
-                                  (isGroup || isEvent || chat.isOrganization)
-                                  ? dialogTitle
-                                  : null,
-                            );
-                          },
-                        ),
-
-                      // Share Community (Community Only)
-                      if (isCommunity)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.share2,
-                          iconColor: Colors.blue.shade700,
-                          iconBgColor: Colors.blue.shade50,
-                          title: 'Share Community',
-                          subtitle: 'Share this community with others',
-                          onTap: () {
-                            Navigator.pop(context);
-                            if (community != null) {
-                              showDialog(
-                                context: context,
-                                builder: (context) =>
-                                    ShareCommunityDialog(community: community!),
-                              );
-                            } else {
-                              // Fallback if community data failed to load
-                              Share.share(
-                                'Check out $displayName on Diaspora Nearby!',
-                              );
-                            }
-                          },
-                        ),
-
-                      // Create Community Group
-                      if (isCommunity)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.users,
-                          iconColor: Colors.blue.shade700,
-                          iconBgColor: Colors.blue.shade50,
-                          title: 'Create Community Group',
-                          subtitle: 'Start a public group in this community',
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                fullscreenDialog: true,
-                                builder: (context) => CreateGroupScreen(
-                                  communityId: chat.communityId,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
-                      // Create Community Event
-                      if (isCommunity)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.calendarDays,
-                          iconColor: Colors.orange.shade700,
-                          iconBgColor: Colors.orange.shade50,
-                          title: 'Create Community Event',
-                          subtitle: 'Host an event for this community',
-                          onTap: () {
-                            Navigator.pop(context);
-                            context.push(
-                              Uri(
-                                path: '/events/create',
-                                queryParameters: {
-                                  if (chat.communityId != null)
-                                    'communityId': chat.communityId,
-                                },
-                              ).toString(),
-                            );
-                          },
-                        ),
-
-                      // Create Community Org
-                      if (isCommunity)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.briefcase,
-                          iconColor: Colors.purple.shade700,
-                          iconBgColor: Colors.purple.shade50,
-                          title: 'Create Community Org/Business',
-                          subtitle: 'Register a business in this community',
-                          onTap: () {
-                            Navigator.pop(context);
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              useSafeArea: true,
-                              builder: (context) => BusinessRegistrationModal(
-                                communityId: chat.communityId,
-                              ),
-                            );
-                          },
-                        ),
-
-                      // Leader Elections (Community Only)
-                      if (isCommunity)
-                        _buildSheetItem(
-                          context,
-                          icon: LucideIcons.vote,
-                          iconColor: AppTheme.accent,
-                          iconBgColor: AppTheme.accent.withValues(alpha: 0.1),
-                          title: 'Council of Community Leaders',
-                          subtitle: (governanceUnit?.isActiveElection ?? false)
-                              ? 'Active council election in progress'
-                              : 'Elect council members and treasury signers',
-                          onTap: () {
-                            Navigator.pop(context);
-
-                            // Determine Unit ID (Use Unit if available, else derive from Community)
-                            String? unitId = governanceUnit?.id;
-
-                            if (unitId == null && community != null) {
-                              if (community.type == 'global') {
-                                unitId = 'global';
-                              } else if (community.type == 'continent') {
-                                // Standardize to continent_name_with_underscores
-                                final continentName = community.name
-                                    .replaceAll(' Community', '')
-                                    .toLowerCase()
-                                    .replaceAll(' ', '_');
-                                unitId = 'continent_$continentName';
-                              } else if (community.type == 'country') {
-                                // Standardize to country_iso (e.g. country_tz)
-                                final countryCode =
-                                    community.homeCountryCode?.toLowerCase() ??
-                                    (community.location?['countryCode']
-                                        ?.toString()
-                                        .toLowerCase()) ??
-                                    (community.name
-                                        .replaceAll(' Community', '')
-                                        .toLowerCase());
-                                unitId = 'country_$countryCode';
-                              } else {
-                                // Fallback for local/other
-                                unitId = chat.communityId;
-                              }
-                            }
-
-                            if (unitId != null) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => LeaderSelectionScreen(
-                                    unitId: unitId!,
-                                    community: community,
-                                  ),
-                                ),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Governance not initialized for this community.',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                    ],
-                  ),
+          final confirm = await showDialog<bool>(
+            context: outerContext,
+            builder: (context) => AlertDialog(
+              title: const Text('Block User?'),
+              content: const Text(
+                'They will not be able to message you or see your profile.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
                 ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+                  child: const Text('Block'),
+                ),
+              ],
+            ),
+          );
+
+          if (confirm == true) {
+            try {
+              await ref
+                  .read(relationshipRepositoryProvider)
+                  .blockUser(userId: currentUserId, relatedUserId: otherId);
+              if (outerContext.mounted) {
+                outerContext.pop(); // Go back to chat list
+                ScaffoldMessenger.of(outerContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('User blocked'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (outerContext.mounted) {
+                ScaffoldMessenger.of(
+                  outerContext,
+                ).showSnackBar(SnackBar(content: Text('Error block: $e')));
+              }
+            }
+          }
+        },
+        onReportUser: () {
+          Navigator.pop(context);
+          final otherId = chat.getOtherParticipantId(currentUserId);
+          if (otherId != null) {
+            _handleReportUser(outerContext, ref, otherId, displayName);
+          }
+        },
+        onUnblockUser: () async {
+          Navigator.pop(context);
+          final otherId = chat.getOtherParticipantId(currentUserId);
+          if (otherId == null) return;
+          try {
+            await ref
+                .read(relationshipRepositoryProvider)
+                .unblockUser(userId: currentUserId, relatedUserId: otherId);
+            if (outerContext.mounted) {
+              ScaffoldMessenger.of(outerContext).showSnackBar(
+                const SnackBar(
+                  content: Text('User unblocked'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } catch (e) {
+            if (outerContext.mounted) {
+              ScaffoldMessenger.of(
+                outerContext,
+              ).showSnackBar(SnackBar(content: Text('Error: $e')));
+            }
+          }
+        },
+        onStartGroupChat: () {
+          Navigator.pop(context);
+          final otherId = chat.getOtherParticipantId(currentUserId);
+          Navigator.of(outerContext).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) =>
+                  CreateGroupScreen(initialParticipantId: otherId),
+            ),
+          );
+        },
+        onCreateGroupEvent: () {
+          Navigator.pop(context);
+          outerContext.push(
+            Uri(
+              path: '/events/create',
+              queryParameters: {'groupId': chat.id},
+            ).toString(),
+          );
+        },
+        onShareCommunity: () {
+          Navigator.pop(context);
+          if (community != null) {
+            showDialog(
+              context: outerContext,
+              builder: (context) => ShareCommunityDialog(community: community!),
+            );
+          }
+        },
+        onCreateCommunityGroup: () {
+          Navigator.pop(context);
+          Navigator.push(
+            outerContext,
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (context) =>
+                  CreateGroupScreen(communityId: chat.communityId),
+            ),
+          );
+        },
+        onCreateCommunityEvent: () {
+          Navigator.pop(context);
+          outerContext.push(
+            Uri(
+              path: '/events/create',
+              queryParameters: {
+                if (chat.communityId != null) 'communityId': chat.communityId,
+              },
+            ).toString(),
+          );
+        },
+        onCreateCommunityOrg: () {
+          Navigator.pop(context);
+          showModalBottomSheet(
+            context: outerContext,
+            isScrollControlled: true,
+            useSafeArea: true,
+            builder: (context) =>
+                BusinessRegistrationModal(communityId: chat.communityId),
+          );
+        },
+        onDDILoans: () {
+          Navigator.pop(context);
+          Navigator.push(
+            outerContext,
+            MaterialPageRoute(
+              builder: (context) => DdiLoansScreen(
+                communityId: chat.communityId,
+                community: community,
               ),
             ),
-          ],
-        );
-      },
-    );
+          );
+        },
+        onLeaderElections: () {
+          Navigator.pop(context);
+          _handleLeaderElections(outerContext, chat, governanceUnit, community);
+        },
+      ),
+    ).then((_) {
+      _isShowingMoreMenu = false;
+    });
+  }
+
+  void _handleLeaderElections(
+    BuildContext context,
+    Chat chat,
+    GovernanceUnit? governanceUnit,
+    Community? community,
+  ) {
+    String? unitId = governanceUnit?.id;
+
+    if (unitId == null && community != null) {
+      if (community.type == 'global') {
+        unitId = 'global';
+      } else if (community.type == 'continent') {
+        final continentName = community.name
+            .replaceAll(' Community', '')
+            .toLowerCase()
+            .replaceAll(' ', '_');
+        unitId = 'continent_$continentName';
+      } else if (community.type == 'country') {
+        final countryCode =
+            community.homeCountryCode?.toLowerCase() ??
+            (community.location?['countryCode']?.toString().toLowerCase()) ??
+            (community.name.replaceAll(' Community', '').toLowerCase());
+        unitId = 'country_$countryCode';
+      } else {
+        unitId = chat.communityId;
+      }
+    }
+
+    if (unitId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              LeaderSelectionScreen(unitId: unitId!, community: community),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Governance not initialized for this community.'),
+        ),
+      );
+    }
   }
 
   // [NEW] DSP Transfer Logic
@@ -2913,28 +2302,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     String chatId,
     String name,
   ) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear Chat?'),
-        content: Text(
-          'Are you sure you want to clear your chat history with $name? This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.orange),
-            onPressed: () async {
-              Navigator.pop(context);
-              await repo.clearChat(chatId);
-              // Stay in chat, messages will clear (handled by stream filtering ideally, or just UI clear)
-            },
-            child: const Text('Clear'),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatConfirmationSheet(
+        title: 'Clear Chat?',
+        message:
+            'Are you sure you want to clear your chat history with $name? This cannot be undone.',
+        actionTitle: 'Clear Chat',
+        subtitle: 'Delete all messages for you',
+        icon: LucideIcons.eraser,
+        onAction: () async {
+          Navigator.pop(context); // Close sheet
+          try {
+            await repo.clearChat(chatId);
+            if (context.mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Chat cleared')));
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error clearing chat: $e')),
+              );
+            }
+          }
+        },
       ),
     );
   }
@@ -2947,41 +2342,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     bool isLeave = false,
     String? titleOverride,
   }) {
-    showDialog(
+    final title = titleOverride ?? (isLeave ? 'Leave Group?' : 'Delete Chat?');
+    final message = isLeave
+        ? 'Are you sure you want to leave $name?'
+        : (titleOverride == 'Unfollow Organization?')
+        ? 'Are you sure you want to unfollow $name?'
+        : 'Are you sure you want to delete your chat with $name? This action cannot be undone.';
+    final actionTitle = isLeave
+        ? (titleOverride?.contains('Unfollow') == true ? 'Unfollow' : 'Leave')
+        : 'Delete';
+    final subtitle = isLeave
+        ? 'You will no longer be a participant'
+        : 'Remove conversation and all history';
+
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          titleOverride ?? (isLeave ? 'Leave Group?' : 'Delete Chat?'),
-        ),
-        content: Text(
-          isLeave
-              ? 'Are you sure you want to leave $name?'
-              : (titleOverride == 'Unfollow Organization?') // [UPDATED]
-              ? 'Are you sure you want to unfollow $name?'
-              : 'Are you sure you want to delete your chat with $name? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(context);
-              if (isLeave) {
-                await repo.leaveChat(chatId);
-              } else {
-                await repo.deleteChat(chatId);
-              }
-              if (context.mounted) {
-                // Pop until home or chats list
-                Navigator.of(context).pop();
-              }
-            },
-            child: Text(isLeave ? 'Leave' : 'Delete'),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatConfirmationSheet(
+        title: title,
+        message: message,
+        actionTitle: actionTitle,
+        subtitle: subtitle,
+        icon: isLeave ? LucideIcons.logOut : LucideIcons.trash2,
+        onAction: () async {
+          Navigator.pop(context); // Close sheet
+          try {
+            if (isLeave) {
+              await repo.leaveChat(chatId);
+            } else {
+              await repo.deleteChat(chatId);
+            }
+            if (context.mounted) {
+              // Handle post-deletion navigation
+              Navigator.of(context).pop();
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Error: $e')));
+            }
+          }
+        },
       ),
     );
   }
@@ -3000,250 +2403,51 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-
-                    // Reaction Bar
-                    SizedBox(
-                      height: 60,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        children: ['❤️', '😂', '👍', '👎', '😮', '😢', '🙏']
-                            .map((emoji) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: GestureDetector(
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    _handleReaction(message, emoji);
-                                  },
-                                  child: Text(
-                                    emoji,
-                                    style: const TextStyle(fontSize: 32),
-                                  ),
-                                ),
-                              );
-                            })
-                            .toList(),
-                      ),
-                    ),
-                    const Divider(),
-
-                    // Scrollable action list
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                    // Actions
-                    ListTile(
-                      leading: const Icon(LucideIcons.reply),
-                      title: const Text('Reply'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _setReplyTo(message);
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(LucideIcons.forward),
-                      title: const Text('Forward'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ForwardChatSelectionScreen(message: message),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(LucideIcons.copy),
-                      title: const Text('Copy'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Clipboard.setData(
-                          ClipboardData(text: message.content),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Message copied')),
-                        );
-                      },
-                    ),
-
-                    ListTile(
-                      leading: const Icon(LucideIcons.share2),
-                      title: const Text('Share'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Share.share(
-                          message.content,
-                        );
-                      },
-                    ),
-
-                    // Report / Block — only for others' messages
-                    if (!isOwn) ...[
-                      ListTile(
-                        leading: const Icon(
-                          LucideIcons.ban,
-                          color: Colors.grey,
-                        ),
-                        title: const Text('Block Sender'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _handleBlockUser(
-                            context,
-                            ref,
-                            message.senderId,
-                            message.senderName ?? 'Sender',
-                          );
-                                                },
-                      ),
-                      ListTile(
-                        leading: const Icon(
-                          LucideIcons.flag,
-                          color: AppTheme.error,
-                        ),
-                        title: const Text(
-                          'Report Sender',
-                          style: TextStyle(color: AppTheme.error),
-                        ),
-                        subtitle: const Text(
-                          'Earn 10 DSP for reporting',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _handleReportUser(
-                            context,
-                            ref,
-                            message.senderId,
-                            message.senderName ?? 'Sender',
-                          );
-                                                },
-                      ),
-                      ListTile(
-                        leading: const Icon(
-                          LucideIcons.flag,
-                          color: AppTheme.error,
-                        ),
-                        title: const Text(
-                          'Report Message',
-                          style: TextStyle(color: AppTheme.error),
-                        ),
-                        subtitle: const Text(
-                          'Earn 10 DSP for reporting',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _showReportDialog(context, ref, message);
-                        },
-                      ),
-                    ],
-
-                    if (!isOwn)
-                      ListTile(
-                        leading: const Icon(
-                          LucideIcons.checkCircle2,
-                          color: Colors.green,
-                        ),
-                        title: const Text(
-                          'Mark as Verified Solution',
-                          style: TextStyle(color: Colors.green),
-                        ),
-                        subtitle: const Text(
-                          'Earn 100 DSP · 10 marks = 100 DSP + 1 PoCT for sender',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                        onTap: () async {
-                          Navigator.pop(context);
-                          final chatRepo = ref.read(chatRepositoryProvider);
-                          final currentUserId = chatRepo.currentUserId;
-                          if (currentUserId == null) return;
-
-                          final success = await ref
-                              .read(trustServiceProvider)
-                              .markAsVerifiedSolution(
-                                senderId: message.senderId,
-                                messageId: message.id,
-                                chatId: _activeChatId ?? '',
-                                reporterId: currentUserId,
-                              );
-
-                          if (context.mounted) {
-                            if (success) {
-                              showExplorationRewardToast(
-                                context,
-                                message: 'Verified solution! +100 DSP for you.',
-                                points: 100,
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Already marked as solution or error occurred.',
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                      ),
-
-                    // Delete — own messages only, always last
-                    if (isOwn)
-                      ListTile(
-                        leading: const Icon(
-                          LucideIcons.trash2,
-                          color: AppTheme.error,
-                        ),
-                        title: const Text(
-                          'Delete',
-                          style: TextStyle(color: AppTheme.error),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          _handleDeleteMessage(message);
-                        },
-                      ),
-
-                    const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
-                    ),
-            ],
-          ),
-        ),
+      builder: (sheetContext) => ChatMessageActionSheet(
+        message: message,
+        isOwn: isOwn,
+        currentUserId: currentUserId,
+        onReply: (m) => _setReplyTo(m),
+        onReaction: (m, emoji) => _handleReaction(m, emoji),
+        onReportMessage: (m) => _showReportDialog(context, ref, m),
+        onBlockUser: (uid, name) => _handleBlockUser(context, ref, uid, name),
+        onReportUser: (uid, name) => _handleReportUser(context, ref, uid, name),
+        onVerifySolution: (m) => _handleVerifySolution(m),
+        onDelete: (m) => _handleDeleteMessage(m),
       ),
     );
   }
 
+  void _handleVerifySolution(Message message) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final currentUserId = chatRepo.currentUserId;
+    if (currentUserId == null) return;
+
+    final success = await ref
+        .read(trustServiceProvider)
+        .markAsVerifiedSolution(
+          senderId: message.senderId,
+          messageId: message.id,
+          chatId: _activeChatId ?? '',
+          reporterId: currentUserId,
+        );
+
+    if (mounted) {
+      if (success) {
+        showExplorationRewardToast(
+          context,
+          message: 'Verified solution! +1,000 DSP for you.',
+          points: 1000,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Already marked as solution or error occurred.'),
+          ),
+        );
+      }
+    }
+  }
 
   // [NEW] Handle Reaction
   void _handleReaction(Message message, String emoji) {
@@ -3274,182 +2478,94 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // [NEW] Handle Delete
   void _handleDeleteMessage(Message message) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Message'),
-        content: const Text(
-          'Are you sure you want to delete this message? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref
-                  .read(chatRepositoryProvider)
-                  .deleteMessage(message.chatId, message.id);
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatConfirmationSheet(
+        title: 'Delete Message',
+        message:
+            'Are you sure you want to delete this message? This action cannot be undone.',
+        actionTitle: 'Delete Message',
+        subtitle: 'This will permanently remove the message from this chat',
+        onAction: () {
+          Navigator.pop(context);
+          ref
+              .read(chatRepositoryProvider)
+              .deleteMessage(message.chatId, message.id);
+        },
       ),
     );
   }
 
   void _showReportDialog(BuildContext context, WidgetRef ref, Message message) {
-    final reasons = [
-      'Spam or Scam',
-      'Prohibited Advertising', // [NEW]
-      'Hate Speech',
-      'Harassment or Bullying',
-      'Nudity or Sexual Activity',
-      'False Information',
-      'Other',
-    ];
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Message'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: reasons.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                title: Text(reasons[index]),
-                onTap: () async {
-                  Navigator.pop(context); // Close dialog
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatReportSheet(
+        title: 'Report Message',
+        entityName: 'this message',
+        reasons: ChatReportSheet.messageReasons,
+        onReport: (reason) async {
+          Navigator.pop(context); // Close sheet
 
-                  // Show loading
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Submitting report...')),
-                  );
+          // Show loading
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Submitting report...')));
 
-                  try {
-                    final currentUserId = ref
-                        .read(authRepositoryProvider)
-                        .currentUser
-                        ?.uid;
-                    if (currentUserId == null) return;
+          try {
+            final currentUserId = ref
+                .read(authRepositoryProvider)
+                .currentUser
+                ?.uid;
+            if (currentUserId == null) return;
 
-                    final success = await ref
-                        .read(reportRepositoryProvider)
-                        .reportMessage(
-                          reporterId: currentUserId,
-                          messageId: message.id,
-                          senderId: message.senderId,
-                          reason: reasons[index],
-                        );
+            final success = await ref
+                .read(reportRepositoryProvider)
+                .reportMessage(
+                  reporterId: currentUserId,
+                  messageId: message.id,
+                  senderId: message.senderId,
+                  reason: reason,
+                );
 
-                    // [NEW] Award 10 DSP for reporting a message
-                    if (success) {
-                      try {
-                        await ref
-                            .read(pointsServiceProvider)
-                            .awardPoints(
-                              userId: currentUserId,
-                              amount: 10,
-                              reason: 'report_message',
-                            );
-                      } catch (e) {
-                        debugPrint('Error awarding report DSP: $e');
-                      }
-                    }
+            // [NEW] Award 100 DSP for reporting a message
+            if (success) {
+              try {
+                await ref
+                    .read(pointsServiceProvider)
+                    .awardPoints(
+                      userId: currentUserId,
+                      amount: 100,
+                      reason: 'report_message',
+                    );
+              } catch (e) {
+                debugPrint('Error awarding report DSP: $e');
+              }
+            }
 
-                    if (context.mounted) {
-                      if (success) {
-                        showExplorationRewardToast(
-                          context,
-                          message: 'Report submitted. Thank you!',
-                          points: 10,
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Failed to submit report. Please try again.',
-                            ),
-                            backgroundColor: AppTheme.error,
-                          ),
-                        );
-                      }
-                    }
-                  } catch (e) {
-                    debugPrint('Error reporting: $e');
-                  }
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSheetItem(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBgColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 20, color: iconColor),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: isDestructive
-                          ? Colors.red
-                          : theme.colorScheme.onSurface,
-                      fontWeight: FontWeight.w600,
-                    ),
+            if (context.mounted) {
+              if (success) {
+                showExplorationRewardToast(
+                  context,
+                  message: 'Report submitted. Thank you!',
+                  points: 100,
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to submit report. Please try again.'),
+                    backgroundColor: AppTheme.error,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('Error reporting message: $e');
+          }
+        },
       ),
     );
   }
@@ -3487,8 +2603,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       if (rel != null && rel.status == 'active') {
         const Set<String> familyTypes = {
-          'wife', 'husband', 'daughter', 'son', 'mother', 'father',
-          'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+          'wife',
+          'husband',
+          'daughter',
+          'son',
+          'mother',
+          'father',
+          'sister',
+          'brother',
+          'aunt',
+          'uncle',
+          'nephew',
+          'niece',
+          'cousin',
         };
         if (familyTypes.contains(rel.type.toLowerCase())) {
           if (context.mounted) {
@@ -3536,70 +2663,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         return;
       }
 
-      // 3. Show Relationship Selection / Verification Flow
+      // 3. Show Verification Modal directly (no relationship selection needed)
+      // Relationships are added separately via "Add Relationship" in the menu.
       if (context.mounted) {
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          builder: (modalContext) => RelationshipSelectionModal(
-            otherUserId: otherUserId,
-            otherUserName: profile.fullName,
-            includeFriend: true,
-            onSelected: (type) async {
-              Navigator.pop(modalContext);
-
-              final socialTypes = [
-                'Colleague',
-                'Business Partner',
-                'Community Member',
-                'Friend',
-              ];
-
-              if (socialTypes.contains(type)) {
-                // Allow verification
-                if (context.mounted) {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (c) => ProfileVerificationModal(
-                      targetUser: profile,
-                      currentUserId: currentUserId,
-                    ),
-                  );
-                }
-              } else {
-                // Relative - deny
-                if (context.mounted) {
-                  VerificationAlertModal.show(
-                    context,
-                    type: VerificationAlertType.conflict,
-                    title: 'Verification Blocked',
-                    message:
-                        'Relationship request sent. You cannot verify relatives to ensure unbiased community trust.',
-                  );
-                }
-                // Send relationship request
-                final repo = ref.read(relationshipRepositoryProvider);
-
-                try {
-                  final myProfile = await ref
-                      .read(profileRepositoryProvider)
-                      .getUserProfile(currentUserId);
-                  if (myProfile != null) {
-                    await repo.sendRelationshipRequest(
-                      fromUserId: currentUserId,
-                      fromUserName: myProfile.fullName,
-                      fromUserFlag: _getCountryFlag(myProfile.homeCountryCode),
-                      toUserId: otherUserId,
-                      toUserName: profile.fullName,
-                      relationshipType: type,
-                    );
-                  }
-                } catch (e) {
-                  debugPrint('Error sending request: $e');
-                }
-              }
-            },
+          builder: (c) => ProfileVerificationModal(
+            targetUser: profile,
+            currentUserId: currentUserId,
           ),
         );
       }
@@ -3638,7 +2710,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             await repo.sendRelationshipRequest(
               fromUserId: myProfile.uid!,
               fromUserName: myProfile.fullName,
-              fromUserFlag: _getCountryFlag(myProfile.homeCountryCode),
+              fromUserFlag: CountryUtils.getCountryFlag(
+                myProfile.homeCountryCode,
+              ),
+              fromUserPhoto: myProfile.profileImage,
               toUserId: otherUserId,
               toUserName: displayName ?? 'User',
               relationshipType: type,
@@ -3661,66 +2736,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  String _getCountryFlag(String? countryCode) {
-    if (countryCode == null) return '🏳️';
-    String country = countryCode.toUpperCase();
-    if (country.length != 2) return '🏳️';
-    int flagOffset = 0x1F1E6;
-    int asciiOffset = 0x41;
-    int firstChar = country.codeUnitAt(0) - asciiOffset + flagOffset;
-    int secondChar = country.codeUnitAt(1) - asciiOffset + flagOffset;
-    return String.fromCharCode(firstChar) + String.fromCharCode(secondChar);
-  }
-
   void _handleBlockUser(
     BuildContext context,
     WidgetRef ref,
     String userId,
     String userName,
   ) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Block User?'),
-        content: Text(
-          'Are you sure you want to block $userName? They will not be able to message you.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatConfirmationSheet(
+        title: 'Block User',
+        message:
+            'Are you sure you want to block $userName? They will not be able to message you.',
+        actionTitle: 'Block User',
+        subtitle: 'You can unblock them later from your profile settings',
+        onAction: () async {
+          Navigator.pop(context); // Close sheet
 
-              final currentUserId = ref
-                  .read(authRepositoryProvider)
-                  .currentUser
-                  ?.uid;
-              if (currentUserId == null) return;
+          final currentUserId = ref
+              .read(authRepositoryProvider)
+              .currentUser
+              ?.uid;
+          if (currentUserId == null) return;
 
-              try {
-                await ref
-                    .read(relationshipRepositoryProvider)
-                    .blockUser(userId: currentUserId, relatedUserId: userId);
+          try {
+            await ref
+                .read(relationshipRepositoryProvider)
+                .blockUser(userId: currentUserId, relatedUserId: userId);
 
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('User blocked')));
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error blocking user: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Block', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+            if (context.mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('User blocked')));
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error blocking user: $e')),
+              );
+            }
+          }
+        },
       ),
     );
   }
@@ -3731,93 +2789,70 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     String userId,
     String userName,
   ) {
-    final reasons = [
-      'Fake Account',
-      'Harassment or Bullying',
-      'Inappropriate Content',
-      'Spam',
-      'Prohibited Advertising', // [NEW]
-      'Other',
-    ];
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Report $userName'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: reasons.length,
-            itemBuilder: (context, index) {
-              return ListTile(
-                title: Text(reasons[index]),
-                onTap: () async {
-                  Navigator.pop(context);
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ChatReportSheet(
+        title: 'Report $userName',
+        entityName: userName,
+        reasons: ChatReportSheet.userReasons,
+        onReport: (reason) async {
+          Navigator.pop(context);
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Submitting report...')),
-                  );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Submitting report...')));
 
-                    try {
-                      final currentUserId = ref
-                          .read(authRepositoryProvider)
-                          .currentUser
-                          ?.uid;
-                      if (currentUserId == null) return;
+          try {
+            final currentUserId = ref
+                .read(authRepositoryProvider)
+                .currentUser
+                ?.uid;
+            if (currentUserId == null) return;
 
-                      final success = await ref
-                          .read(reportRepositoryProvider)
-                          .reportUser(
-                            reporterId: currentUserId,
-                            reportedUserId: userId,
-                            reason: reasons[index],
-                          );
+            final success = await ref
+                .read(reportRepositoryProvider)
+                .reportUser(
+                  reporterId: currentUserId,
+                  reportedUserId: userId,
+                  reason: reason,
+                );
 
-                      if (success) {
-                        // Award 10 DSP for reporting a sender (new report only)
-                        try {
-                          await ref
-                              .read(pointsServiceProvider)
-                              .awardPoints(
-                                userId: currentUserId,
-                                amount: 10,
-                                reason: 'report_sender',
-                              );
-                        } catch (e) {
-                          debugPrint('Error awarding report DSP: $e');
-                        }
+            if (success) {
+              // Award 100 DSP for reporting a sender (new report only)
+              try {
+                await ref
+                    .read(pointsServiceProvider)
+                    .awardPoints(
+                      userId: currentUserId,
+                      amount: 100,
+                      reason: 'report_sender',
+                    );
+              } catch (e) {
+                debugPrint('Error awarding report DSP: $e');
+              }
 
-                        if (context.mounted) {
-                          showExplorationRewardToast(
-                            context,
-                            message: 'Report submitted. Thank you!',
-                            points: 10,
-                          );
-                        }
-                      } else {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('You have already reported this user.'),
-                            ),
-                          );
-                        }
-                      }
-                  } catch (e) {
-                    // Handle error
-                  }
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
+              if (context.mounted) {
+                showExplorationRewardToast(
+                  context,
+                  message: 'Report submitted. Thank you!',
+                  points: 100,
+                );
+              }
+            } else {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('You have already reported this user.'),
+                  ),
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('Error reporting user: $e');
+          }
+        },
       ),
     );
   }

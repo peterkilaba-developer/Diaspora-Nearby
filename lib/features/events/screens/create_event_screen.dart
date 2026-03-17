@@ -23,7 +23,7 @@ import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/events/screens/organizer_events_screen.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
-import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -118,12 +118,10 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
 
   String _category = 'Social Gathering';
 
-
   // Audience
   String _attendingPermission = 'global_community';
   List<Community> _myCommunities = [];
   List<Chat> _myGroups = []; // [NEW] Groups
-  List<ProfileData> _myContacts = [];
   List<String> _invitedUserIds = [];
   bool _isLoadingAudience = true;
 
@@ -267,7 +265,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         );
       }
     } catch (err) {
-      print('Error parsing date/time for edit: $err');
+      debugPrint('Error parsing date/time for edit: $err');
     }
 
     _attendingPermission = e.attendingPermission ?? 'global';
@@ -303,7 +301,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
       var communities = await communityRepo.getUserCommunities(user.uid);
       final chats = await chatRepo.getUserChats(); // [NEW] Fetch chats
       var groups = chats.where((c) => c.type == 'group').toList();
-      final contacts = await chatRepo.getChatContacts();
 
       // Sort priority: global -> continent -> country -> state -> city
       final typePriority = {
@@ -339,7 +336,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
 
           _myCommunities = communities;
           _myGroups = groups;
-          _myContacts = contacts;
 
           // Only set default if NOT editing (preserve existing selection)
           if (widget.eventToEdit == null) {
@@ -371,7 +367,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         });
       }
     } catch (e) {
-      print('Error fetching audience data: $e');
+      debugPrint('Error fetching audience data: $e');
       if (mounted) setState(() => _isLoadingAudience = false);
     }
   }
@@ -457,7 +453,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         });
       }
     } catch (e) {
-      print('Error fetching place details: $e');
+      debugPrint('Error fetching place details: $e');
     }
   }
 
@@ -465,21 +461,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
     final now = DateTime.now();
     final dt = DateTime(now.year, now.month, now.day, time.hour, time.minute);
     return DateFormat('HH:mm').format(dt);
-  }
-
-  String _getCommunityTypeLabel(String? type) {
-    switch (type) {
-      case 'global':
-        return 'Global Community';
-      case 'country':
-        return 'National Community';
-      case 'state':
-        return 'State Community';
-      case 'city':
-        return 'City Community';
-      default:
-        return 'Community';
-    }
   }
 
   @override
@@ -852,13 +833,15 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
 
                                 if (endDateTime.isBefore(startDateTime)) {
                                   // If selected end time is before start time (e.g. same day), push it forward
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'End time cannot be before start time',
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'End time cannot be before start time',
+                                        ),
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  }
                                   // Optionally auto-correct
                                   final newEnd = startDateTime.add(
                                     const Duration(minutes: 30),
@@ -1100,17 +1083,14 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                               // Locked community display when editing
                               Builder(
                                 builder: (context) {
-                                  final selected =
-                                      _myCommunities.firstWhere(
-                                        (c) =>
-                                            c.id == _attendingPermission,
-                                        orElse: () => _myCommunities.first,
-                                      );
+                                  final selected = _myCommunities.firstWhere(
+                                    (c) => c.id == _attendingPermission,
+                                    orElse: () => _myCommunities.first,
+                                  );
                                   return ListTile(
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                        ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
                                     title: Text(
                                       selected.name,
                                       style: const TextStyle(
@@ -1126,16 +1106,14 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                       color: Colors.grey,
                                       size: 20,
                                     ),
-                                    leading: CommunityChatUtils
-                                        .getCommunityAvatar(
+                                    leading:
+                                        CommunityChatUtils.getCommunityAvatar(
                                           context: context,
                                           chat: null,
                                           communityId: selected.id,
                                           type: selected.type,
-                                          locationType:
-                                              selected.locationType,
-                                          profileImage:
-                                              selected.profileImage,
+                                          locationType: selected.locationType,
+                                          profileImage: selected.profileImage,
                                           homeCountryCode:
                                               selected.homeCountryCode,
                                           hostCountryCode:
@@ -1146,53 +1124,57 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                   );
                                 },
                               )
-                            else
-                              ..._myCommunities.map((community) {
-                                // [FIX] No subtitles, just name. Exception maybe Global?
-                                // User said "remove sub titles for communities".
-                                // "global community is unfiltered and includes all app members" -> Add note to Global
+                            else ...[
+                              RadioGroup<String>(
+                                groupValue: _attendingPermission,
+                                onChanged: (v) {
+                                  FocusScope.of(context).unfocus();
+                                  setState(() => _attendingPermission = v!);
+                                },
+                                child: Column(
+                                  children: _myCommunities.map((community) {
+                                    final isGlobal = community.type == 'global';
 
-                                final isGlobal = community.type == 'global';
-
-                                return RadioListTile<String>(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                  title: Text(
-                                    community.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    '${isGlobal ? 'Includes all app members \u2022 ' : ''}${community.memberCount} members',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  value: community.id,
-                                  groupValue: _attendingPermission,
-                                  onChanged: (v) {
-                                    FocusScope.of(context).unfocus(); // [FIX]
-                                    setState(() => _attendingPermission = v!);
-                                  },
-                                  controlAffinity:
-                                      ListTileControlAffinity.trailing,
-                                  secondary:
-                                      CommunityChatUtils.getCommunityAvatar(
-                                        context: context,
-                                        chat: null,
-                                        communityId: community.id,
-                                        type: community.type,
-                                        locationType: community.locationType,
-                                        profileImage: community.profileImage,
-                                        homeCountryCode:
-                                            community.homeCountryCode,
-                                        hostCountryCode:
-                                            community.hostCountryCode,
-                                        flag: community.flag,
-                                        size: 40,
+                                    return RadioListTile<String>(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                      title: Text(
+                                        community.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                );
-                              }),
+                                      subtitle: Text(
+                                        '${isGlobal ? 'Includes all app members \u2022 ' : ''}${community.memberCount} members',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      value: community.id,
+                                      controlAffinity:
+                                          ListTileControlAffinity.trailing,
+                                      secondary:
+                                          CommunityChatUtils.getCommunityAvatar(
+                                            context: context,
+                                            chat: null,
+                                            communityId: community.id,
+                                            type: community.type,
+                                            locationType:
+                                                community.locationType,
+                                            profileImage:
+                                                community.profileImage,
+                                            homeCountryCode:
+                                                community.homeCountryCode,
+                                            hostCountryCode:
+                                                community.hostCountryCode,
+                                            flag: community.flag,
+                                            size: 40,
+                                          ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
 
                             // [NEW] Locked Group Display
                             if (widget.groupId != null && _myGroups.isNotEmpty)
@@ -1270,7 +1252,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                           final communityName =
                               ref
                                   .read(communityProvider(widget.communityId!))
-                                  .valueOrNull
+                                  .value
                                   ?.name ??
                               'this community';
                           _showExclusivityDialog(communityName);
@@ -1587,7 +1569,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
 }
 
 // -----------------------------------------------------------------------------
@@ -1625,7 +1606,7 @@ class _JoinedEventsList extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80),
           itemCount: events.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
             final event = events[index];
             // Reusing OrganizerEventCard for display, but filtering actions might be needed?

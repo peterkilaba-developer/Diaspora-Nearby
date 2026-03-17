@@ -14,11 +14,16 @@ external JSBoolean _isInstallPromptAvailable();
 @JS('window.addEventListener')
 external void _addEventListener(JSString type, JSFunction listener);
 
-class PWAInstallNotifier extends StateNotifier<bool> {
-  PWAInstallNotifier() : super(false) {
+@JS('isPwaStandalone')
+external JSBoolean _isPwaStandalone();
+
+class PWAInstallNotifier extends Notifier<bool> {
+  @override
+  bool build() {
     if (kIsWeb) {
       _init();
     }
+    return false;
   }
 
   void _init() {
@@ -53,6 +58,15 @@ class PWAInstallNotifier extends StateNotifier<bool> {
       return result.toDart;
     } catch (e) {
       debugPrint('PWA Install Error: $e');
+      return false;
+    }
+  }
+
+  bool isPwaStandalone() {
+    if (!kIsWeb) return false;
+    try {
+      return _isPwaStandalone().toDart;
+    } catch (_) {
       return false;
     }
   }

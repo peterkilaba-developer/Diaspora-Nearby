@@ -54,7 +54,6 @@ class _TextMessageContentState extends State<TextMessageContent> {
       content.splitMapJoin(
         regex,
         onMatch: (Match match) {
-          final fullMatch = match.group(0);
           final uid = match.group(2); // Group 2 is UID
           final name = match.group(3); // Group 3 is Name
 
@@ -199,7 +198,7 @@ class _TextMessageContentState extends State<TextMessageContent> {
                 errorBody: '',
                 cache: const Duration(days: 7),
                 backgroundColor: theme.colorScheme.surfaceContainerHighest
-                    .withOpacity(0.3),
+                    .withValues(alpha: 0.3),
                 borderRadius: 8,
                 removeElevation: true,
                 boxShadow: const [],

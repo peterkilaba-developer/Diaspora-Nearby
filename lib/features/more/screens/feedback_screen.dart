@@ -41,7 +41,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       });
 
       if (mounted) {
-        // [NEW] Award 10 DSP for every feedback
+        // [NEW] Award 100 DSP for every feedback
         if (user != null) {
           final success = await ref
               .read(pointsServiceProvider)
@@ -51,20 +51,20 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
             showExplorationRewardToast(
               context,
               message: 'Feedback Submitted',
-              points: 10,
+              points: 100,
             );
           } else if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Thank you for your feedback!')),
             );
           }
-        } else {
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Thank you for your feedback!')),
           );
         }
 
-        Navigator.pop(context);
+        if (mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -91,7 +91,10 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(
+            16, 16, 16,
+            16 + MediaQuery.of(context).padding.bottom,
+          ),
           child: Column(
             children: [
               GlassContainer(
@@ -109,8 +112,8 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     Text(
                       'Help us improve Diaspora Nearby by sharing your thoughts, suggestions, or reporting issues.',
                       style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(
-                          0.7,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(
+                          alpha: 0.7,
                         ),
                       ),
                     ),
@@ -119,10 +122,10 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFD700).withOpacity(0.1),
+                        color: const Color(0xFFFFD700).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: const Color(0xFFFFD700).withOpacity(0.3),
+                          color: const Color(0xFFFFD700).withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -135,7 +138,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Earn 10 DSP for every feedback submission!',
+                              'Earn 100 DSP for every feedback submission!',
                               style: TextStyle(
                                 color: Colors.orange.shade300,
                                 fontWeight: FontWeight.w600,

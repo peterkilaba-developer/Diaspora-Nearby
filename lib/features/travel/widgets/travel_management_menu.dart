@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/travel/screens/my_bookings_screen.dart';
+import 'package:diaspora_nearby/features/travel/screens/flight_bookings_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/saved_travels_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/travel_history_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/loyalty_rewards_screen.dart';
@@ -70,16 +71,25 @@ class TravelManagementMenu extends StatelessWidget {
         ),
         const PopupMenuItem(
           value: 'booking_requests',
-          child: _MenuRow(icon: LucideIcons.bellRing, label: 'Booking Requests'),
+          child: _MenuRow(
+            icon: LucideIcons.bellRing,
+            label: 'Booking Requests',
+          ),
         ),
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'settings',
-          child: _MenuRow(icon: LucideIcons.settings, label: 'Travel Preferences'),
+          child: _MenuRow(
+            icon: LucideIcons.settings,
+            label: 'Travel Preferences',
+          ),
         ),
         const PopupMenuItem(
           value: 'support',
-          child: _MenuRow(icon: LucideIcons.helpCircle, label: 'Help & Support'),
+          child: _MenuRow(
+            icon: LucideIcons.helpCircle,
+            label: 'Help & Support',
+          ),
         ),
       ],
     );
@@ -88,24 +98,36 @@ class TravelManagementMenu extends StatelessWidget {
   void _handleMenuAction(BuildContext context, String action) {
     switch (action) {
       case 'my_bookings':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => MyBookingsScreen(category: category)),
-        );
+        if (category == 'Flight' || category == 'Hotel') {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const FlightBookingsScreen()),
+          );
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => MyBookingsScreen(category: category),
+            ),
+          );
+        }
         break;
       case 'saved':
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => SavedTravelsScreen(category: category)),
+          MaterialPageRoute(
+            builder: (_) => SavedTravelsScreen(category: category),
+          ),
         );
         break;
       case 'travel_history':
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => TravelHistoryScreen(category: category)),
+          MaterialPageRoute(
+            builder: (_) => TravelHistoryScreen(category: category),
+          ),
         );
         break;
       case 'loyalty':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const LoyaltyRewardsScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const LoyaltyRewardsScreen()));
         break;
       case 'my_listings':
         // Map category to filter type
@@ -122,20 +144,24 @@ class TravelManagementMenu extends StatelessWidget {
             break;
         }
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => MyListingsScreen(filterType: filterType)),
+          MaterialPageRoute(
+            builder: (_) => MyListingsScreen(filterType: filterType),
+          ),
         );
         break;
       case 'booking_requests':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const HostBookingsScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const HostBookingsScreen()));
         break;
       case 'settings':
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Travel Preferences — coming soon'),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
         break;
@@ -144,7 +170,9 @@ class TravelManagementMenu extends StatelessWidget {
           SnackBar(
             content: const Text('Help & Support — coming soon'),
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
         break;
@@ -163,7 +191,11 @@ class _MenuRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Row(
       children: [
-        Icon(icon, size: 18, color: theme.colorScheme.onSurface.withOpacity(0.7)),
+        Icon(
+          icon,
+          size: 18,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+        ),
         const SizedBox(width: 12),
         Text(label, style: const TextStyle(fontSize: 14)),
       ],

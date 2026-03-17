@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$DIASPORA Token — Diaspora Nearby Project</title>
+    <meta name="description"
+        content="$DIASPORA is a community-owned utility token powering the Diaspora Nearby ecosystem on Base Mainnet — connecting diaspora communities worldwide through decentralized governance, treasury management, and token generation events.">
+    <meta name="keywords" content="DIASPORA, token, Base, blockchain, diaspora, community, TGE, governance, treasury">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="$DIASPORA Token — Diaspora Nearby">
+    <meta property="og:description"
+        content="The Hard Asset for the Global Diaspora. Community-owned utility token on Base Mainnet.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://diasporanearby.com/project">
+    <meta property="og:image" content="https://diasporanearby.com/icons/Icon-512.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="$DIASPORA Token — Diaspora Nearby">
+    <meta name="twitter:description"
+        content="Community-owned utility token powering the global diaspora ecosystem on Base Mainnet.">
+
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --sage: #7B9E6B;
+            --sage-dark: #5C7A4E;
+            --sage-light: #A3C293;
+            --orange: #FF9800;
+            --orange-light: #FFB74D;
+            --orange-dim: rgba(255, 152, 0, 0.08);
+            --orange-border: rgba(255, 152, 0, 0.15);
+            --bg-primary: #121212;
+            --bg-card: rgba(255, 255, 255, 0.04);
+            --bg-inner: rgba(255, 255, 255, 0.06);
+            --text-primary: #f1f5f9;
+            --text-secondary: rgba(241, 245, 249, 0.5);
+            --accent-blue: #60a5fa;
+            --page-padding: 16px;
+            --section-padding: 48px;
+            --card-radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 var(--page-padding);
+        }
+
+        /* ── Hero ── */
+        .hero {
+            padding: 64px 0 var(--section-padding);
+            text-align: center;
+        }
+
+        .hero-logo {
+            width: 88px;
+            height: 88px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 30px rgba(123, 158, 107, 0.25));
+        }
+
+        .hero h1 {
+            font-size: 2.6rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 6px;
+        }
+
+        .hero h1 .token-name {
+            color: var(--orange);
+        }
+
+        .hero .tagline {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            margin-bottom: 24px;
+        }
+
+        .hero-badges {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .badge:hover {
+            color: var(--text-primary);
+            background: var(--bg-inner);
+        }
+
+        .badge.live {
+            color: var(--sage);
+        }
+
+        .badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--sage);
+            animation: pulse 2s infinite;
+        }
+
+        .badge.token-badge {
+            color: var(--orange);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* ── Sections ── */
+        section {
+            padding: var(--section-padding) 0;
+        }
+
+        .section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--sage);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .section-label i {
+            width: 14px;
+            height: 14px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .section-title .token-name {
+            color: var(--orange);
+        }
+
+        .section-desc {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            max-width: 700px;
+        }
+
+        /* ── Cards grid ── */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--card-radius);
+            padding: 20px;
+        }
+
+        .card-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--bg-inner);
+            margin-bottom: 12px;
+            color: var(--sage);
+        }
+
+        .card-icon.orange {
+            color: var(--orange);
+        }
+
+        .card-icon i {
+            width: 18px;
+            height: 18px;
+        }
+
+        .card h3 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .card p {
+            font-size: 0.83rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .card .token-name {
+            color: var(--orange);
+            font-weight: 600;
+        }
+
+        /* ── Contract info ── */
+        .contract-box {
+            background: var(--bg-card);
+            border-radius: var(--card-radius);
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .contract-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: none;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .contract-row:last-child {
+            border-bottom: none;
+        }
+
+        .contract-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .contract-value {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: var(--orange);
+            word-break: break-all;
+        }
+
+        .contract-value a {
+            color: var(--orange);
+            text-decoration: none;
+        }
+
+        .contract-value a:hover {
+            text-decoration: underline;
+        }
+
+        .contract-value.neutral {
+            color: var(--text-secondary);
+        }
+
+        /* ── Efficiency table ── */
+        .eff-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.83rem;
+        }
+
+        .eff-table th,
+        .eff-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: none;
+        }
+
+        .eff-table th {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .eff-table td {
+            color: var(--text-secondary);
+        }
+
+        .eff-table .eff-rate {
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        /* 5-band color scale matching app */
+        .eff-high {
+            color: var(--sage) !important;
+        }
+
+        .eff-standard {
+            color: #8bc34a !important;
+        }
+
+        .eff-medium {
+            color: #ffc107 !important;
+        }
+
+        .eff-basic {
+            color: #ff5722 !important;
+        }
+
+        .eff-low {
+            color: #f44336 !important;
+        }
+
+        .eff-none {
+            color: #9e9e9e !important;
+        }
+
+        /* ── Team ── */
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .team-card {
+            background: var(--bg-card);
+            border-radius: var(--card-radius);
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .team-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--sage-dark), var(--sage));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .team-info h3 {
+            font-size: 0.92rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .team-info .role {
+            font-size: 0.78rem;
+            color: var(--sage);
+            font-weight: 500;
+        }
+
+        .team-info .bio {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .team-info a {
+            font-size: 0.73rem;
+            color: var(--accent-blue);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .team-info a:hover {
+            text-decoration: underline;
+        }
+
+        .team-info a i {
+            width: 12px;
+            height: 12px;
+        }
+
+        /* ── Distribution bar ── */
+        .dist-bar-wrap {
+            margin-top: 20px;
+        }
+
+        .dist-bar {
+            display: flex;
+            height: 32px;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .dist-bar .seg {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: white;
+            transition: flex 0.3s;
+        }
+
+        .seg-community {
+            background: var(--sage);
+            flex: 5;
+        }
+
+        .seg-founders {
+            background: #5c6bc0;
+            flex: 1;
+        }
+
+        .seg-investors {
+            background: #7e57c2;
+            flex: 1;
+        }
+
+        .seg-burn {
+            background: #ef5350;
+            flex: 1;
+        }
+
+        .dist-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 0.8rem;
+        }
+
+        .dist-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+        }
+
+        .dist-legend-item .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        /* ── Treasury hierarchy ── */
+        .treasury-hierarchy {
+            margin-top: 28px;
+        }
+
+        .hierarchy-flow {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 0;
+            align-items: start;
+            margin-top: 20px;
+        }
+
+        .hierarchy-col {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .hierarchy-col-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 8px;
+        }
+
+        .hierarchy-col-center .vline {
+            width: 2px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .hier-node {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .hier-node.global {
+            grid-column: 1 / -1;
+            justify-self: center;
+            background: rgba(123, 158, 107, 0.12);
+            color: var(--sage);
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+
+        .hier-node i {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .hier-node .hier-label {
+            color: var(--text-secondary);
+            font-weight: 400;
+            font-size: 0.75rem;
+            margin-left: auto;
+        }
+
+        .hier-heading {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--sage);
+            margin-bottom: 4px;
+            text-align: center;
+        }
+
+        .ddi-callout {
+            background: rgba(255, 152, 0, 0.06);
+            border-radius: var(--card-radius);
+            padding: 20px;
+            margin-top: 28px;
+        }
+
+        .ddi-callout h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--orange);
+            margin-bottom: 8px;
+        }
+
+        .ddi-callout h3 i {
+            width: 20px;
+            height: 20px;
+        }
+
+        .ddi-callout p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .tge-callout {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: rgba(123, 158, 107, 0.08);
+            margin-top: 20px;
+            font-size: 0.82rem;
+            color: var(--sage);
+            font-weight: 500;
+        }
+
+        .tge-callout i {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .tge-callout .eff-val {
+            font-weight: 800;
+            font-size: 1rem;
+            color: var(--sage);
+            margin-left: auto;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        @media (max-width: 640px) {
+            .hierarchy-flow {
+                grid-template-columns: 1fr;
+            }
+
+            .hierarchy-col-center {
+                flex-direction: row;
+                padding: 8px 0;
+            }
+
+            .hierarchy-col-center .vline {
+                width: 40px;
+                height: 2px;
+            }
+        }
+
+        /* ── Footer ── */
+        .footer {
+            padding: 32px 0;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
+
+        .footer a {
+            color: var(--sage);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer .disclaimer {
+            margin-top: 12px;
+            font-size: 0.68rem;
+            color: rgba(241, 245, 249, 0.3);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .hero h1 {
+                font-size: 1.9rem;
+            }
+
+            .hero .tagline {
+                font-size: 0.95rem;
+            }
+
+            .contract-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .section-title {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══════════════════ HERO ═══════════════════ -->
+    <header class="hero">
+        <div class="container">
+            <img src="/icons/logo-orange-transparent-256.png" alt="Diaspora Nearby" class="hero-logo">
+            <h1><span class="token-name">$DIASPORA</span> Token</h1>
+            <p class="tagline">The Hard Asset for the Global Diaspora</p>
+            <div class="hero-badges">
+                <span class="badge live"><span class="dot"></span> Live on Base Mainnet</span>
+                <a class="badge token-badge"
+                    href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                    rel="noopener">
+                    <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on Blockchain
+                </a>
+                <span class="badge">ERC-20 · UUPS Upgradeable</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════ ABOUT ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="info"></i> About</p>
+            <h2 class="section-title">What is Diaspora Nearby?</h2>
+            <p class="section-desc">
+                Diaspora Nearby is a mobile-first platform connecting diaspora communities worldwide.
+                <span class="token-name">$DIASPORA</span> is a community-owned ERC-20 utility token deployed on
+                <strong>Base Mainnet</strong> (Coinbase L2). It powers decentralized governance, treasury management,
+                and token generation events (TGEs) across a 10-epoch lifecycle designed to grow with the global diaspora
+                population.
+            </p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="globe"></i></div>
+                    <h3>Community-First</h3>
+                    <p>No ICO or public sale. <span class="token-name">$DIASPORA</span> is primarily earned through Proof of
+                        Action (PoA) — referrals, engagement, governance participation, and community building. A SAFT is available to all eligible investors under Reg CF.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="lock"></i></div>
+                    <h3>Mint-and-Lock</h3>
+                    <p>Each epoch's token supply is pre-minted and locked on-chain in the TGE Controller. Tokens are
+                        only distributed via transparent TGE events, verifiable on Basescan.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="flame"></i></div>
+                    <h3>Deflationary by Design</h3>
+                    <p>10% of all DSP expansion is permanently burned, creating deflationary pressure that increases
+                        scarcity as the ecosystem grows.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="shield-check"></i></div>
+                    <h3>Proof of Community Trust</h3>
+                    <p>PoCT — a reputation score based on verifications, vouches, connections, and account age —
+                        determines your TGE conversion efficiency.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ CONTRACTS ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="file-code"></i> Smart Contracts</p>
+            <h2 class="section-title">On-Chain Contracts (Base Mainnet)</h2>
+            <p class="section-desc">All contracts are upgradeable (UUPS proxy pattern) and secured with OpenZeppelin
+                role-based access control.</p>
+
+            <div class="contract-box">
+                <div class="contract-row">
+                    <span class="contract-label">Token (Proxy)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                            target="_blank" rel="noopener">
+                            0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">TGE Controller (Proxy)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED"
+                            target="_blank" rel="noopener">
+                            0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Network</span>
+                    <span class="contract-value neutral">Base Mainnet (Chain ID: 8453)</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Token Name</span>
+                    <span class="contract-value">Diaspora</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Symbol</span>
+                    <span class="contract-value">DIASPORA</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Decimals</span>
+                    <span class="contract-value neutral">18</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Hard Cap</span>
+                    <span class="contract-value">1,000,000,000,000,000 (1 Quadrillion)</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Standard</span>
+                    <span class="contract-value neutral">ERC-20 + ERC-20Permit · UUPS Proxy</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ TOKENOMICS ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="coins"></i> Tokenomics</p>
+            <h2 class="section-title">10-Epoch Lifecycle</h2>
+            <p class="section-desc">
+                <span class="token-name">$DIASPORA</span> follows a 10-epoch growth model. Each epoch's supply is 10×
+                the previous.
+                Token supply is pre-minted and locked on-chain in the TGE Controller before distribution begins.
+                Each epoch has 10 TGE events, distributing 10% of the epoch supply per event based on users' accumulated
+                DSP and PoCT efficiency.
+            </p>
+
+            <table class="eff-table" style="margin-top: 24px;">
+                <thead>
+                    <tr>
+                        <th>Epoch</th>
+                        <th>DSP Target</th>
+                        <th>Token Supply</th>
+                        <th>TGE Events</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color: var(--orange); font-weight: 600;">1</td>
+                        <td class="eff-rate">1,000,000</td>
+                        <td class="eff-rate" style="color: var(--orange);">1,000,000</td>
+                        <td>10</td>
+                        <td style="color: var(--sage); font-weight: 600;">Active — <a
+                                href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                                target="_blank" rel="noopener"
+                                style="color: var(--sage); text-decoration: underline; text-underline-offset: 2px;">1M
+                                Locked on-chain</a></td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td class="eff-rate">10,000,000</td>
+                        <td class="eff-rate">10,000,000</td>
+                        <td>10</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td class="eff-rate">100,000,000</td>
+                        <td class="eff-rate">100,000,000</td>
+                        <td>10</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td class="eff-rate">1,000,000,000</td>
+                        <td class="eff-rate">1,000,000,000</td>
+                        <td>10</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td class="eff-rate">10,000,000,000</td>
+                        <td class="eff-rate">10,000,000,000</td>
+                        <td>10</td>
+                        <td>—</td>
+                    </tr>
+                    <tr>
+                        <td>6–10</td>
+                        <td class="eff-rate">100B → 1QD</td>
+                        <td class="eff-rate">100B → 1QD</td>
+                        <td>10 each</td>
+                        <td>—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ DISTRIBUTION ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="pie-chart"></i> Distribution</p>
+            <h2 class="section-title">2× Expansion Model</h2>
+            <p class="section-desc">
+                For every DSP earned by a user, the system mints <strong>2× total</strong>. The user keeps their earned
+                share,
+                while the expansion is distributed across <strong>community treasuries</strong>, founders, investors,
+                and a permanent burn.
+                Community treasuries are the dominant allocation — they are the backbone of localized economic
+                sovereignty.
+            </p>
+
+            <div class="dist-bar-wrap">
+                <div class="dist-bar">
+                    <div class="seg seg-community">50%</div>
+                    <div class="seg seg-founders">10%</div>
+                    <div class="seg seg-investors">10%</div>
+                    <div class="seg seg-burn">10%</div>
+                </div>
+                <div class="dist-legend">
+                    <div class="dist-legend-item">
+                        <div class="dot" style="background:var(--sage)"></div> User Earnings (50%)
+                    </div>
+                    <div class="dist-legend-item">
+                        <div class="dot" style="background:#5c6bc0"></div> Founders & Core Team (10%)
+                    </div>
+                    <div class="dist-legend-item">
+                        <div class="dot" style="background:#7e57c2"></div> Investors Vault (10%)
+                    </div>
+                    <div class="dist-legend-item">
+                        <div class="dot" style="background:#ef5350"></div> Permanent Burn (10%)
+                    </div>
+                </div>
+                <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 12px;">
+                    <i data-lucide="info"
+                        style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                    The remaining 20% flows directly into <strong style="color:var(--sage)">Community
+                        Treasuries</strong> across the user's geographic hierarchy — powering
+                    Diaspora Direct Investments and localized governance.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ COMMUNITY TREASURIES ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="landmark"></i> Community Treasuries</p>
+            <h2 class="section-title">The Engine of Localized Economic Sovereignty</h2>
+            <p class="section-desc">
+                Every DSP-earning activity automatically funds a hierarchical network of community treasuries — from
+                global, down through continents, countries, states, and cities. These treasuries accumulate real
+                economic value
+                that communities govern collectively, creating <strong>self-funding diaspora institutions</strong> at
+                every geographic level.
+            </p>
+
+            <!-- How it works -->
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="git-branch"></i></div>
+                    <h3>Automatic Allocation</h3>
+                    <p>When a user earns DSP, 10% of the expansion is automatically split across up to <strong>7
+                            community treasuries</strong>
+                        based on their home and host locations. No manual transfers needed.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="map-pin"></i></div>
+                    <h3>Geographic Hierarchy</h3>
+                    <p>Each user funds both home-country and host-country treasuries. A Kenyan in Canada simultaneously
+                        funds
+                        treasuries in Kenya <em>and</em> Canada — from continent down to city level.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="vote"></i></div>
+                    <h3>Community Governance</h3>
+                    <p>Each community governs its treasury. Members vote on proposals for how funds are allocated —
+                        grants,
+                        infrastructure, events, and Diaspora Direct Investments lending pools.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="badge-check"></i></div>
+                    <h3>APoCT TGE Efficiency</h3>
+                    <p>Community treasuries convert at the <strong style="color:var(--sage)">Average PoCT
+                            (APoCT)</strong> of their members
+                        during TGE events. The higher the collective trust of a community, the more
+                        <span class="token-name">$DIASPORA</span> its treasury yields using the same decile scale as
+                        individuals.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Hierarchy visual -->
+            <div class="treasury-hierarchy">
+                <div style="text-align:center; margin-bottom: 12px;">
+                    <div class="hier-node global" style="display:inline-flex;">
+                        <i data-lucide="globe"></i> Global Fund Reserve
+                        <span class="hier-label">1 unit</span>
+                    </div>
+                </div>
+
+                <div class="hierarchy-flow">
+                    <div class="hierarchy-col">
+                        <div class="hier-heading"><i data-lucide="home"
+                                style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                            Home Country</div>
+                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span>
+                        </div>
+                    </div>
+
+                    <div class="hierarchy-col-center">
+                        <div class="vline"></div>
+                        <div class="vline"></div>
+                        <div class="vline"></div>
+                        <div class="vline"></div>
+                    </div>
+
+                    <div class="hierarchy-col">
+                        <div class="hier-heading"><i data-lucide="plane"
+                                style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                            Host Country</div>
+                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span>
+                        </div>
+                    </div>
+                </div>
+
+                <p style="font-size: 0.75rem; color: var(--text-secondary); text-align: center; margin-top: 12px;">
+                    Each "unit" = 10% of the user's earned DSP. If a state is not set, its fraction goes to the country
+                    level.
+                </p>
+            </div>
+
+            <!-- DDI callout -->
+            <div class="ddi-callout">
+                <h3><i data-lucide="trending-up"></i> Diaspora Direct Investments</h3>
+                <p>
+                    Community treasuries aren't just savings — they're <strong>active capital</strong>. Members can
+                    apply for
+                    micro-loans directly from their local treasury, funded by the accumulated <span
+                        class="token-name">$DIASPORA</span>.
+                    If a local treasury doesn't have sufficient funds, loan requests cascade upward through the
+                    hierarchy — city → state → country → continent → global —
+                    until a treasury with adequate funds is found. This creates a <strong>self-sustaining lending
+                        network</strong>
+                    that operates without traditional banks or intermediaries.
+                </p>
+            </div>
+
+            <!-- TGE efficiency callout -->
+            <div class="tge-callout">
+                <i data-lucide="shield-check"></i>
+                <span>Community treasuries convert at APoCT efficiency — the weighted average PoCT of all members,
+                    applied on the same decile scale</span>
+                <span class="eff-val">APoCT</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ TGE EFFICIENCY ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="gauge"></i> TGE Efficiency</p>
+            <h2 class="section-title">PoCT-Based Efficiency Scale</h2>
+            <p class="section-desc">
+                Your Proof of Community Trust score determines what percentage of your DSP converts to <span
+                    class="token-name">$DIASPORA</span>
+                during a TGE event. The scale uses a 10-step decile system: <code>(score ÷ 10) → ceil → × 10%</code>.
+            </p>
+
+            <table class="eff-table">
+                <thead>
+                    <tr>
+                        <th>PoCT Score</th>
+                        <th>Efficiency</th>
+                        <th>Yield Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="eff-high">
+                        <td>91 – 100</td>
+                        <td class="eff-rate">100%</td>
+                        <td>Maximum Yield</td>
+                    </tr>
+                    <tr class="eff-high">
+                        <td>81 – 90</td>
+                        <td class="eff-rate">90%</td>
+                        <td>Very High Yield</td>
+                    </tr>
+                    <tr class="eff-standard">
+                        <td>71 – 80</td>
+                        <td class="eff-rate">80%</td>
+                        <td>High Yield</td>
+                    </tr>
+                    <tr class="eff-standard">
+                        <td>61 – 70</td>
+                        <td class="eff-rate">70%</td>
+                        <td>Good Yield</td>
+                    </tr>
+                    <tr class="eff-medium">
+                        <td>51 – 60</td>
+                        <td class="eff-rate">60%</td>
+                        <td>Standard Yield</td>
+                    </tr>
+                    <tr class="eff-medium">
+                        <td>41 – 50</td>
+                        <td class="eff-rate">50%</td>
+                        <td>Basic Yield</td>
+                    </tr>
+                    <tr class="eff-basic">
+                        <td>31 – 40</td>
+                        <td class="eff-rate">40%</td>
+                        <td>Low Yield</td>
+                    </tr>
+                    <tr class="eff-basic">
+                        <td>21 – 30</td>
+                        <td class="eff-rate">30%</td>
+                        <td>Very Low Yield</td>
+                    </tr>
+                    <tr class="eff-low">
+                        <td>11 – 20</td>
+                        <td class="eff-rate">20%</td>
+                        <td>Minimal Yield</td>
+                    </tr>
+                    <tr class="eff-low">
+                        <td>1 – 10</td>
+                        <td class="eff-rate">10%</td>
+                        <td>Entry Yield</td>
+                    </tr>
+                    <tr class="eff-none">
+                        <td>0</td>
+                        <td class="eff-rate">0%</td>
+                        <td>No Yield</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ HOW IT WORKS ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="workflow"></i> How It Works</p>
+            <h2 class="section-title">From DSP to <span class="token-name">$DIASPORA</span></h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="star"></i></div>
+                    <h3>1. Earn DSP</h3>
+                    <p>Complete activities: refer friends, engage with communities, explore the app, build trust through
+                        PoCT.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="target"></i></div>
+                    <h3>2. Qualify for TGE</h3>
+                    <p>Accumulate DSP to reach the epoch's TGE threshold. Your PoCT score determines your conversion
+                        rate.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="zap"></i></div>
+                    <h3>3. Token Generation</h3>
+                    <p>At each TGE, qualified users receive <span class="token-name">$DIASPORA</span> tokens from the
+                        locked on-chain supply, proportional to DSP × efficiency.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="wallet"></i></div>
+                    <h3>4. On-Chain Ownership</h3>
+                    <p><span class="token-name">$DIASPORA</span> tokens are real ERC-20 assets on Base Mainnet. Fully
+                        verifiable, transferable, and community-governed.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ SECURITY ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="shield"></i> Security</p>
+            <h2 class="section-title">Security & Transparency</h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="lock-keyhole"></i></div>
+                    <h3>UUPS Proxy Pattern</h3>
+                    <p>Contracts are upgradeable via UUPS proxies with OpenZeppelin's battle-tested libraries, allowing
+                        bug fixes while preserving state.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="users"></i></div>
+                    <h3>Role-Based Access</h3>
+                    <p>Admin, Minter, Upgrader, and TGE Oracle roles are separated. No single key controls everything.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="search-check"></i></div>
+                    <h3>On-Chain Verification</h3>
+                    <p>All minting, locking, and distribution events are recorded on-chain. Anyone can verify
+                        on the blockchain.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="flame"></i></div>
+                    <h3>Immutable Burns</h3>
+                    <p>Burned tokens are sent to the zero address — permanently removed from circulation, verifiable
+                        on-chain.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ TEAM ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="user-circle"></i> Team</p>
+            <h2 class="section-title">Who's Building This?</h2>
+            <p class="section-desc">Diaspora Nearby is built by diaspora members, for diaspora members.</p>
+
+            <div class="team-grid">
+                <div class="team-card">
+                    <div class="team-avatar">PK</div>
+                    <div class="team-info">
+                        <h3>Peter Kilaba</h3>
+                        <span class="role">Founder & Lead Developer</span>
+                        <p class="bio">Full-stack & blockchain developer. Building tools for the global diaspora.</p>
+                        <a href="https://www.linkedin.com/in/peter-kilaba" target="_blank" rel="noopener">
+                            <i data-lucide="linkedin"></i> LinkedIn
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ LINKS ═══════════════════ -->
+    <section>
+        <div class="container">
+            <p class="section-label"><i data-lucide="link"></i> Resources</p>
+            <h2 class="section-title">Links & Resources</h2>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="smartphone"></i></div>
+                    <h3>Mobile App</h3>
+                    <p>Available on Android (Google Play) and iOS (App Store). Search "Diaspora Nearby".</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="file-text"></i></div>
+                    <h3>Legal</h3>
+                    <p>
+                        <a href="/privacy_policy.html" style="color: var(--accent-blue); text-decoration: none;">Privacy
+                            Policy</a> ·
+                        <a href="/terms_service.html" style="color: var(--accent-blue); text-decoration: none;">Terms of
+                            Service</a>
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="scan-search"></i></div>
+                    <h3>Blockchain Explorer</h3>
+                    <p>
+                        <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                            rel="noopener" style="color: var(--orange); text-decoration: none;">Token Contract</a> ·
+                        <a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED"
+                            target="_blank" rel="noopener" style="color: var(--orange); text-decoration: none;">TGE
+                            Controller</a>
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i data-lucide="mail"></i></div>
+                    <h3>Contact</h3>
+                    <p>
+                        <a href="mailto:peterkilaba.developer@gmail.com"
+                            style="color: var(--accent-blue); text-decoration: none;">peterkilaba.developer@gmail.com</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════ FOOTER ═══════════════════ -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Diaspora Nearby. All rights reserved.</p>
+            <p style="margin-top: 6px;">
+                <a href="/">Home</a> ·
+                <a href="/privacy_policy.html">Privacy</a> ·
+                <a href="/terms_service.html">Terms</a> ·
+                <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                    rel="noopener">Blockchain Explorer</a>
+            </p>
+            <p class="disclaimer">
+                $DIASPORA is a utility token used within the Diaspora Nearby platform.
+                The primary method of token distribution is community participation. SAFT offerings are conducted under Regulation Crowdfunding (Reg CF) for all eligible investors, with a parallel Regulation D 506(c) offering for accredited investors from Epoch 4 onward.
+                There is no public sale, ICO, or IEO.
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Lucide icons after DOM load
+        document.addEventListener('DOMContentLoaded', function () {
+            lucide.createIcons();
+        });
+    </script>
+
+</body>
+
+</html>

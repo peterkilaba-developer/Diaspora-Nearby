@@ -41,7 +41,9 @@ class _SavedTravelsScreenState extends State<SavedTravelsScreen>
           controller: _tabController,
           isScrollable: true,
           labelColor: AppTheme.accent,
-          unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.5),
+          unselectedLabelColor: theme.colorScheme.onSurface.withValues(
+            alpha: 0.5,
+          ),
           indicatorColor: AppTheme.accent,
           indicatorSize: TabBarIndicatorSize.label,
           tabAlignment: TabAlignment.start,
@@ -77,7 +79,7 @@ class _SavedTravelsScreenState extends State<SavedTravelsScreen>
             Icon(
               LucideIcons.heart,
               size: 48,
-              color: theme.colorScheme.onSurface.withOpacity(0.15),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
             ),
             const SizedBox(height: 16),
             Text(
@@ -86,20 +88,24 @@ class _SavedTravelsScreenState extends State<SavedTravelsScreen>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 16, color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                Icon(
+                  icon,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                ),
                 const SizedBox(width: 6),
                 Text(
                   'Tap the heart icon on any $type to save it',
                   style: TextStyle(
                     fontSize: 13,
-                    color: theme.colorScheme.onSurface.withOpacity(0.3),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                   ),
                 ),
               ],

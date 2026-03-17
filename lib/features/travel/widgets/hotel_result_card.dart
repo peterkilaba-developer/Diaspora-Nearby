@@ -43,24 +43,33 @@ class HotelResultCard extends StatelessWidget {
   final HotelOfferResult hotel;
   final VoidCallback? onTap;
 
-  const HotelResultCard({
-    super.key,
-    required this.hotel,
-    this.onTap,
-  });
+  const HotelResultCard({super.key, required this.hotel, this.onTap});
 
   static const _radius = 15.0;
 
   /// Map common chain codes to readable names.
   static const _chainNames = {
-    'HY': 'Hyatt', 'HI': 'Holiday Inn', 'BW': 'Best Western',
-    'MC': 'Marriott', 'HH': 'Hilton', 'SI': 'Sheraton',
-    'WI': 'Westin', 'RT': 'Ritz-Carlton', 'IC': 'InterContinental',
-    'AK': 'Accor', 'YX': 'IHG', 'WH': 'Wyndham',
-    'CW': 'Crowne Plaza', 'EM': 'Embassy Suites',
-    'HL': 'Hilton Garden Inn', 'FN': 'Fairfield Inn',
-    'CI': 'Comfort Inn', 'RA': 'Ramada', 'DI': 'Days Inn',
-    'SB': 'Novotel', 'PH': 'Park Hyatt',
+    'HY': 'Hyatt',
+    'HI': 'Holiday Inn',
+    'BW': 'Best Western',
+    'MC': 'Marriott',
+    'HH': 'Hilton',
+    'SI': 'Sheraton',
+    'WI': 'Westin',
+    'RT': 'Ritz-Carlton',
+    'IC': 'InterContinental',
+    'AK': 'Accor',
+    'YX': 'IHG',
+    'WH': 'Wyndham',
+    'CW': 'Crowne Plaza',
+    'EM': 'Embassy Suites',
+    'HL': 'Hilton Garden Inn',
+    'FN': 'Fairfield Inn',
+    'CI': 'Comfort Inn',
+    'RA': 'Ramada',
+    'DI': 'Days Inn',
+    'SB': 'Novotel',
+    'PH': 'Park Hyatt',
   };
 
   String _getChainName(String? code) =>
@@ -71,11 +80,16 @@ class HotelResultCard extends StatelessWidget {
     if (name.isEmpty) return name;
     // Amadeus often returns ALL CAPS names
     if (name == name.toUpperCase() && name.length > 3) {
-      return name.split(' ').map((word) {
-        if (word.isEmpty) return word;
-        if (word.length <= 2) return word; // Keep short words (II, IV, etc.)
-        return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
-      }).join(' ');
+      return name
+          .split(' ')
+          .map((word) {
+            if (word.isEmpty) return word;
+            if (word.length <= 2) {
+              return word; // Keep short words (II, IV, etc.)
+            }
+            return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+          })
+          .join(' ');
     }
     return name;
   }
@@ -86,7 +100,8 @@ class HotelResultCard extends StatelessWidget {
     if (hotel.offers.isEmpty) return const SizedBox.shrink();
 
     final cheapest = hotel.offers.reduce(
-        (a, b) => a.totalPrice <= b.totalPrice ? a : b);
+      (a, b) => a.totalPrice <= b.totalPrice ? a : b,
+    );
     final chainName = _getChainName(hotel.chainCode);
     final nights = cheapest.nights;
     final photoUrl = _getHotelPhotoUrl(hotel.hotelId);
@@ -114,10 +129,14 @@ class HotelResultCard extends StatelessWidget {
                   Image.network(
                     photoUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: AppTheme.accent.withOpacity(0.15),
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppTheme.accent.withValues(alpha: 0.15),
                       child: const Center(
-                        child: Icon(LucideIcons.building2, size: 40, color: AppTheme.accent),
+                        child: Icon(
+                          LucideIcons.building2,
+                          size: 40,
+                          color: AppTheme.accent,
+                        ),
                       ),
                     ),
                     loadingBuilder: (context, child, progress) {
@@ -128,9 +147,10 @@ class HotelResultCard extends StatelessWidget {
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             value: progress.expectedTotalBytes != null
-                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                ? progress.cumulativeBytesLoaded /
+                                      progress.expectedTotalBytes!
                                 : null,
-                            color: AppTheme.accent.withOpacity(0.5),
+                            color: AppTheme.accent.withValues(alpha: 0.5),
                           ),
                         ),
                       );
@@ -149,7 +169,7 @@ class HotelResultCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.65),
+                            Colors.black.withValues(alpha: 0.65),
                           ],
                         ),
                       ),
@@ -160,13 +180,16 @@ class HotelResultCard extends StatelessWidget {
                     top: 10,
                     right: 10,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accent,
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
+                            color: Colors.black.withValues(alpha: 0.25),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -188,7 +211,7 @@ class HotelResultCard extends StatelessWidget {
                             nights > 1 ? '$nights nights' : '/night',
                             style: TextStyle(
                               fontSize: 9,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                             ),
                           ),
                         ],
@@ -210,7 +233,9 @@ class HotelResultCard extends StatelessWidget {
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
-                            shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black54),
+                            ],
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -220,8 +245,10 @@ class HotelResultCard extends StatelessWidget {
                             chainName,
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.white.withOpacity(0.8),
-                              shadows: const [Shadow(blurRadius: 4, color: Colors.black54)],
+                              color: Colors.white.withValues(alpha: 0.8),
+                              shadows: const [
+                                Shadow(blurRadius: 4, color: Colors.black54),
+                              ],
                             ),
                           ),
                       ],
@@ -237,21 +264,17 @@ class HotelResultCard extends StatelessWidget {
               child: Row(
                 children: [
                   // Bed info
-                  _infoChip(
-                    context,
-                    LucideIcons.bedDouble,
-                    cheapest.bedInfo,
-                  ),
+                  _infoChip(context, LucideIcons.bedDouble, cheapest.bedInfo),
                   const SizedBox(width: 12),
                   // Board type
                   _infoChip(
                     context,
                     cheapest.boardType == 'BREAKFAST' ||
-                        cheapest.boardType == 'HALF_BOARD' ||
-                        cheapest.boardType == 'FULL_BOARD' ||
-                        cheapest.boardType == 'ALL_INCLUSIVE'
-                      ? LucideIcons.coffee
-                      : LucideIcons.doorOpen,
+                            cheapest.boardType == 'HALF_BOARD' ||
+                            cheapest.boardType == 'FULL_BOARD' ||
+                            cheapest.boardType == 'ALL_INCLUSIVE'
+                        ? LucideIcons.coffee
+                        : LucideIcons.doorOpen,
                     cheapest.boardTypeDisplay,
                   ),
                   const Spacer(),
@@ -262,7 +285,9 @@ class HotelResultCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                 ],
@@ -289,7 +314,7 @@ class HotelResultCard extends StatelessWidget {
                     size: 14,
                     color: cheapest.cancellationDeadline != null
                         ? Colors.green.shade600
-                        : theme.colorScheme.onSurface.withOpacity(0.4),
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -303,7 +328,7 @@ class HotelResultCard extends StatelessWidget {
                           : FontWeight.normal,
                       color: cheapest.cancellationDeadline != null
                           ? Colors.green.shade600
-                          : theme.colorScheme.onSurface.withOpacity(0.5),
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                   const Spacer(),
@@ -315,7 +340,9 @@ class HotelResultCard extends StatelessWidget {
                           : 'Pay now  \$${cheapest.totalPrice.toStringAsFixed(0)}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withOpacity(0.4),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.4,
+                        ),
                       ),
                     ),
                   const SizedBox(width: 8),
@@ -323,7 +350,7 @@ class HotelResultCard extends StatelessWidget {
                     hotel.currency,
                     style: TextStyle(
                       fontSize: 11,
-                      color: theme.colorScheme.onSurface.withOpacity(0.4),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                 ],
@@ -340,13 +367,17 @@ class HotelResultCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: theme.colorScheme.onSurface.withOpacity(0.45)),
+        Icon(
+          icon,
+          size: 14,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+        ),
         const SizedBox(width: 4),
         Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: theme.colorScheme.onSurface.withOpacity(0.65),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
           ),
         ),
       ],

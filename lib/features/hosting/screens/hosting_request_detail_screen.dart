@@ -36,8 +36,9 @@ class _HostingRequestDetailScreenState
 
   Future<void> _loadRequest() async {
     try {
-      final request =
-          await ref.read(hostingRepositoryProvider).getRequest(widget.requestId);
+      final request = await ref
+          .read(hostingRepositoryProvider)
+          .getRequest(widget.requestId);
       if (mounted) {
         setState(() {
           _request = request;
@@ -48,7 +49,9 @@ class _HostingRequestDetailScreenState
         });
 
         // Auto-open the interested hosts sheet if there are interested hosts
-        if (request != null && request.interestedHostIds.isNotEmpty && request.isOpen) {
+        if (request != null &&
+            request.interestedHostIds.isNotEmpty &&
+            request.isOpen) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _showInterestedHosts(request);
           });
@@ -89,38 +92,46 @@ class _HostingRequestDetailScreenState
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        LucideIcons.alertCircle,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: GoogleFonts.outfit(
-                          fontSize: 15,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    LucideIcons.alertCircle,
+                    size: 48,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
                   ),
-                )
-              : _buildContent(),
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : _buildContent(),
     );
   }
 
   Widget _buildContent() {
     final request = _request!;
-    final isMatched = request.status == HostingRequestStatus.matched ||
+    final isMatched =
+        request.status == HostingRequestStatus.matched ||
         request.status == HostingRequestStatus.active ||
         request.status == HostingRequestStatus.completed;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(
+        20, 20, 20,
+        20 + MediaQuery.of(context).padding.bottom,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -147,7 +158,11 @@ class _HostingRequestDetailScreenState
           const SizedBox(height: 20),
 
           // ── Community
-          _infoRow(LucideIcons.heartHandshake, 'Community', request.communityName),
+          _infoRow(
+            LucideIcons.heartHandshake,
+            'Community',
+            request.communityName,
+          ),
           const SizedBox(height: 12),
 
           // ── Travel dates
@@ -199,7 +214,11 @@ class _HostingRequestDetailScreenState
               ),
               child: Row(
                 children: [
-                  const Icon(LucideIcons.checkCircle, size: 20, color: AppTheme.accent),
+                  const Icon(
+                    LucideIcons.checkCircle,
+                    size: 20,
+                    color: AppTheme.accent,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -240,13 +259,19 @@ class _HostingRequestDetailScreenState
                 ),
                 child: Column(
                   children: [
-                    Icon(LucideIcons.heartOff, size: 36, color: AppTheme.accent.withValues(alpha: 0.4)),
+                    Icon(
+                      LucideIcons.heartOff,
+                      size: 36,
+                      color: AppTheme.accent.withValues(alpha: 0.4),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'No hosts have shown interest yet',
                       style: GoogleFonts.outfit(
                         fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                   ],
@@ -296,15 +321,14 @@ class _HostingRequestDetailScreenState
                 label,
                 style: GoogleFonts.outfit(
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                value,
-                style: GoogleFonts.outfit(fontSize: 14),
-              ),
+              Text(value, style: GoogleFonts.outfit(fontSize: 14)),
             ],
           ),
         ),

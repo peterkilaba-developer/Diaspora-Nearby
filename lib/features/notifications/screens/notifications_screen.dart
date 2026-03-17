@@ -31,7 +31,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -63,15 +63,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 value: 'mark_all_read',
                 child: Text('Mark all as read'),
               ),
-              const PopupMenuItem(
-                value: 'clear_all',
-                child: Text('Clear all'),
-              ),
+              const PopupMenuItem(value: 'clear_all', child: Text('Clear all')),
             ],
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           labelStyle: GoogleFonts.outfit(
             fontWeight: FontWeight.w600,
             fontSize: 14,
@@ -82,7 +81,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           ),
           indicatorColor: Theme.of(context).colorScheme.onSurface,
           labelColor: Theme.of(context).colorScheme.onSurface,
-          unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+          unselectedLabelColor: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.4),
           tabs: [
             Tab(
               child: Row(
@@ -92,6 +93,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   const SizedBox(width: 6),
                   const Text('Action Required'),
                   _buildBadge(notificationsAsync),
+                ],
+              ),
+            ),
+            const Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.checkCircle2, size: 16),
+                  SizedBox(width: 6),
+                  Text('Completed'),
                 ],
               ),
             ),
@@ -118,21 +129,36 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.alertTriangle, size: 40, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
+                  Icon(
+                    LucideIcons.alertTriangle,
+                    size: 40,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     'Error loading notifications',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '$e',
-                    style: GoogleFonts.outfit(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: () => ref.invalidate(notificationsStreamProvider),
+                    onPressed: () =>
+                        ref.invalidate(notificationsStreamProvider),
                     icon: const Icon(LucideIcons.refreshCw, size: 16),
                     label: const Text('Retry'),
                   ),
@@ -144,6 +170,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         data: (allNotifications) {
           final actionRequired = allNotifications
               .where((n) => n.actionRequired && !n.actionCompleted)
+              .toList();
+          final completed = allNotifications
+              .where((n) => n.actionRequired && n.actionCompleted)
               .toList();
 
           return TabBarView(
@@ -158,7 +187,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                     )
                   : _buildList(actionRequired, isDark),
 
-              // Tab 2: All Notifications
+              // Tab 2: Completed
+              completed.isEmpty
+                  ? _buildEmptyState(
+                      icon: LucideIcons.checkCheck,
+                      title: 'No completed actions yet',
+                      subtitle: 'Completed actions will appear here',
+                    )
+                  : _buildList(completed, isDark),
+
+              // Tab 3: All Notifications
               allNotifications.isEmpty
                   ? _buildEmptyState(
                       icon: LucideIcons.bellOff,
@@ -176,7 +214,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   // ── Badge on the Action Required tab ─────────────────────────────────
 
   Widget _buildBadge(AsyncValue<List<NotificationItem>> async) {
-    final count = async.valueOrNull
+    final count =
+        async.value
             ?.where((n) => n.actionRequired && !n.actionCompleted)
             .length ??
         0;
@@ -205,14 +244,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 56, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15)),
+          Icon(
+            icon,
+            size: 56,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.15),
+          ),
           const SizedBox(height: 12),
           Text(
             title,
             style: GoogleFonts.outfit(
               fontSize: 17,
               fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 4),
@@ -220,7 +267,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             subtitle,
             style: GoogleFonts.outfit(
               fontSize: 13,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.35),
             ),
           ),
         ],
@@ -232,9 +281,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
   Widget _buildList(List<NotificationItem> items, bool isDark) {
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.only(
+        top: 8,
+        bottom: 8 + MediaQuery.of(context).padding.bottom,
+      ),
       itemCount: items.length,
-      separatorBuilder: (_, __) => Divider(
+      separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 72,
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
@@ -276,18 +328,31 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         if (chatId != null) {
           context.push('/chats/$chatId');
         }
+        // Mark as completed when tapped
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
+        }
         break;
       case NotificationType.relationshipRequest:
         final fromUserId = item.payload['fromUserId'] as String?;
         final requestId = item.payload['requestId'] as String?;
         if (fromUserId != null) {
-          context.push('/profile/$fromUserId?requestId=${requestId ?? ''}&action=review');
+          context.push(
+            '/profile/$fromUserId?requestId=${requestId ?? ''}&action=review',
+          );
         }
         break;
       case NotificationType.relationshipAccepted:
         final chatId = item.payload['chatId'] as String?;
         if (chatId != null) {
           context.push('/chats/$chatId');
+        }
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
         }
         break;
       case NotificationType.groupInvitation:
@@ -298,6 +363,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
       case NotificationType.proxyRequest:
         context.push('/dsp/emergency-fund');
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
+        }
         break;
       case NotificationType.dspTransfer:
         final chatId = item.payload['chatId'] as String?;
@@ -307,6 +377,132 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           context.push('/dsp/points');
         }
         break;
+
+      // ── Travel / Peer Bookings ──
+      case NotificationType.travelBookingRequest:
+      case NotificationType.travelBookingConfirmed:
+      case NotificationType.travelBookingDeclined:
+      case NotificationType.travelBookingCancelled:
+      case NotificationType.travelTripReminder:
+        final chatId = item.payload['chatId'] as String?;
+        if (chatId != null && chatId.isNotEmpty) {
+          context.push('/chats/$chatId');
+        } else {
+          context.push('/dsp/travel/stays');
+        }
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
+        }
+        break;
+
+      // ── Events ──
+      case NotificationType.eventNew:
+      case NotificationType.eventReminder:
+      case NotificationType.eventUpdate:
+      case NotificationType.eventCancelled:
+      case NotificationType.eventNewAttendee:
+        final eventId = item.payload['eventId'] as String?;
+        if (eventId != null) {
+          context.push('/events/$eventId');
+        } else {
+          context.push('/events');
+        }
+        break;
+
+      // ── Governance / Elections ──
+      case NotificationType.electionStarted:
+      case NotificationType.electionEndingSoon:
+      case NotificationType.electionResults:
+        context.push('/communities');
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
+        }
+        break;
+
+      // ── Marketplace ──
+      case NotificationType.marketplaceInquiry:
+        final chatId = item.payload['chatId'] as String?;
+        if (chatId != null && chatId.isNotEmpty) {
+          context.push('/chats/$chatId');
+        } else {
+          final listingId = item.payload['listingId'] as String?;
+          if (listingId != null) {
+            context.push('/marketplace/listing/$listingId');
+          } else {
+            context.push('/marketplace');
+          }
+        }
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
+        }
+        break;
+      case NotificationType.marketplaceStatusChange:
+      case NotificationType.marketplacePriceDrop:
+        final listingId = item.payload['listingId'] as String?;
+        if (listingId != null) {
+          context.push('/marketplace/listing/$listingId');
+        } else {
+          context.push('/marketplace');
+        }
+        break;
+
+      // ── Real Estate ──
+      case NotificationType.realEstateInquiry:
+        final chatId = item.payload['chatId'] as String?;
+        if (chatId != null && chatId.isNotEmpty) {
+          context.push('/chats/$chatId');
+        } else {
+          context.push('/dsp/real-estate/buy');
+        }
+        if (userId != null && item.actionRequired && !item.actionCompleted) {
+          ref
+              .read(notificationsRepositoryProvider)
+              .markActionCompleted(userId, item.id);
+        }
+        break;
+      case NotificationType.realEstateMatch:
+      case NotificationType.realEstatePriceChange:
+      case NotificationType.realEstateStatusChange:
+        context.push('/dsp/real-estate/buy');
+        break;
+
+      // ── Trust & Verification ──
+      case NotificationType.trustPeerVerified:
+      case NotificationType.trustPeerVouched:
+      case NotificationType.trustFullTrustReceived:
+        final fromUserId = item.payload['fromUserId'] as String?;
+        if (fromUserId != null && fromUserId.isNotEmpty) {
+          context.push('/profile/$fromUserId');
+        }
+        break;
+      case NotificationType.trustMilestone:
+        break; // Just informational
+
+      // ── Community ──
+      case NotificationType.communityJoined:
+      case NotificationType.communityNewMember:
+        context.push('/communities');
+        break;
+
+      // ── Organization ──
+      case NotificationType.orgInvitation:
+      case NotificationType.orgAnnouncement:
+        break; // Future: navigate to org detail
+
+      // ── Emergency Fund ──
+      case NotificationType.emergencyFundStaked:
+      case NotificationType.emergencyFundPaymentSuccess:
+      case NotificationType.emergencyFundMembershipActive:
+      case NotificationType.emergencyFundDspRefunded:
+        context.push('/dsp/emergency-fund');
+        break;
+
       case NotificationType.system:
         break;
     }
@@ -325,15 +521,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
       case 'view_chat':
         final chatId = item.payload['chatId'] as String?;
-        if (chatId != null) context.push('/chats/$chatId');
+        if (chatId != null && chatId.isNotEmpty) context.push('/chats/$chatId');
         ref
             .read(notificationsRepositoryProvider)
             .markActionCompleted(userId, item.id);
         break;
       case 'view_profile':
-        final profileId = item.payload['fromUserId'] as String? ??
+        final profileId =
+            item.payload['fromUserId'] as String? ??
             item.payload['hostId'] as String?;
         if (profileId != null) context.push('/profile/$profileId');
+        break;
+      case 'view_event':
+        final eventId = item.payload['eventId'] as String?;
+        if (eventId != null) context.push('/events/$eventId');
+        ref
+            .read(notificationsRepositoryProvider)
+            .markActionCompleted(userId, item.id);
+        break;
+      case 'view_listing':
+        final listingId = item.payload['listingId'] as String?;
+        if (listingId != null) {
+          context.push('/marketplace/listing/$listingId');
+        }
+        ref
+            .read(notificationsRepositoryProvider)
+            .markActionCompleted(userId, item.id);
+        break;
+      case 'view_election':
+        context.push('/communities');
+        ref
+            .read(notificationsRepositoryProvider)
+            .markActionCompleted(userId, item.id);
         break;
       case 'dismiss':
         _dismissNotification(item);
@@ -347,12 +566,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     final requestId = item.payload['requestId'] as String?;
     final hostId = item.payload['hostId'] as String?;
-    final hostName = item.payload['hostName'] as String? ?? 'Host';
     if (requestId == null || hostId == null) {
-      debugPrint('Error selecting host: missing requestId=$requestId or hostId=$hostId');
+      debugPrint(
+        'Error selecting host: missing requestId=$requestId or hostId=$hostId',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid notification data. Please dismiss this notification.')),
+          const SnackBar(
+            content: Text(
+              'Invalid notification data. Please dismiss this notification.',
+            ),
+          ),
         );
       }
       return;
@@ -360,9 +584,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     try {
       // 1. Fetch the full hosting request
-      final request = await ref.read(hostingRepositoryProvider).getRequest(requestId);
+      final request = await ref
+          .read(hostingRepositoryProvider)
+          .getRequest(requestId);
       if (request == null) {
-        throw Exception('This hosting request no longer exists. It may have expired.');
+        throw Exception(
+          'This hosting request no longer exists. It may have expired.',
+        );
       }
 
       // 2. Fetch host profile
@@ -381,13 +609,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       }
 
       // 4. Confirm arrangement (creates session, updates request to matched + active)
-      final session = await ref.read(hostingServiceProvider).confirmArrangement(
-        request: request,
-        hostId: hostId,
-        hostName: hostProfile.fullName,
-        hostPhoto: hostProfile.profileImage,
-        chatId: chat.id,
-      );
+      final session = await ref
+          .read(hostingServiceProvider)
+          .confirmArrangement(
+            request: request,
+            hostId: hostId,
+            hostName: hostProfile.fullName,
+            hostPhoto: hostProfile.profileImage,
+            chatId: chat.id,
+          );
       if (session == null) {
         throw Exception('Could not create hosting session. Please try again.');
       }
@@ -396,9 +626,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       await chatRepo.sendTextMessage(
         chat.id,
         '🏠 Hosting arrangement confirmed! '
-            '${request.travelerName} will be hosted by ${hostProfile.fullName} '
-            'from ${_formatDate(request.arrivalDate)} to ${_formatDate(request.departureDate)}. '
-            'Use this chat to coordinate the details.',
+        '${request.travelerName} will be hosted by ${hostProfile.fullName} '
+        'from ${_formatDate(request.arrivalDate)} to ${_formatDate(request.departureDate)}. '
+        'Use this chat to coordinate the details.',
         type: 'system',
         senderIdOverride: 'system',
         senderNameOverride: 'Hosting',
@@ -426,7 +656,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${hostProfile.fullName} selected as your host!')),
+          SnackBar(
+            content: Text('${hostProfile.fullName} selected as your host!'),
+          ),
         );
         // Navigate to the DM
         context.push('/chats/${chat.id}');
@@ -438,10 +670,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             ? e.toString().replaceFirst('Exception: ', '')
             : 'Something went wrong. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
     }
@@ -454,15 +683,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final requestId = item.payload['requestId'] as String?;
     final hostId = item.payload['hostId'] as String?;
     if (requestId == null || hostId == null) {
-      debugPrint('Error rejecting host: missing requestId=$requestId or hostId=$hostId');
+      debugPrint(
+        'Error rejecting host: missing requestId=$requestId or hostId=$hostId',
+      );
       // Clear stale notification anyway
       await ref
           .read(notificationsRepositoryProvider)
           .markActionCompleted(userId, item.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Notification cleared.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Notification cleared.')));
       }
       return;
     }
@@ -477,9 +708,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           .read(notificationsRepositoryProvider)
           .markActionCompleted(userId, item.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Host declined')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Host declined')));
       }
     } catch (e) {
       debugPrint('Error rejecting host: $e');
@@ -488,9 +719,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           .read(notificationsRepositoryProvider)
           .markActionCompleted(userId, item.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Host declined')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Host declined')));
       }
     }
   }
@@ -498,7 +729,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   void _dismissNotification(NotificationItem item) {
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
-    ref.read(notificationsRepositoryProvider).deleteNotification(userId, item.id);
+    ref
+        .read(notificationsRepositoryProvider)
+        .deleteNotification(userId, item.id);
   }
 
   void _markAllRead() {
@@ -565,8 +798,8 @@ class _NotificationCard extends StatelessWidget {
     final bgColor = item.isRead
         ? Colors.transparent
         : (isDark
-            ? AppTheme.accent.withValues(alpha: 0.06)
-            : AppTheme.accent.withValues(alpha: 0.04));
+              ? AppTheme.accent.withValues(alpha: 0.06)
+              : AppTheme.accent.withValues(alpha: 0.04));
 
     return Dismissible(
       key: ValueKey(item.id),
@@ -603,8 +836,9 @@ class _NotificationCard extends StatelessWidget {
                             item.title,
                             style: GoogleFonts.outfit(
                               fontSize: 14,
-                              fontWeight:
-                                  item.isRead ? FontWeight.w500 : FontWeight.w700,
+                              fontWeight: item.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w700,
                             ),
                           ),
                         ),
@@ -612,7 +846,9 @@ class _NotificationCard extends StatelessWidget {
                           timeago.format(item.createdAt, allowFromNow: true),
                           style: GoogleFonts.outfit(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.4),
                           ),
                         ),
                       ],
@@ -624,7 +860,9 @@ class _NotificationCard extends StatelessWidget {
                       item.body,
                       style: GoogleFonts.outfit(
                         fontSize: 13,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
                         height: 1.4,
                       ),
                       maxLines: 3,
@@ -681,7 +919,11 @@ class _NotificationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Center(
-        child: Icon(config.icon, size: 20, color: config.color.withValues(alpha: 0.7)),
+        child: Icon(
+          config.icon,
+          size: 20,
+          color: config.color.withValues(alpha: 0.7),
+        ),
       ),
     );
   }
@@ -704,6 +946,89 @@ class _NotificationCard extends StatelessWidget {
         return const _IconConfig(LucideIcons.shield, AppTheme.warning);
       case NotificationType.dspTransfer:
         return const _IconConfig(LucideIcons.coins, AppTheme.warning);
+
+      // ── Travel / Peer Bookings ──
+      case NotificationType.travelBookingRequest:
+        return const _IconConfig(LucideIcons.calendarPlus, AppTheme.accent);
+      case NotificationType.travelBookingConfirmed:
+        return const _IconConfig(LucideIcons.calendarCheck, AppTheme.success);
+      case NotificationType.travelBookingDeclined:
+        return const _IconConfig(LucideIcons.calendarX, AppTheme.error);
+      case NotificationType.travelBookingCancelled:
+        return const _IconConfig(LucideIcons.calendarX, AppTheme.warning);
+      case NotificationType.travelTripReminder:
+        return const _IconConfig(LucideIcons.alarmClock, AppTheme.info);
+
+      // ── Events ──
+      case NotificationType.eventNew:
+        return const _IconConfig(LucideIcons.partyPopper, AppTheme.accent);
+      case NotificationType.eventReminder:
+        return const _IconConfig(LucideIcons.bellRing, AppTheme.warning);
+      case NotificationType.eventUpdate:
+        return const _IconConfig(LucideIcons.refreshCw, AppTheme.info);
+      case NotificationType.eventCancelled:
+        return const _IconConfig(LucideIcons.calendarX, AppTheme.error);
+      case NotificationType.eventNewAttendee:
+        return const _IconConfig(LucideIcons.userPlus2, AppTheme.success);
+
+      // ── Governance / Elections ──
+      case NotificationType.electionStarted:
+        return const _IconConfig(LucideIcons.vote, AppTheme.accent);
+      case NotificationType.electionEndingSoon:
+        return const _IconConfig(LucideIcons.timer, AppTheme.warning);
+      case NotificationType.electionResults:
+        return const _IconConfig(LucideIcons.trophy, AppTheme.success);
+
+      // ── Marketplace ──
+      case NotificationType.marketplaceInquiry:
+        return const _IconConfig(LucideIcons.shoppingBag, AppTheme.accent);
+      case NotificationType.marketplaceStatusChange:
+        return const _IconConfig(LucideIcons.badgeCheck, AppTheme.info);
+      case NotificationType.marketplacePriceDrop:
+        return const _IconConfig(LucideIcons.trendingDown, AppTheme.success);
+
+      // ── Real Estate ──
+      case NotificationType.realEstateInquiry:
+        return const _IconConfig(LucideIcons.building2, AppTheme.accent);
+      case NotificationType.realEstateMatch:
+        return const _IconConfig(LucideIcons.search, AppTheme.info);
+      case NotificationType.realEstatePriceChange:
+        return const _IconConfig(LucideIcons.trendingDown, AppTheme.warning);
+      case NotificationType.realEstateStatusChange:
+        return const _IconConfig(LucideIcons.badgeCheck, AppTheme.info);
+
+      // ── Trust & Verification ──
+      case NotificationType.trustPeerVerified:
+        return const _IconConfig(LucideIcons.shieldCheck, AppTheme.success);
+      case NotificationType.trustPeerVouched:
+        return const _IconConfig(LucideIcons.heartHandshake, AppTheme.accent);
+      case NotificationType.trustFullTrustReceived:
+        return const _IconConfig(LucideIcons.star, AppTheme.accent);
+      case NotificationType.trustMilestone:
+        return const _IconConfig(LucideIcons.award, AppTheme.warning);
+
+      // ── Community ──
+      case NotificationType.communityJoined:
+        return const _IconConfig(LucideIcons.home, AppTheme.success);
+      case NotificationType.communityNewMember:
+        return const _IconConfig(LucideIcons.userPlus, AppTheme.info);
+
+      // ── Organization ──
+      case NotificationType.orgInvitation:
+        return const _IconConfig(LucideIcons.building, AppTheme.accent);
+      case NotificationType.orgAnnouncement:
+        return const _IconConfig(LucideIcons.megaphone, AppTheme.info);
+
+      // ── Emergency Fund ──
+      case NotificationType.emergencyFundStaked:
+        return const _IconConfig(LucideIcons.coins, AppTheme.warning);
+      case NotificationType.emergencyFundPaymentSuccess:
+        return const _IconConfig(LucideIcons.creditCard, AppTheme.success);
+      case NotificationType.emergencyFundMembershipActive:
+        return const _IconConfig(LucideIcons.shieldCheck, AppTheme.success);
+      case NotificationType.emergencyFundDspRefunded:
+        return const _IconConfig(LucideIcons.refreshCw, AppTheme.info);
+
       case NotificationType.system:
         return const _IconConfig(LucideIcons.bell, AppTheme.accent);
     }
@@ -756,6 +1081,18 @@ class _NotificationCard extends StatelessWidget {
             ),
           ],
         );
+      case NotificationType.relationshipAccepted:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'Start Chat',
+              icon: LucideIcons.messageCircle,
+              color: AppTheme.success,
+              onTap: () => onAction('view_chat'),
+            ),
+          ],
+        );
       case NotificationType.groupInvitation:
         return Row(
           mainAxisAlignment: MainAxisAlignment.start,
@@ -780,6 +1117,95 @@ class _NotificationCard extends StatelessWidget {
             ),
           ],
         );
+
+      // ── Travel / Peer Bookings ──
+      case NotificationType.travelBookingRequest:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'View Booking',
+              icon: LucideIcons.calendarCheck,
+              color: AppTheme.accent,
+              onTap: () => onAction('view_chat'),
+            ),
+          ],
+        );
+      case NotificationType.travelBookingConfirmed:
+      case NotificationType.travelBookingDeclined:
+      case NotificationType.travelBookingCancelled:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'View Chat',
+              icon: LucideIcons.messageCircle,
+              color: AppTheme.info,
+              onTap: () => onAction('view_chat'),
+            ),
+          ],
+        );
+
+      // ── Events ──
+      case NotificationType.eventCancelled:
+      case NotificationType.eventUpdate:
+      case NotificationType.eventNew:
+      case NotificationType.eventReminder:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'View Event',
+              icon: LucideIcons.calendarDays,
+              color: AppTheme.accent,
+              onTap: () => onAction('view_event'),
+            ),
+          ],
+        );
+
+      // ── Governance / Elections ──
+      case NotificationType.electionStarted:
+      case NotificationType.electionEndingSoon:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'Cast Vote',
+              icon: LucideIcons.vote,
+              color: AppTheme.accent,
+              onTap: () => onAction('view_election'),
+            ),
+          ],
+        );
+
+      // ── Marketplace ──
+      case NotificationType.marketplaceInquiry:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'Reply',
+              icon: LucideIcons.messageCircle,
+              color: AppTheme.accent,
+              onTap: () => onAction('view_chat'),
+            ),
+          ],
+        );
+
+      // ── Real Estate ──
+      case NotificationType.realEstateInquiry:
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _actionChip(
+              label: 'Reply',
+              icon: LucideIcons.messageCircle,
+              color: AppTheme.accent,
+              onTap: () => onAction('view_chat'),
+            ),
+          ],
+        );
+
       default:
         return const SizedBox.shrink();
     }

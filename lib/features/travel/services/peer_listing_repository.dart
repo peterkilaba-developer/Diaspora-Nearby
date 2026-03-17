@@ -46,13 +46,14 @@ class PeerListingRepository {
   Future<List<PeerListing>> getMyListings(String uid) async {
     try {
       // Only filter by ownerId — sort client-side to avoid composite index
-      final query = await _listings
-          .where('ownerId', isEqualTo: uid)
-          .get();
-      debugPrint('[getMyListings] Found ${query.docs.length} listings for uid=$uid');
+      final query = await _listings.where('ownerId', isEqualTo: uid).limit(100).get();
+      debugPrint(
+        '[getMyListings] Found ${query.docs.length} listings for uid=$uid',
+      );
       final listings = query.docs
-          .map((d) =>
-              PeerListing.fromJson(d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => PeerListing.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
           .toList();
       // Sort newest first client-side
       listings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -71,9 +72,9 @@ class PeerListingRepository {
   /// seats, fuel type, amenities, features, and fallback city text match.
   Future<List<PeerListing>> searchListings({
     required String type,
-    String? city,           // free-text fallback
-    String? locality,       // structured city for Firestore query
-    String? state,          // structured state
+    String? city, // free-text fallback
+    String? locality, // structured city for Firestore query
+    String? state, // structured state
     String? countryCode,
     // Stay filters
     String? propertyType,
@@ -102,10 +103,13 @@ class PeerListingRepository {
       query = query.limit(limit);
 
       final results = await query.get();
-      debugPrint('[SearchListings] Firestore returned ${results.docs.length} docs for type=$type');
+      debugPrint(
+        '[SearchListings] Firestore returned ${results.docs.length} docs for type=$type',
+      );
       var listings = results.docs
-          .map((d) =>
-              PeerListing.fromJson(d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => PeerListing.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
           .toList();
 
       // Sort by newest first (client-side to avoid composite index)
@@ -119,14 +123,16 @@ class PeerListingRepository {
       if (locationQuery != null && locationQuery.isNotEmpty) {
         final q = locationQuery.toLowerCase();
         listings = listings
-            .where((l) =>
-                (l.localityLower?.contains(q) ?? false) ||
-                (l.city?.toLowerCase().contains(q) ?? false) ||
-                (l.locality?.toLowerCase().contains(q) ?? false) ||
-                (l.subLocality?.toLowerCase().contains(q) ?? false) ||
-                (l.state?.toLowerCase().contains(q) ?? false) ||
-                (l.country?.toLowerCase().contains(q) ?? false) ||
-                (l.address?.toLowerCase().contains(q) ?? false))
+            .where(
+              (l) =>
+                  (l.localityLower?.contains(q) ?? false) ||
+                  (l.city?.toLowerCase().contains(q) ?? false) ||
+                  (l.locality?.toLowerCase().contains(q) ?? false) ||
+                  (l.subLocality?.toLowerCase().contains(q) ?? false) ||
+                  (l.state?.toLowerCase().contains(q) ?? false) ||
+                  (l.country?.toLowerCase().contains(q) ?? false) ||
+                  (l.address?.toLowerCase().contains(q) ?? false),
+            )
             .toList();
       }
 
@@ -143,16 +149,19 @@ class PeerListingRepository {
       // Stay-specific
       if (propertyType != null && propertyType.isNotEmpty) {
         listings = listings
-            .where((l) =>
-                l.propertyType?.toLowerCase() == propertyType.toLowerCase())
+            .where(
+              (l) =>
+                  l.propertyType?.toLowerCase() == propertyType.toLowerCase(),
+            )
             .toList();
       }
       if (minBeds != null) {
         listings = listings.where((l) => (l.beds ?? 0) >= minBeds).toList();
       }
       if (minGuests != null) {
-        listings =
-            listings.where((l) => (l.maxGuests ?? 0) >= minGuests).toList();
+        listings = listings
+            .where((l) => (l.maxGuests ?? 0) >= minGuests)
+            .toList();
       }
       if (amenities != null && amenities.isNotEmpty) {
         listings = listings.where((l) {
@@ -165,8 +174,10 @@ class PeerListingRepository {
       // Car-specific
       if (transmission != null && transmission.isNotEmpty) {
         listings = listings
-            .where((l) =>
-                l.transmission?.toLowerCase() == transmission.toLowerCase())
+            .where(
+              (l) =>
+                  l.transmission?.toLowerCase() == transmission.toLowerCase(),
+            )
             .toList();
       }
       if (minSeats != null) {
@@ -174,8 +185,7 @@ class PeerListingRepository {
       }
       if (fuelType != null && fuelType.isNotEmpty) {
         listings = listings
-            .where(
-                (l) => l.fuelType?.toLowerCase() == fuelType.toLowerCase())
+            .where((l) => l.fuelType?.toLowerCase() == fuelType.toLowerCase())
             .toList();
       }
       if (features != null && features.isNotEmpty) {
@@ -226,12 +236,11 @@ class PeerListingRepository {
   /// Get bookings for a guest (my trips)
   Future<List<PeerBooking>> getGuestBookings(String uid) async {
     try {
-      final query = await _bookings
-          .where('guestId', isEqualTo: uid)
-          .get();
+      final query = await _bookings.where('guestId', isEqualTo: uid).limit(100).get();
       final bookings = query.docs
-          .map((d) =>
-              PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
           .toList();
       bookings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return bookings;
@@ -245,12 +254,11 @@ class PeerListingRepository {
   /// Get bookings for a host (incoming requests)
   Future<List<PeerBooking>> getHostBookings(String uid) async {
     try {
-      final query = await _bookings
-          .where('hostId', isEqualTo: uid)
-          .get();
+      final query = await _bookings.where('hostId', isEqualTo: uid).limit(100).get();
       final bookings = query.docs
-          .map((d) =>
-              PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
           .toList();
       bookings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return bookings;
@@ -266,10 +274,12 @@ class PeerListingRepository {
     try {
       final query = await _bookings
           .where('listingId', isEqualTo: listingId)
+          .limit(100)
           .get();
       final bookings = query.docs
-          .map((d) =>
-              PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id),
+          )
           .toList();
       bookings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return bookings;
@@ -292,27 +302,22 @@ class PeerListingRepository {
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
     final batch = _firestore.batch();
-    batch.set(
-      _listings.doc(listingId).collection('saved_by').doc(userId),
-      {'savedAt': FieldValue.serverTimestamp()},
-    );
-    batch.update(
-      _listings.doc(listingId),
-      {'savedCount': FieldValue.increment(1)},
-    );
+    batch.set(_listings.doc(listingId).collection('saved_by').doc(userId), {
+      'savedAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(_listings.doc(listingId), {
+      'savedCount': FieldValue.increment(1),
+    });
     await batch.commit();
   }
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
     final batch = _firestore.batch();
-    batch.delete(
-      _listings.doc(listingId).collection('saved_by').doc(userId),
-    );
-    batch.update(
-      _listings.doc(listingId),
-      {'savedCount': FieldValue.increment(-1)},
-    );
+    batch.delete(_listings.doc(listingId).collection('saved_by').doc(userId));
+    batch.update(_listings.doc(listingId), {
+      'savedCount': FieldValue.increment(-1),
+    });
     await batch.commit();
   }
 

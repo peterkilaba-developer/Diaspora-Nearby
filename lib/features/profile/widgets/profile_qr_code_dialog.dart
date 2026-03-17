@@ -5,6 +5,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
@@ -97,6 +99,40 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     }
   }
 
+  /// Formats a Placemark as "City, State, Country" or "City, Country" to match
+  /// the user card's "From" / "Lives in" display format, always including country.
+  String? _formatPlacemarkLocation(Placemark p) {
+    final city = p.locality?.isNotEmpty == true
+        ? p.locality!
+        : p.subLocality?.isNotEmpty == true
+        ? p.subLocality!
+        : null;
+
+    final country = p.country?.isNotEmpty == true
+        ? formatLocationName(p.country)
+        : null;
+
+    if (city == null) {
+      return country ?? p.administrativeArea;
+    }
+
+    final countryCode = p.isoCountryCode;
+    if (countryCode != null &&
+        country_data.hasStateLevelHierarchyFromData(countryCode)) {
+      // State-level countries (US, India, etc.): "City, State, Country"
+      final state = p.administrativeArea;
+      if (state != null && state.isNotEmpty) {
+        final parts = [city, formatLocationName(state)];
+        if (country != null) parts.add(country);
+        return parts.join(', ');
+      }
+    }
+
+    // Other countries or no state: "City, Country"
+    if (country != null) return '$city, $country';
+    return city;
+  }
+
   Future<void> _preCacheLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -120,17 +156,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
       );
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
-        final List<String> parts = [];
-        if (p.locality != null && p.locality!.isNotEmpty) {
-          parts.add(p.locality!);
-        }
-        if (p.administrativeArea != null && p.administrativeArea!.isNotEmpty) {
-          parts.add(p.administrativeArea!);
-        }
-        if (p.country != null && p.country!.isNotEmpty) {
-          parts.add(p.country!);
-        }
-        _cachedAddress = parts.join(', ');
+        // Format as "City, State" or "City, Country" matching user card format
+        _cachedAddress = _formatPlacemarkLocation(p);
+        if (_cachedAddress?.isEmpty == true) _cachedAddress = null;
         debugPrint('📍 QR: Location precached: $_cachedAddress');
       }
     } catch (e) {
@@ -271,11 +299,8 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                   );
                   if (placemarks.isNotEmpty) {
                     final p = placemarks.first;
-                    finalAddress = [
-                      p.locality,
-                      p.administrativeArea,
-                      p.country,
-                    ].where((s) => s != null && s.isNotEmpty).join(', ');
+                    // Format as "City, State" or "City, Country" matching user card format
+                    finalAddress = _formatPlacemarkLocation(p);
                   }
                 } else {
                   debugPrint(

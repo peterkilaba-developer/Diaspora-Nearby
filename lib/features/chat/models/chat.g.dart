@@ -25,20 +25,20 @@ Map<String, dynamic> _$ChatProfileImageToJson(ChatProfileImage instance) =>
     };
 
 LastMessage _$LastMessageFromJson(Map<String, dynamic> json) => LastMessage(
-      id: json['id'] as String? ?? '',
-      content: json['content'] as String,
-      timestamp: (json['timestamp'] as num).toInt(),
-      senderId: json['senderId'] as String,
-      senderName: json['senderName'] as String,
-      type: json['type'] as String,
-      mentions: (json['mentions'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      forwarded: json['forwarded'] as bool?,
-      status: json['status'] as String?,
-      deletedForEveryone: json['deletedForEveryone'] as bool?,
-      metadata: json['metadata'] as Map<String, dynamic>?,
-    );
+  id: json['id'] as String? ?? '',
+  content: json['content'] as String,
+  timestamp: (json['timestamp'] as num).toInt(),
+  senderId: json['senderId'] as String,
+  senderName: json['senderName'] as String,
+  type: json['type'] as String,
+  mentions: (json['mentions'] as List<dynamic>?)
+      ?.map((e) => e as String)
+      .toList(),
+  forwarded: json['forwarded'] as bool?,
+  status: json['status'] as String?,
+  deletedForEveryone: json['deletedForEveryone'] as bool?,
+  metadata: json['metadata'] as Map<String, dynamic>?,
+);
 
 Map<String, dynamic> _$LastMessageToJson(LastMessage instance) =>
     <String, dynamic>{
@@ -56,55 +56,53 @@ Map<String, dynamic> _$LastMessageToJson(LastMessage instance) =>
     };
 
 Chat _$ChatFromJson(Map<String, dynamic> json) => Chat(
-      id: json['id'] as String,
-      communityId: json['communityId'] as String?,
-      homeCountryCode: json['homeCountryCode'] as String?,
-      hostCountryCode: json['hostCountryCode'] as String?,
-      locationType: json['locationType'] as String?,
-      type: json['type'] as String,
-      name: json['name'] as String,
-      photoUrl: json['photoUrl'] as String?,
-      profileImage: json['profileImage'] == null
-          ? null
-          : ChatProfileImage.fromJson(
-              json['profileImage'] as Map<String, dynamic>),
-      participants: (json['participants'] as List<dynamic>)
-          .map((e) => e as String)
-          .toList(),
-      admins:
-          (json['admins'] as List<dynamic>?)?.map((e) => e as String).toList(),
-      createdBy: json['createdBy'] as String?,
-      lastMessage: json['lastMessage'] == null
-          ? null
-          : LastMessage.fromJson(json['lastMessage'] as Map<String, dynamic>),
-      createdAt: (json['createdAt'] as num).toInt(),
-      updatedAt: (json['updatedAt'] as num).toInt(),
-      eventId: json['eventId'] as String?,
-      memberCount: (json['memberCount'] as num?)?.toInt(),
-      flag: json['flag'] as String?,
-      metadata: json['metadata'] as Map<String, dynamic>?,
-      description: json['description'] as String?,
-    );
+  id: json['id'] as String,
+  communityId: json['communityId'] as String?,
+  homeCountryCode: json['homeCountryCode'] as String?,
+  hostCountryCode: json['hostCountryCode'] as String?,
+  locationType: json['locationType'] as String?,
+  type: json['type'] as String,
+  name: json['name'] as String,
+  photoUrl: json['photoUrl'] as String?,
+  profileImage: json['profileImage'] == null
+      ? null
+      : ChatProfileImage.fromJson(json['profileImage'] as Map<String, dynamic>),
+  participants: (json['participants'] as List<dynamic>)
+      .map((e) => e as String)
+      .toList(),
+  admins: (json['admins'] as List<dynamic>?)?.map((e) => e as String).toList(),
+  createdBy: json['createdBy'] as String?,
+  lastMessage: json['lastMessage'] == null
+      ? null
+      : LastMessage.fromJson(json['lastMessage'] as Map<String, dynamic>),
+  createdAt: (json['createdAt'] as num).toInt(),
+  updatedAt: (json['updatedAt'] as num).toInt(),
+  eventId: json['eventId'] as String?,
+  memberCount: (json['memberCount'] as num?)?.toInt(),
+  flag: json['flag'] as String?,
+  metadata: json['metadata'] as Map<String, dynamic>?,
+  description: json['description'] as String?,
+);
 
 Map<String, dynamic> _$ChatToJson(Chat instance) => <String, dynamic>{
-      'id': instance.id,
-      'communityId': instance.communityId,
-      'homeCountryCode': instance.homeCountryCode,
-      'hostCountryCode': instance.hostCountryCode,
-      'locationType': instance.locationType,
-      'type': instance.type,
-      'name': instance.name,
-      'photoUrl': instance.photoUrl,
-      'profileImage': instance.profileImage?.toJson(),
-      'participants': instance.participants,
-      'admins': instance.admins,
-      'createdBy': instance.createdBy,
-      'lastMessage': instance.lastMessage?.toJson(),
-      'createdAt': instance.createdAt,
-      'updatedAt': instance.updatedAt,
-      'eventId': instance.eventId,
-      'memberCount': instance.memberCount,
-      'flag': instance.flag,
-      'description': instance.description,
-      'metadata': instance.metadata,
-    };
+  'id': instance.id,
+  'communityId': instance.communityId,
+  'homeCountryCode': instance.homeCountryCode,
+  'hostCountryCode': instance.hostCountryCode,
+  'locationType': instance.locationType,
+  'type': instance.type,
+  'name': instance.name,
+  'photoUrl': instance.photoUrl,
+  'profileImage': instance.profileImage?.toJson(),
+  'participants': instance.participants,
+  'admins': instance.admins,
+  'createdBy': instance.createdBy,
+  'lastMessage': instance.lastMessage?.toJson(),
+  'createdAt': instance.createdAt,
+  'updatedAt': instance.updatedAt,
+  'eventId': instance.eventId,
+  'memberCount': instance.memberCount,
+  'flag': instance.flag,
+  'description': instance.description,
+  'metadata': instance.metadata,
+};

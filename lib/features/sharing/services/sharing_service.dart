@@ -2,22 +2,24 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
+import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
 
 class SharingService {
   SharingService._();
   static final SharingService instance = SharingService._();
 
   // Basic App Invite
-  Future<void> shareApp() async {
-    const appLink = 'https://diasporanearby.com/download';
-    const message =
+  Future<void> shareApp({String? referralCode}) async {
+    final appLink = referralCode != null && referralCode.isNotEmpty
+        ? 'https://diasporanearby.com/invite?code=$referralCode'
+        : 'https://diasporanearby.com/invite';
+    final message =
         'For my family and Friends at home and abroad. Join and connect with me in this platform.: $appLink';
 
     try {
       // Load logo from assets
-      final byteData = await rootBundle.load('assets/icons/logo-original.png');
+      final byteData = await rootBundle.load('assets/icons/logo-transparent-128.png');
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/logo.png');
       await file.writeAsBytes(
@@ -28,17 +30,20 @@ class SharingService {
       );
 
       // Share image + text
-      await Share.shareXFiles([XFile(file.path)], text: message);
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: message),
+      );
     } catch (e) {
       // Fallback to text only if image fails
-      await Share.share(message);
+      await SharePlus.instance.share(ShareParams(text: message));
     }
   }
 
   // Share Event
-  Future<void> shareEvent(Event event) async {
-    // In a real app, this would be a dynamic link like https://diasporanearby.com/events/${event.id}
-    final eventLink = 'https://diasporanearby.com/events/${event.id}';
+  Future<void> shareEvent(Event event, {String? referralCode}) async {
+    final eventLink = referralCode != null && referralCode.isNotEmpty
+        ? 'https://diasporanearby.com/invite?code=$referralCode'
+        : 'https://diasporanearby.com/invite';
 
     final StringBuffer sb = StringBuffer();
     sb.writeln('Check out this event: ${event.title}');
@@ -47,19 +52,17 @@ class SharingService {
     sb.writeln('');
     sb.writeln('Join us on Diaspora Nearby: $eventLink');
 
-    await Share.share(sb.toString(), subject: event.title);
+    await SharePlus.instance.share(
+      ShareParams(text: sb.toString(), subject: event.title),
+    );
   }
 
   // Share to WhatsApp directly
   Future<void> shareToWhatsApp(String message) async {
-    final encodedMessage = Uri.encodeComponent(message);
-    final url = Uri.parse('whatsapp://send?text=$encodedMessage');
-
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    } else {
+    final success = await WhatsAppUtils.shareText(message);
+    if (!success) {
       // Fallback to generic share if WhatsApp not installed
-      await Share.share(message);
+      await SharePlus.instance.share(ShareParams(text: message));
     }
   }
 }

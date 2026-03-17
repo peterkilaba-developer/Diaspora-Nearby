@@ -10,15 +10,13 @@ import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.
 import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/screens/marketplace_screen.dart'
     show categoryIcon;
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
-import 'package:diaspora_nearby/features/dsp/screens/points_system_screen.dart'
-    show userPointsStreamProvider;
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'package:diaspora_nearby/features/marketplace/data/vehicle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/data/motorcycle_data.dart';
 import 'package:diaspora_nearby/features/marketplace/services/vin_decoder_service.dart';
+import 'package:diaspora_nearby/features/travel/widgets/vin_scanner_widget.dart';
 import 'package:diaspora_nearby/features/marketplace/data/electronics_data.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
@@ -31,7 +29,11 @@ class CreateListingScreen extends ConsumerStatefulWidget {
   final MarketplaceListing? existingListing;
   final String? defaultListingType;
 
-  const CreateListingScreen({super.key, this.existingListing, this.defaultListingType});
+  const CreateListingScreen({
+    super.key,
+    this.existingListing,
+    this.defaultListingType,
+  });
 
   @override
   ConsumerState<CreateListingScreen> createState() =>
@@ -67,11 +69,20 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   String? _vehicleFuelType;
   String? _vehicleBodyType;
   String? _vehicleDriveType;
-  String? _vehicleEngineSize;   // e.g. "2.5L 4-cyl"
-  String? _vehicleHP;           // e.g. "203"
-  String? _vehicleEngineLabel;   // compact e.g. "1.5L I4"
-  String? _vehicleDoors;        // e.g. "4"
+  String? _vehicleEngineSize; // e.g. "2.5L 4-cyl"
+  String? _vehicleHP; // e.g. "203"
+  String? _vehicleEngineLabel; // compact e.g. "1.5L I4"
+  String? _vehicleDoors; // e.g. "4"
   String? _vehiclePlantCountry; // e.g. "JAPAN"
+  String? _vehiclePlantCity;
+  String? _vehicleTrim;
+  String? _vehicleSeries;
+  String? _vehicleAbs;
+  String? _vehicleAirbagLocations;
+  String? _vehicleGvwr;
+  String? _vehicleType;
+  String? _vehicleElectrificationType;
+  String? _vehicleBatteryKWh;
   bool _vinLookupLoading = false;
 
   // Contextual fields — Motorcycles
@@ -111,7 +122,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   // Contextual fields — Jobs
   final _jobCompanyController = TextEditingController();
-  String? _jobCompanyPlaceId; // from Google Places establishment search
   String? _jobEmploymentType;
   final _jobSalaryController = TextEditingController();
   String? _jobExperienceLevel;
@@ -158,8 +168,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           listing.vehicleDetails!['mileage']?.toString() ?? '';
       _vehicleVinController.text =
           listing.vehicleDetails!['vin']?.toString() ?? '';
-      _vehicleTransmission =
-          listing.vehicleDetails!['transmission'] as String?;
+      _vehicleTransmission = listing.vehicleDetails!['transmission'] as String?;
       _vehicleFuelType = listing.vehicleDetails!['fuelType'] as String?;
       _vehicleBodyType = listing.vehicleDetails!['bodyType'] as String?;
       _vehicleDriveType = listing.vehicleDetails!['driveType'] as String?;
@@ -167,8 +176,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _vehicleHP = listing.vehicleDetails!['horsepower'] as String?;
       _vehicleEngineLabel = listing.vehicleDetails!['engineLabel'] as String?;
       _vehicleDoors = listing.vehicleDetails!['doors'] as String?;
-      _vehiclePlantCountry =
-          listing.vehicleDetails!['plantCountry'] as String?;
+      _vehiclePlantCountry = listing.vehicleDetails!['plantCountry'] as String?;
+      _vehiclePlantCity = listing.vehicleDetails!['plantCity'] as String?;
+      _vehicleTrim = listing.vehicleDetails!['trim'] as String?;
+      _vehicleSeries = listing.vehicleDetails!['series'] as String?;
+      _vehicleAbs = listing.vehicleDetails!['abs'] as String?;
+      _vehicleAirbagLocations = listing.vehicleDetails!['airbagLocations'] as String?;
+      _vehicleGvwr = listing.vehicleDetails!['gvwr'] as String?;
+      _vehicleType = listing.vehicleDetails!['vehicleType'] as String?;
+      _vehicleElectrificationType = listing.vehicleDetails!['electrificationType'] as String?;
+      _vehicleBatteryKWh = listing.vehicleDetails!['batteryKWh'] as String?;
     }
 
     // Car parts details
@@ -188,10 +205,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
     // Real estate details
     if (listing.realEstateDetails != null) {
-      _realEstateBedrooms =
-          listing.realEstateDetails!['bedrooms'] as String?;
-      _realEstateBathrooms =
-          listing.realEstateDetails!['bathrooms'] as String?;
+      _realEstateBedrooms = listing.realEstateDetails!['bedrooms'] as String?;
+      _realEstateBathrooms = listing.realEstateDetails!['bathrooms'] as String?;
       _realEstateSqftController.text =
           listing.realEstateDetails!['sqft']?.toString() ?? '';
       _realEstateType = listing.realEstateDetails!['type'] as String?;
@@ -203,22 +218,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
     // Electronics details
     if (listing.electronicsDetails != null) {
-      _electronicsBrand =
-          listing.electronicsDetails!['brand'] as String?;
-      _electronicsModel =
-          listing.electronicsDetails!['model'] as String?;
-      _electronicsStorage =
-          listing.electronicsDetails!['storage'] as String?;
+      _electronicsBrand = listing.electronicsDetails!['brand'] as String?;
+      _electronicsModel = listing.electronicsDetails!['model'] as String?;
+      _electronicsStorage = listing.electronicsDetails!['storage'] as String?;
     }
 
     // Service details
     if (listing.serviceDetails != null) {
-      _serviceExperience =
-          listing.serviceDetails!['experience'] as String?;
-      _serviceAvailability =
-          listing.serviceDetails!['availability'] as String?;
-      _serviceAreaDisplay =
-          listing.serviceDetails!['serviceArea'] as String?;
+      _serviceExperience = listing.serviceDetails!['experience'] as String?;
+      _serviceAvailability = listing.serviceDetails!['availability'] as String?;
+      _serviceAreaDisplay = listing.serviceDetails!['serviceArea'] as String?;
       _serviceAreaPlaceId =
           listing.serviceDetails!['serviceAreaPlaceId'] as String?;
     }
@@ -227,15 +236,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     if (listing.jobDetails != null) {
       _jobCompanyController.text =
           listing.jobDetails!['companyName']?.toString() ?? '';
-      _jobEmploymentType =
-          listing.jobDetails!['employmentType'] as String?;
+      _jobEmploymentType = listing.jobDetails!['employmentType'] as String?;
       _jobSalaryController.text =
           listing.jobDetails!['salaryRange']?.toString() ?? '';
-      _jobExperienceLevel =
-          listing.jobDetails!['experienceLevel'] as String?;
+      _jobExperienceLevel = listing.jobDetails!['experienceLevel'] as String?;
       _jobWorkMode = listing.jobDetails!['workMode'] as String?;
-      final deadlineStr =
-          listing.jobDetails!['applicationDeadline'] as String?;
+      final deadlineStr = listing.jobDetails!['applicationDeadline'] as String?;
       if (deadlineStr != null && deadlineStr.isNotEmpty) {
         _jobDeadline = DateTime.tryParse(deadlineStr);
       }
@@ -276,7 +282,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final profile = ref.watch(userProfileProvider).valueOrNull;
 
     // [COMMENTED] Gate: must be a verified business — re-add later
     // if (profile?.businessProfile?.isBusinessVerified != true) {
@@ -310,8 +315,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     //   );
     // }
 
-
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -326,10 +329,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             child: Center(
               child: Text(
                 'Step ${_currentStep + 1} of 3',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.hintColor,
-                ),
+                style: TextStyle(fontSize: 12, color: theme.hintColor),
               ),
             ),
           ),
@@ -343,10 +343,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             LinearProgressIndicator(
               value: (_currentStep + 1) / 3,
               backgroundColor: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.black.withOpacity(0.04),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.04),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
               minHeight: 3,
             ),
 
@@ -357,8 +356,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 child: _currentStep == 0
                     ? _buildStep1TypeCategory(theme, isDark)
                     : _currentStep == 1
-                        ? _buildStep2Details(theme, isDark)
-                        : _buildStep3ImagesContact(theme, isDark),
+                    ? _buildStep2Details(theme, isDark)
+                    : _buildStep3ImagesContact(theme, isDark),
               ),
             ),
 
@@ -380,8 +379,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         return _listingType == ListingType.job
             ? 'Job Details'
             : _listingType == ListingType.service
-                ? 'Service Details'
-                : 'Listing Details';
+            ? 'Service Details'
+            : 'Listing Details';
       case 2:
         return _listingType == ListingType.job
             ? 'Images & Contact'
@@ -396,8 +395,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     final categories = _listingType == ListingType.service
         ? MarketplaceCategory.serviceCategories
         : _listingType == ListingType.job
-            ? MarketplaceCategory.jobCategories
-            : MarketplaceCategory.productCategories;
+        ? MarketplaceCategory.jobCategories
+        : MarketplaceCategory.productCategories;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,10 +482,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 duration: const Duration(milliseconds: 200),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : isDark
-                          ? Colors.white.withOpacity(0.03)
-                          : Colors.black.withOpacity(0.02),
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : Colors.black.withValues(alpha: 0.02),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
@@ -497,18 +496,21 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                       size: 24,
                       color: isSelected
                           ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withOpacity(0.35),
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.35),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       MarketplaceCategory.displayName(cat),
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                         color: isSelected
                             ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withOpacity(0.6),
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                       ),
                       textAlign: TextAlign.center,
                       maxLines: 2,
@@ -529,36 +531,44 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: MarketplaceCategory.subcategories(_selectedCategory!)
-                .map((sub) {
-              final isSelected = _selectedSubcategory == sub;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedSubcategory = sub),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
-                        : isDark
-                            ? Colors.white.withOpacity(0.04)
-                            : Colors.black.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    sub,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
+            children: MarketplaceCategory.subcategories(_selectedCategory!).map(
+              (sub) {
+                final isSelected = _selectedSubcategory == sub;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedSubcategory = sub),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
                       color: isSelected
-                          ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withOpacity(0.6),
+                          ? AppTheme.accent.withValues(
+                              alpha: isDark ? 0.25 : 0.12,
+                            )
+                          : isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      sub,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected
+                            ? AppTheme.accent
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              },
+            ).toList(),
           ),
         ],
 
@@ -568,8 +578,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           _listingType == ListingType.job
               ? 'Where is this job?'
               : _listingType == ListingType.service
-                  ? 'Where do you provide this service?'
-                  : 'Where are you selling?',
+              ? 'Where do you provide this service?'
+              : 'Where are you selling?',
           theme,
         ),
         const SizedBox(height: 8),
@@ -607,7 +617,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   // ─── STEP 2: Details (Contextual) ─────────────────────────────────────
   Widget _buildStep2Details(ThemeData theme, bool isDark) {
-    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final profile = ref.watch(userProfileProvider).value;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -621,18 +631,21 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(isDark ? 0.08 : 0.05),
+              color: AppTheme.accent.withValues(alpha: isDark ? 0.08 : 0.05),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Listing Title',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.accent,
-                        letterSpacing: 0.5)),
+                const Text(
+                  'Listing Title',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.accent,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   _generateTitle(),
@@ -656,8 +669,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           _listingType == ListingType.job
               ? 'Job Description'
               : _listingType == ListingType.service
-                  ? 'Service Description'
-                  : 'Item Description',
+              ? 'Service Description'
+              : 'Item Description',
           theme,
         ),
         const SizedBox(height: 8),
@@ -666,8 +679,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           hint: _listingType == ListingType.job
               ? 'Describe the role, responsibilities, and requirements...'
               : _listingType == ListingType.service
-                  ? 'Describe your service, what you offer, and how it works...'
-                  : 'Describe your item in detail...',
+              ? 'Describe your service, what you offer, and how it works...'
+              : 'Describe your item in detail...',
           maxLines: 4,
           maxLength: 2000,
           theme: theme,
@@ -681,8 +694,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           _listingType == ListingType.job
               ? 'Salary (${CurrencyHelper.currencyCode(profile?.hostCountryCode)})'
               : _listingType == ListingType.service
-                  ? 'Rate (${CurrencyHelper.currencyCode(profile?.hostCountryCode)})'
-                  : 'Price (${CurrencyHelper.currencyCode(profile?.hostCountryCode)})',
+              ? 'Rate (${CurrencyHelper.currencyCode(profile?.hostCountryCode)})'
+              : 'Price (${CurrencyHelper.currencyCode(profile?.hostCountryCode)})',
           theme,
         ),
         const SizedBox(height: 8),
@@ -710,8 +723,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   final label = _listingType == ListingType.job
                       ? 'Salary'
                       : _listingType == ListingType.service
-                          ? 'Rate'
-                          : 'Price';
+                      ? 'Rate'
+                      : 'Price';
                   if (v == null || v.isEmpty) return '$label is required';
                   if (double.tryParse(v) == null) return 'Invalid amount';
                   return null;
@@ -720,27 +733,30 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             ),
             const SizedBox(width: 12),
             GestureDetector(
-              onTap: () =>
-                  setState(() => _priceNegotiable = !_priceNegotiable),
+              onTap: () => setState(() => _priceNegotiable = !_priceNegotiable),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: _priceNegotiable
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(LucideIcons.tag,
-                        size: 12,
-                        color: _priceNegotiable
-                            ? AppTheme.accent
-                            : theme.hintColor),
+                    Icon(
+                      LucideIcons.tag,
+                      size: 12,
+                      color: _priceNegotiable
+                          ? AppTheme.accent
+                          : theme.hintColor,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Negotiable',
@@ -769,40 +785,48 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              ItemCondition.brandNew,
-              ItemCondition.likeNew,
-              ItemCondition.usedGood,
-              ItemCondition.usedFair,
-            ].map((c) {
-              final isSelected = _condition == c;
-              return GestureDetector(
-                onTap: () => setState(() => _condition = c),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-                        : isDark
-                            ? Colors.white.withOpacity(0.04)
-                            : Colors.black.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    ItemCondition.displayName(c),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected
-                          ? AppTheme.accent
-                          : theme.colorScheme.onSurface.withOpacity(0.6),
+            children:
+                [
+                  ItemCondition.brandNew,
+                  ItemCondition.likeNew,
+                  ItemCondition.usedGood,
+                  ItemCondition.usedFair,
+                ].map((c) {
+                  final isSelected = _condition == c;
+                  return GestureDetector(
+                    onTap: () => setState(() => _condition = c),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.accent.withValues(
+                                alpha: isDark ? 0.2 : 0.1,
+                              )
+                            : isDark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : Colors.black.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        ItemCondition.displayName(c),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? AppTheme.accent
+                              : theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              );
-            }).toList(),
+                  );
+                }).toList(),
           ),
         ],
       ],
@@ -841,7 +865,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               maxLength: 120,
               theme: theme,
               isDark: isDark,
-              validator: (v) => v == null || v.isEmpty ? 'Title is required' : null,
+              validator: (v) =>
+                  v == null || v.isEmpty ? 'Title is required' : null,
             ),
           ],
         );
@@ -850,9 +875,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   // ── Vehicle-specific fields ─────────────────────────────────────────
   Widget _buildVehicleFields(ThemeData theme, bool isDark) {
-    final models = _vehicleMake != null
+    // Build model list: static data + VIN-decoded model if not already present
+    var models = _vehicleMake != null
         ? VehicleData.getModels(_vehicleMake!)
         : <String>[];
+    if (_vehicleModel != null &&
+        !models.any((m) => m.toLowerCase() == _vehicleModel!.toLowerCase())) {
+      models = [_vehicleModel!, ...models];
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,7 +898,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         _buildSearchableDropdown(
           label: 'Make',
           value: _vehicleMake,
-          items: VehicleData.brands,
+          items: _vehicleMake != null &&
+              !VehicleData.brands.any(
+                  (b) => b.toLowerCase() == _vehicleMake!.toLowerCase())
+              ? [_vehicleMake!, ...VehicleData.brands]
+              : VehicleData.brands,
           hint: 'Select brand',
           theme: theme,
           isDark: isDark,
@@ -915,8 +949,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Mileage',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+                  Text(
+                    'Mileage',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.hintColor,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   _buildTextField(
                     controller: _vehicleMileageController,
@@ -933,8 +973,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 16),
 
         // ── Transmission (own row) ──
-        Text('Transmission',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Transmission',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -943,20 +989,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             return GestureDetector(
               onTap: () => setState(() => _vehicleTransmission = t),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   t,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -967,8 +1018,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 16),
 
         // ── Fuel type (own row) ──
-        Text('Fuel Type',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Fuel Type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -977,20 +1034,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             return GestureDetector(
               onTap: () => setState(() => _vehicleFuelType = f),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   f,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -1001,43 +1063,73 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 16),
 
         // ── Body Type (own row) ──
-        Text('Body Type',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Body Type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
           runSpacing: 6,
-          children: ['Sedan', 'SUV', 'Hatchback', 'Coupe', 'Pickup', 'Van', 'Wagon', 'Convertible', 'Crossover'].map((b) {
-            final isSelected = _vehicleBodyType == b;
-            return GestureDetector(
-              onTap: () => setState(() => _vehicleBodyType = b),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
-                      : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  b,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? AppTheme.accent : theme.hintColor,
+          children:
+              [
+                'Sedan',
+                'SUV',
+                'Hatchback',
+                'Coupe',
+                'Pickup',
+                'Van',
+                'Wagon',
+                'Convertible',
+                'Crossover',
+              ].map((b) {
+                final isSelected = _vehicleBodyType == b;
+                return GestureDetector(
+                  onTap: () => setState(() => _vehicleBodyType = b),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.accent.withValues(
+                              alpha: isDark ? 0.25 : 0.12,
+                            )
+                          : isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      b,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected ? AppTheme.accent : theme.hintColor,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+                );
+              }).toList(),
         ),
         const SizedBox(height: 16),
 
         // ── Drive Type (own row) ──
-        Text('Drive Type',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Drive Type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -1046,20 +1138,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             return GestureDetector(
               onTap: () => setState(() => _vehicleDriveType = d),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   d,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -1074,8 +1171,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             _vehicleDoors != null ||
             _vehiclePlantCountry != null) ...[
           const SizedBox(height: 16),
-          Text('Specs from VIN',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+          Text(
+            'Specs from VIN',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: theme.hintColor,
+            ),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
@@ -1086,9 +1189,72 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               if (_vehicleHP != null)
                 _buildInfoChip(LucideIcons.zap, '$_vehicleHP hp', isDark),
               if (_vehicleDoors != null)
-                _buildInfoChip(LucideIcons.doorOpen, '$_vehicleDoors doors', isDark),
+                _buildInfoChip(
+                  LucideIcons.doorOpen,
+                  '$_vehicleDoors doors',
+                  isDark,
+                ),
               if (_vehiclePlantCountry != null)
-                _buildInfoChip(LucideIcons.factory, _vehiclePlantCountry!, isDark),
+                _buildInfoChip(
+                  LucideIcons.factory,
+                  _vehiclePlantCountry!,
+                  isDark,
+                ),
+            ],
+          ),
+        ],
+
+        // ── VIN-decoded extended info ──
+        if (_vehicleTrim != null || _vehicleSeries != null ||
+            _vehicleAbs != null || _vehicleAirbagLocations != null ||
+            _vehicleGvwr != null || _vehicleType != null ||
+            _vehicleElectrificationType != null ||
+            _vehicleBatteryKWh != null ||
+            _vehiclePlantCity != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            'VIN Details',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: theme.hintColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (_vehicleTrim != null)
+                _buildInfoChip(LucideIcons.star,
+                  'Trim: $_vehicleTrim', isDark),
+              if (_vehicleSeries != null)
+                _buildInfoChip(LucideIcons.layers,
+                  'Series: $_vehicleSeries', isDark),
+              if (_vehicleType != null)
+                _buildInfoChip(LucideIcons.car,
+                  '$_vehicleType', isDark),
+              if (_vehicleAbs != null)
+                _buildInfoChip(LucideIcons.shieldCheck,
+                  'ABS: $_vehicleAbs', isDark),
+              if (_vehicleAirbagLocations != null)
+                _buildInfoChip(LucideIcons.shieldAlert,
+                  'Airbags: $_vehicleAirbagLocations', isDark),
+              if (_vehicleGvwr != null)
+                _buildInfoChip(LucideIcons.scale,
+                  'GVWR: $_vehicleGvwr', isDark),
+              if (_vehicleElectrificationType != null)
+                _buildInfoChip(LucideIcons.batteryCharging,
+                  '$_vehicleElectrificationType', isDark),
+              if (_vehicleBatteryKWh != null)
+                _buildInfoChip(LucideIcons.battery,
+                  '$_vehicleBatteryKWh kWh', isDark),
+              if (_vehiclePlantCity != null && _vehiclePlantCountry != null)
+                _buildInfoChip(LucideIcons.mapPin,
+                  'Made in $_vehiclePlantCity, $_vehiclePlantCountry', isDark)
+              else if (_vehiclePlantCity != null)
+                _buildInfoChip(LucideIcons.mapPin,
+                  'Made in $_vehiclePlantCity', isDark),
             ],
           ),
         ],
@@ -1098,27 +1264,30 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Widget _buildInfoChip(IconData icon, String label, bool isDark) {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 300),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : Colors.black.withOpacity(0.04),
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.accent.withOpacity(0.15),
-        ),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: AppTheme.accent),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.accent,
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.accent,
+              ),
             ),
           ),
         ],
@@ -1189,8 +1358,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Mileage',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+                  Text(
+                    'Mileage',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.hintColor,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   _buildTextField(
                     controller: _motorcycleMileageController,
@@ -1207,8 +1382,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 16),
 
         // ── Engine Size ──
-        Text('Engine Size',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Engine Size',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -1218,20 +1399,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             return GestureDetector(
               onTap: () => setState(() => _motorcycleEngineSize = e),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   e,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -1242,8 +1428,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 16),
 
         // ── Motorcycle Type ──
-        Text('Motorcycle Type',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Motorcycle Type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -1253,20 +1445,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             return GestureDetector(
               onTap: () => setState(() => _motorcycleType = t),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   t,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -1356,15 +1553,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('VIN',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+                  Text(
+                    'VIN',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: theme.hintColor,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   _buildTextField(
                     controller: _partVinController,
                     hint: 'VIN (17 chars)',
                     theme: theme,
                     isDark: isDark,
-                    prefix: Icon(LucideIcons.fingerprint, size: 16, color: theme.hintColor),
+                    prefix: Icon(
+                      LucideIcons.fingerprint,
+                      size: 16,
+                      color: theme.hintColor,
+                    ),
                     maxLength: 17,
                   ),
                 ],
@@ -1380,13 +1587,74 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     );
   }
 
-  /// VIN lookup field with auto-fill button for vehicle form
+  /// VIN lookup field with scanner and auto-fill button for vehicle form
   Widget _buildVinLookupField(ThemeData theme, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('VIN Lookup',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        // ── VIN Scanner button ──
+        GestureDetector(
+          onTap: _scanVin,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.accent.withValues(alpha: isDark ? 0.15 : 0.08),
+                  AppTheme.accent.withValues(alpha: isDark ? 0.08 : 0.04),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppTheme.accent.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(LucideIcons.focus, size: 20,
+                    color: AppTheme.accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Scan VIN Number', style: GoogleFonts.outfit(
+                        fontSize: 14, fontWeight: FontWeight.w600,
+                        color: AppTheme.accent,
+                      )),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Scan barcode on door panel or photo of paperwork',
+                        style: TextStyle(fontSize: 11,
+                          color: theme.hintColor),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(LucideIcons.chevronRight, size: 18,
+                  color: AppTheme.accent.withValues(alpha: 0.6)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // ── VIN text field + lookup button ──
+        Text(
+          'VIN Lookup',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1397,7 +1665,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 hint: 'Enter 17-character VIN',
                 theme: theme,
                 isDark: isDark,
-                prefix: Icon(LucideIcons.fingerprint, size: 16, color: theme.hintColor),
+                prefix: Icon(
+                  LucideIcons.fingerprint,
+                  size: 16,
+                  color: theme.hintColor,
+                ),
                 maxLength: 17,
               ),
             ),
@@ -1405,7 +1677,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             SizedBox(
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: _vinLookupLoading || _vehicleVinController.text.trim().length != 17
+                onPressed:
+                    _vinLookupLoading ||
+                        _vehicleVinController.text.trim().length != 17
                     ? null
                     : () => _lookupVin(),
                 icon: _vinLookupLoading
@@ -1491,23 +1765,53 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 (m) => m.toLowerCase() == result.model!.toLowerCase(),
                 orElse: () => '',
               );
-              if (matchedModel.isNotEmpty) {
-                _vehicleModel = matchedModel;
-              }
+              // Use matched model from static data, or fall back to API model
+              _vehicleModel = matchedModel.isNotEmpty
+                  ? matchedModel
+                  : result.model;
             }
+          } else {
+            // Brand not in static data — use raw API values
+            _vehicleMake = result.make;
+            _vehicleModel = result.model;
           }
         }
 
         if (result.year != null) _vehicleYear = result.year;
-        if (result.transmission != null) _vehicleTransmission = result.transmission;
+        if (result.transmission != null) {
+          _vehicleTransmission = result.transmission;
+        }
         if (result.fuelType != null) _vehicleFuelType = result.fuelType;
         if (result.bodyClass != null) _vehicleBodyType = result.bodyClass;
         if (result.driveType != null) _vehicleDriveType = result.driveType;
-        if (result.engineDescription != null) _vehicleEngineSize = result.engineDescription;
-        if (result.compactEngineLabel != null) _vehicleEngineLabel = result.compactEngineLabel;
+        if (result.engineDescription != null) {
+          _vehicleEngineSize = result.engineDescription;
+        }
+        if (result.compactEngineLabel != null) {
+          _vehicleEngineLabel = result.compactEngineLabel;
+        }
         if (result.engineHP != null) _vehicleHP = result.engineHP;
         if (result.doors != null) _vehicleDoors = result.doors;
-        if (result.plantCountry != null) _vehiclePlantCountry = result.plantCountry;
+        if (result.plantCountry != null) {
+          _vehiclePlantCountry = result.plantCountry;
+        }
+        if (result.plantCity != null) {
+          _vehiclePlantCity = result.plantCity;
+        }
+        if (result.trim != null) _vehicleTrim = result.trim;
+        if (result.series != null) _vehicleSeries = result.series;
+        if (result.abs != null) _vehicleAbs = result.abs;
+        if (result.airbagLocations != null) {
+          _vehicleAirbagLocations = result.airbagLocations;
+        }
+        if (result.gvwr != null) _vehicleGvwr = result.gvwr;
+        if (result.vehicleType != null) _vehicleType = result.vehicleType;
+        if (result.electrificationType != null) {
+          _vehicleElectrificationType = result.electrificationType;
+        }
+        if (result.batteryKWh != null) {
+          _vehicleBatteryKWh = result.batteryKWh;
+        }
       });
 
       // Show success
@@ -1521,10 +1825,16 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         if (result.engineDescription != null) filled.add('Engine');
         if (result.transmission != null) filled.add('Trans');
         if (result.fuelType != null) filled.add('Fuel');
+        if (result.trim != null) filled.add('Trim');
+        if (result.series != null) filled.add('Series');
+        if (result.abs != null) filled.add('ABS');
+        if (result.airbagLocations != null) filled.add('Airbags');
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Auto-filled ${filled.length} fields: ${filled.join(', ')}'),
+            content: Text(
+              'Auto-filled ${filled.length} fields: ${filled.join(', ')}',
+            ),
             backgroundColor: AppTheme.accent,
           ),
         );
@@ -1534,6 +1844,22 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         setState(() => _vinLookupLoading = false);
       }
     }
+  }
+
+  /// Opens VIN barcode/OCR scanner and auto-fills on scan
+  Future<void> _scanVin() async {
+    final result = await showVinScanner(context);
+    if (result == null || !mounted) return;
+
+    _vehicleVinController.text = result.vin;
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('VIN captured via ${result.source}: ${result.vin}'),
+      backgroundColor: AppTheme.accent,
+    ));
+
+    // Auto-trigger lookup
+    _lookupVin();
   }
 
   /// Autocomplete chip builder for compatible car models
@@ -1549,8 +1875,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Also Fits',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Also Fits',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 4),
 
         // Chips
@@ -1560,7 +1892,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             runSpacing: 6,
             children: _compatibleModels.map((model) {
               return Container(
-                padding: const EdgeInsets.only(left: 10, right: 4, top: 4, bottom: 4),
+                padding: const EdgeInsets.only(
+                  left: 10,
+                  right: 4,
+                  top: 4,
+                  bottom: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -1581,8 +1918,13 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     ),
                     const SizedBox(width: 2),
                     GestureDetector(
-                      onTap: () => setState(() => _compatibleModels.remove(model)),
-                      child: Icon(LucideIcons.x, size: 14, color: AppTheme.accent.withValues(alpha: 0.7)),
+                      onTap: () =>
+                          setState(() => _compatibleModels.remove(model)),
+                      child: Icon(
+                        LucideIcons.x,
+                        size: 14,
+                        color: AppTheme.accent.withValues(alpha: 0.7),
+                      ),
                     ),
                   ],
                 ),
@@ -1605,8 +1947,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.06)
-                  : Colors.black.withOpacity(0.03),
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -1617,10 +1959,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   _compatibleModels.isEmpty
                       ? 'Add compatible models...'
                       : 'Add more models...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.hintColor,
-                  ),
+                  style: TextStyle(fontSize: 14, color: theme.hintColor),
                 ),
               ],
             ),
@@ -1674,27 +2013,33 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 4),
         GestureDetector(
           onTap: enabled
               ? () => _showSearchableBottomSheet(
-                    context: context,
-                    title: 'Select $label',
-                    items: items,
-                    onSelected: onChanged,
-                    theme: theme,
-                    isDark: isDark,
-                  )
+                  context: context,
+                  title: 'Select $label',
+                  items: items,
+                  onSelected: onChanged,
+                  theme: theme,
+                  isDark: isDark,
+                )
               : null,
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(enabled ? 0.06 : 0.02)
-                  : Colors.black.withOpacity(enabled ? 0.03 : 0.01),
+                  ? Colors.white.withValues(alpha: enabled ? 0.06 : 0.02)
+                  : Colors.black.withValues(alpha: enabled ? 0.03 : 0.01),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -1706,13 +2051,19 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                       fontSize: 14,
                       color: value != null
                           ? theme.colorScheme.onSurface
-                          : theme.hintColor.withOpacity(enabled ? 1.0 : 0.4),
+                          : theme.hintColor.withValues(
+                              alpha: enabled ? 1.0 : 0.4,
+                            ),
                     ),
                   ),
                 ),
-                Icon(LucideIcons.chevronDown,
-                    size: 16,
-                    color: enabled ? theme.hintColor : theme.hintColor.withOpacity(0.3)),
+                Icon(
+                  LucideIcons.chevronDown,
+                  size: 16,
+                  color: enabled
+                      ? theme.hintColor
+                      : theme.hintColor.withValues(alpha: 0.3),
+                ),
               ],
             ),
           ),
@@ -1747,7 +2098,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       ),
     );
   }
-
 
   // ── Real Estate specific fields ─────────────────────────────────────
   Widget _buildRealEstateFields(ThemeData theme, bool isDark) {
@@ -1791,7 +2141,19 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               child: _buildSearchableDropdown(
                 label: 'Bedrooms',
                 value: _realEstateBedrooms,
-                items: const ['Studio', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'],
+                items: const [
+                  'Studio',
+                  '1',
+                  '2',
+                  '3',
+                  '4',
+                  '5',
+                  '6',
+                  '7',
+                  '8',
+                  '9',
+                  '10+',
+                ],
                 hint: 'Bedrooms',
                 theme: theme,
                 isDark: isDark,
@@ -1872,7 +2234,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           label: 'Model',
           value: _electronicsModel,
           items: models,
-          hint: _electronicsBrand == null ? 'Select brand first' : 'Select model',
+          hint: _electronicsBrand == null
+              ? 'Select brand first'
+              : 'Select model',
           theme: theme,
           isDark: isDark,
           enabled: _electronicsBrand != null,
@@ -1881,8 +2245,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         const SizedBox(height: 16),
 
         // ── Storage chips ──
-        Text('Storage',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          'Storage',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -1892,20 +2262,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             return GestureDetector(
               onTap: () => setState(() => _electronicsStorage = s),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   s,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -1939,9 +2314,19 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           label: 'Experience',
           value: _serviceExperience,
           items: const [
-            'Less than 1 year', '1 year', '2 years', '3 years',
-            '4 years', '5 years', '6 years', '7 years', '8 years',
-            '9 years', '10 years', '15 years', '20+ years',
+            'Less than 1 year',
+            '1 year',
+            '2 years',
+            '3 years',
+            '4 years',
+            '5 years',
+            '6 years',
+            '7 years',
+            '8 years',
+            '9 years',
+            '10 years',
+            '15 years',
+            '20+ years',
           ],
           hint: 'Years of experience',
           theme: theme,
@@ -1964,45 +2349,53 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         ),
         const SizedBox(height: 12),
 
-        Text('Availability',
-            style: TextStyle(fontSize: 11, color: theme.hintColor)),
+        Text(
+          'Availability',
+          style: TextStyle(fontSize: 11, color: theme.hintColor),
+        ),
         const SizedBox(height: 4),
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: [
-            'Weekdays',
-            'Weekends',
-            'Evenings',
-            'Flexible',
-            'By Appointment',
-          ].map((a) {
-            final isSelected = _serviceAvailability == a;
-            return GestureDetector(
-              onTap: () => setState(() => _serviceAvailability = a),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-                      : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  a,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? AppTheme.accent : theme.hintColor,
+          children:
+              [
+                'Weekdays',
+                'Weekends',
+                'Evenings',
+                'Flexible',
+                'By Appointment',
+              ].map((a) {
+                final isSelected = _serviceAvailability == a;
+                return GestureDetector(
+                  onTap: () => setState(() => _serviceAvailability = a),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.accent.withValues(
+                              alpha: isDark ? 0.2 : 0.1,
+                            )
+                          : isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      a,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected ? AppTheme.accent : theme.hintColor,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+                );
+              }).toList(),
         ),
       ],
     );
@@ -2032,45 +2425,53 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           isDark: isDark,
         ),
         const SizedBox(height: 16),
-        Text('Employment Type',
-            style: TextStyle(fontSize: 11, color: theme.hintColor)),
+        Text(
+          'Employment Type',
+          style: TextStyle(fontSize: 11, color: theme.hintColor),
+        ),
         const SizedBox(height: 4),
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: [
-            'Full-time',
-            'Part-time',
-            'Contract',
-            'Freelance',
-            'Internship',
-          ].map((t) {
-            final isSelected = _jobEmploymentType == t;
-            return GestureDetector(
-              onTap: () => setState(() => _jobEmploymentType = t),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-                      : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  t,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? AppTheme.accent : theme.hintColor,
+          children:
+              [
+                'Full-time',
+                'Part-time',
+                'Contract',
+                'Freelance',
+                'Internship',
+              ].map((t) {
+                final isSelected = _jobEmploymentType == t;
+                return GestureDetector(
+                  onTap: () => setState(() => _jobEmploymentType = t),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.accent.withValues(
+                              alpha: isDark ? 0.2 : 0.1,
+                            )
+                          : isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      t,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected ? AppTheme.accent : theme.hintColor,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+                );
+              }).toList(),
         ),
         const SizedBox(height: 16),
         _buildSectionLabel('Salary Range', theme),
@@ -2082,79 +2483,88 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           isDark: isDark,
         ),
         const SizedBox(height: 16),
-        Text('Experience Required',
-            style: TextStyle(fontSize: 11, color: theme.hintColor)),
+        Text(
+          'Experience Required',
+          style: TextStyle(fontSize: 11, color: theme.hintColor),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: [
-            'Entry Level',
-            'Junior (1-2 yrs)',
-            'Mid-Level (3-5 yrs)',
-            'Senior (5-8 yrs)',
-            'Lead (8+ yrs)',
-            'Director / Executive',
-          ].map((e) {
-            final isSelected = _jobExperienceLevel == e;
-            return GestureDetector(
-              onTap: () => setState(() => _jobExperienceLevel = e),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-                      : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  e,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? AppTheme.accent : theme.hintColor,
+          children:
+              [
+                'Entry Level',
+                'Junior (1-2 yrs)',
+                'Mid-Level (3-5 yrs)',
+                'Senior (5-8 yrs)',
+                'Lead (8+ yrs)',
+                'Director / Executive',
+              ].map((e) {
+                final isSelected = _jobExperienceLevel == e;
+                return GestureDetector(
+                  onTap: () => setState(() => _jobExperienceLevel = e),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.accent.withValues(
+                              alpha: isDark ? 0.2 : 0.1,
+                            )
+                          : isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      e,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: isSelected ? AppTheme.accent : theme.hintColor,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+                );
+              }).toList(),
         ),
         const SizedBox(height: 16),
-        Text('Work Mode',
-            style: TextStyle(fontSize: 11, color: theme.hintColor)),
+        Text(
+          'Work Mode',
+          style: TextStyle(fontSize: 11, color: theme.hintColor),
+        ),
         const SizedBox(height: 4),
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: [
-            'Remote',
-            'On-site',
-            'Hybrid',
-          ].map((m) {
+          children: ['Remote', 'On-site', 'Hybrid'].map((m) {
             final isSelected = _jobWorkMode == m;
             return GestureDetector(
               onTap: () => setState(() => _jobWorkMode = m),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
                   m,
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected ? AppTheme.accent : theme.hintColor,
                   ),
                 ),
@@ -2163,8 +2573,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           }).toList(),
         ),
         const SizedBox(height: 16),
-        Text('Application Deadline',
-            style: TextStyle(fontSize: 11, color: theme.hintColor)),
+        Text(
+          'Application Deadline',
+          style: TextStyle(fontSize: 11, color: theme.hintColor),
+        ),
         const SizedBox(height: 6),
         GestureDetector(
           onTap: () async {
@@ -2190,8 +2602,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.06)
-                  : Colors.black.withOpacity(0.03),
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -2213,7 +2625,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 if (_jobDeadline != null)
                   GestureDetector(
                     onTap: () => setState(() => _jobDeadline = null),
-                    child: Icon(LucideIcons.x, size: 14, color: theme.hintColor),
+                    child: Icon(
+                      LucideIcons.x,
+                      size: 14,
+                      color: theme.hintColor,
+                    ),
                   ),
               ],
             ),
@@ -2227,11 +2643,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
   String _generateTitle() {
     switch (_selectedCategory) {
       case MarketplaceCategory.vehicles:
-        final parts = <String>[
-          ?_vehicleYear,
-          ?_vehicleMake,
-          ?_vehicleModel,
-        ];
+        final parts = <String>[?_vehicleYear, ?_vehicleMake, ?_vehicleModel];
         return parts.join(' ');
 
       case MarketplaceCategory.motorcycles:
@@ -2297,7 +2709,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: _selectedImages.length + 1,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               if (index == 0) {
                 return GestureDetector(
@@ -2306,8 +2718,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     width: 100,
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Column(
@@ -2344,8 +2756,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     top: 4,
                     right: 4,
                     child: GestureDetector(
-                      onTap: () => setState(
-                          () => _selectedImages.removeAt(index - 1)),
+                      onTap: () =>
+                          setState(() => _selectedImages.removeAt(index - 1)),
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -2375,59 +2787,89 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              {'id': 'pickup', 'label': 'Pickup', 'icon': LucideIcons.mapPin},
-              {'id': 'delivery', 'label': 'Delivery', 'icon': LucideIcons.truck},
-              {'id': 'shipping', 'label': 'Shipping', 'icon': LucideIcons.package},
-              {'id': 'digital', 'label': 'Digital', 'icon': LucideIcons.monitor},
-            ].map((opt) {
-              final isSelected = _deliveryOptions.contains(opt['id'] as String);
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (isSelected) {
-                      _deliveryOptions.remove(opt['id'] as String);
-                    } else {
-                      _deliveryOptions.add(opt['id']! as String);
-                    }
-                  });
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-                        : isDark
-                            ? Colors.white.withOpacity(0.04)
-                            : Colors.black.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(opt['icon'] as IconData,
-                          size: 13,
-                          color: isSelected
-                              ? AppTheme.accent
-                              : theme.colorScheme.onSurface.withOpacity(0.5)),
-                      const SizedBox(width: 5),
-                      Text(
-                        opt['label']! as String,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
-                          color: isSelected
-                              ? AppTheme.accent
-                              : theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
+            children:
+                [
+                  {
+                    'id': 'pickup',
+                    'label': 'Pickup',
+                    'icon': LucideIcons.mapPin,
+                  },
+                  {
+                    'id': 'delivery',
+                    'label': 'Delivery',
+                    'icon': LucideIcons.truck,
+                  },
+                  {
+                    'id': 'shipping',
+                    'label': 'Shipping',
+                    'icon': LucideIcons.package,
+                  },
+                  {
+                    'id': 'digital',
+                    'label': 'Digital',
+                    'icon': LucideIcons.monitor,
+                  },
+                ].map((opt) {
+                  final isSelected = _deliveryOptions.contains(
+                    opt['id'] as String,
+                  );
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          _deliveryOptions.remove(opt['id'] as String);
+                        } else {
+                          _deliveryOptions.add(opt['id']! as String);
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
                       ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.accent.withValues(
+                                alpha: isDark ? 0.2 : 0.1,
+                              )
+                            : isDark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : Colors.black.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            opt['icon'] as IconData,
+                            size: 13,
+                            color: isSelected
+                                ? AppTheme.accent
+                                : theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            opt['label']! as String,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? AppTheme.accent
+                                  : theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.6,
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
           ),
           const SizedBox(height: 24),
         ],
@@ -2437,59 +2879,88 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           _listingType == ListingType.job
               ? 'How should applicants reach you?'
               : _listingType == ListingType.service
-                  ? 'How should clients contact you?'
-                  : 'How should buyers contact you?',
+              ? 'How should clients contact you?'
+              : 'How should buyers contact you?',
           theme,
         ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: [
-            {'id': ContactMethod.chat, 'label': 'In-App Chat', 'icon': LucideIcons.messageCircle},
-            {'id': ContactMethod.phone, 'label': 'Phone', 'icon': LucideIcons.phone},
-            {'id': ContactMethod.whatsapp, 'label': 'WhatsApp', 'icon': LucideIcons.smartphone},
-            {'id': ContactMethod.email, 'label': 'Email', 'icon': LucideIcons.mail},
-          ].map((opt) {
-            final isSelected = _contactMethod == opt['id'];
-            return GestureDetector(
-              onTap: () => setState(() => _contactMethod = opt['id']! as String),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
-                      : isDark
-                          ? Colors.white.withOpacity(0.04)
-                          : Colors.black.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(opt['icon'] as IconData,
-                        size: 13,
-                        color: isSelected
-                            ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withOpacity(0.5)),
-                    const SizedBox(width: 5),
-                    Text(
-                      opt['label']! as String,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
-                        color: isSelected
-                            ? AppTheme.accent
-                            : theme.colorScheme.onSurface.withOpacity(0.6),
-                      ),
+          children:
+              [
+                {
+                  'id': ContactMethod.chat,
+                  'label': 'In-App Chat',
+                  'icon': LucideIcons.messageCircle,
+                },
+                {
+                  'id': ContactMethod.phone,
+                  'label': 'Phone',
+                  'icon': LucideIcons.phone,
+                },
+                {
+                  'id': ContactMethod.whatsapp,
+                  'label': 'WhatsApp',
+                  'icon': LucideIcons.smartphone,
+                },
+                {
+                  'id': ContactMethod.email,
+                  'label': 'Email',
+                  'icon': LucideIcons.mail,
+                },
+              ].map((opt) {
+                final isSelected = _contactMethod == opt['id'];
+                return GestureDetector(
+                  onTap: () =>
+                      setState(() => _contactMethod = opt['id']! as String),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
                     ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.accent.withValues(
+                              alpha: isDark ? 0.2 : 0.1,
+                            )
+                          : isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          opt['icon'] as IconData,
+                          size: 13,
+                          color: isSelected
+                              ? AppTheme.accent
+                              : theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.5,
+                                ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          opt['label']! as String,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? AppTheme.accent
+                                : theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
         ),
 
         const SizedBox(height: 24),
@@ -2502,18 +2973,18 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           hint: _listingType == ListingType.job
               ? 'e.g. remote, flutter, senior, startup (comma-separated)'
               : _listingType == ListingType.service
-                  ? 'e.g. plumbing, certified, 24hr, emergency (comma-separated)'
-                  : _selectedCategory == MarketplaceCategory.vehicles
-                      ? 'e.g. toyota, hilux, 4x4, diesel (comma-separated)'
-                      : _selectedCategory == MarketplaceCategory.carParts
-                          ? 'e.g. OEM, aftermarket, brake, engine, part-number (comma-separated)'
-                          : _selectedCategory == MarketplaceCategory.realEstate
-                          ? 'e.g. 3-bedroom, furnished, garden, garage (comma-separated)'
-                          : _selectedCategory == MarketplaceCategory.electronics
-                              ? 'e.g. iphone, 256gb, unlocked (comma-separated)'
-                              : _selectedCategory == MarketplaceCategory.fashion
-                                  ? 'e.g. handmade, silk, large, designer (comma-separated)'
-                                  : 'e.g. keyword1, keyword2 (comma-separated)',
+              ? 'e.g. plumbing, certified, 24hr, emergency (comma-separated)'
+              : _selectedCategory == MarketplaceCategory.vehicles
+              ? 'e.g. toyota, hilux, 4x4, diesel (comma-separated)'
+              : _selectedCategory == MarketplaceCategory.carParts
+              ? 'e.g. OEM, aftermarket, brake, engine, part-number (comma-separated)'
+              : _selectedCategory == MarketplaceCategory.realEstate
+              ? 'e.g. 3-bedroom, furnished, garden, garage (comma-separated)'
+              : _selectedCategory == MarketplaceCategory.electronics
+              ? 'e.g. iphone, 256gb, unlocked (comma-separated)'
+              : _selectedCategory == MarketplaceCategory.fashion
+              ? 'e.g. handmade, silk, large, designer (comma-separated)'
+              : 'e.g. keyword1, keyword2 (comma-separated)',
           theme: theme,
           isDark: isDark,
         ),
@@ -2527,8 +2998,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.02)
-            : Colors.black.withOpacity(0.01),
+            ? Colors.white.withValues(alpha: 0.02)
+            : Colors.black.withValues(alpha: 0.01),
       ),
       child: SafeArea(
         child: Row(
@@ -2540,7 +3011,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurface,
                     side: BorderSide(
-                      color: theme.colorScheme.onSurface.withOpacity(0.1),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -2610,15 +3081,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     }
   }
 
-
-
-
   Future<void> _submitListing() async {
     setState(() => _isSubmitting = true);
 
     try {
       final user = ref.read(authRepositoryProvider).currentUser;
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       if (user == null || profile == null) throw Exception('Not logged in');
 
       // Upload images
@@ -2626,8 +3094,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       for (int i = 0; i < _selectedImages.length; i++) {
         final file = File(_selectedImages[i].path);
         final storageRef = FirebaseStorage.instance.ref().child(
-              'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
-            );
+          'marketplace/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$i.jpg',
+        );
         await storageRef.putFile(file);
         final url = await storageRef.getDownloadURL();
         imageUrls.add(url);
@@ -2664,6 +3132,15 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           'horsepower': _vehicleHP,
           'doors': _vehicleDoors,
           'plantCountry': _vehiclePlantCountry,
+          'plantCity': _vehiclePlantCity,
+          'trim': _vehicleTrim,
+          'series': _vehicleSeries,
+          'abs': _vehicleAbs,
+          'airbagLocations': _vehicleAirbagLocations,
+          'gvwr': _vehicleGvwr,
+          'vehicleType': _vehicleType,
+          'electrificationType': _vehicleElectrificationType,
+          'batteryKWh': _vehicleBatteryKWh,
         };
       } else if (_selectedCategory == MarketplaceCategory.motorcycles) {
         motorcycleDetails = {
@@ -2759,8 +3236,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           country: profile.hostCountry,
           countryCode: profile.hostCountryCode,
         ),
-        deliveryOptions:
-            _deliveryOptions.isEmpty ? null : _deliveryOptions,
+        deliveryOptions: _deliveryOptions.isEmpty ? null : _deliveryOptions,
         contactMethod: _contactMethod,
         communityIds: profile.communityMemberships,
         expiresAt: DateTime.now().add(const Duration(days: 30)),
@@ -2782,21 +3258,23 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
           context.pop();
         }
       } else {
-
         final listingId = await repo.createListing(listing);
 
         // Create the public group chat for this listing
         try {
-          await ref.read(chatRepositoryProvider).createListingChat(
-            otherUserId: user.uid, // Seller is the creator/admin
-            listingId: listingId,
-            listingTitle: listing.title,
-            listingType: listing.listingType,
-            sellerRole: _getSellerRole(listing.category),
-            listingImageUrl:
-                imageUrls.isNotEmpty ? imageUrls.first : null,
+          await ref
+              .read(chatRepositoryProvider)
+              .createListingChat(
+                otherUserId: user.uid, // Seller is the creator/admin
+                listingId: listingId,
+                listingTitle: listing.title,
+                listingType: listing.listingType,
+                sellerRole: _getSellerRole(listing.category),
+                listingImageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+              );
+          debugPrint(
+            '✅ [Marketplace] Listing group chat created for $listingId',
           );
-          debugPrint('✅ [Marketplace] Listing group chat created for $listingId');
         } catch (e) {
           debugPrint('⚠️ [Marketplace] Failed to create listing chat: $e');
         }
@@ -2804,7 +3282,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Listing published! 100 DSP deducted.'),
+              content: Text('Listing published successfully!'),
               backgroundColor: AppTheme.success,
             ),
           );
@@ -2819,9 +3297,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -2841,9 +3319,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
   Future<void> _pickImage() async {
     if (_selectedImages.length >= 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maximum 6 photos allowed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Maximum 6 photos allowed')));
       return;
     }
 
@@ -2866,7 +3344,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: theme.colorScheme.onSurface.withOpacity(0.7),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
       ),
     );
   }
@@ -2887,10 +3365,10 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+              ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
               : isDark
-                  ? Colors.white.withOpacity(0.03)
-                  : Colors.black.withOpacity(0.02),
+              ? Colors.white.withValues(alpha: 0.03)
+              : Colors.black.withValues(alpha: 0.02),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -2908,7 +3386,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 color: isSelected
                     ? AppTheme.accent
-                    : theme.colorScheme.onSurface.withOpacity(0.6),
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             if (subtitle != null) ...[
@@ -2944,23 +3422,22 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       keyboardType: keyboardType,
       validator: validator,
       textCapitalization: TextCapitalization.sentences,
-      style: TextStyle(
-        fontSize: 14,
-        color: theme.colorScheme.onSurface,
-      ),
+      style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(fontSize: 13, color: theme.hintColor),
         filled: true,
         fillColor: isDark
-            ? Colors.white.withOpacity(0.04)
-            : Colors.black.withOpacity(0.03),
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.black.withValues(alpha: 0.03),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         prefix: prefix,
         counterStyle: TextStyle(fontSize: 10, color: theme.hintColor),
       ),
@@ -2979,8 +3456,14 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.hintColor)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 4),
         GestureDetector(
           onTap: () => _showLocationSearchSheet(
@@ -2995,15 +3478,19 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.06)
-                  : Colors.black.withOpacity(0.03),
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.mapPin,
-                    size: 16,
-                    color: displayValue != null ? AppTheme.accent : theme.hintColor),
+                Icon(
+                  LucideIcons.mapPin,
+                  size: 16,
+                  color: displayValue != null
+                      ? AppTheme.accent
+                      : theme.hintColor,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -3016,7 +3503,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     ),
                   ),
                 ),
-                Icon(LucideIcons.chevronRight, size: 16, color: theme.hintColor),
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 16,
+                  color: theme.hintColor,
+                ),
               ],
             ),
           ),
@@ -3089,8 +3580,9 @@ class _SearchableListSheetState extends State<_SearchableListSheet> {
         _filtered = widget.items;
       } else {
         final q = query.toLowerCase();
-        _filtered =
-            widget.items.where((i) => i.toLowerCase().contains(q)).toList();
+        _filtered = widget.items
+            .where((i) => i.toLowerCase().contains(q))
+            .toList();
       }
     });
   }
@@ -3116,7 +3608,7 @@ class _SearchableListSheetState extends State<_SearchableListSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.hintColor.withOpacity(0.25),
+                  color: theme.hintColor.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -3148,12 +3640,15 @@ class _SearchableListSheetState extends State<_SearchableListSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search...',
                   hintStyle: TextStyle(fontSize: 14, color: theme.hintColor),
-                  prefixIcon: Icon(LucideIcons.search,
-                      size: 18, color: theme.hintColor),
+                  prefixIcon: Icon(
+                    LucideIcons.search,
+                    size: 18,
+                    color: theme.hintColor,
+                  ),
                   filled: true,
                   fillColor: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : Colors.black.withOpacity(0.04),
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.black.withValues(alpha: 0.04),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -3167,14 +3662,18 @@ class _SearchableListSheetState extends State<_SearchableListSheet> {
             Expanded(
               child: _filtered.isEmpty
                   ? Center(
-                      child: Text('No results',
-                          style: TextStyle(
-                              fontSize: 14, color: theme.hintColor)),
+                      child: Text(
+                        'No results',
+                        style: TextStyle(fontSize: 14, color: theme.hintColor),
+                      ),
                     )
                   : ListView.builder(
                       controller: scrollController,
                       padding: EdgeInsets.only(
-                        bottom: viewPad + MediaQuery.of(context).padding.bottom + 16,
+                        bottom:
+                            viewPad +
+                            MediaQuery.of(context).padding.bottom +
+                            16,
                       ),
                       itemCount: _filtered.length,
                       itemBuilder: (ctx, i) {
@@ -3248,7 +3747,9 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
 
   Future<void> _selectPrediction(AutocompletePrediction prediction) async {
     try {
-      final response = await widget.placesService.getPlaceDetails(prediction.placeId);
+      final response = await widget.placesService.getPlaceDetails(
+        prediction.placeId,
+      );
       if (response == null) {
         widget.onSelected(prediction.fullText, prediction.placeId);
         return;
@@ -3257,14 +3758,16 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
 
       // Build display using app's standard location convention
       String display = prediction.fullText;
-      if (place.addressComponents != null && place.addressComponents!.isNotEmpty) {
+      if (place.addressComponents != null &&
+          place.addressComponents!.isNotEmpty) {
         final parsed = parseLocationComponents(
           place.address ?? prediction.fullText,
           place.addressComponents!,
         );
         if (parsed != null) {
           final parts = <String>[
-            if (parsed.sublocality != null) formatLocationName(parsed.sublocality!),
+            if (parsed.sublocality != null)
+              formatLocationName(parsed.sublocality!),
             if (parsed.city != null) formatLocationName(parsed.city!),
             if (parsed.state != null) formatLocationName(parsed.state!),
             formatLocationName(parsed.country),
@@ -3302,7 +3805,7 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.hintColor.withOpacity(0.25),
+                  color: theme.hintColor.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -3334,8 +3837,11 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search for a location...',
                   hintStyle: TextStyle(fontSize: 14, color: theme.hintColor),
-                  prefixIcon: Icon(LucideIcons.search,
-                      size: 18, color: theme.hintColor),
+                  prefixIcon: Icon(
+                    LucideIcons.search,
+                    size: 18,
+                    color: theme.hintColor,
+                  ),
                   suffixIcon: _loading
                       ? const Padding(
                           padding: EdgeInsets.all(12),
@@ -3348,8 +3854,8 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
                       : null,
                   filled: true,
                   fillColor: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : Colors.black.withOpacity(0.04),
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.black.withValues(alpha: 0.04),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -3368,16 +3874,20 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.mapPin,
-                                size: 32,
-                                color: theme.hintColor.withOpacity(0.3)),
+                            Icon(
+                              LucideIcons.mapPin,
+                              size: 32,
+                              color: theme.hintColor.withValues(alpha: 0.3),
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               _searchController.text.isEmpty
                                   ? 'Start typing to search'
                                   : 'No results found',
                               style: TextStyle(
-                                  fontSize: 14, color: theme.hintColor),
+                                fontSize: 14,
+                                color: theme.hintColor,
+                              ),
                             ),
                           ],
                         ),
@@ -3392,8 +3902,11 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
                       itemBuilder: (ctx, i) {
                         final p = _predictions[i];
                         return ListTile(
-                          leading: const Icon(LucideIcons.mapPin,
-                              size: 18, color: AppTheme.accent),
+                          leading: const Icon(
+                            LucideIcons.mapPin,
+                            size: 18,
+                            color: AppTheme.accent,
+                          ),
                           title: Text(
                             p.primaryText,
                             style: TextStyle(
@@ -3509,8 +4022,8 @@ class _ModelSearchSheetState extends State<_ModelSearchSheet> {
             child: Container(
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.06)
-                    : Colors.black.withOpacity(0.03),
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.03),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(
@@ -3520,7 +4033,11 @@ class _ModelSearchSheetState extends State<_ModelSearchSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search brand or model...',
                   hintStyle: TextStyle(color: theme.hintColor),
-                  prefixIcon: Icon(LucideIcons.search, size: 18, color: theme.hintColor),
+                  prefixIcon: Icon(
+                    LucideIcons.search,
+                    size: 18,
+                    color: theme.hintColor,
+                  ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -3529,7 +4046,10 @@ class _ModelSearchSheetState extends State<_ModelSearchSheet> {
           ),
           const SizedBox(height: 8),
 
-          Divider(height: 1, color: theme.colorScheme.onSurface.withValues(alpha: 0.08)),
+          Divider(
+            height: 1,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+          ),
 
           // Results list
           Expanded(
@@ -3549,15 +4069,21 @@ class _ModelSearchSheetState extends State<_ModelSearchSheet> {
                       return ListTile(
                         dense: true,
                         leading: Icon(
-                          isSelected ? LucideIcons.checkCircle : LucideIcons.circle,
+                          isSelected
+                              ? LucideIcons.checkCircle
+                              : LucideIcons.circle,
                           size: 18,
-                          color: isSelected ? AppTheme.accent : theme.hintColor.withValues(alpha: 0.4),
+                          color: isSelected
+                              ? AppTheme.accent
+                              : theme.hintColor.withValues(alpha: 0.4),
                         ),
                         title: Text(
                           model,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                             color: isSelected
                                 ? AppTheme.accent
                                 : theme.colorScheme.onSurface,

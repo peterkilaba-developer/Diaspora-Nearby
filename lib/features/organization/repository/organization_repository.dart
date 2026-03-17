@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 // import 'package:diaspora_nearby/core/services/local_cache_service.dart'; // Deprecated
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_local_service.dart';
@@ -31,12 +30,9 @@ final organizationByIdProvider =
 class OrganizationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-
   final OrganizationLocalService _localService;
-  final Ref _ref;
 
-  OrganizationRepository(this._ref)
-    : _localService = OrganizationLocalService();
+  OrganizationRepository(Ref ref) : _localService = OrganizationLocalService();
 
   /// Watch organizations where the user is an admin, superAdmin, or pendingAdmin
   Stream<List<Map<String, dynamic>>> watchUserOrganizations(String userId) {
@@ -255,7 +251,10 @@ class OrganizationRepository {
               .doc(userId)
               .collection('userChats')
               .doc(chatId)
-              .set({'chatId': chatId, 'updatedAt': DateTime.now().millisecondsSinceEpoch}, SetOptions(merge: true));
+              .set({
+                'chatId': chatId,
+                'updatedAt': DateTime.now().millisecondsSinceEpoch,
+              }, SetOptions(merge: true));
           await _firestore.collection('chats').doc(chatId).update({
             'adminIds': admins,
           });
@@ -313,8 +312,6 @@ class OrganizationRepository {
     final orgId = const Uuid().v4();
     final docRef = _firestore.collection('organizations').doc(orgId);
 
-
-
     final orgData = {
       ...data,
       'createdAt': FieldValue.serverTimestamp(),
@@ -366,14 +363,14 @@ class OrganizationRepository {
         .collection('userChats')
         .doc(chatId)
         .set({
-      'chatId': chatId,
-      'updatedAt': fsNow,
-      'lastMessage': {
-        'content': 'Organization created',
-        'timestamp': fsNow,
-        'type': 'system',
-      },
-    });
+          'chatId': chatId,
+          'updatedAt': fsNow,
+          'lastMessage': {
+            'content': 'Organization created',
+            'timestamp': fsNow,
+            'type': 'system',
+          },
+        });
 
     // 3. Save to Firestore
     await docRef.set({...orgData, 'chatId': chatId});
@@ -405,10 +402,10 @@ class OrganizationRepository {
           .collection('userChats')
           .doc(chatId)
           .set({
-        'chatId': chatId,
-        'updatedAt': now,
-        'following': true,
-      }, SetOptions(merge: true));
+            'chatId': chatId,
+            'updatedAt': now,
+            'following': true,
+          }, SetOptions(merge: true));
 
       // Also add to participants so they can post to the board
       await _firestore.collection('chats').doc(chatId).update({
@@ -489,9 +486,9 @@ class OrganizationRepository {
     // 3. Force refresh local cache
     await getOrganization(orgId, force: true);
   }
+
   /// Enable specialized Product/Service listing for a business
   Future<void> enableProductListing(String orgId, String userId) async {
-
     await _firestore.collection('organizations').doc(orgId).update({
       'isListingEnabled': true,
       'listingPaidAt': FieldValue.serverTimestamp(),

@@ -57,28 +57,15 @@ class ReportRepository {
 
       if (uniqueReporters.isNotEmpty && uniqueReporters.length % 10 == 0) {
         debugPrint(
-          '🚨 [ReportRepository] Message $messageId reached ${uniqueReporters.length} unique reports. Deducting 100 DSP + 1 PoCT from $senderId.',
+          '🚨 [ReportRepository] Message $messageId reached ${uniqueReporters.length} unique reports. Deducting -10 PoCT from $senderId.',
         );
 
-        // Deduct 100 DSP + 1 PoCT from the message sender
-        final pointsService = _ref.read(pointsServiceProvider);
-        await pointsService.deductPoints(
-          userId: senderId,
-          amount: 100,
-          reason: 'reported_message_milestone_${uniqueReporters.length ~/ 10}',
-        );
-        await pointsService.deductPoints(
-          userId: senderId,
-          amount: 1,
-          reason: 'poct_reported_message_milestone_${uniqueReporters.length ~/ 10}',
-        );
+        // [UPDATED v8] DSP deduction removed — only PoCT milestone deduction
+        // -10 PoCT per 10 unique reporters
+        final trustService = _ref.read(trustServiceProvider);
+        await trustService.recordActivity(senderId, HTSActivityType.flaggedMessage);
 
-        // Use TrustService for automated penalty/score recalculation
-        await _ref
-            .read(trustServiceProvider)
-            .recordActivity(senderId, HTSActivityType.flaggedMessage);
-
-        // Charge Ad Penalty if reported for advertising/spam
+        // Chat ad penalty (PoCT-only, no DSP) still triggers trust recalculation
         if (reason == 'Prohibited Advertising' || reason == 'Spam or Scam') {
           await _ref.read(pointsServiceProvider).trackChatAdPenalty(senderId);
         }
@@ -145,25 +132,14 @@ class ReportRepository {
           .map((d) => (d.data())['reporterId'])
           .toSet();
 
-      // 4. At every 10 unique reporters → deduct 100 DSP + 1 PoCT from reported user
+      // 4. [UPDATED v8] At every 10 unique reporters → deduct -10 PoCT (no DSP)
       if (uniqueReporters.isNotEmpty && uniqueReporters.length % 10 == 0) {
         debugPrint(
-          '🚨 [ReportRepository] User $reportedUserId reached ${uniqueReporters.length} unique user reports. Deducting 100 DSP + 1 PoCT.',
+          '🚨 [ReportRepository] User $reportedUserId reached ${uniqueReporters.length} unique user reports. Deducting -10 PoCT.',
         );
 
-        final pointsService = _ref.read(pointsServiceProvider);
-        await pointsService.deductPoints(
-          userId: reportedUserId,
-          amount: 100,
-          reason: 'reported_user_milestone_${uniqueReporters.length ~/ 10}',
-        );
-        await pointsService.deductPoints(
-          userId: reportedUserId,
-          amount: 1,
-          reason: 'poct_reported_user_milestone_${uniqueReporters.length ~/ 10}',
-        );
-
-        // HTS signal
+        // [UPDATED v8] DSP deduction removed — only PoCT milestone
+        // HTS signal triggers trust recalculation which handles PoCT
         await _ref
             .read(trustServiceProvider)
             .recordActivity(reportedUserId, HTSActivityType.flaggedMessage);

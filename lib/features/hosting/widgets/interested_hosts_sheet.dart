@@ -49,7 +49,9 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -60,11 +62,7 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const Icon(
-                  LucideIcons.users,
-                  size: 20,
-                  color: AppTheme.accent,
-                ),
+                const Icon(LucideIcons.users, size: 20, color: AppTheme.accent),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -81,7 +79,9 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
                         '${hostIds.length} host${hostIds.length == 1 ? '' : 's'} responded',
                         style: GoogleFonts.outfit(
                           fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
                       ),
                     ],
@@ -92,7 +92,12 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
           ),
           const SizedBox(height: 16),
 
-          Divider(height: 1, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08)),
+          Divider(
+            height: 1,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.08),
+          ),
 
           // ── Host List
           if (hostIds.isEmpty)
@@ -103,14 +108,18 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
                   Icon(
                     LucideIcons.heartOff,
                     size: 48,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'No hosts have shown interest yet',
                     style: GoogleFonts.outfit(
                       fontSize: 15,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -122,13 +131,18 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: hostIds.length,
-                separatorBuilder: (_, __) =>
-                    Divider(height: 1, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05)),
+                separatorBuilder: (_, _) => Divider(
+                  height: 1,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.05),
+                ),
                 itemBuilder: (context, index) {
                   return _HostTile(
                     hostId: hostIds[index],
                     request: widget.request,
-                    isSelecting: _isSelecting && _selectingHostId == hostIds[index],
+                    isSelecting:
+                        _isSelecting && _selectingHostId == hostIds[index],
                     isDisabled: _isSelecting,
                     onSelect: () => _handleSelectHost(hostIds[index]),
                     onViewProfile: () {
@@ -173,28 +187,36 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
       debugPrint('🏠 [SelectHost] Step 2 ✅ Chat ID: ${chat.id}');
 
       // 3. Confirm arrangement (creates session, updates request to matched)
-      debugPrint('🏠 [SelectHost] Step 3: Confirming arrangement for request ${widget.request.id}');
-      final session = await ref.read(hostingServiceProvider).confirmArrangement(
-        request: widget.request,
-        hostId: hostId,
-        hostName: hostProfile.fullName,
-        hostPhoto: hostProfile.profileImage,
-        chatId: chat.id,
+      debugPrint(
+        '🏠 [SelectHost] Step 3: Confirming arrangement for request ${widget.request.id}',
       );
+      final session = await ref
+          .read(hostingServiceProvider)
+          .confirmArrangement(
+            request: widget.request,
+            hostId: hostId,
+            hostName: hostProfile.fullName,
+            hostPhoto: hostProfile.profileImage,
+            chatId: chat.id,
+          );
 
       if (session == null) {
-        throw Exception('Could not create hosting session — check if the hosting request still exists in Firestore');
+        throw Exception(
+          'Could not create hosting session — check if the hosting request still exists in Firestore',
+        );
       }
       debugPrint('🏠 [SelectHost] Step 3 ✅ Session ID: ${session.id}');
 
       // 4. Send arrangement system message to the DM
-      debugPrint('🏠 [SelectHost] Step 4: Sending system message to DM ${chat.id}');
+      debugPrint(
+        '🏠 [SelectHost] Step 4: Sending system message to DM ${chat.id}',
+      );
       final message = await chatRepo.sendTextMessage(
         chat.id,
         '🏠 Hosting arrangement confirmed! '
-            '${widget.request.travelerName} will be hosted by ${hostProfile.fullName} '
-            'from ${_formatDate(widget.request.arrivalDate)} to ${_formatDate(widget.request.departureDate)}. '
-            'Use this chat to coordinate the details.',
+        '${widget.request.travelerName} will be hosted by ${hostProfile.fullName} '
+        'from ${_formatDate(widget.request.arrivalDate)} to ${_formatDate(widget.request.departureDate)}. '
+        'Use this chat to coordinate the details.',
         type: 'system',
         senderIdOverride: 'system',
         senderNameOverride: 'Hosting',
@@ -214,7 +236,9 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
           'stayDuration': widget.request.stayDuration,
         },
       );
-      debugPrint('🏠 [SelectHost] Step 4 ${message != null ? '✅' : '❌'} Message sent: ${message?.id}');
+      debugPrint(
+        '🏠 [SelectHost] Step 4 ${message != null ? '✅' : '❌'} Message sent: ${message?.id}',
+      );
 
       if (mounted) {
         // 5. Close sheet and navigate to the DM
@@ -229,10 +253,7 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
             ? e.toString().replaceFirst('Exception: ', '')
             : 'Something went wrong. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -247,8 +268,18 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
@@ -281,9 +312,11 @@ class _HostTile extends ConsumerWidget {
         padding: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
-      error: (_, __) => ListTile(
+      error: (_, _) => ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.08),
           child: const Icon(LucideIcons.user),
         ),
         title: Text('Host $hostId'),
@@ -293,7 +326,9 @@ class _HostTile extends ConsumerWidget {
         if (profile == null) {
           return ListTile(
             leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.08),
               child: const Icon(LucideIcons.user),
             ),
             title: const Text('Unknown Host'),
@@ -349,7 +384,7 @@ class _HostTile extends ConsumerWidget {
                         'Tap to view profile',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
-                            color: AppTheme.accent.withValues(alpha: 0.7),
+                          color: AppTheme.accent.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -366,8 +401,12 @@ class _HostTile extends ConsumerWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accent,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
-                    disabledForegroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                    disabledBackgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.1),
+                    disabledForegroundColor: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),

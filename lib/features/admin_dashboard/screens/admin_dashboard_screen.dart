@@ -80,7 +80,10 @@ class AdminDashboardScreen extends StatelessWidget {
             child: Column(
               children: [
                 AppBar(
-                  backgroundColor: AppTheme.elevationColor(context, 1), // Level 1 header
+                  backgroundColor: AppTheme.elevationColor(
+                    context,
+                    1,
+                  ), // Level 1 header
                   elevation: 0,
                   title: Text(
                     _getTitle(location),
@@ -135,7 +138,9 @@ class _SidebarItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          color: isActive ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+          color: isActive
+              ? Colors.blue.withValues(alpha: 0.1)
+              : Colors.transparent,
           border: isActive
               ? const Border(left: BorderSide(color: Colors.blue, width: 4))
               : null,

@@ -6,6 +6,14 @@ import '../models/governance_roles.dart';
 
 final governanceRepositoryProvider = Provider((ref) => GovernanceRepository());
 
+/// Riverpod StreamProvider to watch a governance unit by its ID.
+/// Used by _GovernanceUnitCard instead of StreamBuilder so that
+/// ref.watch(treasuryTokenBalanceProvider) can chain properly.
+final governanceUnitStreamProvider =
+    StreamProvider.family<GovernanceUnit?, String>((ref, id) {
+  return ref.watch(governanceRepositoryProvider).watchGovernanceUnit(id);
+});
+
 class GovernanceRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -231,14 +239,14 @@ class GovernanceRepository {
         .map((s) => s.docs.map((d) => d.data()).toList());
   }
 
-  /// Get vote summary (yay/nay/hold counts) for a candidate.
+  /// Get vote summary (yay/nay/abstain counts) for a candidate.
   Future<VoteSummary> getCandidateVoteSummary(
     String unitId,
     String candidateId,
     String role,
   ) async {
     final votes = await getVotesForCandidateRole(unitId, candidateId, role);
-    int yay = 0, nay = 0, hold = 0;
+    int yay = 0, nay = 0, abstain = 0;
     for (final vote in votes) {
       switch (vote['verdict'] as String?) {
         case VoteVerdict.yay:
@@ -247,8 +255,8 @@ class GovernanceRepository {
         case VoteVerdict.nay:
           nay++;
           break;
-        case VoteVerdict.hold:
-          hold++;
+        case VoteVerdict.abstain:
+          abstain++;
           break;
       }
     }
@@ -257,7 +265,7 @@ class GovernanceRepository {
       role: role,
       yayCount: yay,
       nayCount: nay,
-      holdCount: hold,
+      abstainCount: abstain,
     );
   }
 
@@ -298,10 +306,7 @@ class GovernanceRepository {
   }
 
   /// Remove a council member (vote-out).
-  Future<void> removeCouncilMember(
-    String unitId,
-    String userId,
-  ) async {
+  Future<void> removeCouncilMember(String unitId, String userId) async {
     await _firestore.collection('governance').doc(unitId).update({
       'councilMembers': FieldValue.arrayRemove([userId]),
       'councilRoles.$userId': FieldValue.delete(),

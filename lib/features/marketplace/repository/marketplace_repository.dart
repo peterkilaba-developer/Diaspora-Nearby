@@ -48,10 +48,12 @@ class MarketplaceRepository {
 
     return query.snapshots().map((snapshot) {
       final listings = snapshot.docs
-          .map((doc) => MarketplaceListing.fromMap(
-                doc.data() as Map<String, dynamic>,
-                doc.id,
-              ))
+          .map(
+            (doc) => MarketplaceListing.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            ),
+          )
           .toList();
 
       // Filter by community visibility on client side
@@ -62,8 +64,7 @@ class MarketplaceRepository {
             return true;
           }
           // Otherwise, user must share at least one community
-          return listing.communityIds!
-              .any((cid) => communityIds.contains(cid));
+          return listing.communityIds!.any((cid) => communityIds.contains(cid));
         }).toList();
       }
 
@@ -91,13 +92,18 @@ class MarketplaceRepository {
     return _listingsRef
         .where('sellerId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => MarketplaceListing.fromMap(
+        .map(
+          (snapshot) => snapshot.docs
+              .map(
+                (doc) => MarketplaceListing.fromMap(
                   doc.data() as Map<String, dynamic>,
                   doc.id,
-                ))
-            .toList());
+                ),
+              )
+              .toList(),
+        );
   }
 
   /// Search listings by title
@@ -117,10 +123,12 @@ class MarketplaceRepository {
 
     final snapshot = await firestoreQuery.get();
     return snapshot.docs
-        .map((doc) => MarketplaceListing.fromMap(
-              doc.data() as Map<String, dynamic>,
-              doc.id,
-            ))
+        .map(
+          (doc) => MarketplaceListing.fromMap(
+            doc.data() as Map<String, dynamic>,
+            doc.id,
+          ),
+        )
         .toList();
   }
 
@@ -141,18 +149,22 @@ class MarketplaceRepository {
 
       final snapshot = await query.limit(limit).get();
       final results = snapshot.docs
-          .map((doc) => MarketplaceListing.fromMap(
-                doc.data() as Map<String, dynamic>,
-                doc.id,
-              ))
+          .map(
+            (doc) => MarketplaceListing.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            ),
+          )
           .toList();
 
       // Client-side filter by model if provided
       if (model != null && model.isNotEmpty) {
         final exact = results
-            .where((l) =>
-                l.carPartsDetails?['carModel']?.toString().toLowerCase() ==
-                model.toLowerCase())
+            .where(
+              (l) =>
+                  l.carPartsDetails?['carModel']?.toString().toLowerCase() ==
+                  model.toLowerCase(),
+            )
             .toList();
         // Return exact matches, or all make-matches if no model matches
         return exact.isNotEmpty ? exact : results;
@@ -178,18 +190,22 @@ class MarketplaceRepository {
 
       final snapshot = await query.limit(limit).get();
       final results = snapshot.docs
-          .map((doc) => MarketplaceListing.fromMap(
-                doc.data() as Map<String, dynamic>,
-                doc.id,
-              ))
+          .map(
+            (doc) => MarketplaceListing.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            ),
+          )
           .toList();
 
       // Client-side filter by model if provided
       if (model != null && model.isNotEmpty) {
         final exact = results
-            .where((l) =>
-                l.vehicleDetails?['model']?.toString().toLowerCase() ==
-                model.toLowerCase())
+            .where(
+              (l) =>
+                  l.vehicleDetails?['model']?.toString().toLowerCase() ==
+                  model.toLowerCase(),
+            )
             .toList();
         return exact.isNotEmpty ? exact : results;
       }
@@ -244,14 +260,12 @@ class MarketplaceRepository {
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
     final batch = _firestore.batch();
-    batch.set(
-      _listingsRef.doc(listingId).collection('saved_by').doc(userId),
-      {'savedAt': FieldValue.serverTimestamp()},
-    );
-    batch.update(
-      _listingsRef.doc(listingId),
-      {'savedCount': FieldValue.increment(1)},
-    );
+    batch.set(_listingsRef.doc(listingId).collection('saved_by').doc(userId), {
+      'savedAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(_listingsRef.doc(listingId), {
+      'savedCount': FieldValue.increment(1),
+    });
     await batch.commit();
   }
 
@@ -261,10 +275,9 @@ class MarketplaceRepository {
     batch.delete(
       _listingsRef.doc(listingId).collection('saved_by').doc(userId),
     );
-    batch.update(
-      _listingsRef.doc(listingId),
-      {'savedCount': FieldValue.increment(-1)},
-    );
+    batch.update(_listingsRef.doc(listingId), {
+      'savedCount': FieldValue.increment(-1),
+    });
     await batch.commit();
   }
 
@@ -287,6 +300,7 @@ class MarketplaceRepository {
         .collection('users')
         .doc(userId)
         .collection('saved_listings')
+        .limit(200)
         .get();
     return snapshot.docs.map((doc) => doc.id).toSet();
   }
@@ -318,25 +332,33 @@ class MarketplaceRepository {
         .doc(userId)
         .collection('saved_listings')
         .orderBy('savedAt', descending: true)
+        .limit(100)
         .snapshots()
         .asyncMap((snapshot) async {
-      final ids = snapshot.docs.map((doc) => doc.id).toList();
-      if (ids.isEmpty) return <MarketplaceListing>[];
+          final ids = snapshot.docs.map((doc) => doc.id).toList();
+          if (ids.isEmpty) return <MarketplaceListing>[];
 
-      // Fetch in batches of 10 (Firestore whereIn limit)
-      final listings = <MarketplaceListing>[];
-      for (var i = 0; i < ids.length; i += 10) {
-        final batch = ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10);
-        final snap = await _listingsRef
-            .where(FieldPath.documentId, whereIn: batch)
-            .get();
-        listings.addAll(snap.docs.map((doc) => MarketplaceListing.fromMap(
-              doc.data() as Map<String, dynamic>,
-              doc.id,
-            )));
-      }
-      return listings;
-    });
+          // Fetch in batches of 10 (Firestore whereIn limit)
+          final listings = <MarketplaceListing>[];
+          for (var i = 0; i < ids.length; i += 10) {
+            final batch = ids.sublist(
+              i,
+              i + 10 > ids.length ? ids.length : i + 10,
+            );
+            final snap = await _listingsRef
+                .where(FieldPath.documentId, whereIn: batch)
+                .get();
+            listings.addAll(
+              snap.docs.map(
+                (doc) => MarketplaceListing.fromMap(
+                  doc.data() as Map<String, dynamic>,
+                  doc.id,
+                ),
+              ),
+            );
+          }
+          return listings;
+        });
   }
 
   /// Check if a user has already interacted (paid DSP) with a listing
@@ -365,9 +387,9 @@ class MarketplaceRepository {
         .collection('interactions')
         .doc(userId)
         .set({
-      'interactedAt': FieldValue.serverTimestamp(),
-      'type': interactionType ?? 'contact_seller',
-    });
+          'interactedAt': FieldValue.serverTimestamp(),
+          'type': interactionType ?? 'contact_seller',
+        });
   }
 
   /// Report a listing
@@ -379,15 +401,11 @@ class MarketplaceRepository {
     final batch = _firestore.batch();
     batch.set(
       _listingsRef.doc(listingId).collection('reports').doc(reporterId),
-      {
-        'reason': reason,
-        'reportedAt': FieldValue.serverTimestamp(),
-      },
+      {'reason': reason, 'reportedAt': FieldValue.serverTimestamp()},
     );
-    batch.update(
-      _listingsRef.doc(listingId),
-      {'reportCount': FieldValue.increment(1)},
-    );
+    batch.update(_listingsRef.doc(listingId), {
+      'reportCount': FieldValue.increment(1),
+    });
     await batch.commit();
   }
 }

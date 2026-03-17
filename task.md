@@ -1,7 +1,7 @@
 # DiasporaNearby Task Tracker
 
 ## Active Tasks
-- [ ] **Data Model Audit**
+- [x] **Data Model Audit**
     - [x] Audit `users` collection vs `ProfileData`
     - [x] Audit `communities` collection vs `Community`
     - [x] Audit `events` collection vs `Event`
@@ -10,11 +10,11 @@
 - [x] Refine Profile Completion Screen
     - [x] Make `ProfileQRCodeDialog` full-screen with `Scaffold` and `AppBar`
     - [x] Apply theme padding (`AppTheme.pageHorizontalPadding`)
-    - [/] Refine requirements logic:
-        - [ ] Remove "Lived in" from required fields
-        - [ ] Ensure "Years in Host Country" is required
-        - [ ] Ensure "Services I can offer" is required
-        - [ ] Improve Education logic (No School OR School submitted)
+    - [x] Refine requirements logic:
+        - [x] Remove "Lived in" from required fields
+        - [x] Ensure "Years in Host Country" is required
+        - [x] Ensure "Services I can offer" is required
+        - [x] Improve Education logic (No School OR School submitted)
     - [x] Implement reactive error border dismissal in `UserProfileForm`
 - [x] **DSP Earning & Trust Logic Implementation**
     - [x] Create `DSP_EARNING_MODEL.md` specification.

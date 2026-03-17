@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:sms_autofill/sms_autofill.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'auth_controller.dart';
 
 class OTPVerificationScreen extends ConsumerStatefulWidget {
@@ -60,7 +61,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       await SmsAutoFill().listenForCode();
       // Get app signature for SMS format (useful for debugging)
       final signature = await SmsAutoFill().getAppSignature;
-      print('OTPVerificationScreen: App Signature for SMS: $signature');
+      debugPrint('OTPVerificationScreen: App Signature for SMS: $signature');
 
       // Auto-stop listening after 60 seconds
       Future.delayed(const Duration(seconds: 60), () {
@@ -69,7 +70,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
         }
       });
     } catch (e) {
-      print('OTPVerificationScreen: Failed to start listening: $e');
+      debugPrint('OTPVerificationScreen: Failed to start listening: $e');
       setState(() => _isListening = false);
     }
   }
@@ -91,7 +92,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     final theme = Theme.of(context);
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: !kIsWeb,
       appBar: AppBar(title: const Text('Verify Phone')),
       body: SafeArea(
         child: SingleChildScrollView(

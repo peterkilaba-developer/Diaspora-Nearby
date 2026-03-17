@@ -233,9 +233,11 @@ class _OrganizationInfoScreenState
         _isFollowing = !_isFollowing;
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isFollowLoading = false);
     }
@@ -263,7 +265,10 @@ class _OrganizationInfoScreenState
           : _orgData == null
           ? const Center(child: Text('Organization not found'))
           : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: EdgeInsets.only(
+                top: 16,
+                bottom: 16 + MediaQuery.of(context).padding.bottom,
+              ),
               child: Column(
                 children: [
                   // Logo & Details

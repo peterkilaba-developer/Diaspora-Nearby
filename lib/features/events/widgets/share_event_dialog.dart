@@ -16,7 +16,7 @@ import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 /// A dialog that previews the event as a visual share card, captures it as
-/// a PNG image, and opens the device native share sheet via [Share.shareXFiles].
+/// a PNG image, and opens the device native share sheet via [SharePlus.instance.share].
 /// Follows the same pattern as [ShareCommunityDialog].
 class ShareEventDialog extends ConsumerStatefulWidget {
   final Event event;
@@ -59,8 +59,7 @@ class _ShareEventDialogState extends ConsumerState<ShareEventDialog> {
       if (mounted) {
         Navigator.pop(context);
 
-        String eventUrl =
-            'https://diasporanearby.app/events/${widget.event.id}';
+        String eventUrl = 'https://diasporanearby.com/invite';
         String shareText =
             'Join me at ${widget.event.title}!\n\nLocation: ${widget.event.venueName ?? widget.event.location}';
 
@@ -98,10 +97,12 @@ class _ShareEventDialogState extends ConsumerState<ShareEventDialog> {
 
         shareText += '\n\nView Event: $eventUrl';
 
-        await Share.shareXFiles(
-          [XFile(imagePath)],
-          text: shareText,
-          subject: widget.event.title,
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(imagePath)],
+            text: shareText,
+            subject: widget.event.title,
+          ),
         );
 
         // Award points

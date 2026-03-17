@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquidity Treasury — Diaspora Nearby</title>
+    <meta name="description" content="The Liquidity Treasury provides DEX liquidity for the $DIASPORA ecosystem. 5% of total epoch supply released at TGE milestones with decile conversion scaling.">
+    <link rel="canonical" href="https://diasporanearby.com/liquidity_treasury">
+    <meta property="og:title" content="Liquidity Treasury — Diaspora Nearby">
+    <meta property="og:description" content="DEX liquidity for the $DIASPORA ecosystem. 5% of total epoch supply with decile release scaling.">
+    <meta property="og:image" content="https://diasporanearby.com/images/og-share-card.png">
+    <meta property="og:url" content="https://diasporanearby.com/liquidity_treasury">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Microsoft Clarity Analytics -->
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "vwwrhkj22s");
+    </script>
+    <link rel="stylesheet" href="styles.css?v=20260312nav2">
+    <link rel="stylesheet" href="liquidity_treasury.css?v=20260315v1">
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav class="nav" id="nav">
+        <div class="container nav-inner">
+            <a href="/" class="nav-logo">
+                <img src="icons/token-logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
+                Diaspora Nearby
+            </a>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                <i data-lucide="menu"></i>
+            </button>
+            <ul class="nav-links" id="nav-links">
+                <li><a href="/#social">Community</a></li>
+                <li><a href="/#economy">Economy</a></li>
+                <li><a href="/#treasuries">Treasuries</a></li>
+                <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
+                <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
+                <li><a href="https://app.diasporanearby.com" class="nav-cta">Open App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero" id="hero" style="padding:120px 0 64px;">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge"><span class="dot"></span> Open Market — Trade Any Amount</div>
+                <h1>Trade <span class="accent-orange">$DIASPORA</span> on the Open Market.</h1>
+                <p style="max-width:700px;">
+                    The Liquidity Treasury deploys <strong>5% of total epoch supply</strong> directly to DEX pools on Base blockchain. No lot sizes, no minimums — <strong>swap any amount</strong> of $DIASPORA for USDC or ETH on Uniswap or Aerodrome.
+                </p>
+                <div class="hero-actions" style="margin-top:32px;display:flex;gap:12px;flex-wrap:wrap;">
+                    <a href="#how-it-works" class="btn btn-orange">How It Works <i data-lucide="arrow-down" style="width:16px;height:16px"></i></a>
+                    <a href="#epochs" class="btn" style="border:1px solid var(--border-strong);background:var(--surface);">Browse Epochs <i data-lucide="layers" style="width:16px;height:16px"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- LIVE PRICE TICKER -->
+    <div class="live-ticker fade-in">
+        <div class="container" style="display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;">
+            <div class="ticker-item"><span class="ticker-dot green"></span> <strong>Live DSP Price:</strong> <span id="live-dsp-price" class="ticker-value">$0.00110</span></div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item"><i data-lucide="users" style="width:14px;height:14px"></i> Users: <span id="factor-users">0</span></div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item"><i data-lucide="coins" style="width:14px;height:14px"></i> Minted: <span id="factor-minted">0</span></div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item"><i data-lucide="flame" style="width:14px;height:14px"></i> Burned: <span id="factor-burned">0</span></div>
+        </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <section class="section" id="how-it-works" style="padding-top:32px;">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="info" style="width:14px;height:14px"></i> How It Works</div>
+                <h2>Three Simple Steps</h2>
+                <p>The Liquidity Treasury deploys tokens to DEX pools at each TGE milestone. Anyone can trade freely on the open market.</p>
+            </div>
+            <div class="card-grid fade-in" style="grid-template-columns:repeat(3,1fr);">
+                <div class="card" style="border:2px solid var(--orange-bg);">
+                    <div class="card-icon orange"><i data-lucide="droplets"></i></div>
+                    <h3>1. Liquidity Deployed</h3>
+                    <p>At each <strong>TGE milestone</strong>, 10% of that epoch's treasury allocation is deployed to <strong>DEX liquidity pools</strong> on Base. Earlier TGEs have higher conversion rates (100% → 10%).</p>
+                    <div style="margin-top:12px;padding:8px 12px;background:var(--orange-bg);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--orange);">Automated pool deployment</div>
+                </div>
+                <div class="card" style="border:2px solid rgba(100,149,237,0.15);">
+                    <div class="card-icon" style="background:rgba(100,149,237,0.1);color:cornflowerblue;"><i data-lucide="bell"></i></div>
+                    <h3>2. Get Notified</h3>
+                    <p>Register your interest for any epoch or TGE. We'll <strong>email you directly</strong> when that liquidity goes live on the DEX — with a direct swap link so you don't miss the window.</p>
+                    <div style="margin-top:12px;padding:8px 12px;background:rgba(100,149,237,0.08);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:cornflowerblue;">Never miss a TGE drop</div>
+                </div>
+                <div class="card" style="border:2px solid var(--sage-bg);">
+                    <div class="card-icon green"><i data-lucide="arrow-left-right"></i></div>
+                    <h3>3. Swap Any Amount</h3>
+                    <p>Trade <strong>any amount</strong> of $DIASPORA — no lot sizes, no minimums. Swap $DIASPORA/USDC or $DIASPORA/ETH on <strong>Uniswap</strong> or <strong>Aerodrome</strong> on Base blockchain.</p>
+                    <div style="margin-top:12px;padding:8px 12px;background:var(--sage-bg);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--sage);">Open market, equal access</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TRADING PAIRS -->
+    <section class="section" id="trading-pairs" style="padding-top:16px;">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="arrow-left-right" style="width:14px;height:14px"></i> Trading Pairs</div>
+                <h2>Swap With USDC or ETH</h2>
+                <p>$DIASPORA liquidity is deployed to two primary pairs on Base blockchain — trade against stablecoins or ETH, with no lot sizes or minimums.</p>
+            </div>
+            <div class="card-grid fade-in" style="grid-template-columns:repeat(2,1fr);">
+                <div class="card" style="border:2px solid var(--orange-bg);text-align:center;">
+                    <div class="card-icon orange" style="margin:0 auto 12px;"><i data-lucide="dollar-sign"></i></div>
+                    <h3>$DIASPORA / USDC</h3>
+                    <div style="font-size:13px;color:var(--fg-muted);margin-bottom:12px;">Primary Pair — Stablecoin</div>
+                    <p style="font-size:14px;">The primary trading pair. Stable dollar-denominated pricing that aligns directly with the implied value model. Best for price discovery and straightforward swaps.</p>
+                    <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                        <span class="pair-badge">Base Blockchain</span>
+                        <span class="pair-badge">Uniswap V3</span>
+                        <span class="pair-badge">Aerodrome</span>
+                    </div>
+                </div>
+                <div class="card" style="border:2px solid rgba(100,149,237,0.2);text-align:center;">
+                    <div class="card-icon" style="margin:0 auto 12px;background:rgba(100,149,237,0.1);color:cornflowerblue;"><i data-lucide="hexagon"></i></div>
+                    <h3>$DIASPORA / ETH</h3>
+                    <div style="font-size:13px;color:var(--fg-muted);margin-bottom:12px;">Secondary Pair — Crypto Native</div>
+                    <p style="font-size:14px;">For crypto-native users who want to swap directly from ETH. Captures DeFi-native demand. DEX aggregators will also auto-route through the best pool.</p>
+                    <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                        <span class="pair-badge">Base Blockchain</span>
+                        <span class="pair-badge">Uniswap V3</span>
+                        <span class="pair-badge">Aerodrome</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WHY LIQUIDITY TREASURY -->
+    <section class="section" id="why-liquidity" style="padding-top:16px;">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="droplets" style="width:14px;height:14px"></i> Why Open Market</div>
+                <h2>Community-First, No Gatekeepers</h2>
+                <p>Instead of private sales, token presales, or securities offerings — the Liquidity Treasury deploys directly to DEX pools. Equal access for everyone.</p>
+            </div>
+            <div class="fade-in" style="max-width:800px;margin:0 auto;">
+                <div class="card-grid" style="grid-template-columns:1fr;gap:16px;">
+                    <div class="card" style="border-left:3px solid var(--orange);">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                            <div class="card-icon orange" style="width:36px;height:36px;"><i data-lucide="users" style="width:18px;height:18px"></i></div>
+                            <div>
+                                <h3 style="margin:0;font-size:16px;">No Private Sales, No VCs, No Minimums</h3>
+                                <span style="font-size:12px;color:var(--fg-dim);">Trade any amount on equal terms</span>
+                            </div>
+                        </div>
+                        <p style="font-size:14px;">There are no private rounds, pre-sales, VC allocations, or lot-size requirements. Liquidity goes to the DEX — <strong>anyone can trade any amount on equal terms</strong>.</p>
+                    </div>
+                    <div class="card" style="border-left:3px solid var(--sage);">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                            <div class="card-icon green" style="width:36px;height:36px;"><i data-lucide="shield" style="width:18px;height:18px"></i></div>
+                            <div>
+                                <h3 style="margin:0;font-size:16px;">Only 5% of Total Epoch Supply</h3>
+                                <span style="font-size:12px;color:var(--fg-dim);">Modest, controlled release</span>
+                            </div>
+                        </div>
+                        <p style="font-size:14px;">The Liquidity Treasury represents just <strong>5% of total epoch supply</strong> (10% of the matched half). Combined with the fact that most users hold their earned tokens, this creates naturally tight supply and healthy price discovery.</p>
+                    </div>
+                    <div class="card" style="border-left:3px solid var(--fg-dim);">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                            <div class="card-icon" style="width:36px;height:36px;"><i data-lucide="arrow-up-right" style="width:18px;height:18px"></i></div>
+                            <div>
+                                <h3 style="margin:0;font-size:16px;">Earned Tokens ≠ Sold Tokens</h3>
+                                <span style="font-size:12px;color:var(--fg-dim);">Natural scarcity</span>
+                            </div>
+                        </div>
+                        <p style="font-size:14px;">Users <strong>earn tokens through community participation</strong>, creating strong attachment and holding behavior. This means circulating sell-side supply stays naturally low, making the Liquidity Treasury one of the few accessible sources.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOMO CONVERSION -->
+    <section class="section" id="conversion">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="trending-down" style="width:14px;height:14px"></i> Decile Conversion</div>
+                <h2>Earlier TGE = Higher Conversion</h2>
+                <p>The FOMO conversion model rewards early believers. TGE 1 converts at 100%, declining by 10% per milestone. This pattern repeats identically across every Epoch.</p>
+            </div>
+            <div class="fade-in" style="max-width:700px;margin:0 auto;">
+                <div class="conversion-bar-wrap">
+                    <div class="conversion-bars" id="conversion-bars"></div>
+                </div>
+                <table class="lt-table" style="margin-top:24px;">
+                    <thead><tr><th>TGE</th><th>Conversion</th><th>Effective DSP</th></tr></thead>
+                    <tbody>
+                        <tr class="highlight-row"><td><strong>TGE 1</strong></td><td><span class="conv-badge c100">100%</span></td><td>10,000 of 10,000</td></tr>
+                        <tr><td>TGE 2</td><td><span class="conv-badge c90">90%</span></td><td>9,000 of 10,000</td></tr>
+                        <tr><td>TGE 3</td><td><span class="conv-badge c80">80%</span></td><td>8,000 of 10,000</td></tr>
+                        <tr><td>TGE 4</td><td><span class="conv-badge c70">70%</span></td><td>7,000 of 10,000</td></tr>
+                        <tr><td>TGE 5</td><td><span class="conv-badge c60">60%</span></td><td>6,000 of 10,000</td></tr>
+                        <tr><td>TGE 6</td><td><span class="conv-badge c50">50%</span></td><td>5,000 of 10,000</td></tr>
+                        <tr><td>TGE 7</td><td><span class="conv-badge c40">40%</span></td><td>4,000 of 10,000</td></tr>
+                        <tr><td>TGE 8</td><td><span class="conv-badge c30">30%</span></td><td>3,000 of 10,000</td></tr>
+                        <tr><td>TGE 9</td><td><span class="conv-badge c20">20%</span></td><td>2,000 of 10,000</td></tr>
+                        <tr><td>TGE 10</td><td><span class="conv-badge c10">10%</span></td><td>1,000 of 10,000</td></tr>
+                    </tbody>
+                    <tfoot><tr><td colspan="3" style="text-align:center;font-size:12px;color:var(--fg-dim);padding-top:8px;">* DSP shown for Epoch 1 (10,000 per TGE release). Each subsequent epoch scales by 10×.</td></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- VALUE TRAJECTORY -->
+    <section class="section" id="trajectory">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="trending-up" style="width:14px;height:14px"></i> Value Trajectory</div>
+                <h2>DSP Implied Value Across Epochs</h2>
+                <p>Prices shown are <strong>live</strong>, computed from the same formula used in the app. As users grow, DSP burns, and fiat GDP increases — the implied value rises across all epochs.</p>
+            </div>
+            <div class="fade-in" style="max-width:900px;margin:0 auto;">
+                <div class="chart-container"><canvas id="trajectory-canvas"></canvas></div>
+                <div class="factor-cards">
+                    <div class="factor-card"><div class="fc-label">Network Effect</div><div class="fc-value" id="factor-network">0%</div><div class="fc-desc">log₁₀(users) / 10</div></div>
+                    <div class="factor-card"><div class="fc-label">Deflation Ratio</div><div class="fc-value" id="factor-deflation">0%</div><div class="fc-desc">burned / minted (cap 50%)</div></div>
+                    <div class="factor-card"><div class="fc-label">Epoch Scarcity</div><div class="fc-value" id="factor-epoch">1.10×</div><div class="fc-desc">1 + epoch × 0.1</div></div>
+                    <div class="factor-card"><div class="fc-label">Fiat GDP Boost</div><div class="fc-value" id="factor-gdp">1.000×</div><div class="fc-desc">1 + log₁₀(GDP) / 10</div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- EPOCH TABLES — generated by JS -->
+    <section class="section" id="epochs">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="calendar" style="width:14px;height:14px"></i> All Epochs</div>
+                <h2>Browse Epochs & Get Notified</h2>
+                <p>10 Epochs × 10 TGEs = 100 liquidity release events. Register to be notified when liquidity goes live on the DEX — values update <strong>in real-time</strong> from live platform data.</p>
+            </div>
+            <div id="epoch-tables" class="fade-in"></div>
+        </div>
+    </section>
+
+    <!-- HOW TO TRADE -->
+    <section class="section" id="how-to-trade">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="wallet" style="width:14px;height:14px"></i> How to Trade</div>
+                <h2>Trade $DIASPORA in 4 Steps</h2>
+                <p>No gatekeepers, no applications. When liquidity goes live on the DEX, anyone can trade freely using a Web3 wallet on Base blockchain.</p>
+            </div>
+            <div class="fade-in" style="max-width:500px;margin:0 auto;">
+                <div class="wallet-flow">
+                    <div class="wallet-step"><div class="ws-num">1</div><div><strong>Get notified</strong><br><span class="fg-muted">Register interest for any epoch above — we'll email you when liquidity drops</span></div></div>
+                    <div class="wallet-step"><div class="ws-num">2</div><div><strong>Connect a wallet</strong><br><span class="fg-muted">Use MetaMask, Coinbase Wallet, or any Web3 wallet on Base blockchain</span></div></div>
+                    <div class="wallet-step"><div class="ws-num">3</div><div><strong>Swap any amount</strong><br><span class="fg-muted">Trade $DIASPORA/USDC or $DIASPORA/ETH on Uniswap or Aerodrome — no minimums</span></div></div>
+                    <div class="wallet-step"><div class="ws-num">4</div><div><strong>Hold or use in-app</strong><br><span class="fg-muted">Link your wallet in Diaspora Nearby to use $DIASPORA across the ecosystem</span></div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SIGN UP CTA -->
+    <section class="section" id="start-earning" style="padding-top:16px;">
+        <div class="container">
+            <div class="fade-in" style="max-width:700px;margin:0 auto;text-align:center;padding:48px 32px;background:linear-gradient(135deg,var(--orange-bg),rgba(229,147,58,0.02));border:2px solid rgba(229,147,58,0.2);border-radius:var(--radius-lg);">
+                <div class="card-icon orange" style="margin:0 auto 16px;"><i data-lucide="sparkles"></i></div>
+                <h2 style="margin-bottom:8px;">Start Earning $DIASPORA Today</h2>
+                <p class="fg-muted" style="font-size:14px;max-width:500px;margin:0 auto 24px;">Don't just trade — <strong>earn tokens through community participation</strong>. Sign up for Diaspora Nearby to build your DSP balance, connect with the diaspora, and use $DIASPORA across the ecosystem.</p>
+                <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+                    <a href="https://app.diasporanearby.com" class="btn btn-orange" style="padding:14px 28px;font-size:15px;"><i data-lucide="download" style="width:18px;height:18px"></i> Get the App</a>
+                    <a href="/#decoupling" class="btn" style="border:1px solid var(--border-strong);background:var(--surface);padding:14px 28px;font-size:15px;"><i data-lucide="book-open" style="width:18px;height:18px"></i> Learn About DSP</a>
+                </div>
+                <div style="margin-top:20px;display:flex;gap:20px;justify-content:center;flex-wrap:wrap;font-size:12px;color:var(--fg-muted);">
+                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Free to join</span>
+                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Earn DSP daily</span>
+                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Smart Wallet auto-created</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer style="background:var(--surface);padding:64px 0 24px;border-top:1px solid var(--border);">
+        <div class="container">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:32px;">
+                <div style="max-width:300px;">
+                    <div class="nav-logo" style="margin-bottom:16px;color:var(--fg);"><img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="24" height="24"> Diaspora Nearby</div>
+                    <p style="color:var(--fg-muted);font-size:13px;line-height:1.6;">The world's first active capital social network building economic sovereignty for the global diaspora. <strong>Earn. Build. Govern. Own.</strong></p>
+                </div>
+                <div style="display:flex;gap:48px;flex-wrap:wrap;">
+                    <div>
+                        <h4 style="font-size:13px;font-weight:700;margin-bottom:16px;color:var(--fg);">Ecosystem</h4>
+                        <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--fg-muted);">
+                            <li><a href="https://app.diasporanearby.com" class="footer-link">Launch App</a></li>
+                            <li><a href="/#decoupling" class="footer-link">$DIASPORA Economy</a></li>
+                            <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
+                            <li><a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank" rel="noopener" class="footer-link">Base Mainnet Contract <i data-lucide="external-link" style="width:10px;height:10px;display:inline;"></i></a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 style="font-size:13px;font-weight:700;margin-bottom:16px;color:var(--fg);">Resources</h4>
+                        <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--fg-muted);">
+                            <li><a href="/whitepaper" class="footer-link">Whitepaper</a></li>
+                            <li><a href="mailto:support@diasporanearby.com" class="footer-link">Contact Support</a></li>
+                            <li><a href="/terms-of-service" class="footer-link">Terms of Service</a></li>
+                            <li><a href="/privacy-policy" class="footer-link">Privacy Policy</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:48px;border-top:1px solid var(--border);padding-top:24px;text-align:center;color:var(--fg-dim);font-size:12px;line-height:1.6;">
+                <p>&copy; 2026 Diaspora Nearby. Built for the culture.</p>
+                <p style="margin-top:8px;">Disclaimer: $DIASPORA is a utility token used within the Diaspora Nearby platform. The Liquidity Treasury deploys tokens to decentralized exchange pools — there are no private sales, ICOs, or pre-sales. Trading occurs on the open market via DEXes. Nothing on this site constitutes financial advice or a solicitation to buy securities.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- NOTIFY MODAL -->
+    <div class="modal-overlay" id="notify-modal">
+        <div class="modal-card">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <h3 id="modal-title">Get Notified</h3>
+            <p id="modal-subtitle" class="fg-muted" style="font-size:13px;margin-bottom:20px;"></p>
+
+            <!-- Step 1: Email Registration -->
+            <div id="modal-step-1">
+                <div class="notify-info-card">
+                    <div class="contract-preview" id="notify-preview"></div>
+                </div>
+
+                <div class="lt-label" style="margin-top:20px;">Your Email</div>
+                <p class="fg-muted" style="font-size:12px;margin-bottom:8px;">We'll notify you the moment this liquidity goes live on the DEX — with a direct swap link.</p>
+                <input type="email" id="notify-email" placeholder="you@example.com" class="notify-email-input" oninput="validateNotifyForm()" />
+
+                <label style="display:flex;align-items:center;gap:8px;margin:16px 0 0;font-size:12px;cursor:pointer;color:var(--fg-muted);">
+                    <input type="checkbox" id="notify-agree" onchange="validateNotifyForm()" style="accent-color:var(--orange);"> I want to be notified when this liquidity is available for trading on the DEX
+                </label>
+
+                <button class="btn btn-orange" style="width:100%;justify-content:center;margin-top:16px;" id="notify-btn" disabled onclick="submitNotification()">
+                    <i data-lucide="bell" style="width:16px;height:16px"></i> Notify Me When Live
+                </button>
+            </div>
+
+            <!-- Step 2: Success -->
+            <div id="modal-step-2" style="display:none;text-align:center;padding:24px 0;">
+                <div style="margin-bottom:16px;"><i data-lucide="bell-ring" style="width:48px;height:48px;color:#4caf50;"></i></div>
+                <h3 style="color:#4caf50;">You're on the List!</h3>
+                <p class="fg-muted" style="font-size:13px;margin-top:8px;max-width:380px;margin-left:auto;margin-right:auto;">We'll email you at <strong id="confirmed-email"></strong> when this liquidity goes live. You'll get a direct link to swap on the DEX.</p>
+
+                <div style="margin-top:24px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);">
+                    <div class="lt-label">When Live, Trade Here</div>
+                    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                        <a href="https://app.uniswap.org/swap?chain=base" target="_blank" rel="noopener" class="dex-link-btn">
+                            <i data-lucide="arrow-right-left" style="width:14px;height:14px"></i> Uniswap (Base) <i data-lucide="external-link" style="width:12px;height:12px"></i>
+                        </a>
+                        <a href="https://aerodrome.finance/swap" target="_blank" rel="noopener" class="dex-link-btn">
+                            <i data-lucide="plane" style="width:14px;height:14px"></i> Aerodrome (Base) <i data-lucide="external-link" style="width:12px;height:12px"></i>
+                        </a>
+                    </div>
+                    <p class="fg-muted" style="font-size:11px;margin-top:10px;">Swap any amount — $DIASPORA/USDC or $DIASPORA/ETH. No lot sizes, no minimums.</p>
+                </div>
+
+                <div style="margin-top:20px;padding:16px;background:var(--orange-bg);border:1px solid rgba(229,147,58,0.2);border-radius:var(--radius-sm);">
+                    <div class="lt-label" style="color:var(--orange);">Or Start Earning DSP Now</div>
+                    <p class="fg-muted" style="font-size:12px;margin-bottom:10px;">Earn tokens through community participation — no purchase needed.</p>
+                    <a href="https://app.diasporanearby.com" class="btn btn-orange" style="width:100%;justify-content:center;padding:10px;"><i data-lucide="download" style="width:14px;height:14px"></i> Get the App</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+    lucide.createIcons();
+    </script>
+    <script src="liquidity_treasury.js?v=20260315v1"></script>
+    <script src="script.js?v=20260314v2"></script>
+
+    <!-- Firebase Real-time Data -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+        import { getFirestore, doc, onSnapshot }
+            from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+        // Firebase client config is intentionally public — security is enforced
+        // via Firestore/Auth security rules, not API key secrecy.
+        const firebaseConfig = {
+            apiKey: "AIzaSyBPUiYKBDFpHvPj8KJH-VKs5QqHBnPiJtI",
+            authDomain: "diaspora-nearby-a3dac.firebaseapp.com",
+            projectId: "diaspora-nearby-a3dac",
+            storageBucket: "diaspora-nearby-a3dac.firebasestorage.app",
+            messagingSenderId: "512074182214",
+            appId: "1:512074182214:web:351bd07f62180977b92447"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Listen to DSP supply
+        onSnapshot(doc(db, 'system_stats', 'dsp_supply'), (snap) => {
+            const data = snap.data() || {};
+            liveData.totalMinted = data.totalMinted || 0;
+            updateDynamicPricing();
+        });
+
+        // Listen to treasury (burned + fiatGDP)
+        onSnapshot(doc(db, 'system_stats', 'treasury'), (snap) => {
+            const data = snap.data() || {};
+            liveData.totalBurned = (data.totalBurnedUtility || 0);
+            liveData.fiatGdpUsd = (data.totalFiatGdpUsd || 0);
+            updateDynamicPricing();
+        });
+
+        // Listen to global member count
+        onSnapshot(doc(db, 'communities', 'global_community'), (snap) => {
+            const data = snap.data() || {};
+            liveData.totalUsers = data.memberCount || 0;
+            updateDynamicPricing();
+        });
+    </script>
+</body>
+</html>

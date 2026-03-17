@@ -14,18 +14,18 @@ service firebase.storage {
     // Path: profile_photos/{userId}/...
     match /profile_photos/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if true; // [DEBUG] Allow public deletion
-      // allow write: if request.auth != null && request.auth.uid == userId && isImage() && isSmallEnough();
+      // Owner can upload images (≤5MB) or delete their own photos
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     // --- Event Images ---
     // Path: event_images/{eventId} (or similar)
-    // We allow authenticated users to upload event images. 
-    // Ideally we would check 'createdBy' on the event doc, but the image might be uploaded before the doc.
+    // Authenticated users can upload event images or delete them.
     match /event_images/{allPaths=**} {
       allow read: if true;
-      allow write: if true; // [DEBUG]
-      // allow write: if request.auth != null && isImage() && isSmallEnough();
+      allow write: if request.auth != null
+                   && (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     // --- Chat/Group Media ---

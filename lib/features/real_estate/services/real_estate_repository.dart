@@ -41,15 +41,22 @@ class RealEstateRepository {
   }
 
   /// Get listings by owner
-  Future<List<RealEstateListing>> getMyListings(String uid, {String? category}) async {
+  Future<List<RealEstateListing>> getMyListings(
+    String uid, {
+    String? category,
+  }) async {
     try {
       // Query by ownerId only, filter category client-side
       Query q = _col.where('ownerId', isEqualTo: uid);
-      q = q.orderBy('createdAt', descending: true);
+      q = q.orderBy('createdAt', descending: true).limit(100);
       final snap = await q.get();
       var list = snap.docs
-          .map((d) => RealEstateListing.fromJson(
-              d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => RealEstateListing.fromJson(
+              d.data() as Map<String, dynamic>,
+              d.id,
+            ),
+          )
           .toList();
       if (category != null) {
         list = list.where((l) => l.category == category).toList();
@@ -59,10 +66,14 @@ class RealEstateRepository {
       debugPrint('getMyListings error: $e');
       // Fallback without orderBy (missing index)
       try {
-        final snap = await _col.where('ownerId', isEqualTo: uid).get();
+        final snap = await _col.where('ownerId', isEqualTo: uid).limit(100).get();
         var list = snap.docs
-            .map((d) => RealEstateListing.fromJson(
-                d.data() as Map<String, dynamic>, d.id))
+            .map(
+              (d) => RealEstateListing.fromJson(
+                d.data() as Map<String, dynamic>,
+                d.id,
+              ),
+            )
             .toList();
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         if (category != null) {
@@ -97,8 +108,12 @@ class RealEstateRepository {
       q = q.orderBy('createdAt', descending: true).limit(limit);
       final snap = await q.get();
       var list = snap.docs
-          .map((d) => RealEstateListing.fromJson(
-              d.data() as Map<String, dynamic>, d.id))
+          .map(
+            (d) => RealEstateListing.fromJson(
+              d.data() as Map<String, dynamic>,
+              d.id,
+            ),
+          )
           .toList();
 
       // Client-side filters
@@ -106,12 +121,16 @@ class RealEstateRepository {
         list = list.where((l) => l.category == category).toList();
       }
       if (countryCode != null) {
-        list = list.where((l) =>
-            l.countryCode?.toLowerCase() == countryCode.toLowerCase()).toList();
+        list = list
+            .where(
+              (l) => l.countryCode?.toLowerCase() == countryCode.toLowerCase(),
+            )
+            .toList();
       }
       if (locality != null && locality.isNotEmpty) {
-        list = list.where((l) =>
-            l.localityLower == locality.toLowerCase()).toList();
+        list = list
+            .where((l) => l.localityLower == locality.toLowerCase())
+            .toList();
       }
       if (listingType != null) {
         list = list.where((l) => l.listingType == listingType).toList();
@@ -127,15 +146,16 @@ class RealEstateRepository {
       }
       if (zoning != null) {
         list = list
-            .where((l) =>
-                l.zoning?.toLowerCase() == zoning.toLowerCase())
+            .where((l) => l.zoning?.toLowerCase() == zoning.toLowerCase())
             .toList();
       }
       if (state != null && state.isNotEmpty) {
         list = list
-            .where((l) =>
-                l.stateLower == state.toLowerCase() ||
-                l.state?.toLowerCase() == state.toLowerCase())
+            .where(
+              (l) =>
+                  l.stateLower == state.toLowerCase() ||
+                  l.state?.toLowerCase() == state.toLowerCase(),
+            )
             .toList();
       }
 
@@ -144,10 +164,17 @@ class RealEstateRepository {
       debugPrint('searchListings error: $e');
       // Fallback without orderBy (missing index for status+createdAt)
       try {
-        final snap = await _col.where('status', isEqualTo: 'active').limit(limit).get();
+        final snap = await _col
+            .where('status', isEqualTo: 'active')
+            .limit(limit)
+            .get();
         var list = snap.docs
-            .map((d) => RealEstateListing.fromJson(
-                d.data() as Map<String, dynamic>, d.id))
+            .map(
+              (d) => RealEstateListing.fromJson(
+                d.data() as Map<String, dynamic>,
+                d.id,
+              ),
+            )
             .toList();
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         if (category != null) {
@@ -159,8 +186,12 @@ class RealEstateRepository {
         // Last resort: fetch everything
         final snap = await _col.limit(limit).get();
         var list = snap.docs
-            .map((d) => RealEstateListing.fromJson(
-                d.data() as Map<String, dynamic>, d.id))
+            .map(
+              (d) => RealEstateListing.fromJson(
+                d.data() as Map<String, dynamic>,
+                d.id,
+              ),
+            )
             .toList();
         list = list.where((l) => l.status == 'active').toList();
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -177,42 +208,33 @@ class RealEstateRepository {
     final doc = await _col.doc(id).get();
     if (!doc.exists) return null;
     return RealEstateListing.fromJson(
-        doc.data() as Map<String, dynamic>, doc.id);
+      doc.data() as Map<String, dynamic>,
+      doc.id,
+    );
   }
 
   // ─── ENGAGEMENT ───────────────────────────────────────
 
   /// Increment view count
   Future<void> incrementViewCount(String listingId) async {
-    await _col.doc(listingId).update({
-      'viewCount': FieldValue.increment(1),
-    });
+    await _col.doc(listingId).update({'viewCount': FieldValue.increment(1)});
   }
 
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
     final batch = _db.batch();
-    batch.set(
-      _col.doc(listingId).collection('saved_by').doc(userId),
-      {'savedAt': FieldValue.serverTimestamp()},
-    );
-    batch.update(
-      _col.doc(listingId),
-      {'savedCount': FieldValue.increment(1)},
-    );
+    batch.set(_col.doc(listingId).collection('saved_by').doc(userId), {
+      'savedAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(_col.doc(listingId), {'savedCount': FieldValue.increment(1)});
     await batch.commit();
   }
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
     final batch = _db.batch();
-    batch.delete(
-      _col.doc(listingId).collection('saved_by').doc(userId),
-    );
-    batch.update(
-      _col.doc(listingId),
-      {'savedCount': FieldValue.increment(-1)},
-    );
+    batch.delete(_col.doc(listingId).collection('saved_by').doc(userId));
+    batch.update(_col.doc(listingId), {'savedCount': FieldValue.increment(-1)});
     await batch.commit();
   }
 

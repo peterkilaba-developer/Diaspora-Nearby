@@ -15,13 +15,11 @@ void main() {
   late PointsService pointsService;
   late MockPointsRepository mockRepository;
   late MockTrustService mockTrustService;
-  late MockProfileRepository mockProfileRepository;
 
   setUp(() {
     mockRepository = MockPointsRepository();
     mockTrustService = MockTrustService();
-    mockProfileRepository = MockProfileRepository();
-    pointsService = PointsService(mockRepository, mockTrustService, mockProfileRepository);
+    pointsService = PointsService(mockRepository, mockTrustService);
   });
 
   group('PointsService', () {

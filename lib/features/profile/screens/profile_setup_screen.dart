@@ -28,7 +28,6 @@ import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; 
 import '../widgets/profile_setup_home_step.dart';
 import '../widgets/profile_setup_host_step.dart';
 import '../widgets/profile_setup_details_step.dart';
-import '../widgets/relationship_selection_modal.dart'; // [NEW] Import for referral flow
 
 /// Setup step enum matching React's SetupStep type
 enum SetupStep { home, host, profile }
@@ -118,7 +117,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   /// Request location permission for distance calculations
   Future<void> _requestLocationPermission() async {
-
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -475,6 +473,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_profileImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add a profile photo'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     if (_homeLocation == null || _hostLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select both locations')),
@@ -564,7 +571,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
       // 4.5 Create Communities & Chats (Critical Step)
       // UPDATED: Moved BEFORE points initialization to ensure community documents exist
-      // when _distributeTreasuryPoints tries to update treasury subcollections
+      // when Cloud Functions distribute treasury points during awardPoints calls
       List<String> createdCommunityIds = [];
       final Set<String> newCommunityNames = {};
       void onFirstMember(String name) => newCommunityNames.add(name);
@@ -603,40 +610,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           }
         }
 
-        // [NEW] If referred, prompt for Relationship Connection immediately
-        // We do this after communities content (step 5) or before?
-        // Let's do it after we have setup the user but BEFORE navigation.
-        // We will store it to trigger the dialog.
-
-        if (referrerId != null) {
-          if (!context.mounted) return;
-          // Fetch referrer name for the modal
-          final referrerProfile = await ref
-              .read(profileRepositoryProvider)
-              .getUserProfile(referrerId);
-          if (referrerProfile != null) {
-            if (!context.mounted) return;
-            final referrerName = referrerProfile.fullName;
-
-            // Trigger Modal
-            await showModalBottomSheet(
-              // ignore: use_build_context_synchronously
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              enableDrag: false,
-              isDismissible:
-                  false, // Force selection? Or allow skip? User request says "we automatically show...".
-              // Let's allow dismiss but it's strongly encouraged.
-              builder: (sheetContext) => RelationshipSelectionModal(
-                otherUserId: referrerId!,
-                otherUserName: referrerName,
-                // [UPDATED] Allow all relationship types (including Friends) as requested.
-                // includeFriend: false,
-              ),
-            );
-          }
-        }
+        // Relationships are added by users on their own time from the DM chat
+        // "Show More" menu — no automatic prompting during signup.
 
         // Generate referral code for this new user
         await pointsService.generateReferralCode(
@@ -685,178 +660,166 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
       if (!context.mounted) return;
       if (newCommunityNames.isNotEmpty) {
-          await showDialog(
-            // ignore: use_build_context_synchronously
-            context: context,
-            builder: (ctx) => Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 32,
-                ),
+        await showDialog(
+          // ignore: use_build_context_synchronously
+          context: context,
+          builder: (ctx) => Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(ctx).size.height * 0.7,
                 ),
                 child: SingleChildScrollView(
                   child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          ctx,
-                        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        LucideIcons.partyPopper,
-                        size: 40,
-                        color: Colors.amber,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Congratulations!',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'You are the first member of these ${newCommunityNames.length} communities!\n',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                        height: 1.4,
-                      ),
-                    ),
-                    // List communities as chips for readability
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: newCommunityNames.map((name) => Chip(
-                        label: Text(
-                          name,
-                          style: const TextStyle(fontSize: 12),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            ctx,
+                          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
                         ),
-                        visualDensity: VisualDensity.compact,
-                      )).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Know someone who lives here?\nInvite them and earn 100 DSP! 🎁',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                        height: 1.4,
+                        child: const Icon(
+                          LucideIcons.partyPopper,
+                          size: 40,
+                          color: Colors.amber,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: () async {
-                          final user = ref
-                              .read(authRepositoryProvider)
-                              .currentUser;
-                          String shareUrl = 'https://diasporanearby.com';
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Congratulations!',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'You are the first member of these ${newCommunityNames.length} communities!\n',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                          height: 1.4,
+                        ),
+                      ),
+                      // List communities as chips for readability
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: newCommunityNames
+                            .map(
+                              (name) => Chip(
+                                label: Text(
+                                  name,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Know someone who lives here?\nInvite them and earn 1,000 DSP! 🎁',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            final user = ref
+                                .read(authRepositoryProvider)
+                                .currentUser;
+                            String shareUrl = 'https://diasporanearby.com/invite';
 
-                          if (user != null) {
-                            try {
-                              String? code = await ref
-                                  .read(pointsRepositoryProvider)
-                                  .getReferralCode(user.uid);
-                              if (code == null) {
-                                final countryCode =
-                                    _hostLocation?.countryCode ?? 'US';
-                                code = await ref
+                            if (user != null) {
+                              try {
+                                String? code = await ref
                                     .read(pointsRepositoryProvider)
-                                    .generateReferralCode(
-                                      user.uid,
-                                      _firstNameController.text,
-                                      countryCode,
-                                    );
+                                    .getReferralCode(user.uid);
+                                if (code == null) {
+                                  final countryCode =
+                                      _hostLocation?.countryCode ?? 'US';
+                                  code = await ref
+                                      .read(pointsRepositoryProvider)
+                                      .generateReferralCode(
+                                        user.uid,
+                                        _firstNameController.text,
+                                        countryCode,
+                                      );
+                                }
+                                shareUrl = '$shareUrl?code=$code';
+                              } catch (e) {
+                                debugPrint('Error getting referral code: $e');
                               }
-                              shareUrl = '$shareUrl/invite?code=$code';
-                                                    } catch (e) {
-                              debugPrint('Error getting referral code: $e');
                             }
-                          }
 
-                          await SharePlus.instance.share(
-                            ShareParams(
-                              text: 'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
-                              subject: 'Diaspora Nearby',
-                            ),
-                          );
+                            await SharePlus.instance.share(
+                              ShareParams(
+                                text:
+                                    'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
+                                subject: 'Diaspora Nearby',
+                              ),
+                            );
 
-                          // Award DSP for sharing
-                          if (user != null) {
-                            try {
-                              // 10 DSP exploration reward for discovering the share action
-                              await ref
-                                  .read(pointsServiceProvider)
-                                  .trackExplorationReward(
-                                    user.uid,
-                                    'action_explore_first_share',
+                            // Award DSP for sharing
+                            if (user != null) {
+                              try {
+                                // Share reward — deprecated tracking functions
+                                // (actual DSP is awarded via referral signup when recipient signs up)
+                                if (ctx.mounted) {
+                                  showExplorationRewardToast(
+                                    ctx,
+                                    message: 'Share sent! 🎉 You\'ll earn 1,000 DSP when they sign up.',
+                                    points: 1000,
                                   );
-
-                              // 100 DSP share reward using the proper share tracking
-                              final shareRewarded = await ref
-                                  .read(pointsServiceProvider)
-                                  .trackExternalShare(
-                                    user.uid,
-                                    'invite_referral',
-                                  );
-
-                              if (shareRewarded && ctx.mounted) {
-                                showExplorationRewardToast(
-                                  ctx,
-                                  message: 'First Share Reward! 🎉',
-                                  points: 110,
-                                );
+                                }
+                              } catch (e) {
+                                debugPrint('Error awarding share DSP: $e');
                               }
-                            } catch (e) {
-                              debugPrint('Error awarding share DSP: $e');
                             }
-                          }
 
-                          // Dismiss dialog AFTER share sheet completes
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        },
-                        icon: const Icon(LucideIcons.share2),
-                        label: const Text('Invite Friends  •  Earn 100 DSP'),
+                            // Dismiss dialog AFTER share sheet completes
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          },
+                          icon: const Icon(LucideIcons.share2),
+                          label: const Text('Invite Friends  •  Earn 1,000 DSP'),
+                        ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Maybe Later'),
-                    ),
-                  ],
-                ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Maybe Later'),
+                      ),
+                    ],
+                  ),
                 ), // SingleChildScrollView
               ), // ConstrainedBox
-              ),
             ),
-          );
-        }
-        // Clear pending referral code on success
-        ref.read(pendingReferralCodeProvider.notifier).state = null;
+          ),
+        );
+      }
+      // Clear pending referral code on success
+      ref.read(pendingReferralCodeProvider.notifier).set(null);
 
-        if (context.mounted) {
-          // ignore: use_build_context_synchronously
-          context.go('/nearby'); // First time users land on Nearby to explore
-        }
+      if (context.mounted) {
+        // ignore: use_build_context_synchronously
+        context.go('/nearby'); // First time users land on Nearby to explore
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(

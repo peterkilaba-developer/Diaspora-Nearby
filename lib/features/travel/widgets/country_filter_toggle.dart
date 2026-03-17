@@ -28,10 +28,12 @@ class CountryFilterToggle extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final hostCountry =
-        hostCountryCode != null ? getCountryByCode(hostCountryCode!) : null;
-    final homeCountry =
-        homeCountryCode != null ? getCountryByCode(homeCountryCode!) : null;
+    final hostCountry = hostCountryCode != null
+        ? getCountryByCode(hostCountryCode!)
+        : null;
+    final homeCountry = homeCountryCode != null
+        ? getCountryByCode(homeCountryCode!)
+        : null;
     final hostName = hostCountry?.name ?? 'Host';
     final homeName = homeCountry?.name ?? 'Home';
     final hostFlag = hostCountry?.flag;
@@ -46,13 +48,29 @@ class CountryFilterToggle extends StatelessWidget {
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(children: [
-          _chip(context, theme, isDark, 'All', 'all', LucideIcons.globe),
-          _chip(context, theme, isDark, hostName, 'host', LucideIcons.mapPin,
-              flag: hostFlag),
-          _chip(context, theme, isDark, homeName, 'home', LucideIcons.home,
-              flag: homeFlag),
-        ]),
+        child: Row(
+          children: [
+            _chip(context, theme, isDark, 'All', 'all', LucideIcons.globe),
+            _chip(
+              context,
+              theme,
+              isDark,
+              hostName,
+              'host',
+              LucideIcons.mapPin,
+              flag: hostFlag,
+            ),
+            _chip(
+              context,
+              theme,
+              isDark,
+              homeName,
+              'home',
+              LucideIcons.home,
+              flag: homeFlag,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -75,7 +93,7 @@ class CountryFilterToggle extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: isSelected
-                ? AppTheme.accent.withOpacity(isDark ? 0.18 : 0.10)
+                ? AppTheme.accent.withValues(alpha: isDark ? 0.18 : 0.10)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
@@ -86,9 +104,11 @@ class CountryFilterToggle extends StatelessWidget {
                 Text(flag, style: const TextStyle(fontSize: 14)),
                 const SizedBox(width: 4),
               ] else ...[
-                Icon(icon,
-                    size: 13,
-                    color: isSelected ? AppTheme.accent : theme.hintColor),
+                Icon(
+                  icon,
+                  size: 13,
+                  color: isSelected ? AppTheme.accent : theme.hintColor,
+                ),
                 const SizedBox(width: 4),
               ],
               Flexible(

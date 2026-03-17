@@ -11,8 +11,6 @@ import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_he
 class MyListingsScreen extends ConsumerWidget {
   const MyListingsScreen({super.key});
 
-
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -20,9 +18,7 @@ class MyListingsScreen extends ConsumerWidget {
     final userId = ref.watch(authRepositoryProvider).currentUser?.uid;
 
     if (userId == null) {
-      return const Scaffold(
-        body: Center(child: Text('Please sign in')),
-      );
+      return const Scaffold(body: Center(child: Text('Please sign in')));
     }
 
     final repo = ref.watch(marketplaceRepositoryProvider);
@@ -61,7 +57,7 @@ class MyListingsScreen extends ConsumerWidget {
                   Icon(
                     LucideIcons.packagePlus,
                     size: 48,
-                    color: theme.hintColor.withOpacity(0.3),
+                    color: theme.hintColor.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -77,7 +73,7 @@ class MyListingsScreen extends ConsumerWidget {
                     'Create your first listing to start selling',
                     style: TextStyle(
                       fontSize: 13,
-                      color: theme.hintColor.withOpacity(0.7),
+                      color: theme.hintColor.withValues(alpha: 0.7),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -99,9 +95,14 @@ class MyListingsScreen extends ConsumerWidget {
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+            padding: EdgeInsets.fromLTRB(
+              AppTheme.pageHorizontalPadding,
+              AppTheme.pageHorizontalPadding,
+              AppTheme.pageHorizontalPadding,
+              AppTheme.pageHorizontalPadding + MediaQuery.of(context).padding.bottom,
+            ),
             itemCount: listings.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               return _buildMyListingCard(
                 context,
@@ -129,14 +130,12 @@ class MyListingsScreen extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withOpacity(0.04)
-              : Colors.white,
+          color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
-                ? Colors.white.withOpacity(0.06)
-                : Colors.black.withOpacity(0.06),
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.06),
           ),
         ),
         child: Row(
@@ -158,11 +157,7 @@ class MyListingsScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Top row: status chip
-                    Row(
-                      children: [
-                        _buildStatusChip(listing.status, isDark),
-                      ],
-                    ),
+                    Row(children: [_buildStatusChip(listing.status, isDark)]),
                     const SizedBox(height: 3),
                     Text(
                       listing.title,
@@ -191,7 +186,6 @@ class MyListingsScreen extends ConsumerWidget {
     );
   }
 
-
   Widget _buildStatusChip(String status, bool isDark) {
     Color color;
     String label;
@@ -219,7 +213,7 @@ class MyListingsScreen extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

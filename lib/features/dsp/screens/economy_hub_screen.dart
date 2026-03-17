@@ -1,32 +1,107 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/core/widgets/app_install_card.dart';
 
-class EconomyHubScreen extends ConsumerWidget {
+class EconomyHubScreen extends ConsumerStatefulWidget {
   const EconomyHubScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EconomyHubScreen> createState() => _EconomyHubScreenState();
+}
+
+class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
+    with WidgetsBindingObserver {
+  bool _locationAlwaysGranted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkLocationAlwaysStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check when user returns from system settings
+    if (state == AppLifecycleState.resumed) {
+      _checkLocationAlwaysStatus();
+    }
+  }
+
+  Future<void> _checkLocationAlwaysStatus() async {
+    if (kIsWeb) {
+      if (mounted) setState(() => _locationAlwaysGranted = true);
+      return;
+    }
+    try {
+      final status = await Permission.locationAlways.status;
+      if (mounted) {
+        setState(() {
+          _locationAlwaysGranted = status.isGranted || status.isLimited;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking locationAlways: $e');
+      // Treat as granted if we can't check, to avoid confusion
+      if (mounted) setState(() => _locationAlwaysGranted = true);
+    }
+  }
+
+  Future<void> _requestLocationAlways() async {
+    if (kIsWeb) return;
+    try {
+      // Ensure foreground location is granted first
+      final fgStatus = await Permission.location.status;
+      if (!fgStatus.isGranted && !fgStatus.isLimited) {
+        await Permission.location.request();
+      }
+
+      final status = await Permission.locationAlways.request();
+      if (status.isPermanentlyDenied || status.isDenied) {
+        // On most Android versions, locationAlways requires going to Settings
+        await openAppSettings();
+      }
+      await _checkLocationAlwaysStatus();
+    } catch (e) {
+      debugPrint('Error requesting locationAlways: $e');
+      await openAppSettings();
+      await _checkLocationAlwaysStatus();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final profileAsync = ref.watch(userProfileProvider);
-    final isAdmin = profileAsync.valueOrNull?.isAdmin == true;
-    final homeCountry = profileAsync.valueOrNull?.homeCountry;
+    final isAdmin = profileAsync.value?.isAdmin == true;
+    final homeCountry = profileAsync.value?.homeCountry;
+    final profile = profileAsync.value;
 
     return Scaffold(
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(LucideIcons.wallet, size: 22, color: AppTheme.accent),
+            Icon(LucideIcons.globe, size: 22, color: AppTheme.accent),
             SizedBox(width: 8),
             Text(
-              'Diaspora Economy',
+              'Diaspora Ecosystem',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ],
@@ -51,271 +126,318 @@ class EconomyHubScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- 1. DIASPORA MARKETPLACE (top, most used) ---
-            _buildEconomyCard(
+            // --- PWA INSTALL + TESTER SIGNUP (web only) ---
+            if (kIsWeb) ...[
+              const AppInstallCard(),
+              const SizedBox(height: 16),
+            ],
+
+            // ============================================
+            // SECTION 1: SAFETY NET (Emergency Fund first)
+            // ============================================
+            _buildSectionHeader(context, 'SAFETY NET', LucideIcons.shieldAlert),
+            _buildSectionContainer(
               context,
-              ref: ref,
-              icon: LucideIcons.store,
-              title: 'Diaspora Marketplace',
-              description: 'Products Services and Jobs Listings',
-              color: Colors.teal,
-              explorationAction: ExplorationAction.economyMarketplace,
-              onTap: () => context.push('/marketplace'),
-            ),
-
-            const SizedBox(height: 24),
-
-            // --- 1b. REAL ESTATE ---
-            Text(
-              'Real Estate',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                letterSpacing: 0.5,
+              child: Column(
+                children: [
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.shieldAlert,
+                    iconColor: Colors.red.shade400,
+                    title: 'Community Emergency Fund',
+                    subtitle: 'Medical, Legal, Bereavement & Repatriation',
+                    explorationAction: ExplorationAction.economyEmergencyFund,
+                    onTap: () => context.push('/dsp/emergency-fund'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickAccessCard(
+            const SizedBox(height: 16),
+
+            // ============================================
+            // SECTION 2: MY WALLET
+            // ============================================
+            _buildSectionHeader(context, 'MY WALLET', LucideIcons.wallet),
+            _buildSectionContainer(
+              context,
+              child: Column(
+                children: [
+                  _buildRow(
                     context,
+                    ref: ref,
+                    icon: LucideIcons.coins,
+                    iconColor: AppTheme.accent,
+                    title: 'Diaspora Social Points (DSP)',
+                    subtitle: 'Earn & convert to tokens',
+                    explorationAction: ExplorationAction.walletView,
+                    onTap: () => context.push('/dsp/points'),
+                  ),
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.coins,
+                    iconColor: Colors.orange,
+                    title: r'$DIASPORA Token',
+                    subtitle: 'Hold, Invest, Spend, Swap or Trade',
+                    explorationAction: ExplorationAction.economyCrypto,
+                    onTap: () => context.push('/dsp/crypto'),
+                    useLogoImage: true,
+                  ),
+                  // Remittances (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.send,
+                      iconColor: AppTheme.accent,
+                      title: 'International Remittances',
+                      subtitle: 'Send money to ${homeCountry ?? 'home'}',
+                      explorationAction: ExplorationAction.economyRemittances,
+                      onTap: () => context.push('/dsp/remittances'),
+                      isComingSoon: true,
+                    ),
+                   // DDI — Host Community Loans (Admin only)
+                   if (isAdmin)
+                     _buildRow(
+                       context,
+                       ref: ref,
+                       icon: LucideIcons.landmark,
+                       iconColor: AppTheme.accent,
+                       title: 'DDI Loans',
+                       subtitle: 'Host community business loans — funded by host treasury',
+                       explorationAction: ExplorationAction.economyDfdi,
+                       onTap: () => context.push('/dsp/dfdi'),
+                       isComingSoon: true,
+                     ),
+                   // DFDI — Home Country Large Projects (Admin only)
+                   if (isAdmin)
+                     _buildRow(
+                       context,
+                       ref: ref,
+                       icon: LucideIcons.trendingUp,
+                       iconColor: AppTheme.accent,
+                       title: 'DFDI Projects',
+                       subtitle: 'Home country direct investments — \$1M+ from home treasury',
+                       explorationAction: ExplorationAction.economyDfdi,
+                       onTap: () => context.push('/dsp/dfdi'),
+                       isComingSoon: true,
+                     ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ============================================
+            // SECTION 3: MARKETPLACE
+            // ============================================
+            _buildSectionHeader(
+              context,
+              'MARKETPLACE',
+              LucideIcons.shoppingBag,
+            ),
+            _buildSectionContainer(
+              context,
+              child: Column(
+                children: [
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.package,
+                    iconColor: Colors.teal,
+                    title: 'Products',
+                    subtitle: 'Buy from diaspora businesses',
+                    onTap: () => context.push('/marketplace?type=product'),
+                  ),
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.wrench,
+                    iconColor: Colors.deepPurple,
+                    title: 'Services',
+                    subtitle: 'Find diaspora services',
+                    onTap: () => context.push('/marketplace?type=service'),
+                  ),
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.briefcase,
+                    iconColor: Colors.orange.shade700,
+                    title: 'Jobs',
+                    subtitle: 'Find opportunities',
+                    onTap: () => context.push('/marketplace?type=job'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ============================================
+            // SECTION 4: REAL ESTATE
+            // ============================================
+            _buildSectionHeader(context, 'REAL ESTATE', LucideIcons.building),
+            _buildSectionContainer(
+              context,
+              child: Column(
+                children: [
+                  _buildRow(
+                    context,
+                    ref: ref,
                     icon: LucideIcons.map,
-                    title: 'Plot',
-                    subtitle: 'Rent Lease Buy',
-                    color: Colors.amber.shade700,
+                    iconColor: Colors.amber.shade700,
+                    title: 'Land & Plots',
+                    subtitle: 'Rent, Lease or Buy',
                     onTap: () => context.push('/dsp/real-estate/plot'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickAccessCard(
+                  _buildRow(
                     context,
+                    ref: ref,
                     icon: LucideIcons.sprout,
-                    title: 'Farm',
-                    subtitle: 'Rent Lease Buy',
-                    color: Colors.green.shade600,
+                    iconColor: Colors.green.shade600,
+                    title: 'Farms',
+                    subtitle: 'Rent, Lease or Buy',
                     onTap: () => context.push('/dsp/real-estate/farm'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickAccessCard(
+                  _buildRow(
                     context,
+                    ref: ref,
                     icon: LucideIcons.home,
-                    title: 'House',
-                    subtitle: 'Rent Lease Buy',
-                    color: Colors.blue.shade600,
+                    iconColor: Colors.blue.shade600,
+                    title: 'Houses',
+                    subtitle: 'Rent, Lease or Buy',
                     onTap: () => context.push('/dsp/real-estate/house'),
                   ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // --- 2. DIASPORA TRAVEL PORTAL ---
-            Text(
-              'Diaspora Travel Portal',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                letterSpacing: 0.5,
+                ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            // Travel Portal - 2x2 Grid
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickAccessCard(
+            // ============================================
+            // SECTION 5: TRAVEL
+            // ============================================
+            _buildSectionHeader(context, 'TRAVEL', LucideIcons.plane),
+            _buildSectionContainer(
+              context,
+              child: Column(
+                children: [
+                  _buildRow(
                     context,
+                    ref: ref,
                     icon: LucideIcons.plane,
+                    iconColor: Colors.blue,
                     title: 'Flights',
                     subtitle: 'Book flights',
-                    color: Colors.blue,
-                    isComingSoon: false,
                     onTap: () => context.push('/dsp/travel/flights'),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickAccessCard(
+                  _buildRow(
                     context,
+                    ref: ref,
                     icon: LucideIcons.hotel,
+                    iconColor: Colors.deepPurple,
                     title: 'Hotels',
                     subtitle: 'Find hotels',
-                    color: Colors.deepPurple,
-                    isComingSoon: false,
                     onTap: () => context.push('/dsp/travel/hotels'),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickAccessCard(
+                  _buildRow(
                     context,
+                    ref: ref,
                     icon: LucideIcons.home,
+                    iconColor: Colors.teal,
                     title: 'Stays',
                     subtitle: 'Short-term stays',
-                    color: Colors.teal,
-                    isComingSoon: false,
                     onTap: () => context.push('/dsp/travel/stays'),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickAccessCard(
+                  _buildRow(
                     context,
+                    ref: ref,
                     icon: LucideIcons.car,
+                    iconColor: Colors.orange,
                     title: 'Car Rental',
                     subtitle: 'Rent a car',
-                    color: Colors.orange,
-                    isComingSoon: false,
                     onTap: () => context.push('/dsp/travel/car-rental'),
                   ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // --- 3. IN-APP POINTS AND BLOCKCHAIN TOKENS ---
-            Text(
-              'In-App Points and Blockchain Tokens',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                letterSpacing: 0.5,
+                ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            // DSP Points
-            _buildEconomyCard(
+            // ============================================
+            // SECTION 6: QUICK SETTINGS
+            // ============================================
+            _buildSectionHeader(context, 'QUICK SETTINGS', LucideIcons.zap),
+            _buildSectionContainer(
               context,
-              ref: ref,
-              icon: LucideIcons.coins,
-              title: 'Diaspora Social Points - DSP',
-              description: 'Earn & convert to tokens',
-              color: AppTheme.accent,
-              explorationAction: ExplorationAction.walletView,
-              onTap: () => context.push('/dsp/points'),
-            ),
-            const SizedBox(height: 12),
-
-            // Diaspora Token
-            _buildEconomyCard(
-              context,
-              ref: ref,
-              icon: LucideIcons.coins,
-              imagePath: 'assets/icons/logo-original.png',
-              imageColor: Colors.orange,
-              title: 'Diaspora Token - \$DIASPORA',
-              description: 'Hold Invest Spend Swap or Trade',
-              color: AppTheme.accent,
-              explorationAction: ExplorationAction.economyCrypto,
-              onTap: () => context.push('/dsp/crypto'),
-            ),
-            const SizedBox(height: 12),
-
-            // Remittances (Admin only)
-            if (isAdmin) ...[
-              _buildEconomyCard(
-                context,
-                ref: ref,
-                icon: LucideIcons.send,
-                title: 'International Remittances',
-                description: 'Send money to ${homeCountry ?? 'home'}',
-                color: AppTheme.accent,
-                isComingSoon: true,
-                explorationAction: ExplorationAction.economyRemittances,
-                onTap: () => context.push('/dsp/remittances'),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // DFDI (Admin only)
-            if (isAdmin) ...[
-              _buildEconomyCard(
-                context,
-                ref: ref,
-                icon: LucideIcons.trendingUp,
-                title: 'Diaspora Foreign Direct Investments - DFDI',
-                description:
-                    'Invest with Community & Community Invest in You',
-                color: AppTheme.accent,
-                isComingSoon: true,
-                explorationAction: ExplorationAction.economyDfdi,
-                onTap: () => context.push('/dsp/dfdi'),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            const SizedBox(height: 24),
-
-            // --- 4. COMMUNITY SUPPORT ---
-            Text(
-              'Community Support',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            _buildEconomyCard(
-              context,
-              ref: ref,
-              icon: LucideIcons.shieldAlert,
-              title: 'Community Emergency Fund',
-              description: 'Medical, Legal, Bereavement & Repatriation',
-              color: AppTheme.accent,
-              explorationAction: ExplorationAction.economyEmergencyFund,
-              onTap: () => context.push('/dsp/emergency-fund'),
-            ),
-
-            const SizedBox(height: 24),
-
-            // --- 5. MY PROFILE & SETTINGS ---
-            Text(
-              'My Profile & Settings',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                letterSpacing: 0.5,
+              child: Column(
+                children: [
+                  // Notification toggle
+                  _buildToggleRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.bell,
+                    iconColor: Colors.purple,
+                    title: 'Push Notifications',
+                    subtitle: 'Receive updates & alerts',
+                    value: profile?.notificationsEnabled ?? false,
+                    onChanged: (val) async {
+                      final uid = profile?.uid;
+                      if (uid == null) return;
+                      if (val) {
+                        await ref
+                            .read(pushNotificationServiceProvider)
+                            .registerForUser(uid);
+                      } else {
+                        await ref
+                            .read(pushNotificationServiceProvider)
+                            .disableNotifications(uid);
+                      }
+                    },
+                  ),
+                  // Location Always toggle (native only)
+                  if (!kIsWeb)
+                    _buildToggleRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.mapPin,
+                      iconColor: Colors.blue,
+                      title: 'Location Always',
+                      subtitle: 'Allow background location updates',
+                      value: _locationAlwaysGranted,
+                      onChanged: (val) async {
+                        if (val) {
+                          await _requestLocationAlways();
+                        } else {
+                          // Can't revoke programmatically — send to settings
+                          await openAppSettings();
+                          // Re-check after returning from settings
+                          await _checkLocationAlwaysStatus();
+                        }
+                      },
+                    ),
+                  // My Profile
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.user,
+                    iconColor: AppTheme.accent,
+                    title: 'My Profile',
+                    subtitle: 'View & edit your profile',
+                    explorationAction: ExplorationAction.profileEdit,
+                    onTap: () => context.push('/profile'),
+                  ),
+                  // Settings
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.settings,
+                    iconColor: Colors.grey,
+                    title: 'Settings',
+                    subtitle: 'Account, privacy & theme',
+                    explorationAction: ExplorationAction.moreScreenSettings,
+                    onTap: () => context.push('/settings'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-
-            _buildEconomyCard(
-              context,
-              ref: ref,
-              icon: LucideIcons.user,
-              title: 'My Profile',
-              description: 'View & edit your profile',
-              color: AppTheme.accent,
-              explorationAction: ExplorationAction.profileEdit,
-              onTap: () => context.push('/profile'),
-            ),
-            const SizedBox(height: 12),
-
-            _buildEconomyCard(
-              context,
-              ref: ref,
-              icon: LucideIcons.settings,
-              title: 'Settings',
-              description: 'Account, privacy, notifications & theme',
-              color: AppTheme.accent,
-              explorationAction: ExplorationAction.moreScreenSettings,
-              onTap: () => context.push('/settings'),
-            ),
-
             const SizedBox(height: 32),
           ],
         ),
@@ -323,119 +445,102 @@ class EconomyHubScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickAccessCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-    bool isComingSoon = false,
-  }) {
+  // ─── Section header (uppercase label + icon) ───
+  Widget _buildSectionHeader(
+    BuildContext context,
+    String title,
+    IconData icon,
+  ) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: AppTheme.cardDecoration(context).copyWith(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: theme.colorScheme.onSurface,
-              ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                if (isComingSoon)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.brightness == Brightness.dark
-                          ? Colors.grey.shade800
-                          : Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Coming Soon',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: theme.brightness == Brightness.dark
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
-                      ),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.hintColor,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildEconomyCard(
+  // ─── Section card container ───
+  Widget _buildSectionContainer(
+    BuildContext context, {
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
+      ),
+      child: child,
+    );
+  }
+
+  // ─── Standard navigable row ───
+  Widget _buildRow(
     BuildContext context, {
     required WidgetRef ref,
     required IconData icon,
-    String? imagePath,
-    Color? imageColor,
+    required Color iconColor,
     required String title,
-    required String description,
-    required Color color,
+    required String subtitle,
     required VoidCallback onTap,
-    required String explorationAction,
+    String? explorationAction,
     bool isComingSoon = false,
+    bool useLogoImage = false,
   }) {
     final theme = Theme.of(context);
+
+    final effectiveOnTap = explorationAction != null
+        ? () {
+            _trackExploration(context, ref, explorationAction);
+            onTap();
+          }
+        : onTap;
+
     return InkWell(
-      onTap: () {
-        _trackExploration(context, ref, explorationAction);
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-        decoration: AppTheme.cardDecoration(context).copyWith(
-          borderRadius: BorderRadius.circular(16),
+      onTap: effectiveOnTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.sectionHorizontalPadding,
+          vertical: 14,
         ),
         child: Row(
           children: [
-            imagePath != null
-                ? Image.asset(
-                    imagePath,
-                    width: 24,
-                    height: 24,
-                    fit: BoxFit.contain,
-                    color: imageColor,
-                  )
-                : Icon(icon, color: color, size: 24),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: useLogoImage
+                  ? Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Image.asset(
+                        'assets/icons/logo-orange-transparent-24.png',
+                        width: 20,
+                        height: 20,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : Icon(icon, color: iconColor, size: 20),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -443,21 +548,22 @@ class EconomyHubScreen extends ConsumerWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: theme.hintColor,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.textTheme.bodySmall?.color?.withValues(
+                          alpha: 0.7,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -484,6 +590,12 @@ class EconomyHubScreen extends ConsumerWidget {
                         : Colors.grey.shade600,
                   ),
                 ),
+              )
+            else
+              Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: theme.iconTheme.color?.withValues(alpha: 0.3),
               ),
           ],
         ),
@@ -491,6 +603,71 @@ class EconomyHubScreen extends ConsumerWidget {
     );
   }
 
+  // ─── Toggle row (switch instead of chevron) ───
+  Widget _buildToggleRow(
+    BuildContext context, {
+    required WidgetRef ref,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.sectionHorizontalPadding,
+        vertical: 10,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
+                ),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.textTheme.bodySmall?.color?.withValues(
+                        alpha: 0.7,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppTheme.accent,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Exploration tracking ───
   Future<void> _trackExploration(
     BuildContext context,
     WidgetRef ref,

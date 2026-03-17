@@ -14,7 +14,6 @@ import 'package:diaspora_nearby/features/travel/services/peer_listing_repository
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/my_listings_screen.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
-import 'package:diaspora_nearby/features/travel/utils/peer_listing_seeder.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 
 class StaySearchScreen extends ConsumerStatefulWidget {
@@ -51,11 +50,24 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
   String? _error;
 
   static const _propertyTypes = [
-    'Apartment', 'House', 'Room', 'Villa', 'Studio', 'Condo',
+    'Apartment',
+    'House',
+    'Room',
+    'Villa',
+    'Studio',
+    'Condo',
   ];
   static const _filterAmenities = [
-    'Wi-Fi', 'Kitchen', 'AC', 'Pool', 'Parking',
-    'Washer', 'Gym', 'Workspace', 'TV', 'Heating',
+    'Wi-Fi',
+    'Kitchen',
+    'AC',
+    'Pool',
+    'Parking',
+    'Washer',
+    'Gym',
+    'Workspace',
+    'TV',
+    'Heating',
   ];
 
   @override
@@ -73,13 +85,26 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
   }
 
   Future<void> _loadListings() async {
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final repo = ref.read(peerListingRepositoryProvider);
       final results = await repo.searchListings(type: 'stay', limit: 100);
-      if (mounted) setState(() { _allListings = results; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _allListings = results;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; _isLoading = false; });
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -122,8 +147,13 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
     if (locQuery.isNotEmpty) {
       list = list.where((l) {
         final fields = [
-          l.locality, l.subLocality, l.city, l.state,
-          l.country, l.address, l.localityLower,
+          l.locality,
+          l.subLocality,
+          l.city,
+          l.state,
+          l.country,
+          l.address,
+          l.localityLower,
         ].whereType<String>().map((s) => s.toLowerCase());
         return fields.any((f) => f.contains(locQuery));
       }).toList();
@@ -131,17 +161,23 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
 
     // Property type
     if (_propertyType != null) {
-      list = list.where((l) =>
-          l.propertyType?.toLowerCase() == _propertyType!.toLowerCase(),
-      ).toList();
+      list = list
+          .where(
+            (l) =>
+                l.propertyType?.toLowerCase() == _propertyType!.toLowerCase(),
+          )
+          .toList();
     }
 
     // Price range
     if (_priceFilterActive) {
-      list = list.where((l) =>
-          l.pricePerUnit >= _priceRange.start &&
-          l.pricePerUnit <= _priceRange.end,
-      ).toList();
+      list = list
+          .where(
+            (l) =>
+                l.pricePerUnit >= _priceRange.start &&
+                l.pricePerUnit <= _priceRange.end,
+          )
+          .toList();
     }
 
     // Min beds
@@ -158,8 +194,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
     if (_selectedAmenities.isNotEmpty) {
       list = list.where((l) {
         final la = l.amenities?.map((a) => a.toLowerCase()).toSet() ?? {};
-        return _selectedAmenities.every(
-            (a) => la.contains(a.toLowerCase()));
+        return _selectedAmenities.every((a) => la.contains(a.toLowerCase()));
       }).toList();
     }
 
@@ -176,7 +211,7 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final profileAsync = ref.watch(userProfileProvider);
-    final profile = profileAsync.valueOrNull;
+    final profile = profileAsync.value;
     final listings = _filteredListings(profile);
 
     return Scaffold(
@@ -207,7 +242,8 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
       title: Text(
         'Find a Stay',
         style: TextStyle(
-          fontSize: 18, fontWeight: FontWeight.bold,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
           color: theme.colorScheme.onSurface,
         ),
       ),
@@ -226,32 +262,23 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
         ),
         PopupMenuButton<String>(
           icon: const Icon(LucideIcons.moreVertical, size: 20),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           itemBuilder: (_) => [
             PopupMenuItem(
               value: 'my_listings',
-              child: Row(children: [
-                Icon(LucideIcons.layoutList, size: 16, color: theme.colorScheme.onSurface),
-                const SizedBox(width: 10),
-                const Text('My Listings'),
-              ]),
-            ),
-            const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'seed',
-              child: Row(children: [
-                Icon(LucideIcons.database, size: 16, color: theme.colorScheme.onSurface),
-                const SizedBox(width: 10),
-                const Text('Seed Mock Stays'),
-              ]),
-            ),
-            PopupMenuItem(
-              value: 'clear_seed',
-              child: Row(children: [
-                Icon(LucideIcons.trash2, size: 16, color: theme.colorScheme.onSurface),
-                const SizedBox(width: 10),
-                const Text('Clear Mock Data'),
-              ]),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.layoutList,
+                    size: 16,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('My Listings'),
+                ],
+              ),
             ),
           ],
           onSelected: (v) async {
@@ -262,12 +289,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                   builder: (_) => const MyListingsScreen(filterType: 'stay'),
                 ),
               );
-            } else if (v == 'seed') {
-              await PeerListingSeeder.seed();
-              _loadListings();
-            } else if (v == 'clear_seed') {
-              await PeerListingSeeder.clear();
-              _loadListings();
             }
           },
         ),
@@ -304,21 +325,27 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
             const SizedBox(height: 8),
 
             // Date row
-            Row(children: [
-              Expanded(child: TravelDateField(
-                controller: _checkInController,
-                hint: 'Check-in',
-                icon: LucideIcons.calendarDays,
-                onTap: () => _pickDate(isCheckIn: true),
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: TravelDateField(
-                controller: _checkOutController,
-                hint: 'Check-out',
-                icon: LucideIcons.calendarDays,
-                onTap: () => _pickDate(isCheckIn: false),
-              )),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: TravelDateField(
+                    controller: _checkInController,
+                    hint: 'Check-in',
+                    icon: LucideIcons.calendarDays,
+                    onTap: () => _pickDate(isCheckIn: true),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TravelDateField(
+                    controller: _checkOutController,
+                    hint: 'Check-out',
+                    icon: LucideIcons.calendarDays,
+                    onTap: () => _pickDate(isCheckIn: false),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
 
             // Guests stepper
@@ -335,20 +362,26 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
             // Advanced toggle
             GestureDetector(
               onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-              child: Row(children: [
-                Icon(
-                  _showAdvanced ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                  size: 14, color: AppTheme.accent,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _showAdvanced ? 'Hide filters' : 'More filters',
-                  style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w500,
+              child: Row(
+                children: [
+                  Icon(
+                    _showAdvanced
+                        ? LucideIcons.chevronUp
+                        : LucideIcons.chevronDown,
+                    size: 14,
                     color: AppTheme.accent,
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 4),
+                  Text(
+                    _showAdvanced ? 'Hide filters' : 'More filters',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             if (_showAdvanced) ...[
@@ -364,9 +397,13 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                 alignment: Alignment.centerRight,
                 child: GestureDetector(
                   onTap: _clearFilters,
-                  child: Text('Clear all',
-                    style: TextStyle(fontSize: 11,
-                        color: AppTheme.accent.withValues(alpha: 0.8))),
+                  child: Text(
+                    'Clear all',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.accent.withValues(alpha: 0.8),
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -418,43 +455,70 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
   }
 
   String _formatDate(DateTime d) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun',
-                    'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
-
 
   Widget _buildAdvancedFilters(ThemeData theme, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Property type chips
-        Text('Property type',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+        Text(
+          'Property type',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 6, runSpacing: 6,
+          spacing: 6,
+          runSpacing: 6,
           children: _propertyTypes.map((t) {
             final sel = _propertyType == t;
             return GestureDetector(
               onTap: () => setState(() => _propertyType = sel ? null : t),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withValues(alpha: 0.4) : Colors.transparent,
+                    color: sel
+                        ? AppTheme.accent.withValues(alpha: 0.4)
+                        : Colors.transparent,
                   ),
                 ),
-                child: Text(t, style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                )),
+                child: Text(
+                  t,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -462,19 +526,33 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
 
         // Price range
         const SizedBox(height: 12),
-        Row(children: [
-          Text('Price range',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
-          const Spacer(),
-          if (_priceFilterActive)
-            Text('\$${_priceRange.start.round()} – \$${_priceRange.end.round()}',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                    color: AppTheme.accent)),
-        ]),
+        Row(
+          children: [
+            Text(
+              'Price range',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+            const Spacer(),
+            if (_priceFilterActive)
+              Text(
+                '\$${_priceRange.start.round()} – \$${_priceRange.end.round()}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.accent,
+                ),
+              ),
+          ],
+        ),
         RangeSlider(
           values: _priceRange,
-          min: 0, max: 500, divisions: 50,
+          min: 0,
+          max: 500,
+          divisions: 50,
           activeColor: AppTheme.accent,
           inactiveColor: AppTheme.accent.withValues(alpha: 0.15),
           onChanged: (v) => setState(() {
@@ -495,35 +573,54 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
 
         // Amenities
         const SizedBox(height: 12),
-        Text('Amenities',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+        Text(
+          'Amenities',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 6, runSpacing: 6,
+          spacing: 6,
+          runSpacing: 6,
           children: _filterAmenities.map((a) {
             final sel = _selectedAmenities.contains(a);
             return GestureDetector(
               onTap: () => setState(() {
-                if (sel) { _selectedAmenities.remove(a); }
-                else { _selectedAmenities.add(a); }
+                if (sel) {
+                  _selectedAmenities.remove(a);
+                } else {
+                  _selectedAmenities.add(a);
+                }
               }),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: sel
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: sel ? AppTheme.accent.withValues(alpha: 0.4) : Colors.transparent,
+                    color: sel
+                        ? AppTheme.accent.withValues(alpha: 0.4)
+                        : Colors.transparent,
                   ),
                 ),
-                child: Text(a, style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                  color: sel ? AppTheme.accent : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                )),
+                child: Text(
+                  a,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
+                    color: sel
+                        ? AppTheme.accent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -546,16 +643,29 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(LucideIcons.alertCircle, size: 40,
-                color: theme.colorScheme.error.withValues(alpha: 0.5)),
-            const SizedBox(height: 12),
-            Text('Error loading stays', style: TextStyle(
-                color: theme.colorScheme.error, fontSize: 14)),
-            const SizedBox(height: 8),
-            TextButton(onPressed: _loadListings,
-                child: const Text('Retry', style: TextStyle(color: AppTheme.accent))),
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.alertCircle,
+                size: 40,
+                color: theme.colorScheme.error.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Error loading stays',
+                style: TextStyle(color: theme.colorScheme.error, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _loadListings,
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: AppTheme.accent),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -574,9 +684,15 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
         itemBuilder: (_, i) => PeerListingCard(
           listing: listings[i],
           placeholderIcon: LucideIcons.home,
-          viewerCountryCode: ref.read(userProfileProvider).valueOrNull?.hostCountryCode,
-          onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => PeerListingDetailScreen(listing: listings[i])),
+          viewerCountryCode: ref
+              .read(userProfileProvider)
+              .value
+              ?.hostCountryCode,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PeerListingDetailScreen(listing: listings[i]),
+            ),
           ),
         ),
       ),
@@ -587,23 +703,36 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(LucideIcons.home, size: 48,
-              color: AppTheme.accent.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-          Text('No stays found',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
-          const SizedBox(height: 8),
-          Text(
-            _hasActiveSearchFilters
-                ? 'Try adjusting your search filters'
-                : 'No stays are listed yet. Be the first to list!',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              LucideIcons.home,
+              size: 48,
+              color: AppTheme.accent.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No stays found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _hasActiveSearchFilters
+                  ? 'Try adjusting your search filters'
+                  : 'No stays are listed yet. Be the first to list!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -14,6 +14,11 @@ service cloud.firestore {
       return isAuthenticated() && 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
+    // Check if user is a participant of a chat (used by message subcollection rules)
+    function isChatParticipant(chatId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+    }
     // Check if user is an admin of the organization (requires reading the org doc)
     function isOrgAdmin(orgId) {
       return isAuthenticated() && 
@@ -31,7 +36,8 @@ service cloud.firestore {
           'trustScore', 
           'isIdentityVerified', 
           'blockedByCount', 
-          'vouchedByCount'
+          'vouchedByCount',
+          'communityMemberships'
         ])
       );
       allow delete: if isAdmin();
@@ -44,6 +50,12 @@ service cloud.firestore {
 
       // Notifications Subcollection
       match /notifications/{notificationId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+
+      // Saved Marketplace Listings Subcollection
+      match /saved_listings/{listingId} {
         allow read: if isAuthenticated() && isOwner(userId);
         allow write: if isAuthenticated() && isOwner(userId);
       }
@@ -60,49 +72,108 @@ service cloud.firestore {
         resource.data.toUserId == request.auth.uid ||
         resource.data.fromUserId == request.auth.uid
       );
+      // Sender can cancel (delete) their own pending requests
+      allow delete: if isAuthenticated() && resource.data.fromUserId == request.auth.uid;
     }
     
     // --- Chats Collection ---
     match /chats/{chatId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      // Only participants can modify chat docs
+      allow create: if isAuthenticated();
+      // Allow existing participants/creator for any update,
+      // OR any auth user for join-related updates (adding to participants/memberCount)
+      allow update: if isAuthenticated() && (
+        resource.data.participants.hasAny([request.auth.uid])
+        || resource.data.createdBy == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['participants', 'memberCount', 'updatedAt', 'lastMessage', 'adminIds'])
+      );
+      allow delete: if isAdmin();
 
-      // Messages subcollection
+      // Messages subcollection — participants only
+      // [SECURITY] Only chat participants can read/write messages
       match /messages/{messageId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow read: if isChatParticipant(chatId);
+        allow create: if isChatParticipant(chatId) &&
+          request.resource.data.senderId == request.auth.uid;
+        // Sender can edit their own messages (content, etc.)
+        // Participants can update status (read receipts) and reactions
+        allow update: if isChatParticipant(chatId) && (
+          resource.data.senderId == request.auth.uid
+          || request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'reactions'])
+        );
+        // Messages should not be hard-deleted (use soft-delete flag instead)
+        allow delete: if isAdmin();
       }
 
       // Typing indicators subcollection
-      match /typing/{userId} {
+      match /typing/{typingUserId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow write: if isAuthenticated() && isOwner(typingUserId);
       }
     }
 
     // --- User Chats Subcollection (under users) ---
+    // [SECURITY] Owner has full read/delete access.
+    // Any authenticated user can create or update entries — this is required
+    // because sending a message updates ALL participants' userChats entries
+    // (lastMessage, unreadCount, updatedAt). Without this, the sender can't
+    // update the recipient's chat index.
     match /users/{userId}/userChats/{chatId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isOwner(userId);
     }
 
     // --- Discoverable Chats Collection ---
     match /discoverableChats/{chatId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      // Allow memberCount updates from any auth user (when joining public groups)
+      allow update: if isAuthenticated() && (
+        isAdmin()
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+      );
+      allow delete: if isAdmin();
     }
     
     // --- Communities Collection ---
+    // Public read for global_community (landing page epoch card)
+    match /communities/global_community {
+      allow read: if true;
+      allow write: if false;
+    }
     match /communities/{communityId} {
       allow read: if isAuthenticated();
-      allow update: if isAuthenticated(); 
       allow create: if isAuthenticated();
+      // Allow member-count and membership array updates from any auth user (joining)
+      // Full edits restricted to admins/members
+      // NOTE: resource.data.members check is guarded with 'is list' to prevent
+      // null-reference errors when field is missing or uses 'memberIds' instead
+      allow update: if isAuthenticated() && (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['memberCount', 'members', 'memberIds', 'updatedAt', 'totalMembers'])
+        || (resource.data.members is list && resource.data.members.hasAny([request.auth.uid]))
+        || (resource.data.memberIds is list && resource.data.memberIds.hasAny([request.auth.uid]))
+      );
       allow delete: if isAdmin();
 
       // Treasury sub-collection
+      // [SECURITY] Only Cloud Functions (admin SDK) can modify treasury data
       match /treasury/{document=**} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow write: if false; // Cloud Functions admin SDK ONLY
+      }
+
+      // Members sub-collection (fallback for getCommunityMemberIds)
+      // [SECURITY] Users can only add/remove themselves
+      match /members/{memberId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isOwner(memberId);
+        allow delete: if isAuthenticated() && (isOwner(memberId) || isAdmin());
+        allow update: if false;
       }
     }
     
@@ -122,9 +193,20 @@ service cloud.firestore {
       );
       
        // Subcollections (attendees, etc.)
-       match /{subcollection=**} {
+       // [SECURITY] Only event creator or users adding/removing themselves
+       match /attendees/{attendeeId} {
           allow read: if isAuthenticated();
-          allow write: if isAuthenticated();
+          allow create, delete: if isAuthenticated() && isOwner(attendeeId);
+          allow update: if isAuthenticated() && (
+            isOwner(attendeeId) || resource.data.createdBy == request.auth.uid
+          );
+       }
+       match /{subcollection}/{docId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (
+            isOwner(docId)
+            || get(/databases/$(database)/documents/events/$(eventId)).data.createdBy == request.auth.uid
+          );
        }
     }
     
@@ -137,14 +219,21 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers'])
       );
       allow delete: if isAdmin();
+
+      // Products/Services subcollection
+      // [SECURITY] Only org admins can create/modify products
+      match /products/{productId} {
+        allow read: if isAuthenticated();
+        allow write: if isOrgAdmin(orgId);
+      }
     }
     
     
     // --- Radio Station Health ---
+    // [SECURITY] Station health should only be updated by Cloud Functions
     match /radio_station_health/{stationId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow write: if false; // Cloud Functions admin SDK ONLY
     }
     
     // --- User Radio Data ---
@@ -160,24 +249,52 @@ service cloud.firestore {
 
     // --- DSP Points System ---
     
-    // User Points
+    // User Points — owner can update non-financial fields only
+    // [SECURITY] Financial balance fields (totalPoints, availablePoints, lifetimeEarnings)
+    // MUST only be modified via Cloud Functions admin SDK to prevent manipulation
     match /user_points/{userId} {
-      allow read, write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        isOwner(userId) &&
+        // Prevent client-side modification of financial balances
+        !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['totalPoints', 'availablePoints', 'lifetimeEarnings'])
+      );
+      allow delete: if isAdmin();
     }
 
-    // Points Transactions
+    // Points Transactions — any auth user can create (penalties/rewards for other users)
+    // Ledger is immutable (no update/delete)
     match /points_transactions/{transactionId} {
-      allow read, write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable ledger
     }
 
-    // Referral Codes
+    // Referral Codes — anyone can read (to validate), owner creates
     match /referral_codes/{code} {
-      allow read, write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if false;
     }
 
     // System Stats
+    // [SECURITY] System stats (treasury, DSP supply) are ONLY writable by Cloud Functions
+    // Public read for dsp_supply (landing page epoch card)
+    match /system_stats/dsp_supply {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Public read for treasury (landing page SAFT valuation)
+    match /system_stats/treasury {
+      allow read: if true;
+      allow write: if false;
+    }
     match /system_stats/{statId} {
-      allow read, write: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow write: if false; // Cloud Functions admin SDK ONLY
     }
 
     // --- Feedback ---
@@ -215,6 +332,24 @@ service cloud.firestore {
       allow update: if isAuthenticated() && resource.data.toUserId == request.auth.uid;
     }
 
+    // Emergency Fund Stakers — users can read all (for count), write their own
+    match /emergency_fund_stakers/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Trust Scores — users can read all, write their own (webhook uses admin SDK)
+    match /trust_scores/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Stripe Customers — users can read their own, writes via Cloud Functions
+    match /stripe_customers/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false; // Cloud Functions only
+    }
+
     // --- Trust & Verification ---
     match /trust_ratings/{ratingId} {
       allow read: if isAuthenticated();
@@ -233,7 +368,49 @@ service cloud.firestore {
 
     match /trust_data/{userId} {
        allow read: if isAuthenticated();
-       allow write: if isAuthenticated(); 
+       // Owner can fully write their own trust data.
+       // Other authenticated users can only update trust-related fields
+       // (e.g., when someone vouches for/rates another user, the trust service recalculates)
+       // UPDATED: Added all serialized field names from TrustData model
+       allow write: if isAuthenticated() && (
+         isOwner(userId)
+         || request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                // Core trust fields
+                'trustScore', 'level', 'isVerified',
+                'identityScore', 'activityScore', 'reputationScore',
+                // Counts & metrics
+                'vouchCount', 'vouchedByCount', 'vouchedBy',
+                'verifiedByCount', 'reviewCount', 'averageRating',
+                'reportCount', 'blockedByCount',
+                'flaggedMessagesCount', 'bannedVoucheeCount',
+                'rejectedFamilyConnectionsCount', 'fakeVerificationsCount',
+                'eventNoShowCount', 'reportedFraudCount',
+                'referralCount',
+                // Activity metrics
+                'verifiedFieldsCount', 'joinedEventsCount', 'attendedEventsCount',
+                'verifiedSolutionsCount', 'verifiedCheckInCount',
+                'identityQRExchange',
+                // Unique connection counts
+                'uniqueFamilyCount', 'uniqueFriendCount',
+                'uniqueQrCount', 'uniqueVouchCount', 'uniqueVerificationCount',
+                // HTS & PoCT
+                'poctScore', 'htsScore',
+                'isCouncilEligible',
+                'awardedQualificationMilestones',
+                'awardedHtsTracking',
+                'reliabilityScore', 'helpfulnessScore',
+                'unresponsiveLiaisonCount',
+                // Genesis milestone user IDs (serialized field names)
+                'genesisFamilyIds', 'genesisFriendIds',
+                'genesisQrIds', 'genesisTrustIds',
+                // Legacy field names (keep for backward compat)
+                'familyUserIds', 'friendUserIds', 'qrUserIds', 'trustUserIds',
+                'genesisFamily', 'genesisFriends', 'genesisQR', 'genesisTrust',
+                // Timestamp
+                'lastUpdated'
+              ])
+       );
     }
 
     match /interest_registrations/{registrationId} {
@@ -241,15 +418,28 @@ service cloud.firestore {
     }
 
     // --- Governance ---
+    // [SECURITY] Governance units should only be created/updated through controlled flows
     match /governance/{unitId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      // Only allow updates to voting-related fields, not structural changes
+      allow update: if isAuthenticated() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['candidates', 'voters', 'voteCount', 'updatedAt', 'status', 'electionEndDate']);
+      allow delete: if isAdmin();
     }
 
     match /governance_votes/{voteId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && 
          (request.resource.data.voterId == request.auth.uid || resource.data.voterId == request.auth.uid);
+    }
+
+    // Governance Election History
+    match /governance_history/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if false; // Immutable election records
     }
 
     // --- Trust & Verification (Additional Collections) ---
@@ -269,6 +459,20 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
+    }
+
+    // --- Verified Solutions ---
+    match /verified_solutions/{solutionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if false; // Immutable verification records
+    }
+
+    // --- Organization Vettings ---
+    match /organization_vettings/{vettingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if false; // Immutable vetting records
     }
 
     // --- Secrets Collection (Wallets) ---
@@ -291,7 +495,12 @@ service cloud.firestore {
     match /marketplace_listings/{listingId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      // Owner can update anything; other users can only update view/saved counters
+      allow update: if isAuthenticated() && (
+        resource.data.sellerId == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['viewCount', 'savedCount'])
+      );
       allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
 
       // saved_by subcollection
@@ -299,6 +508,25 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated() && isOwner(userId);
       }
+
+      // interactions subcollection (DSP-gated contact tracking)
+      match /interactions/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isOwner(userId);
+      }
+
+      // reports subcollection
+      match /reports/{reporterId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isOwner(reporterId);
+      }
+    }
+
+    // --- GDP Transactions ---
+    match /gdp_transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable ledger
     }
 
     // --- Corridors ---
@@ -308,18 +536,26 @@ service cloud.firestore {
     }
 
     // --- Hosting ---
+    // [SECURITY] Only request creator or target can modify; only creator can delete
     match /hosting_requests/{requestId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.toUserId == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && resource.data.fromUserId == request.auth.uid;
     }
 
+    // [SECURITY] Only session participants can modify; no client-side deletes
     match /hosting_sessions/{sessionId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.hostId == request.auth.uid ||
+        resource.data.guestId == request.auth.uid
+      );
+      allow delete: if isAdmin(); // Only admin can delete sessions
     }
 
     // --- P2P Stays & Car Rentals ---
@@ -370,6 +606,46 @@ service cloud.firestore {
         allow write: if isAuthenticated() && isOwner(userId);
       }
     }
+
+    // --- Flight Bookings ---
+    match /flight_bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // --- App Testers (PWA tester signup) ---
+    match /app_testers/{email} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+    }
+
+    // --- Landing Page Tester Signups (unauthenticated) ---
+    // [SECURITY] Create-only, no read/update/delete from client.
+    // Field validation prevents abuse — only expected fields are allowed.
+    match /tester_signups/{signupId} {
+      allow create: if request.resource.data.keys().hasOnly(
+        ['email', 'platform', 'source', 'signup_type', 'timestamp']
+      )
+      && request.resource.data.email is string
+      && request.resource.data.email.size() > 0
+      && request.resource.data.email.size() < 256;
+      allow read, update, delete: if false;
+    }
+
+    // --- Liquidity Treasury Interest Registrations (unauthenticated) ---
+    // [SECURITY] Create-only, no read/update/delete from client.
+    // Users on the landing page can register interest for TGE notifications.
+    match /liquidity_interest/{interestId} {
+      allow create: if request.resource.data.keys().hasOnly(
+        ['email', 'interest', 'epoch', 'tge', 'type', 'createdAt', 'source']
+      )
+      && request.resource.data.email is string
+      && request.resource.data.email.size() > 0
+      && request.resource.data.email.size() < 256;
+      allow read, update, delete: if false;
+    }
+
     // Default deny for all other collections
     match /{document=**} {
       allow read, write: if false;

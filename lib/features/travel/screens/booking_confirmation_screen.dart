@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/travel/screens/flight_bookings_screen.dart';
 
 /// Universal booking confirmation screen for flights and hotels.
 class BookingConfirmationScreen extends StatelessWidget {
@@ -31,8 +32,20 @@ class BookingConfirmationScreen extends StatelessWidget {
   String _formatDate(String iso) {
     try {
       final dt = DateTime.parse(iso);
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
     } catch (_) {
       return iso;
@@ -52,7 +65,12 @@ class BookingConfirmationScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          8,
+          16,
+          MediaQuery.of(context).padding.bottom + 32,
+        ),
         child: Column(
           children: [
             const SizedBox(height: 16),
@@ -67,8 +85,8 @@ class BookingConfirmationScreen extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    AppTheme.accent.withOpacity(0.2),
-                    const Color(0xFF4CAF50).withOpacity(0.2),
+                    AppTheme.accent.withValues(alpha: 0.2),
+                    const Color(0xFF4CAF50).withValues(alpha: 0.2),
                   ],
                 ),
               ),
@@ -93,7 +111,7 @@ class BookingConfirmationScreen extends StatelessWidget {
               'Your booking has been confirmed successfully.',
               style: TextStyle(
                 fontSize: 14,
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
               textAlign: TextAlign.center,
             ),
@@ -108,12 +126,14 @@ class BookingConfirmationScreen extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    AppTheme.accent.withOpacity(0.08),
-                    AppTheme.accent.withOpacity(0.03),
+                    AppTheme.accent.withValues(alpha: 0.08),
+                    AppTheme.accent.withValues(alpha: 0.03),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(_radius),
-                border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
+                border: Border.all(
+                  color: AppTheme.accent.withValues(alpha: 0.2),
+                ),
               ),
               child: Column(
                 children: [
@@ -123,7 +143,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.5,
-                      color: theme.colorScheme.onSurface.withOpacity(0.4),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -150,8 +170,13 @@ class BookingConfirmationScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Icon(LucideIcons.copy, size: 16,
-                            color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                        Icon(
+                          LucideIcons.copy,
+                          size: 16,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -160,7 +185,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                     'Tap to copy',
                     style: TextStyle(
                       fontSize: 10,
-                      color: theme.colorScheme.onSurface.withOpacity(0.3),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                     ),
                   ),
                 ],
@@ -185,18 +210,45 @@ class BookingConfirmationScreen extends StatelessWidget {
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.5,
-                      color: theme.colorScheme.onSurface.withOpacity(0.4),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _detailRow(context, LucideIcons.hash, 'Booking ID', bookingId),
-                  _detailRow(context, LucideIcons.user, 'Passenger', passengerName),
-                  _detailRow(context, bookingType == 'Flight' ? LucideIcons.plane : LucideIcons.hotel,
-                      'Route', route),
+                  _detailRow(
+                    context,
+                    LucideIcons.hash,
+                    'Booking ID',
+                    bookingId,
+                  ),
+                  _detailRow(
+                    context,
+                    LucideIcons.user,
+                    'Passenger',
+                    passengerName,
+                  ),
+                  _detailRow(
+                    context,
+                    bookingType == 'Flight'
+                        ? LucideIcons.plane
+                        : LucideIcons.hotel,
+                    'Route',
+                    route,
+                  ),
                   if (date.isNotEmpty)
-                    _detailRow(context, LucideIcons.calendar, 'Date', _formatDate(date)),
-                  _detailRow(context, LucideIcons.creditCard, 'Amount', price, isLast: true,
-                      valueColor: AppTheme.accent),
+                    _detailRow(
+                      context,
+                      LucideIcons.calendar,
+                      'Date',
+                      _formatDate(date),
+                    ),
+                  _detailRow(
+                    context,
+                    LucideIcons.creditCard,
+                    'Amount',
+                    price,
+                    isLast: true,
+                    valueColor: AppTheme.accent,
+                  ),
                 ],
               ),
             ),
@@ -212,8 +264,11 @@ class BookingConfirmationScreen extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(LucideIcons.info, size: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                  Icon(
+                    LucideIcons.info,
+                    size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -222,7 +277,9 @@ class BookingConfirmationScreen extends StatelessWidget {
                       'Use your booking reference for check-in and airline support.',
                       style: TextStyle(
                         fontSize: 11,
-                        color: theme.colorScheme.onSurface.withOpacity(0.4),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.4,
+                        ),
                         height: 1.5,
                       ),
                     ),
@@ -244,7 +301,9 @@ class BookingConfirmationScreen extends StatelessWidget {
                   backgroundColor: AppTheme.accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(_radius),
+                  ),
                   elevation: 0,
                 ),
                 icon: const Icon(LucideIcons.checkCircle, size: 18),
@@ -260,7 +319,11 @@ class BookingConfirmationScreen extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(context).popUntil((route) => route.isFirst);
-                // The user can navigate to My Bookings from the travel hub
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const FlightBookingsScreen(),
+                  ),
+                );
               },
               child: const Text(
                 'View My Bookings',
@@ -277,14 +340,24 @@ class BookingConfirmationScreen extends StatelessWidget {
     );
   }
 
-  Widget _detailRow(BuildContext context, IconData icon, String label, String value,
-      {bool isLast = false, Color? valueColor}) {
+  Widget _detailRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value, {
+    bool isLast = false,
+    Color? valueColor,
+  }) {
     final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurface.withOpacity(0.3)),
+          Icon(
+            icon,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -295,7 +368,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                     letterSpacing: 0.5,
                   ),
                 ),

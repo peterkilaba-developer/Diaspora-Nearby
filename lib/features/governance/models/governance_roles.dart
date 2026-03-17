@@ -76,13 +76,13 @@ class GovernanceRoles {
   }
 }
 
-/// Vote verdicts for Yay/Nay/Hold voting system.
+/// Vote verdicts for Yay/Nay/Abstain voting system.
 class VoteVerdict {
   static const String yay = 'yay';
   static const String nay = 'nay';
-  static const String hold = 'hold';
+  static const String abstain = 'abstain';
 
-  static const List<String> all = [yay, nay, hold];
+  static const List<String> all = [yay, nay, abstain];
 }
 
 /// Vote summary for a candidate.
@@ -91,18 +91,18 @@ class VoteSummary {
   final String role;
   final int yayCount;
   final int nayCount;
-  final int holdCount;
+  final int abstainCount;
 
   VoteSummary({
     required this.candidateId,
     required this.role,
     this.yayCount = 0,
     this.nayCount = 0,
-    this.holdCount = 0,
+    this.abstainCount = 0,
   });
 
-  int get totalVotes => yayCount + nayCount + holdCount;
-  int get decisiveVotes => yayCount + nayCount; // Exclude hold from ratio
+  int get totalVotes => yayCount + nayCount + abstainCount;
+  int get decisiveVotes => yayCount + nayCount; // Exclude abstain from ratio
   double get favorableRate =>
       decisiveVotes > 0 ? yayCount / decisiveVotes : 0.0;
   bool get isWinning => favorableRate > 0.5 && decisiveVotes > 0;

@@ -28,7 +28,6 @@ class OrganizationChatPreview extends ConsumerStatefulWidget {
 class _OrganizationChatPreviewState
     extends ConsumerState<OrganizationChatPreview> {
   final TextEditingController _messageController = TextEditingController();
-  bool _isSending = false;
 
   void _showSendMessageDialog() {
     showDialog(
@@ -115,7 +114,6 @@ class _OrganizationChatPreviewState
   }
 
   Future<void> _sendMessage(String text) async {
-    setState(() => _isSending = true);
     try {
       await ref
           .read(chatRepositoryProvider)
@@ -126,8 +124,6 @@ class _OrganizationChatPreviewState
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to send: $e')));
       }
-    } finally {
-      if (mounted) setState(() => _isSending = false);
     }
   }
 
@@ -162,9 +158,9 @@ class _OrganizationChatPreviewState
         Container(
           height: 300,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.withOpacity(0.2)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(12),
-            color: Colors.grey.withOpacity(0.05),
+            color: Colors.grey.withValues(alpha: 0.05),
           ),
           child: StreamBuilder<List<Message>>(
             stream: ref
@@ -272,7 +268,7 @@ class _OrganizationChatPreviewState
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 2,
                     offset: const Offset(0, 1),
                   ),

@@ -80,9 +80,10 @@ class ExchangeRateService {
         final decoded = jsonDecode(cached) as Map<String, dynamic>;
         _rates = decoded.map((k, v) => MapEntry(k, (v as num).toDouble()));
         debugPrint(
-            'ExchangeRateService: Loaded ${_rates!.length} rates from cache '
-            '(age: ${Duration(milliseconds: age).inMinutes}min, '
-            'expired: $_cacheExpired)');
+          'ExchangeRateService: Loaded ${_rates!.length} rates from cache '
+          '(age: ${Duration(milliseconds: age).inMinutes}min, '
+          'expired: $_cacheExpired)',
+        );
       } else {
         _cacheExpired = true;
       }
@@ -104,22 +105,23 @@ class ExchangeRateService {
         final ratesJson = json['rates'] as Map<String, dynamic>?;
 
         if (ratesJson != null && ratesJson.isNotEmpty) {
-          _rates =
-              ratesJson.map((k, v) => MapEntry(k, (v as num).toDouble()));
+          _rates = ratesJson.map((k, v) => MapEntry(k, (v as num).toDouble()));
           _cacheExpired = false;
 
           // Persist to cache
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_cacheKey, jsonEncode(_rates));
           await prefs.setInt(
-              _cacheTimestampKey, DateTime.now().millisecondsSinceEpoch);
+            _cacheTimestampKey,
+            DateTime.now().millisecondsSinceEpoch,
+          );
 
           debugPrint(
-              'ExchangeRateService: Fetched ${_rates!.length} live rates ✓');
+            'ExchangeRateService: Fetched ${_rates!.length} live rates ✓',
+          );
         }
       } else {
-        debugPrint(
-            'ExchangeRateService: API returned ${response.statusCode}');
+        debugPrint('ExchangeRateService: API returned ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('ExchangeRateService: Network fetch failed: $e');

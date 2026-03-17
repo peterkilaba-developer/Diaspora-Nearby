@@ -13,8 +13,6 @@ import '../../dsp/services/points_service.dart';
 import '../../trust/services/trust_service.dart';
 import '../../trust/repository/trust_repository.dart';
 import '../../chat/services/chat_messaging_service.dart';
-import 'mock_election_data.dart';
-import '../../auth/repository/auth_repository.dart';
 
 final governanceRepositoryProviderAlias = governanceRepositoryProvider;
 
@@ -38,11 +36,9 @@ class GovernanceService {
 
     // Get community members
     final communityId = unit.communityId;
-    if (communityId == null && !MockElectionData.enabled) return [];
+    if (communityId == null) return [];
 
-    final memberIds = communityId != null
-        ? await repo.getCommunityMemberIds(communityId)
-        : <String>[];
+    final memberIds = await repo.getCommunityMemberIds(communityId);
 
     // IDs already running for a role — exclude from qualified pool
     final alreadyRunning = unit.allRoleCandidateIds.toSet();
@@ -65,41 +61,7 @@ class GovernanceService {
       }
     }
 
-    // When mock data is seeded, add mock qualified pool + current user
-    if (MockElectionData.isSeeded) {
-      final existingIds = qualified.map((q) => q.userId).toSet();
 
-      // Add mock qualified pool members from in-memory data
-      for (final mockCandidate in MockElectionData.mockQualifiedCandidates) {
-        if (alreadyRunning.contains(mockCandidate.userId)) continue;
-        if (existingIds.contains(mockCandidate.userId)) continue;
-        qualified.add(mockCandidate);
-        existingIds.add(mockCandidate.userId);
-      }
-
-      // Add current user (the tester) if not already present
-      final auth = _ref.read(authRepositoryProvider);
-      final currentUserId = auth.currentUser?.uid;
-      if (currentUserId != null &&
-          !alreadyRunning.contains(currentUserId) &&
-          !existingIds.contains(currentUserId)) {
-        final up = await pointsRepo.getUserPoints(currentUserId);
-        if (up != null) {
-          qualified.add(up);
-        } else {
-          // Create a minimal UserPoints entry so the tester shows up
-          qualified.add(UserPoints(
-            userId: currentUserId,
-            totalPoints: 0,
-            availablePoints: 0,
-            currentStreak: 0,
-            dailyMessageCount: 0,
-            lastUpdated: DateTime.now(),
-            signupDate: DateTime.now(),
-          ));
-        }
-      }
-    }
 
     return qualified;
   }
@@ -120,20 +82,22 @@ class GovernanceService {
     final unit = await repo.getGovernanceUnit(unitId);
     if (unit == null) throw Exception('Governance unit not found.');
 
-    // 1. Verify user is qualified (skip for mock testing)
-    if (!MockElectionData.enabled) {
-      final trustData = await _ref
-          .read(trustServiceProvider)
-          .getTrustData(userId);
-      if (trustData == null || !trustData.isCouncilEligible) {
-        throw Exception('You do not meet the candidacy eligibility requirements.');
-      }
+    // 1. Verify user is qualified
+    final trustData = await _ref
+        .read(trustServiceProvider)
+        .getTrustData(userId);
+    if (trustData == null || !trustData.isCouncilEligible) {
+      throw Exception(
+        'You do not meet the candidacy eligibility requirements.',
+      );
     }
 
     // 2. Check user isn't already running for this role
     final currentCandidates = unit.roleCandidates[role] ?? [];
     if (currentCandidates.contains(userId)) {
-      throw Exception('You are already running for ${GovernanceRoles.displayName(role)}.');
+      throw Exception(
+        'You are already running for ${GovernanceRoles.displayName(role)}.',
+      );
     }
 
     // 3. Add to role-specific candidate list
@@ -153,17 +117,13 @@ class GovernanceService {
       verdict: VoteVerdict.yay,
     );
 
-    // 6. Record HTS activity (skip for mock)
-    if (!MockElectionData.enabled) {
-      await _ref
-          .read(trustServiceProvider)
-          .recordActivity(userId, HTSActivityType.vote);
-    }
+    // 6. Record HTS activity
+    await _ref
+        .read(trustServiceProvider)
+        .recordActivity(userId, HTSActivityType.vote);
 
-    // 7. Send system message to community chat (skip for mock)
-    if (!MockElectionData.enabled) {
-      await _sendCandidacyAnnouncement(unit, userId, role);
-    }
+    // 7. Send system message to community chat
+    await _sendCandidacyAnnouncement(unit, userId, role);
 
     debugPrint(
       '✅ $userId selected role ${GovernanceRoles.displayName(role)} '
@@ -199,7 +159,7 @@ class GovernanceService {
         chatId,
         '$roleEmoji A community member has announced their candidacy for '
         '$roleName! Open Voice of Diaspora to cast your vote: '
-        'Yay ✅, Nay ❌, or Hold ⏸️',
+        'Yay, Nay, or Abstain',
         senderIdOverride: 'system',
         senderNameOverride: '🗳️ Voice of Diaspora',
         type: 'system',
@@ -229,23 +189,17 @@ class GovernanceService {
   }) async {
     final repo = _ref.read(governanceRepositoryProvider);
 
-    // Check if this is a mock/test vote (voterId has timestamp suffix)
-    final isMockVote = MockElectionData.enabled &&
-        voterId.contains(RegExp(r'_\d{13}$'));
-
-    // 1. Verify community has 4+ members (skip for mock votes)
+    // 1. Verify community has 4+ members
     final unit = await repo.getGovernanceUnit(unitId);
     if (unit == null) throw Exception('Governance unit not found.');
 
-    if (!isMockVote && unit.communityId != null) {
+    if (unit.communityId != null) {
       final community = await _ref
           .read(communityRepositoryProvider)
           .getCommunity(unit.communityId!);
       final memberCount = community?.memberCount ?? 0;
       if (memberCount < 4) {
-        throw Exception(
-          'Community must have at least 4 members for voting.',
-        );
+        throw Exception('Community must have at least 4 members for voting.');
       }
     }
 
@@ -258,12 +212,10 @@ class GovernanceService {
       verdict: verdict,
     );
 
-    // 3. Record HTS governance activity (skip for mock votes)
-    if (!isMockVote) {
-      await _ref
-          .read(trustServiceProvider)
-          .recordActivity(voterId, HTSActivityType.vote);
-    }
+    // 3. Record HTS governance activity
+    await _ref
+        .read(trustServiceProvider)
+        .recordActivity(voterId, HTSActivityType.vote);
 
     // 4. Check if winner can be declared or vote-out applies
     await _evaluateRoleStatus(unitId, candidateId, role);
@@ -305,6 +257,16 @@ class GovernanceService {
     if (summary.totalVotes >= quorumTarget && summary.isWinning) {
       // Candidate has quorum + >50% favorable → promote to council
       await repo.addCouncilMember(unitId, candidateId, role);
+
+      // [NEW] Add elected leader as admin of the community
+      if (unit.communityId != null) {
+        await FirebaseFirestore.instance
+            .collection('communities')
+            .doc(unit.communityId!)
+            .update({
+          'admins': FieldValue.arrayUnion([candidateId]),
+        });
+      }
 
       // Award governance achievement
       final pointsService = _ref.read(pointsServiceProvider);
@@ -401,23 +363,23 @@ class GovernanceService {
       final Map<String, List<String>> candidateVerdicts = {};
       for (final vote in votes) {
         final cid = vote['candidateId'] as String;
-        final verdict = vote['verdict'] as String? ?? VoteVerdict.hold;
+        final verdict = vote['verdict'] as String? ?? VoteVerdict.abstain;
         candidateVerdicts.putIfAbsent(cid, () => []).add(verdict);
       }
 
       for (final entry in candidateVerdicts.entries) {
-        int yay = 0, nay = 0, hold = 0;
+        int yay = 0, nay = 0, abstain = 0;
         for (final v in entry.value) {
           if (v == VoteVerdict.yay) yay++;
           if (v == VoteVerdict.nay) nay++;
-          if (v == VoteVerdict.hold) hold++;
+          if (v == VoteVerdict.abstain) abstain++;
         }
         summaries[entry.key] = VoteSummary(
           candidateId: entry.key,
           role: role,
           yayCount: yay,
           nayCount: nay,
-          holdCount: hold,
+          abstainCount: abstain,
         );
       }
       return summaries;

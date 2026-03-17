@@ -2,9 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 // ignore: unused_import
 import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import '../../../utils/mocks.mocks.dart';
 import '../../../utils/test_data.dart';
+
+class FakeFirebaseFunctions extends Fake implements FirebaseFunctions {}
 
 void main() {
   late PointsRepository repository;
@@ -21,7 +24,7 @@ void main() {
     mockDocument = MockDocumentReference<Map<String, dynamic>>();
     mockSnapshot = MockDocumentSnapshot<Map<String, dynamic>>();
 
-    repository = PointsRepository(mockFirestore);
+    repository = PointsRepository(mockFirestore, FakeFirebaseFunctions());
 
     when(mockFirestore.batch()).thenReturn(mockBatch);
     when(mockFirestore.collection(any)).thenReturn(mockCollection);
@@ -47,11 +50,8 @@ void main() {
       // Verify batch was committed
       verify(mockBatch.commit()).called(1);
       
-      // Verify batch.set was called for user_points and welcome bonus (2 args)
-      verify(mockBatch.set(any, any)).called(greaterThan(1));
-      
-      // Verify batch.set was called for treasury/governance (3 args with options)
-      verify(mockBatch.set(any, any, any)).called(greaterThan(0));
+      // Verify batch.set was called for user_points and welcome bonus
+      verify(mockBatch.set(any, any)).called(2);
     });
 
     test('initializeUserPoints should skip if already initialized', () async {

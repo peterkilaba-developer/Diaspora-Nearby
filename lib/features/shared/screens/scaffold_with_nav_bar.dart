@@ -5,7 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../radio/screens/mini_player.dart';
 import '../widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/core/services/location_update_service.dart';
@@ -34,6 +34,12 @@ class ScaffoldWithNavBar extends ConsumerStatefulWidget {
 
 class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     with WidgetsBindingObserver {
+
+  // [PERF FIX] Debounce resume actions — was running location update +
+  // background service check + proximity check on EVERY resume (switching
+  // apps, returning from notification, etc.). Now cooldown 5 minutes.
+  DateTime? _lastResumeAction;
+
   @override
   void initState() {
     super.initState();
@@ -81,7 +87,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
         await ProximityService().checkAndNotify(user.uid);
       }
     } catch (e) {
-      print('Error starting background service from Shell: $e');
+      debugPrint('Error starting background service from Shell: $e');
     }
   }
 
@@ -94,6 +100,16 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // [PERF FIX] Debounce: only run resume actions at most once every 5 minutes.
+      // Prevents hammering Firestore/GPS/network on rapid app switches.
+      final now = DateTime.now();
+      if (_lastResumeAction != null &&
+          now.difference(_lastResumeAction!) < const Duration(minutes: 5)) {
+        debugPrint('ScaffoldWithNavBar: resume debounced (< 5 min since last)');
+        return;
+      }
+      _lastResumeAction = now;
+
       _updateLocation();
       _triggerDailyCheckIn();
       // Re-check background service state on resume
@@ -207,9 +223,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     // Get User for home country
     final userProfile = ref.watch(userProfileProvider).value;
     final homeCountryCode = userProfile?.homeCountryCode;
-    final homeCountry = homeCountryCode != null
-        ? country_data.getCountryByCode(homeCountryCode)?.name
-        : null;
 
     // View Mode Logic localized per screen
     bool isGlobalView = false;

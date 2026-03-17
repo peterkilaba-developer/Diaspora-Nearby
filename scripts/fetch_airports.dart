@@ -20,7 +20,6 @@ Future<void> main() async {
       final validTypes = ['large_airport', 'medium_airport'];
       final List<Map<String, dynamic>> airports = [];
       
-      int count = 0;
       for (int i = 1; i < lines.length; i++) {
         if (lines[i].trim().isEmpty) continue;
         
@@ -45,11 +44,10 @@ Future<void> main() async {
               'iata_code': iata,
               'local_code': values[14].replaceAll('"', ''),
             });
-            count++;
           }
         }
       }
-      print('Parsed \$count major airports with IATA codes.');
+      print('Parsed ${airports.length} major airports with IATA codes.');
       
       // Save it as JSON to assets
       final outDir = Directory('assets/data');
@@ -59,14 +57,14 @@ Future<void> main() async {
       
       final outFile = File('assets/data/airports.json');
       await outFile.writeAsString(jsonEncode(airports));
-      print('Saved to \${outFile.path}');
+      print('Saved to ${outFile.path}');
       
     } else {
-      print('Failed to download: \${response.statusCode}');
+      print('Failed to download: ${response.statusCode}');
     }
     client.close();
   } catch (e) {
-    print('Error: \$e');
+    print('Error: $e');
   }
 }
 

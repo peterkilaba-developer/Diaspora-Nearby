@@ -368,19 +368,21 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   child: Container(
                                     width: 80,
                                     height: 96,
-                                    color: theme.colorScheme.surfaceContainerHighest,
+                                    color: theme
+                                        .colorScheme
+                                        .surfaceContainerHighest,
                                     child: widget.localImage != null
                                         ? (kIsWeb
                                               ? Image.network(
                                                   widget.localImage!.path,
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (_, _, ___) =>
+                                                  errorBuilder: (_, _, _) =>
                                                       _buildInitials(theme),
                                                 )
                                               : Image.file(
                                                   File(widget.localImage!.path),
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (_, _, ___) =>
+                                                  errorBuilder: (_, _, _) =>
                                                       _buildInitials(theme),
                                                 ))
                                         : (widget
@@ -590,7 +592,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                           children: [
                             Row(
                               children: [
-                                if (homeFlag.isNotEmpty) ...[
+                                if (homeFlag.isNotEmpty && !isLocal) ...[
                                   Text(
                                     homeFlag,
                                     style: const TextStyle(fontSize: 14),
@@ -652,7 +654,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                if (hostFlag.isNotEmpty) ...[
+                                if (hostFlag.isNotEmpty && !isLocal) ...[
                                   Text(
                                     hostFlag,
                                     style: const TextStyle(fontSize: 14),
@@ -780,7 +782,9 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   Container(
                                     width: 1,
                                     height: 12,
-                                    color: theme.hintColor.withValues(alpha: 0.2),
+                                    color: theme.hintColor.withValues(
+                                      alpha: 0.2,
+                                    ),
                                   ),
                                   const SizedBox(width: 8),
                                   Flexible(
@@ -908,7 +912,7 @@ class _MovingLogoState extends State<_MovingLogo>
     return ScaleTransition(
       scale: _animation,
       child: Image.asset(
-        'assets/icons/logo-original.png',
+        'assets/icons/logo-transparent-24.png',
         width: 14,
         height: 14,
       ),

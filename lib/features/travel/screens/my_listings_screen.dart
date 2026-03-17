@@ -183,7 +183,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppTheme.accent.withOpacity(0.12),
+                color: AppTheme.accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: AppTheme.accent, size: 22),
@@ -193,21 +193,29 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                      )),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
                 ],
               ),
             ),
-            Icon(LucideIcons.chevronRight,
-                size: 18,
-                color: theme.colorScheme.onSurface.withOpacity(0.3)),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 18,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
           ],
         ),
       ),
@@ -256,33 +264,40 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
         title: const Text('My Listings'),
         elevation: 0,
         backgroundColor: Colors.transparent,
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createNew,
-        backgroundColor: AppTheme.accent,
-        foregroundColor: Colors.white,
-        icon: const Icon(LucideIcons.plus, size: 18),
-        label: const Text('New Listing',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        actions: [
+          IconButton(
+            onPressed: _createNew,
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(LucideIcons.plus, size: 18, color: AppTheme.accent),
+            ),
+            tooltip: 'New Listing',
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: _isLoading
           ? const TravelSkeletonLoader(label: 'Loading listings...')
           : _listings == null || _listings!.isEmpty
-              ? _buildEmptyState(theme)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: EdgeInsets.only(
-                      left: 8, right: 8, top: 8,
-                      bottom: MediaQuery.of(context).padding.bottom + 16,
-                    ),
-                    itemCount: _listings!.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) =>
-                        _buildListingCard(theme, _listings![i]),
-                  ),
+          ? _buildEmptyState(theme)
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.separated(
+                padding: EdgeInsets.only(
+                  left: 8,
+                  right: 8,
+                  top: 8,
+                  bottom: MediaQuery.of(context).padding.bottom + 16,
                 ),
+                itemCount: _listings!.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (_, i) => _buildListingCard(theme, _listings![i]),
+              ),
+            ),
     );
   }
 
@@ -296,7 +311,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
             Icon(
               LucideIcons.home,
               size: 56,
-              color: theme.colorScheme.onSurface.withOpacity(0.15),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
             ),
             const SizedBox(height: 16),
             Text(
@@ -310,7 +325,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
               'List your property or car for other diaspora members to book.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 fontSize: 14,
               ),
             ),
@@ -321,11 +336,14 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
               label: const Text('Create Your First Listing'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.accent,
-                side: BorderSide(color: AppTheme.accent.withOpacity(0.4)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.4)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -341,8 +359,8 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
     final IconData typeIcon = isHotel
         ? LucideIcons.hotel
         : isCar
-            ? LucideIcons.car
-            : LucideIcons.home;
+        ? LucideIcons.car
+        : LucideIcons.home;
 
     return Container(
       decoration: AppTheme.cardDecoration(context),
@@ -369,14 +387,10 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppTheme.accent.withOpacity(0.1),
+                        color: AppTheme.accent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(
-                        typeIcon,
-                        color: AppTheme.accent,
-                        size: 20,
-                      ),
+                      child: Icon(typeIcon, color: AppTheme.accent, size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -397,8 +411,9 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                             listing.subtitleLabel,
                             style: TextStyle(
                               fontSize: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.5),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -408,11 +423,13 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: isActive
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -445,10 +462,13 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.mapPin,
-                              size: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.4)),
+                          Icon(
+                            LucideIcons.mapPin,
+                            size: 12,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.4,
+                            ),
+                          ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
@@ -457,8 +477,9 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                                   : listing.city!,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: theme.colorScheme.onSurface
-                                    .withOpacity(0.4),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -483,9 +504,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _actionButton(
-                        icon: isActive
-                            ? LucideIcons.pause
-                            : LucideIcons.play,
+                        icon: isActive ? LucideIcons.pause : LucideIcons.play,
                         label: isActive ? 'Pause' : 'Activate',
                         onTap: () => _toggleStatus(listing),
                       ),
@@ -517,7 +536,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
   }) {
     final color = isDestructive
         ? Colors.red.shade400
-        : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),

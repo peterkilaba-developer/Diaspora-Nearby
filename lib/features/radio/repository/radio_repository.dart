@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,7 +34,7 @@ class RadioRepository {
   Future<List<RadioStation>> _fetchWithFallback(String endpoint) async {
     // 1. Try Proxy
     final proxyUrl = Uri.parse('$_proxyUrl?endpoint=$endpoint');
-    print('RadioRepo: Attempting PROXY: $proxyUrl');
+    debugPrint('RadioRepo: Attempting PROXY: $proxyUrl');
 
     try {
       final response = await http
@@ -42,7 +43,9 @@ class RadioRepository {
       if (response.statusCode == 200) {
         final dynamic decoded = json.decode(response.body);
         if (decoded is List && decoded.isNotEmpty) {
-          print('RadioRepo: Proxy SUCCESS - Found ${decoded.length} items');
+          debugPrint(
+            'RadioRepo: Proxy SUCCESS - Found ${decoded.length} items',
+          );
           return decoded
               .map(
                 (item) => RadioStation.fromJson(item as Map<String, dynamic>),
@@ -54,16 +57,16 @@ class RadioRepository {
               )
               .toList();
         }
-        print(
+        debugPrint(
           'RadioRepo: Proxy returned 200 but ${decoded is List ? "0 items" : "non-list body"}. Falling back to Direct...',
         );
       } else {
-        print(
+        debugPrint(
           'RadioRepo: Proxy FAILED with status ${response.statusCode}. Falling back to Direct...',
         );
       }
     } catch (e) {
-      print('RadioRepo: Proxy EXCEPTION: $e. Falling back to Direct...');
+      debugPrint('RadioRepo: Proxy EXCEPTION: $e. Falling back to Direct...');
     }
 
     // 2. Fallback to Direct (Mirrors)
@@ -72,7 +75,7 @@ class RadioRepository {
         ? endpoint
         : 'stations/$endpoint';
     final directUrl = Uri.parse('$_directUrl/$directEndpoint');
-    print('RadioRepo: Attempting DIRECT: $directUrl');
+    debugPrint('RadioRepo: Attempting DIRECT: $directUrl');
 
     try {
       final response = await http
@@ -81,7 +84,9 @@ class RadioRepository {
       if (response.statusCode == 200) {
         final dynamic decoded = json.decode(response.body);
         if (decoded is List) {
-          print('RadioRepo: Direct SUCCESS - Found ${decoded.length} items');
+          debugPrint(
+            'RadioRepo: Direct SUCCESS - Found ${decoded.length} items',
+          );
           return decoded
               .map(
                 (item) => RadioStation.fromJson(item as Map<String, dynamic>),
@@ -94,9 +99,9 @@ class RadioRepository {
               .toList();
         }
       }
-      print('RadioRepo: Direct FAILED with status ${response.statusCode}');
+      debugPrint('RadioRepo: Direct FAILED with status ${response.statusCode}');
     } catch (e) {
-      print('RadioRepo: Direct EXCEPTION: $e');
+      debugPrint('RadioRepo: Direct EXCEPTION: $e');
     }
 
     return [];
@@ -126,11 +131,11 @@ class RadioRepository {
 
       _unreliableStationsCache = snapshot.docs.map((d) => d.id).toSet();
       _lastCacheUpdate = DateTime.now();
-      print(
+      debugPrint(
         'RadioHealth: Updated cache with ${_unreliableStationsCache.length} unreliable stations',
       );
     } catch (e) {
-      print('RadioHealth: Failed to update cache (Check Indexes?): $e');
+      debugPrint('RadioHealth: Failed to update cache (Check Indexes?): $e');
     }
   }
 
@@ -164,7 +169,7 @@ class RadioRepository {
         'lastReported': cf.FieldValue.serverTimestamp(),
       }, cf.SetOptions(merge: true));
     } catch (e) {
-      print('RadioHealth: Failed report failure: $e');
+      debugPrint('RadioHealth: Failed report failure: $e');
     }
   }
 
@@ -178,7 +183,7 @@ class RadioRepository {
         'lastReported': cf.FieldValue.serverTimestamp(),
       }, cf.SetOptions(merge: true));
     } catch (e) {
-      print('RadioHealth: Failed report success: $e');
+      debugPrint('RadioHealth: Failed report success: $e');
     }
   }
 
@@ -203,7 +208,7 @@ class RadioRepository {
         });
       }
     } catch (e) {
-      print('RadioRepo: Error toggling favorite: $e');
+      debugPrint('RadioRepo: Error toggling favorite: $e');
     }
   }
 
@@ -220,7 +225,7 @@ class RadioRepository {
           .map((doc) => RadioStation.fromJson(_sanitizeStationData(doc.data())))
           .toList();
     } catch (e) {
-      print('RadioRepo: Error fetching favorites: $e');
+      debugPrint('RadioRepo: Error fetching favorites: $e');
       return [];
     }
   }
@@ -237,7 +242,7 @@ class RadioRepository {
             'playedAt': cf.FieldValue.serverTimestamp(),
           });
     } catch (e) {
-      print('RadioRepo: Error adding to history: $e');
+      debugPrint('RadioRepo: Error adding to history: $e');
     }
   }
 
@@ -255,7 +260,7 @@ class RadioRepository {
           .map((doc) => RadioStation.fromJson(_sanitizeStationData(doc.data())))
           .toList();
     } catch (e) {
-      print('RadioRepo: Error fetching history: $e');
+      debugPrint('RadioRepo: Error fetching history: $e');
       return [];
     }
   }
@@ -269,6 +274,8 @@ class RadioRepository {
     if (sanitized['bitrate'] is String) {
       sanitized['bitrate'] = int.tryParse(sanitized['bitrate']) ?? 0;
     }
+    // Ensure url_resolved exists (may be missing from older saved stations)
+    sanitized['url_resolved'] ??= '';
     return sanitized;
   }
 }

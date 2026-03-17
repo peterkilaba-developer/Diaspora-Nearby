@@ -160,28 +160,31 @@ class _BereavementAnnouncementModalState
 
                   // 4. Funeral Plan
                   _buildSectionTitle('Funeral Plan'),
-                  RadioListTile<String>(
-                    title: Text(
-                      'Domestic ($deceasedHostCountry)',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    value: 'Domestic',
+                  RadioGroup<String>(
                     groupValue: _selectedFuneralPlan,
-                    contentPadding: EdgeInsets.zero,
                     onChanged: (v) => setState(() => _selectedFuneralPlan = v!),
-                  ),
-                  if (!isSameCountry)
-                    RadioListTile<String>(
-                      title: Text(
-                        'International ($deceasedHomeCountry)',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      value: 'International',
-                      groupValue: _selectedFuneralPlan,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (v) =>
-                          setState(() => _selectedFuneralPlan = v!),
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: Text(
+                            'Domestic ($deceasedHostCountry)',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          value: 'Domestic',
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        if (!isSameCountry)
+                          RadioListTile<String>(
+                            title: Text(
+                              'International ($deceasedHomeCountry)',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            value: 'International',
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                      ],
                     ),
+                  ),
 
                   const SizedBox(height: 12),
 

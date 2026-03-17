@@ -51,14 +51,14 @@ Earning is only half the battle. **Proof of Community Trust** is how we ensure t
 ### Earning PoCT & The Decile Efficiency Gate
 To prevent inflation and ensure active participation, your TGE conversion efficiency is tied to your Trust Score. 
 *   **From the Beginning:** $DIASPORA and PoCT are awarded instantly in real-time for all general activities (referrals, new chats, check-ins, creating events). You receive $DIASPORA + 1 PoCT for each of these actions.
-*   **Connection Milestones (The 10× Rule):** For the four core connection milestones (Family, Friend, QR Exchange, and Vouched/Verified combined), you earn 1,000 $DIASPORA **instantly** per connection. However, the +10 PoCT is awarded only at **10× intervals** (10, 100, 1,000).
+*   **Genesis Connection Milestones (The 10× Rule):** For the four Genesis connection milestones (Family, Friend, QR Exchange, and Vouched/Verified combined), you earn 1,000 $DIASPORA **instantly** per connection. However, the +10 PoCT is awarded only at **10× intervals** (10, 100, 1,000).
 *   **Profile Completion (The Genesis Exception):** The only milestone that does not pay out instantly is Profile Completion. It requires exactly 10 fields to fully complete, which then triggers a massive 10,000 $DIASPORA Genesis lump sum and +10 PoCT all at once.
 
 Your final Trust Score dictates your **Swap Rate** at the Token Generation Event.
 *   *Formula*: `Efficiency = (Score / 10).ceil() / 10.0`
 *   A user with a score of 95 gets 100% (1:1), while a user with a score of 51 gets only 60% conversion.
 
-**In short: Be active to earn from the beginning. Hit 10-person connection milestones to unlock massive Genesis rewards.**
+**In short: Be active to earn from the beginning. Hit 10-person Genesis Milestones to unlock massive one-time rewards.**
 
 ---
 

@@ -16,12 +16,12 @@ import 'package:diaspora_nearby/features/chat/repository/report_repository.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Generate Mocks
-@GenerateMocks([
-  TrustRepository,
-  ProfileRepository,
-  RelationshipRepository,
-  PointsRepository,
-  ReportRepository,
+@GenerateNiceMocks([
+  MockSpec<TrustRepository>(),
+  MockSpec<ProfileRepository>(),
+  MockSpec<RelationshipRepository>(),
+  MockSpec<PointsRepository>(),
+  MockSpec<ReportRepository>(),
 ])
 import 'trust_service_test.mocks.dart';
 
@@ -55,6 +55,18 @@ void main() {
       ],
     );
 
+    // The real PointsService calls getUserPoints via _addPoints when
+    // milestone awards fire. Stub to return a valid UserPoints.
+    when(mockPointsRepo.getUserPoints(any)).thenAnswer((_) async => UserPoints(
+          userId: 'stub',
+          totalPoints: 0,
+          availablePoints: 0,
+          lastUpdated: DateTime.now(),
+          signupDate: DateTime.now(),
+          currentStreak: 0,
+          dailyMessageCount: 0,
+        ));
+
     trustService = container.read(trustServiceProvider);
   });
 
@@ -79,6 +91,7 @@ void main() {
         availability: ['Weekends'],
         servicesOffered: ['Coding'],
         lookingFor: ['Networking'],
+        interests: ['Technology'],
         homeLocation: const UserLocation(city: 'Home', country: 'Country', formattedAddress: 'Home Addr', placeId: 'home-id', countryCode: 'US'),
         hostLocation: const UserLocation(city: 'Host', country: 'Country', formattedAddress: 'Host Addr', placeId: 'host-id', countryCode: 'US'),
         phone: '1234567890',
@@ -124,6 +137,7 @@ void main() {
       // Mock Report counts etc
       // ... (Stubbing other repo calls to avoid null errors)
       when(mockTrustRepo.getVouchesByVoucher(userId)).thenAnswer((_) async => []);
+      when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer((_) async => []);
       
       // 4. Act
       await trustService.recalculateTrustScore(userId: userId, profile: profile, points: points);
@@ -169,6 +183,7 @@ void main() {
       when(mockTrustRepo.getVouchesForUser(userId)).thenAnswer((_) async => []);
       when(mockTrustRepo.getTrustData(userId)).thenAnswer((_) async => null);
       when(mockTrustRepo.getVouchesByVoucher(userId)).thenAnswer((_) async => []);
+      when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer((_) async => []);
 
       await trustService.recalculateTrustScore(userId: userId, profile: profile, points: points);
 

@@ -21,9 +21,7 @@ class SavedListingsScreen extends ConsumerWidget {
     final userId = ref.watch(authRepositoryProvider).currentUser?.uid;
 
     if (userId == null) {
-      return const Scaffold(
-        body: Center(child: Text('Please sign in')),
-      );
+      return const Scaffold(body: Center(child: Text('Please sign in')));
     }
 
     final repo = ref.watch(marketplaceRepositoryProvider);
@@ -56,7 +54,7 @@ class SavedListingsScreen extends ConsumerWidget {
                   Icon(
                     LucideIcons.bookmarkMinus,
                     size: 48,
-                    color: theme.hintColor.withOpacity(0.3),
+                    color: theme.hintColor.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -72,7 +70,7 @@ class SavedListingsScreen extends ConsumerWidget {
                     'Browse the marketplace and save items for later',
                     style: TextStyle(
                       fontSize: 13,
-                      color: theme.hintColor.withOpacity(0.7),
+                      color: theme.hintColor.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -91,7 +89,12 @@ class SavedListingsScreen extends ConsumerWidget {
             itemCount: listings.length,
             itemBuilder: (context, index) {
               return _buildSavedCard(
-                  context, listings[index], theme, isDark, ref);
+                context,
+                listings[index],
+                theme,
+                isDark,
+                ref,
+              );
             },
           );
         },
@@ -111,8 +114,8 @@ class SavedListingsScreen extends ConsumerWidget {
       child: Container(
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.white.withOpacity(0.03)
-              : Colors.black.withOpacity(0.02),
+              ? Colors.white.withValues(alpha: 0.03)
+              : Colors.black.withValues(alpha: 0.02),
           borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
         ),
         child: Column(
@@ -131,13 +134,13 @@ class SavedListingsScreen extends ConsumerWidget {
                       )
                     : Container(
                         color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.04),
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.04),
                         child: Center(
                           child: Icon(
                             categoryIcon(listing.category),
                             size: 28,
-                            color: theme.hintColor.withOpacity(0.25),
+                            color: theme.hintColor.withValues(alpha: 0.25),
                           ),
                         ),
                       ),
@@ -154,7 +157,9 @@ class SavedListingsScreen extends ConsumerWidget {
                         Flexible(
                           child: Text(
                             CurrencyHelper.formatLocalPrice(
-                                listing.priceAmount, listing.sellerCountryCode),
+                              listing.priceAmount,
+                              listing.sellerCountryCode,
+                            ),
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -191,5 +196,4 @@ class SavedListingsScreen extends ConsumerWidget {
       ),
     );
   }
-
 }

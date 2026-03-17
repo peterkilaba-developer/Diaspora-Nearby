@@ -433,7 +433,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest
-                            .withOpacity(0.3),
+                            .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: theme.dividerColor),
                       ),
@@ -485,7 +485,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                               width: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                            error: (_, __) => const SizedBox.shrink(),
+                            error: (_, _) => const SizedBox.shrink(),
                           ),
                         ],
                       ),
@@ -611,7 +611,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                           : () {
                               if (kCommunityId != null) {
                                 final communityName =
-                                    communityAsync.valueOrNull?.name ??
+                                    communityAsync.value?.name ??
                                     'this community';
                                 _showExclusivityDialog(communityName);
                               } else {

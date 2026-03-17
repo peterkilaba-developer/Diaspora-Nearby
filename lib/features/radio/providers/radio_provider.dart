@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
 import 'package:diaspora_nearby/features/radio/models/radio_station.dart';
@@ -90,8 +92,8 @@ class RadioNotifier extends Notifier<RadioState> {
     _eventSubscription = _player.playbackEventStream.listen(
       (event) {},
       onError: (Object e, StackTrace stackTrace) {
-        print('ðŸ”´ Radio Playback Stream Error: $e');
-        print('Stack: $stackTrace');
+        debugPrint('ðŸ”´ Radio Playback Stream Error: $e');
+        debugPrint('Stack: $stackTrace');
         _handlePlaybackError('Stream error: $e');
       },
     );
@@ -117,7 +119,7 @@ class RadioNotifier extends Notifier<RadioState> {
     try {
       ref.read(audioPlaybackServiceProvider).stopAll();
     } catch (e) {
-      print('⚠️ Could not stop chat audio: $e');
+      debugPrint('⚠️ Could not stop chat audio: $e');
     }
     // ------------------------------------------
 
@@ -133,8 +135,23 @@ class RadioNotifier extends Notifier<RadioState> {
 
       await _player.stop();
 
+      // Use streamUrl which prefers url_resolved (pre-resolved direct stream)
+      // over url (which may be a playlist or redirect chain).
+      final streamUrl = station.streamUrl;
+      debugPrint('🎵 Radio: Playing stream URL: $streamUrl');
+      debugPrint('🎵 Radio: Original URL: ${station.url}');
+      debugPrint('🎵 Radio: Resolved URL: ${station.urlResolved}');
+
+      // Set Android-specific audio attributes for streaming optimization
+      await _player.setAndroidAudioAttributes(
+        const AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.music,
+          usage: AndroidAudioUsage.media,
+        ),
+      );
+
       final source = AudioSource.uri(
-        Uri.parse(station.url),
+        Uri.parse(streamUrl),
         tag: MediaItem(
           id: station.stationuuid,
           album: "Diaspora Nearby Radio",
@@ -145,7 +162,8 @@ class RadioNotifier extends Notifier<RadioState> {
         ),
       );
 
-      await _player.setAudioSource(source);
+      // Explicitly preload to start buffering immediately
+      await _player.setAudioSource(source, preload: true);
       await _player.play();
 
       // Start Success Timer (15 seconds)
@@ -162,8 +180,8 @@ class RadioNotifier extends Notifier<RadioState> {
         }
       });
     } catch (e, stackTrace) {
-      print('ðŸ”´ Radio Play Error: $e');
-      print('Stack: $stackTrace');
+      debugPrint('ðŸ”´ Radio Play Error: $e');
+      debugPrint('Stack: $stackTrace');
       _handlePlaybackError("Failed to play: $e");
     }
   }

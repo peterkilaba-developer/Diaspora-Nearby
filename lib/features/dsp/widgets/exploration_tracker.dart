@@ -107,7 +107,7 @@ void showExplorationRewardToast(
               decoration: BoxDecoration(
                 color: const Color(
                   0xFFFFD700,
-                ).withOpacity(0.2), // Gold with opacity
+                ).withValues(alpha: 0.2), // Gold with opacity
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFFFFD700), width: 1),
               ),

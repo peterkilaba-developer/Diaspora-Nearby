@@ -19,24 +19,25 @@ class ProfileData {
 
   bool get isComplete => getMissingRequiredFields().isEmpty;
 
-  // [NEW] Milestone Tracking
-  int get totalMilestoneFields => 12;
-  int get completedMilestoneFieldCount {
-    int count = 0;
-    if (bio != null && bio!.isNotEmpty) count++;
-    if (occupation != null && occupation!.isNotEmpty) count++;
-    if (yearsInHostCountry != null && yearsInHostCountry!.isNotEmpty) count++;
-    if (industry != null && industry!.isNotEmpty) count++;
-    if (profession != null && profession!.isNotEmpty) count++;
-    if (languages != null && languages!.isNotEmpty) count++;
-    if (meetingPreferences != null && meetingPreferences!.isNotEmpty) count++;
-    if (availability != null && availability!.isNotEmpty) count++;
-    if (interests != null && interests!.isNotEmpty) count++;
-    if (servicesOffered != null && servicesOffered!.isNotEmpty) count++;
-    if (lookingFor != null && lookingFor!.isNotEmpty) count++;
-    if (education != null && education!.isNotEmpty) count++;
-    return count;
-  }
+  // [UPDATED v3] Milestone Tracking — single source of truth.
+  // Adding a new field check here automatically adjusts both counts.
+  List<bool> get _milestoneFieldChecks => [
+    bio != null && bio!.isNotEmpty,
+    occupation != null && occupation!.isNotEmpty,
+    yearsInHostCountry != null && yearsInHostCountry!.isNotEmpty,
+    industry != null && industry!.isNotEmpty,
+    profession != null && profession!.isNotEmpty,
+    languages != null && languages!.isNotEmpty,
+    meetingPreferences != null && meetingPreferences!.isNotEmpty,
+    availability != null && availability!.isNotEmpty,
+    interests != null && interests!.isNotEmpty,
+    servicesOffered != null && servicesOffered!.isNotEmpty,
+    lookingFor != null && lookingFor!.isNotEmpty,
+    education != null && education!.isNotEmpty,
+  ];
+  int get totalMilestoneFields => _milestoneFieldChecks.length;
+  int get completedMilestoneFieldCount =>
+      _milestoneFieldChecks.where((c) => c).length;
 
   List<String> getMissingRequiredFields() {
     final List<String> missing = [];
@@ -234,6 +235,22 @@ class ProfileData {
       final loc = json['hostLocation'] as Map<String, dynamic>;
       json['hostCountryCode'] = loc['country_code'];
     }
+
+    // [FIX] Ensure required non-nullable fields have safe defaults
+    // to prevent TypeError ("type 'Null' is not a subtype of type 'String'")
+    // when Firestore doc is missing fields like profilePhoto, firstName, etc.
+    json['firstName'] ??= '';
+    json['lastName'] ??= '';
+    json['phone'] ??= '';
+    json['profilePhoto'] ??= '';
+    json['homeLocation'] ??= <String, dynamic>{
+      'formatted_address': '',
+      'place_id': '',
+    };
+    json['hostLocation'] ??= <String, dynamic>{
+      'formatted_address': '',
+      'place_id': '',
+    };
 
     return _$ProfileDataFromJson(json);
   }

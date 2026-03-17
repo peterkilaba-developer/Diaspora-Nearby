@@ -56,6 +56,9 @@ class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
           }
 
           return ListView.builder(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+            ),
             itemCount: blockedIds.length,
             itemBuilder: (context, index) {
               final userId = blockedIds[index];

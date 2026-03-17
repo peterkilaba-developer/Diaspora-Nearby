@@ -281,6 +281,17 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         )
         .toList();
 
+    // [FIX] Extract host continents from Firestore data for real IDs
+    // Filter by userHomeCode to avoid matching continents from other diasporas
+    final hostContinentCommunities = relevantCommunities
+        .where(
+          (c) =>
+              c.type == 'continent' &&
+              (c.locationType == 'host' || c.locationType == 'past') &&
+              c.homeCountryCode == userHomeCode,
+        )
+        .toList();
+
     // 3. Build Host Tree (Countries -> States -> Cities)
     final flatHostCountryItems = _buildHostCountryTree(
       hostCountries,
@@ -310,26 +321,36 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       );
       final totalMembers = countries.fold(0, (acc, c) => acc + c.totalMembers);
 
+      // [FIX] Try to find the real Firestore host continent community for this continent
+      final dbHostContinent = hostContinentCommunities
+          .cast<Community?>()
+          .firstWhere(
+            (c) =>
+                _normalizeContinentName(c?.name ?? '') ==
+                _normalizeContinentName(continent.displayName),
+            orElse: () => null,
+          );
+
       final continentSlug = continent.name.replaceAllMapped(
         RegExp(r'[A-Z]'),
         (m) => '-${m[0]!.toLowerCase()}',
       );
-      final syntheticId = 'my_host_cont_$continentSlug';
+      final continentId = dbHostContinent?.id ?? 'my_host_cont_$continentSlug';
 
       hostContinentItems.add(
         HierarchyItem(
-          id: syntheticId,
+          id: continentId,
           name: CommunityChatUtils.generateCommunityNameFromParts(
             name: continent.displayName,
             locationType: 'host',
-            id: 'chat_host_continent_$continentSlug',
+            id: 'chat_$continentId',
           ),
           type: 'continent',
           locationType: 'host',
 
           homeCountryCode: userHomeCode,
-          flag: null, // Continents generally don't have flags, handled by utils
-          profileImage: null, // Continents don't have profile images usually
+          flag: null,
+          profileImage: null,
 
           totalMembers: totalMembers,
           isExpandable: countries.isNotEmpty,
@@ -721,9 +742,6 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
   // ===========================================================================
   Future<List<HierarchyItem>> _buildGlobalHierarchy(String userHomeCode) async {
     // Helper
-    String normalizeName(String name) =>
-        name.toLowerCase().replaceAll('community', '').trim();
-
     final firestore = FirebaseFirestore.instance;
 
     // Fetch all communities
@@ -965,6 +983,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         }
       }
 
+      // [FIX] Find real host continent communities for this home country
+      final myHostContinentCommunities = hostCommunities
+          .where((c) => c.type == 'continent' && c.homeCountryCode == hCode)
+          .toList();
+
       // Create Continent Items
       continentMap.forEach((continent, countries) {
         countries.sort(
@@ -976,20 +999,30 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           (acc, c) => acc + c.totalMembers,
         );
 
-        // Generate a synthetic ID that mirrors Firestore but includes continent slug
+        // [FIX] Try to find the real Firestore host continent community
+        final dbHostContinent = myHostContinentCommunities
+            .cast<Community?>()
+            .firstWhere(
+              (c) =>
+                  _normalizeContinentName(c?.name ?? '') ==
+                  _normalizeContinentName(continent.displayName),
+              orElse: () => null,
+            );
+
         final continentSlug = continent.name.replaceAllMapped(
           RegExp(r'[A-Z]'),
           (Match m) => '-${m[0]!.toLowerCase()}',
         );
-        final syntheticId = '${homeCountry.id}_host_cont_$continentSlug';
+        final continentId =
+            dbHostContinent?.id ?? '${homeCountry.id}_host_cont_$continentSlug';
 
         hostContinentChildren.add(
           HierarchyItem(
-            id: syntheticId,
+            id: continentId,
             name: CommunityChatUtils.generateCommunityNameFromParts(
               name: continent.displayName,
               locationType: 'host',
-              id: 'chat_host_continent_$continentSlug',
+              id: 'chat_$continentId',
             ),
             type: 'continent',
             locationType: 'host',
@@ -1160,14 +1193,13 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         (acc, country) => acc + country.totalMembers,
       );
 
-      // Try to find matching homeContinent from DB for metadata (image/flag/etc)
-      final continentDisplayName = continent.displayName
-          .toLowerCase()
-          .replaceAll(' community', '')
-          .trim();
+      // [FIX] Try to find matching homeContinent from DB for metadata (image/flag/etc)
+      // Use _normalizeContinentName to handle adjective vs noun forms
+      // e.g. "African Community" -> "africa", "Africa" -> "africa"
       final dbContinent = homeContinents.cast<Community?>().firstWhere(
         (c) =>
-            normalizeName(c?.name ?? '') == normalizeName(continentDisplayName),
+            _normalizeContinentName(c?.name ?? '') ==
+            _normalizeContinentName(continent.displayName),
         orElse: () => null,
       );
 
@@ -1293,6 +1325,27 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     }
 
     return hierarchy;
+  }
+
+  /// Normalizes continent names for comparison, handling both noun and
+  /// adjective forms (e.g. "African Community" → "africa", "Africa" → "africa").
+  String _normalizeContinentName(String name) {
+    // Strip "community" suffix and trim
+    var normalized = name.toLowerCase().replaceAll('community', '').trim();
+
+    // Map adjective forms to base continent names
+    const adjectiveToNoun = {
+      'african': 'africa',
+      'asian': 'asia',
+      'european': 'europe',
+      'north american': 'north america',
+      'south american': 'south america',
+      'oceanian': 'oceania',
+      'antarctic': 'antarctica',
+      // 'caribbean' maps to itself (same noun/adjective)
+    };
+
+    return adjectiveToNoun[normalized] ?? normalized;
   }
 
   Community? _safeParseCommunity(

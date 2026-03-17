@@ -1,6 +1,5 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // [NEW]
 import 'package:flutter/foundation.dart';
@@ -19,7 +18,6 @@ final communityServiceProvider = Provider<CommunityService>((ref) {
 /// CommunityService handles community and chat creation during user registration.
 class CommunityService {
   final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
-
 
   /// Searches for communities matching the query string (e.g., country name).
   Future<List<Community>> searchCommunities(String query) async {
@@ -51,7 +49,7 @@ class CommunityService {
           .map((doc) => Community.fromJson(doc.data()..['id'] = doc.id))
           .toList();
     } catch (e) {
-      print('Error searching communities: $e');
+      debugPrint('Error searching communities: $e');
       return [];
     }
   }
@@ -289,12 +287,11 @@ class CommunityService {
             .where('type', isEqualTo: type)
             .where('locationType', isEqualTo: locationType)
             // Ensure we only match for this specific Diaspora (Home Country)
-            .where(
-              'homeCountryCode',
-              isEqualTo: (locationType == 'host' || locationType == 'past')
-                  ? homeCountryCode
-                  : null,
-            )
+            // [FIX] Always use the actual homeCountryCode for PlaceID dedup.
+            // Previously, home communities passed `null` which never matched
+            // stored docs (they always have the real country code), breaking
+            // PlaceID-based deduplication for home communities.
+            .where('homeCountryCode', isEqualTo: homeCountryCode)
             .limit(1)
             .get();
 
@@ -396,10 +393,10 @@ class CommunityService {
           .collection('userChats')
           .doc(chatId)
           .set({
-        'chatId': chatId,
-        'lastRead': chatNow,
-        'addedAt': chatNow,
-      }, cf.SetOptions(merge: true));
+            'chatId': chatId,
+            'lastRead': chatNow,
+            'addedAt': chatNow,
+          }, cf.SetOptions(merge: true));
     } else {
       // Add member to existing community
       final existingData = docSnapshot.data() as Map<String, dynamic>;
@@ -502,10 +499,10 @@ class CommunityService {
             .collection('userChats')
             .doc(chatId)
             .set({
-          'chatId': chatId,
-          'lastRead': nowTs,
-          'addedAt': nowTs,
-        }, cf.SetOptions(merge: true));
+              'chatId': chatId,
+              'lastRead': nowTs,
+              'addedAt': nowTs,
+            }, cf.SetOptions(merge: true));
       } else {
         // Chat doesn't exist - create it now
         await _createChat(
@@ -570,7 +567,8 @@ class CommunityService {
       'communityId': communityId,
       'type': 'community', // CRITICAL: must be 'community' not communityType
       'name': chatName,
-      'locationType': locationType, // CRITICAL: Determines avatar color (home vs host)
+      'locationType':
+          locationType, // CRITICAL: Determines avatar color (home vs host)
       'homeCountryCode': homeCountryCode,
       'hostCountryCode': hostCountryCode,
       'participants': initialParticipants,
@@ -629,6 +627,7 @@ class CommunityService {
   Future<Map<String, List<String>>> hardResetDatabase({
     List<String> resetTargets = const [
       'users',
+      'auth',
       'communities',
       'events',
       'organizations',
@@ -714,24 +713,7 @@ class CommunityService {
   // Obsolete helper _tryDeleteCollection removed in favor of tryTarget pattern above
   // Obsolete helper _deleteCollection removed - now handled by Cloud Function
 
-  Future<void> _deleteStorageFolder(String path) async {
-    try {
-      final ref = FirebaseStorage.instance.ref(path);
-      final list = await ref.listAll();
-
-      // Delete files
-      for (final item in list.items) {
-        await item.delete();
-      }
-
-      // Recurse directories
-      for (final prefix in list.prefixes) {
-        await _deleteStorageFolder(prefix.fullPath);
-      }
-    } catch (e) {
-      // Often errors if folder doesn't exist, ignore
-    }
-  }
+  // Storage folder deletion now handled by Cloud Function
 
   /// Batch updates userChats index for all community chats (Firestore).
   Future<void> _batchUpdateUserChatsIndex(
@@ -856,7 +838,6 @@ class CommunityService {
           'lastMessage': lastMsg,
           'updatedAt': now,
         });
-
 
         // We rely on Cloud Functions or client-side fan-out if needed for unread counts.
         // For Community chats, usually the listener handles it.

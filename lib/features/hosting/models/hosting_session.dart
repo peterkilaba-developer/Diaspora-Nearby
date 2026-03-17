@@ -53,7 +53,8 @@ class HostingSession {
 
   // Completion
   final int? actualDays; // Calculated at checkout
-  final int? totalDspCharged; // [DEPRECATED] Historical field — no longer written
+  final int?
+  totalDspCharged; // [DEPRECATED] Historical field — no longer written
   final bool travelerSettled; // Traveler confirmed the settlement
   final bool hostSettled; // Host confirmed the settlement
 
@@ -110,8 +111,6 @@ class HostingSession {
     return days < 1 ? 1 : days; // Minimum 1 day
   }
 
-
-
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -124,10 +123,12 @@ class HostingSession {
       'hostPhoto': hostPhoto,
       'communityId': communityId,
       'communityName': communityName,
-      'checkInTime':
-          checkInTime != null ? Timestamp.fromDate(checkInTime!) : null,
-      'checkOutTime':
-          checkOutTime != null ? Timestamp.fromDate(checkOutTime!) : null,
+      'checkInTime': checkInTime != null
+          ? Timestamp.fromDate(checkInTime!)
+          : null,
+      'checkOutTime': checkOutTime != null
+          ? Timestamp.fromDate(checkOutTime!)
+          : null,
       'plannedArrival': Timestamp.fromDate(plannedArrival),
       'plannedDeparture': Timestamp.fromDate(plannedDeparture),
       'actualDays': actualDays,
@@ -140,8 +141,7 @@ class HostingSession {
           : null,
       'status': status.name,
       'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt':
-          updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'chatId': chatId,
     };
   }

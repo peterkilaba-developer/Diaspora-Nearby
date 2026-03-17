@@ -40,7 +40,8 @@ class HostingRequest {
   // Travel details
   final DateTime arrivalDate;
   final DateTime departureDate;
-  final String? purpose; // e.g., 'Business', 'Vacation', 'Family visit', 'Education'
+  final String?
+  purpose; // e.g., 'Business', 'Vacation', 'Family visit', 'Education'
   final String? notes; // Additional info from traveler
   final int? guestCount; // Number of guests (default 1)
 
@@ -117,8 +118,7 @@ class HostingRequest {
       'matchedHostName': matchedHostName,
       'status': status.name,
       'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt':
-          updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'chatMessageId': chatMessageId,
     };
   }
@@ -141,7 +141,8 @@ class HostingRequest {
       languages: (map['languages'] as List<dynamic>?)
           ?.map((e) => e.toString())
           .toList(),
-      interestedHostIds: (map['interestedHostIds'] as List<dynamic>?)
+      interestedHostIds:
+          (map['interestedHostIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],

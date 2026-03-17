@@ -2,6 +2,17 @@
   "projects": {
     "production": "diaspora-nearby-a3dac"
   },
-  "targets": {},
+  "targets": {
+    "diaspora-nearby-a3dac": {
+      "hosting": {
+        "landing": [
+          "diaspora-nearby-a3dac"
+        ],
+        "app": [
+          "diaspora-nearby-app"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

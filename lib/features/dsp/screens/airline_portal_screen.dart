@@ -80,7 +80,7 @@ class _AirlinePortalScreenState extends ConsumerState<AirlinePortalScreen> {
         showExplorationRewardToast(
           context,
           message: 'Notification list updated',
-          points: 10, // Default reward for interest
+          points: 100, // Default reward for interest
         );
       }
     } catch (e) {
@@ -140,7 +140,7 @@ class _AirlinePortalScreenState extends ConsumerState<AirlinePortalScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.accent.withOpacity(0.1),
+                    color: AppTheme.accent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(color: AppTheme.accent),
                   ),

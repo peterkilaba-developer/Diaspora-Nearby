@@ -66,7 +66,10 @@ class PeerListingCard extends StatelessWidget {
                   _buildImage(isDark, theme),
                   // Gradient overlay
                   Positioned(
-                    bottom: 0, left: 0, right: 0, height: 80,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 80,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -82,10 +85,13 @@ class PeerListingCard extends StatelessWidget {
                   ),
                   // Price badge (top-right)
                   Positioned(
-                    top: 10, right: 10,
+                    top: 10,
+                    right: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accent,
                         borderRadius: BorderRadius.circular(8),
@@ -113,10 +119,13 @@ class PeerListingCard extends StatelessWidget {
                   ),
                   // Type badge (top-left) for community listings
                   Positioned(
-                    top: 10, left: 10,
+                    top: 10,
+                    left: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(6),
@@ -128,8 +137,8 @@ class PeerListingCard extends StatelessWidget {
                             _isHotel
                                 ? LucideIcons.hotel
                                 : _isCar
-                                    ? LucideIcons.car
-                                    : LucideIcons.home,
+                                ? LucideIcons.car
+                                : LucideIcons.home,
                             size: 10,
                             color: Colors.white.withValues(alpha: 0.9),
                           ),
@@ -138,10 +147,10 @@ class PeerListingCard extends StatelessWidget {
                             _isApiHotel
                                 ? 'Partner'
                                 : _isHotel
-                                    ? 'Community'
-                                    : _isCar
-                                        ? 'Car Rental'
-                                        : listing.propertyType ?? 'Stay',
+                                ? 'Community'
+                                : _isCar
+                                ? 'Car Rental'
+                                : listing.propertyType ?? 'Stay',
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
@@ -154,7 +163,9 @@ class PeerListingCard extends StatelessWidget {
                   ),
                   // Title overlay (bottom-left)
                   Positioned(
-                    bottom: 10, left: 12, right: 80,
+                    bottom: 10,
+                    left: 12,
+                    right: 80,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -165,8 +176,9 @@ class PeerListingCard extends StatelessWidget {
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
-                            shadows: [Shadow(blurRadius: 4,
-                                color: Colors.black54)],
+                            shadows: [
+                              Shadow(blurRadius: 4, color: Colors.black54),
+                            ],
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -180,8 +192,7 @@ class PeerListingCard extends StatelessWidget {
 
             // ── Info area ──
             Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -189,25 +200,28 @@ class PeerListingCard extends StatelessWidget {
                   if (location.isNotEmpty) ...[
                     Row(
                       children: [
-                        Icon(LucideIcons.mapPin,
-                            size: 12,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.4)),
+                        Icon(
+                          LucideIcons.mapPin,
+                          size: 12,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             _isCar
                                 ? location
                                 : [location, listing.country]
-                                    .where((s) =>
-                                        s != null && s.isNotEmpty)
-                                    .join(', '),
+                                      .where((s) => s != null && s.isNotEmpty)
+                                      .join(', '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                           ),
                         ),
@@ -229,8 +243,9 @@ class PeerListingCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.55),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
                       ),
                     ),
                   ],
@@ -252,21 +267,33 @@ class PeerListingCard extends StatelessWidget {
     if (_isHotel) {
       final chips = <Widget>[];
       if (listing.hotelCategory != null) {
-        chips.add(_infoChip(theme, LucideIcons.building2, listing.hotelCategory!));
+        chips.add(
+          _infoChip(theme, LucideIcons.building2, listing.hotelCategory!),
+        );
       }
       if (listing.starRating != null && listing.starRating! > 0) {
         chips.add(_infoChip(theme, LucideIcons.star, '${listing.starRating}★'));
       }
       if (listing.beds != null) {
-        chips.add(_infoChip(theme, LucideIcons.bedDouble,
-            '${listing.beds} room${listing.beds! > 1 ? 's' : ''}'));
+        chips.add(
+          _infoChip(
+            theme,
+            LucideIcons.bedDouble,
+            '${listing.beds} room${listing.beds! > 1 ? 's' : ''}',
+          ),
+        );
       }
       if (listing.maxGuests != null) {
         chips.add(_infoChip(theme, LucideIcons.users, '${listing.maxGuests}'));
       }
       if (listing.checkInTime != null && listing.checkOutTime != null) {
-        chips.add(_infoChip(theme, LucideIcons.clock,
-            _formatCheckInOut(listing.checkInTime!, listing.checkOutTime!)));
+        chips.add(
+          _infoChip(
+            theme,
+            LucideIcons.clock,
+            _formatCheckInOut(listing.checkInTime!, listing.checkOutTime!),
+          ),
+        );
       }
       return Wrap(spacing: 12, runSpacing: 6, children: chips);
     } else if (_isCar) {
@@ -276,7 +303,9 @@ class PeerListingCard extends StatelessWidget {
         chips.add(_infoChip(theme, LucideIcons.calendar, '${listing.year}'));
       }
       if (listing.transmission != null) {
-        chips.add(_infoChip(theme, LucideIcons.settings, listing.transmission!));
+        chips.add(
+          _infoChip(theme, LucideIcons.settings, listing.transmission!),
+        );
       }
       if (listing.fuelType != null) {
         chips.add(_infoChip(theme, LucideIcons.fuel, listing.fuelType!));
@@ -285,13 +314,11 @@ class PeerListingCard extends StatelessWidget {
         chips.add(_infoChip(theme, LucideIcons.gauge, listing.drivetrain!));
       }
       if (listing.seats != null) {
-        chips.add(_infoChip(theme, LucideIcons.armchair, '${listing.seats} seats'));
+        chips.add(
+          _infoChip(theme, LucideIcons.armchair, '${listing.seats} seats'),
+        );
       }
-      return Wrap(
-        spacing: 12,
-        runSpacing: 6,
-        children: chips,
-      );
+      return Wrap(spacing: 12, runSpacing: 6, children: chips);
     } else {
       // Stay
       return Row(
@@ -300,13 +327,19 @@ class PeerListingCard extends StatelessWidget {
             _infoChip(theme, LucideIcons.home, listing.propertyType!),
           if (listing.beds != null) ...[
             const SizedBox(width: 12),
-            _infoChip(theme, LucideIcons.bedDouble,
-                '${listing.beds} bed${listing.beds! > 1 ? 's' : ''}'),
+            _infoChip(
+              theme,
+              LucideIcons.bedDouble,
+              '${listing.beds} bed${listing.beds! > 1 ? 's' : ''}',
+            ),
           ],
           if (listing.baths != null) ...[
             const SizedBox(width: 12),
-            _infoChip(theme, LucideIcons.bath,
-                '${listing.baths} bath${listing.baths! > 1 ? 's' : ''}'),
+            _infoChip(
+              theme,
+              LucideIcons.bath,
+              '${listing.baths} bath${listing.baths! > 1 ? 's' : ''}',
+            ),
           ],
           if (listing.maxGuests != null) ...[
             const SizedBox(width: 12),
@@ -329,35 +362,43 @@ class PeerListingCard extends StatelessWidget {
         spacing: 6,
         runSpacing: 4,
         children: [
-          ...items.take(3).map((a) => Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.elevationColor(context, 2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(_amenityIcon(a),
+          ...items
+              .take(3)
+              .map(
+                (a) => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.elevationColor(context, 2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _amenityIcon(a),
                         size: 10,
-                        color: AppTheme.accent.withValues(alpha: 0.6)),
-                    const SizedBox(width: 4),
-                    Text(
-                      a,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.55),
+                        color: AppTheme.accent.withValues(alpha: 0.6),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        a,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.55,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              )),
+              ),
           if (items.length > 3)
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: AppTheme.elevationColor(context, 2),
                 borderRadius: BorderRadius.circular(6),
@@ -379,7 +420,10 @@ class PeerListingCard extends StatelessWidget {
   // ─── Bottom bar ─────────────────────────────────────────────────────
 
   Widget _buildBottomBar(
-      BuildContext context, ThemeData theme, String location) {
+    BuildContext context,
+    ThemeData theme,
+    String location,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -396,8 +440,11 @@ class PeerListingCard extends StatelessWidget {
             CircleAvatar(
               radius: 10,
               backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
-              child: const Icon(LucideIcons.building2,
-                  size: 10, color: AppTheme.accent),
+              child: const Icon(
+                LucideIcons.building2,
+                size: 10,
+                color: AppTheme.accent,
+              ),
             ),
           ] else ...[
             CircleAvatar(
@@ -407,8 +454,11 @@ class PeerListingCard extends StatelessWidget {
                   : null,
               backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
               child: listing.ownerPhoto.isEmpty
-                  ? const Icon(LucideIcons.user,
-                      size: 10, color: AppTheme.accent)
+                  ? const Icon(
+                      LucideIcons.user,
+                      size: 10,
+                      color: AppTheme.accent,
+                    )
                   : null,
             ),
           ],
@@ -428,8 +478,7 @@ class PeerListingCard extends StatelessWidget {
             ),
           ),
           // Country flag + name (right-aligned) — same for all types
-          if (listing.country != null &&
-              listing.country!.isNotEmpty) ...[
+          if (listing.country != null && listing.country!.isNotEmpty) ...[
             if (listing.countryCode != null &&
                 listing.countryCode!.length == 2) ...[
               Text(
@@ -440,24 +489,33 @@ class PeerListingCard extends StatelessWidget {
             ],
             Text(
               listing.country!,
-              style: TextStyle(
-                  fontSize: 10, color: theme.hintColor),
+              style: TextStyle(fontSize: 10, color: theme.hintColor),
             ),
           ],
           // View & save counts (for non-API listings)
           if (!_isApiHotel) ...[
             const SizedBox(width: 8),
-            Icon(LucideIcons.eye,
-                size: 10, color: theme.hintColor.withValues(alpha: 0.5)),
+            Icon(
+              LucideIcons.eye,
+              size: 10,
+              color: theme.hintColor.withValues(alpha: 0.5),
+            ),
             const SizedBox(width: 2),
-            Text('${listing.viewCount}',
-                style: TextStyle(fontSize: 9, color: theme.hintColor)),
+            Text(
+              '${listing.viewCount}',
+              style: TextStyle(fontSize: 9, color: theme.hintColor),
+            ),
             const SizedBox(width: 5),
-            Icon(LucideIcons.bookmark,
-                size: 10, color: theme.hintColor.withValues(alpha: 0.5)),
+            Icon(
+              LucideIcons.bookmark,
+              size: 10,
+              color: theme.hintColor.withValues(alpha: 0.5),
+            ),
             const SizedBox(width: 2),
-            Text('${listing.savedCount}',
-                style: TextStyle(fontSize: 9, color: theme.hintColor)),
+            Text(
+              '${listing.savedCount}',
+              style: TextStyle(fontSize: 9, color: theme.hintColor),
+            ),
           ],
         ],
       ),
@@ -472,7 +530,7 @@ class PeerListingCard extends StatelessWidget {
         imageUrl: listing.photos.first,
         fit: BoxFit.cover,
         placeholder: (_, _) => _placeholder(isDark, theme),
-        errorWidget: (_, _, ___) => _placeholder(isDark, theme),
+        errorWidget: (_, _, _) => _placeholder(isDark, theme),
       );
     }
     return _placeholder(isDark, theme);
@@ -488,8 +546,8 @@ class PeerListingCard extends StatelessWidget {
           _isHotel
               ? LucideIcons.hotel
               : _isCar
-                  ? LucideIcons.car
-                  : LucideIcons.home,
+              ? LucideIcons.car
+              : LucideIcons.home,
           size: 40,
           color: AppTheme.accent.withValues(alpha: 0.3),
         ),
@@ -503,9 +561,11 @@ class PeerListingCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon,
-            size: 14,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.45)),
+        Icon(
+          icon,
+          size: 14,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+        ),
         const SizedBox(width: 4),
         Text(
           label,
@@ -551,9 +611,7 @@ class PeerListingCard extends StatelessWidget {
 
   String _countryFlag(String code) {
     final codeUnits = code.toUpperCase().codeUnits;
-    return String.fromCharCodes(
-      codeUnits.map((c) => 0x1F1E6 - 0x41 + c),
-    );
+    return String.fromCharCodes(codeUnits.map((c) => 0x1F1E6 - 0x41 + c));
   }
 
   /// Format check-in/check-out for display.
@@ -566,8 +624,19 @@ class PeerListingCard extends StatelessWidget {
     // If it's a date like "2026-03-01", format as "Mar 1 - Mar 3"
     try {
       const months = [
-        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+        '',
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
       ];
       final inDate = DateTime.parse(checkIn);
       final outDate = DateTime.parse(checkOut);

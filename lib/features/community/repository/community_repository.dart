@@ -49,6 +49,7 @@ class CommunityRepository {
     return _firestore
         .collection('communities')
         .where('members', arrayContains: uid)
+        .limit(100)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -180,6 +181,7 @@ class CommunityRepository {
       final snapshot = await _firestore
           .collection('communities')
           .where('members', arrayContains: uid)
+          .limit(100)
           .get();
       return snapshot.docs
           .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
@@ -197,6 +199,7 @@ class CommunityRepository {
       final membersQuery = await _firestore
           .collection('communities')
           .where('members', arrayContains: uid)
+          .limit(100)
           .get();
 
       final communities = membersQuery.docs.map((doc) {
@@ -233,10 +236,7 @@ class CommunityRepository {
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
-        return Community.fromJson({
-          ...doc.data(),
-          'id': doc.id,
-        });
+        return Community.fromJson({...doc.data(), 'id': doc.id});
       }
     } catch (e) {
       debugPrint('Error getting home country community: $e');
@@ -286,14 +286,9 @@ class CommunityRepository {
     // This might be heavy, but let's just fetch from firestore for now as it's rarely used
     // Or implement syncAllCommunities()
     try {
-      final snapshot = await _firestore.collection('communities').get();
+      final snapshot = await _firestore.collection('communities').limit(500).get();
       final list = snapshot.docs
-          .map(
-            (doc) => Community.fromJson({
-              ...doc.data(),
-              'id': doc.id,
-            }),
-          )
+          .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
           .toList();
       // No-op: Firestore offline persistence handles caching
       return list;
@@ -313,7 +308,7 @@ class CommunityRepository {
       // Children of Continent are Countries
       // Note: We'd need to filter by continent in Firestore which requires a field
       // For now, fetch all countries and filter in Dart if continent mapping is available
-      final snapshot = await query.where('type', isEqualTo: 'country').get();
+      final snapshot = await query.where('type', isEqualTo: 'country').limit(200).get();
       // Filter by continent (Logic would use LocationUtils mapping)
       return snapshot.docs
           .map(
@@ -329,6 +324,7 @@ class CommunityRepository {
       final snapshot = await query
           .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
           .where('type', whereIn: ['state', 'city'])
+          .limit(200)
           .get();
 
       final results = snapshot.docs
@@ -351,6 +347,7 @@ class CommunityRepository {
       final snapshot = await query
           .where('homeCountryCode', isEqualTo: parent.homeCountryCode)
           .where('type', isEqualTo: 'city')
+          .limit(200)
           .get();
 
       final results = snapshot.docs

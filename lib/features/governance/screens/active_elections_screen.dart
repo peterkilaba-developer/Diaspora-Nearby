@@ -61,7 +61,10 @@ class _ActiveElectionsScreenState extends ConsumerState<ActiveElectionsScreen> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              16, 16, 16,
+              16 + MediaQuery.of(context).padding.bottom,
+            ),
             itemCount: activeUnits.length,
             itemBuilder: (context, index) {
               final unit = activeUnits[index];

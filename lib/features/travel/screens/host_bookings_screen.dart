@@ -68,13 +68,20 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
           controller: _tabC,
           indicatorColor: AppTheme.accent,
           labelColor: AppTheme.accent,
-          unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.4),
-          labelStyle:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          unselectedLabelColor: theme.colorScheme.onSurface.withValues(
+            alpha: 0.4,
+          ),
+          labelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
           tabs: [
             Tab(text: 'Pending (${_filtered('pending').length})'),
             Tab(text: 'Confirmed (${_filtered('confirmed').length})'),
-            Tab(text: 'Past (${_filtered('completed').length + _filtered('cancelled').length})'),
+            Tab(
+              text:
+                  'Past (${_filtered('completed').length + _filtered('cancelled').length})',
+            ),
           ],
         ),
       ),
@@ -105,14 +112,16 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.inbox,
-                size: 48,
-                color: theme.colorScheme.onSurface.withOpacity(0.15)),
+            Icon(
+              LucideIcons.inbox,
+              size: 48,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
+            ),
             const SizedBox(height: 12),
             Text(
               'No bookings here',
               style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
           ],
@@ -124,11 +133,13 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
       onRefresh: _load,
       child: ListView.separated(
         padding: EdgeInsets.only(
-          left: 8, right: 8, top: 8,
+          left: 8,
+          right: 8,
+          top: 8,
           bottom: MediaQuery.of(context).padding.bottom + 16,
         ),
         itemCount: bookings.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (_, i) => _bookingCard(
           theme,
           bookings[i],
@@ -157,23 +168,27 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
           // Header
           Row(
             children: [
-              Icon(isCar ? LucideIcons.car : LucideIcons.home,
-                  size: 18, color: AppTheme.accent),
+              Icon(
+                isCar ? LucideIcons.car : LucideIcons.home,
+                size: 18,
+                color: AppTheme.accent,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   booking.listingTitle,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -192,28 +207,32 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
           // Guest info
           Row(
             children: [
-              Icon(LucideIcons.user,
-                  size: 14,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4)),
+              Icon(
+                LucideIcons.user,
+                size: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
               const SizedBox(width: 6),
               Text(
                 booking.guestName,
                 style: TextStyle(
                   fontSize: 13,
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
               if (booking.guestPhone.isNotEmpty) ...[
                 const SizedBox(width: 12),
-                Icon(LucideIcons.phone,
-                    size: 14,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                Icon(
+                  LucideIcons.phone,
+                  size: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
                 const SizedBox(width: 4),
                 Text(
                   booking.guestPhone,
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
               ],
@@ -224,15 +243,17 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
           // Dates
           Row(
             children: [
-              Icon(LucideIcons.calendar,
-                  size: 14,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4)),
+              Icon(
+                LucideIcons.calendar,
+                size: 14,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
               const SizedBox(width: 6),
               Text(
                 '${_fmtDate(booking.startDate)} → ${_fmtDate(booking.endDate)}',
                 style: TextStyle(
                   fontSize: 13,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(width: 8),
@@ -240,7 +261,7 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
                 '(${booking.nights} ${isCar ? 'day' : 'night'}${booking.nights > 1 ? 's' : ''})',
                 style: TextStyle(
                   fontSize: 12,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                 ),
               ),
             ],
@@ -264,7 +285,7 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
                   '${booking.guests} guest${booking.guests! > 1 ? 's' : ''}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ),
             ],
@@ -282,17 +303,20 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(LucideIcons.messageSquare,
-                      size: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.4)),
+                  Icon(
+                    LucideIcons.messageSquare,
+                    size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       booking.notes!,
                       style: TextStyle(
                         fontSize: 12,
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   ),
@@ -308,35 +332,40 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () =>
-                        _updateStatus(booking, 'cancelled'),
+                    onPressed: () => _updateStatus(booking, 'cancelled'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red.shade400,
                       side: BorderSide(
-                          color: Colors.red.shade400.withOpacity(0.3)),
+                        color: Colors.red.shade400.withValues(alpha: 0.3),
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: const Text('Decline',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: const Text(
+                      'Decline',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () =>
-                        _updateStatus(booking, 'confirmed'),
+                    onPressed: () => _updateStatus(booking, 'confirmed'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       elevation: 0,
                     ),
-                    child: const Text('Confirm',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: const Text(
+                      'Confirm',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ],
@@ -349,18 +378,21 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () =>
-                    _updateStatus(booking, 'completed'),
+                onPressed: () => _updateStatus(booking, 'completed'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.accent,
                   side: BorderSide(
-                      color: AppTheme.accent.withOpacity(0.3)),
+                    color: AppTheme.accent.withValues(alpha: 0.3),
+                  ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: const Text('Mark as Completed',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
+                child: const Text(
+                  'Mark as Completed',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ],

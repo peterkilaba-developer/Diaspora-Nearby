@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
+// ignore_for_file: library_private_types_in_public_api
+
 /// A beautiful, scrollable date picker shown as a bottom sheet.
 ///
 /// Shows a calendar with quick-select shortcuts (Today, Tomorrow, +1 Week, etc.)
@@ -39,8 +41,7 @@ class SmartDatePicker {
         : (initial.isAfter(last) ? last : initial);
 
     // Build default shortcuts if none provided
-    final effectiveShortcuts = shortcuts ??
-        _buildDefaultShortcuts(first, last);
+    final effectiveShortcuts = shortcuts ?? _buildDefaultShortcuts(first, last);
 
     return showModalBottomSheet<DateTime>(
       context: context,
@@ -57,7 +58,9 @@ class SmartDatePicker {
   }
 
   static List<_DateShortcut> _buildDefaultShortcuts(
-      DateTime first, DateTime last) {
+    DateTime first,
+    DateTime last,
+  ) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final shortcuts = <_DateShortcut>[];
@@ -119,23 +122,100 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
   late DateTime _selectedDate;
   late DateTime _currentMonth;
 
+  /// Whether the year/month picker overlay is showing.
+  bool _showYearPicker = false;
+
+  /// If the user picked a year in the picker, show month grid next.
+  int? _pickedYear;
+
+  /// Auto-scroll controller for the year grid.
+  late ScrollController _yearScrollController;
+
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  static const _shortMonths = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  /// Whether the date range is large enough to warrant a year picker.
+  bool get _hasWideRange => (widget.lastDate.year - widget.firstDate.year) > 5;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = widget.initialDate;
     _currentMonth = DateTime(_selectedDate.year, _selectedDate.month);
+    _yearScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _yearScrollController.dispose();
+    super.dispose();
+  }
+
+  void _openYearPicker() {
+    if (!_hasWideRange) return;
+    setState(() {
+      _showYearPicker = true;
+      _pickedYear = null;
+    });
+    // Scroll to the current year after the grid builds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_yearScrollController.hasClients) return;
+      final yearIndex = _currentMonth.year - widget.firstDate.year;
+      final rowIndex = yearIndex ~/ 4; // 4 columns
+      final targetOffset = (rowIndex * 52.0) - 100; // approximate row height
+      _yearScrollController.jumpTo(
+        targetOffset.clamp(0, _yearScrollController.position.maxScrollExtent),
+      );
+    });
+  }
+
+  void _selectYear(int year) {
+    setState(() => _pickedYear = year);
+  }
+
+  void _selectMonth(int month) {
+    final year = _pickedYear!;
+    setState(() {
+      _currentMonth = DateTime(year, month);
+      _showYearPicker = false;
+      _pickedYear = null;
+    });
   }
 
   void _goToPreviousMonth() {
     final prev = DateTime(_currentMonth.year, _currentMonth.month - 1);
-    if (!prev.isBefore(DateTime(widget.firstDate.year, widget.firstDate.month))) {
+    if (!prev.isBefore(
+      DateTime(widget.firstDate.year, widget.firstDate.month),
+    )) {
       setState(() => _currentMonth = prev);
     }
   }
@@ -163,7 +243,9 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(SmartDatePicker._radius)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(SmartDatePicker._radius),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -175,7 +257,7 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
               height: 4,
               margin: const EdgeInsets.only(top: 10, bottom: 6),
               decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withOpacity(0.15),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -186,7 +268,11 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
               children: [
-                const Icon(LucideIcons.calendarDays, size: 18, color: AppTheme.accent),
+                const Icon(
+                  LucideIcons.calendarDays,
+                  size: 18,
+                  color: AppTheme.accent,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   widget.title,
@@ -208,7 +294,7 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: widget.shortcuts.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   final sc = widget.shortcuts[i];
                   final isSelected = _isSameDay(sc.date, _selectedDate);
@@ -220,14 +306,19 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
                       });
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppTheme.accent.withOpacity(0.15)
+                            ? AppTheme.accent.withValues(alpha: 0.15)
                             : AppTheme.elevationColor(context, 2),
                         borderRadius: BorderRadius.circular(20),
                         border: isSelected
-                            ? Border.all(color: AppTheme.accent.withOpacity(0.4))
+                            ? Border.all(
+                                color: AppTheme.accent.withValues(alpha: 0.4),
+                              )
                             : null,
                       ),
                       child: Center(
@@ -238,7 +329,9 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
                             fontWeight: FontWeight.w600,
                             color: isSelected
                                 ? AppTheme.accent
-                                : theme.colorScheme.onSurface.withOpacity(0.6),
+                                : theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
                           ),
                         ),
                       ),
@@ -256,53 +349,107 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 GestureDetector(
-                  onTap: _goToPreviousMonth,
-                  child: Icon(LucideIcons.chevronLeft, size: 20,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5)),
-                ),
-                Text(
-                  '${_months[_currentMonth.month - 1]} ${_currentMonth.year}',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
+                  onTap: _showYearPicker ? null : _goToPreviousMonth,
+                  child: Icon(
+                    LucideIcons.chevronLeft,
+                    size: 20,
+                    color: _showYearPicker
+                        ? Colors.transparent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
                 GestureDetector(
-                  onTap: _goToNextMonth,
-                  child: Icon(LucideIcons.chevronRight, size: 20,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  onTap: _hasWideRange
+                      ? () {
+                          if (_showYearPicker) {
+                            setState(() {
+                              _showYearPicker = false;
+                              _pickedYear = null;
+                            });
+                          } else {
+                            _openYearPicker();
+                          }
+                        }
+                      : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _showYearPicker
+                            ? (_pickedYear != null
+                                  ? 'Select Month in $_pickedYear'
+                                  : 'Select Year')
+                            : '${_months[_currentMonth.month - 1]} ${_currentMonth.year}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      if (_hasWideRange) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          _showYearPicker
+                              ? LucideIcons.chevronUp
+                              : LucideIcons.chevronDown,
+                          size: 16,
+                          color: AppTheme.accent,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _showYearPicker ? null : _goToNextMonth,
+                  child: Icon(
+                    LucideIcons.chevronRight,
+                    size: 20,
+                    color: _showYearPicker
+                        ? Colors.transparent
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 10),
 
-          // Day-of-week headers
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: _days.map((d) => Expanded(
-                child: Center(
-                  child: Text(
-                    d,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface.withOpacity(0.3),
-                    ),
-                  ),
-                ),
-              )).toList(),
+          // Year/Month picker overlay OR calendar grid
+          if (_showYearPicker)
+            _pickedYear == null ? _buildYearGrid(theme) : _buildMonthGrid(theme)
+          else ...[
+            // Day-of-week headers
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: _days
+                    .map(
+                      (d) => Expanded(
+                        child: Center(
+                          child: Text(
+                            d,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.3,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
+            const SizedBox(height: 6),
 
-          // Calendar grid
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildCalendarGrid(theme),
-          ),
+            // Calendar grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildCalendarGrid(theme),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // Selected date + confirm button
@@ -317,12 +464,16 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 0,
                 ),
                 child: Text(
                   'Select ${_formatDisplay(_selectedDate)}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -333,10 +484,18 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
   }
 
   Widget _buildCalendarGrid(ThemeData theme) {
-    final firstDayOfMonth = DateTime(_currentMonth.year, _currentMonth.month, 1);
+    final firstDayOfMonth = DateTime(
+      _currentMonth.year,
+      _currentMonth.month,
+      1,
+    );
     // Monday = 1, Sunday = 7
     final startWeekday = firstDayOfMonth.weekday; // 1-7
-    final daysInMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+    final daysInMonth = DateTime(
+      _currentMonth.year,
+      _currentMonth.month + 1,
+      0,
+    ).day;
 
     final cells = <Widget>[];
 
@@ -348,7 +507,8 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
     // Day cells
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(_currentMonth.year, _currentMonth.month, day);
-      final isSelectable = !date.isBefore(widget.firstDate) && !date.isAfter(widget.lastDate);
+      final isSelectable =
+          !date.isBefore(widget.firstDate) && !date.isAfter(widget.lastDate);
       final isSelected = _isSameDay(date, _selectedDate);
       final today = _isToday(date);
 
@@ -363,8 +523,8 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
               color: isSelected
                   ? AppTheme.accent
                   : today
-                      ? AppTheme.accent.withOpacity(0.08)
-                      : null,
+                  ? AppTheme.accent.withValues(alpha: 0.08)
+                  : null,
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -372,14 +532,16 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
                 '$day',
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: isSelected || today ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: isSelected || today
+                      ? FontWeight.w700
+                      : FontWeight.w500,
                   color: isSelected
                       ? Colors.white
                       : !isSelectable
-                          ? theme.colorScheme.onSurface.withOpacity(0.15)
-                          : today
-                              ? AppTheme.accent
-                              : theme.colorScheme.onSurface.withOpacity(0.8),
+                      ? theme.colorScheme.onSurface.withValues(alpha: 0.15)
+                      : today
+                      ? AppTheme.accent
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.8),
                 ),
               ),
             ),
@@ -398,7 +560,9 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
       rows.add(
         SizedBox(
           height: 40,
-          child: Row(children: rowCells.map((c) => Expanded(child: c)).toList()),
+          child: Row(
+            children: rowCells.map((c) => Expanded(child: c)).toList(),
+          ),
         ),
       );
     }
@@ -406,9 +570,132 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
     return Column(children: rows);
   }
 
+  /// Scrollable grid of years (4 columns).
+  Widget _buildYearGrid(ThemeData theme) {
+    final startYear = widget.firstDate.year;
+    final endYear = widget.lastDate.year;
+    final years = List.generate(endYear - startYear + 1, (i) => startYear + i);
+
+    return SizedBox(
+      height: 260,
+      child: GridView.builder(
+        controller: _yearScrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 2.0,
+        ),
+        itemCount: years.length,
+        itemBuilder: (_, i) {
+          final year = years[i];
+          final isCurrentYear = year == _currentMonth.year;
+          return GestureDetector(
+            onTap: () => _selectYear(year),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isCurrentYear
+                    ? AppTheme.accent
+                    : AppTheme.elevationColor(context, 2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  '$year',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isCurrentYear
+                        ? FontWeight.bold
+                        : FontWeight.w500,
+                    color: isCurrentYear
+                        ? Colors.white
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 3×4 grid of months after a year is picked.
+  Widget _buildMonthGrid(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 2.0,
+        ),
+        itemCount: 12,
+        itemBuilder: (_, i) {
+          final month = i + 1;
+          final isCurrentMonth =
+              _pickedYear == _currentMonth.year && month == _currentMonth.month;
+          // Disable months outside the allowed range
+          final monthDate = DateTime(_pickedYear!, month);
+          final isDisabled =
+              monthDate.isBefore(
+                DateTime(widget.firstDate.year, widget.firstDate.month),
+              ) ||
+              monthDate.isAfter(
+                DateTime(widget.lastDate.year, widget.lastDate.month),
+              );
+
+          return GestureDetector(
+            onTap: isDisabled ? null : () => _selectMonth(month),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isCurrentMonth
+                    ? AppTheme.accent
+                    : AppTheme.elevationColor(context, 2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  _shortMonths[i],
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isCurrentMonth
+                        ? FontWeight.bold
+                        : FontWeight.w500,
+                    color: isDisabled
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.15)
+                        : isCurrentMonth
+                        ? Colors.white
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   String _formatDisplay(DateTime d) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return '${weekdays[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
   }

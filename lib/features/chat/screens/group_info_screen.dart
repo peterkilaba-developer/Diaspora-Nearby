@@ -48,6 +48,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   List<String> _adminIds = []; // Track admins separately
   String? _inviterId; // [NEW]
   bool _isMuted = false; // [NEW] Mute State
+  bool _isFamilyGroup = false; // [NEW] Family Group Detection
 
   // For Batch Editing
   final Set<String> _membersToRemove = {};
@@ -147,6 +148,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             _descriptionController.text = chat.description ?? '';
             _adminIds = chat.admins ?? [];
             _inviterId = foundInviterId; // [NEW]
+            _isFamilyGroup = chat.metadata?['isFamilyGroup'] == true;
 
             _isAdmin =
                 (chat.admins?.contains(widget.currentUserId) ?? false) ||
@@ -177,17 +179,17 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     final repo = ref.read(chatRepositoryProvider);
     final profileRepo = ref.read(profileRepositoryProvider);
 
-    // Add +10 DSP to user and inviter
+    // Add +100 DSP to user and inviter
     if (_inviterId != null) {
       await pointsService.awardPoints(
         userId: _inviterId!,
-        amount: 10,
+        amount: 100,
         reason: 'Group Invite Accepted',
       );
     }
     await pointsService.awardPoints(
       userId: widget.currentUserId,
-      amount: 10,
+      amount: 100,
       reason: 'Joined Group',
     );
 
@@ -262,16 +264,16 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     setState(() => _isLoading = true);
     final pointsService = ref.read(pointsServiceProvider);
 
-    // +10 DSP to user, -10 DSP to inviter
+    // +100 DSP to user, -100 DSP to inviter
     await pointsService.awardPoints(
       userId: widget.currentUserId,
-      amount: 10,
+      amount: 100,
       reason: 'Rejected Group Invite',
     );
     if (_inviterId != null) {
       await pointsService.deductPoints(
         userId: _inviterId!,
-        amount: 10,
+        amount: 100,
         reason: 'Group Invite Rejected',
       );
     }
@@ -521,7 +523,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             if (_isLoading) const LinearProgressIndicator(minHeight: 2),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.pageHorizontalPadding,
+                ),
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
@@ -568,13 +572,21 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                     (_newGroupImageFile == null &&
                                         _currentGroupImage == null)
                                     ? Center(
-                                        child: Text(
-                                          _nameController.text.isEmpty
-                                              ? '?'
-                                              : _nameController.text[0]
-                                                    .toUpperCase(),
-                                          style: theme.textTheme.displayMedium,
-                                        ),
+                                        child: _isFamilyGroup
+                                            ? Icon(
+                                                LucideIcons.heartHandshake,
+                                                color: Colors.blue.shade600,
+                                                size: 42,
+                                              )
+                                            : Text(
+                                                _nameController.text.isEmpty
+                                                    ? '?'
+                                                    : _nameController.text[0]
+                                                          .toUpperCase(),
+                                                style: theme
+                                                    .textTheme
+                                                    .displayMedium,
+                                              ),
                                       )
                                     : null,
                               ),
@@ -759,7 +771,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, -5),
                     ),
@@ -871,10 +883,10 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       margin: const EdgeInsets.only(left: 8, bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withOpacity(0.7),
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.colorScheme.primary.withOpacity(0.5),
+          color: theme.colorScheme.primary.withValues(alpha: 0.5),
           width: 0.5,
         ),
       ),

@@ -85,8 +85,8 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
     final initial = isArrival
         ? (_arrivalDate ?? now.add(const Duration(days: 1)))
         : (_departureDate ??
-            (_arrivalDate?.add(const Duration(days: 3)) ??
-                now.add(const Duration(days: 4))));
+              (_arrivalDate?.add(const Duration(days: 3)) ??
+                  now.add(const Duration(days: 4))));
 
     final picked = await showDatePicker(
       context: context,
@@ -167,8 +167,7 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
         return Container(
           decoration: BoxDecoration(
             color: theme.scaffoldBackgroundColor,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -206,8 +205,11 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
                     // Title
                     Row(
                       children: [
-                        const Icon(LucideIcons.plane,
-                            color: AppTheme.accent, size: 24),
+                        const Icon(
+                          LucideIcons.plane,
+                          color: AppTheme.accent,
+                          size: 24,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -224,10 +226,7 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
                     Text(
                       'Your request will be broadcast to the community chat. '
                       'Interested hosts can view your profile and reach out.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.hintColor,
-                      ),
+                      style: TextStyle(fontSize: 13, color: theme.hintColor),
                     ),
                     const SizedBox(height: 20),
 
@@ -300,8 +299,9 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
                           selected: selected,
                           onSelected: (s) =>
                               setState(() => _purpose = s ? p : null),
-                          selectedColor:
-                              AppTheme.accent.withValues(alpha: 0.15),
+                          selectedColor: AppTheme.accent.withValues(
+                            alpha: 0.15,
+                          ),
                           labelStyle: TextStyle(
                             color: selected
                                 ? const Color(0xFF4A7A5A)
@@ -386,8 +386,7 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
 
                     // ── Submit Button ──
                     ElevatedButton.icon(
-                      onPressed:
-                          _isValid && !_isSubmitting ? _submit : null,
+                      onPressed: _isValid && !_isSubmitting ? _submit : null,
                       icon: _isSubmitting
                           ? const SizedBox(
                               width: 18,
@@ -406,8 +405,7 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.accent,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -464,17 +462,19 @@ class _DateCard extends StatelessWidget {
                 Icon(
                   LucideIcons.calendarDays,
                   size: 16,
-                  color: date != null ? AppTheme.accent : Theme.of(context).hintColor,
+                  color: date != null
+                      ? AppTheme.accent
+                      : Theme.of(context).hintColor,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   date != null ? dateFormat.format(date!) : 'Select',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: date != null ? FontWeight.w600 : FontWeight.normal,
-                    color: date != null
-                        ? null
-                        : Theme.of(context).hintColor,
+                    fontWeight: date != null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: date != null ? null : Theme.of(context).hintColor,
                   ),
                 ),
               ],

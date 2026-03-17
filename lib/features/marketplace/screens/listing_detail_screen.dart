@@ -9,7 +9,6 @@ import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.
 import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/screens/marketplace_screen.dart'
     show categoryIcon;
-import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/shared/widgets/currency_price_display.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
@@ -17,6 +16,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
 
 class ListingDetailScreen extends ConsumerStatefulWidget {
   final String listingId;
@@ -42,7 +42,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     _loadListing();
     // Load viewer's country code for currency conversion
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       if (mounted && profile != null) {
         setState(() => _viewerCountryCode = profile.hostCountryCode);
       }
@@ -94,10 +94,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-        ),
+        appBar: AppBar(elevation: 0, backgroundColor: Colors.transparent),
         body: const Center(
           child: CircularProgressIndicator(color: AppTheme.accent),
         ),
@@ -106,10 +103,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
     if (_listing == null) {
       return Scaffold(
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-        ),
+        appBar: AppBar(elevation: 0, backgroundColor: Colors.transparent),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -153,24 +147,35 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                   icon: const Icon(LucideIcons.moreVertical, size: 20),
                   itemBuilder: (_) => [
                     const PopupMenuItem(
-                        value: 'edit', child: Text('Edit Listing')),
+                      value: 'edit',
+                      child: Text('Edit Listing'),
+                    ),
                     if (listing.status == ListingStatus.active)
                       const PopupMenuItem(
-                          value: 'pause', child: Text('Pause Listing')),
+                        value: 'pause',
+                        child: Text('Pause Listing'),
+                      ),
                     if (listing.status == ListingStatus.paused ||
                         listing.status == ListingStatus.sold)
                       const PopupMenuItem(
-                          value: 'activate', child: Text('Activate')),
+                        value: 'activate',
+                        child: Text('Activate'),
+                      ),
                     if (listing.status != ListingStatus.sold)
                       PopupMenuItem(
-                          value: 'sold',
-                          child: Text(listing.listingType == ListingType.job
+                        value: 'sold',
+                        child: Text(
+                          listing.listingType == ListingType.job
                               ? 'Mark as Filled'
-                              : 'Mark as Sold')),
+                              : 'Mark as Sold',
+                        ),
+                      ),
                     const PopupMenuItem(
                       value: 'delete',
-                      child: Text('Delete',
-                          style: TextStyle(color: AppTheme.error)),
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: AppTheme.error),
+                      ),
                     ),
                   ],
                 )
@@ -217,7 +222,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         itemCount: listing.images.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                        separatorBuilder: (_, _) => const SizedBox(width: 6),
                         itemBuilder: (_, i) => GestureDetector(
                           onTap: () {
                             _imagePageController.animateToPage(
@@ -257,13 +262,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               child: Container(
                 height: 200,
                 color: isDark
-                    ? Colors.white.withOpacity(0.05)
-                    : Colors.black.withOpacity(0.04),
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.black.withValues(alpha: 0.04),
                 child: Center(
                   child: Icon(
                     categoryIcon(listing.category),
                     size: 64,
-                    color: theme.hintColor.withOpacity(0.2),
+                    color: theme.hintColor.withValues(alpha: 0.2),
                   ),
                 ),
               ),
@@ -296,24 +301,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
-                          color: marketplaceSageGreen.withOpacity(0.12),
+                          color: marketplaceSageGreen.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.tag,
-                                size: 10,
-                                color: marketplaceSageGreen),
+                            Icon(
+                              LucideIcons.tag,
+                              size: 10,
+                              color: marketplaceSageGreen,
+                            ),
                             SizedBox(width: 4),
                             Text(
                               'Negotiable',
                               style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: marketplaceSageGreen),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: marketplaceSageGreen,
+                              ),
                             ),
                           ],
                         ),
@@ -322,41 +332,43 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                     const Spacer(),
                     // "Find Parts" button for vehicles & motorcycles
                     if (((listing.category == MarketplaceCategory.vehicles &&
-                                listing.vehicleDetails?['make'] != null &&
-                                listing.vehicleDetails!['make']
-                                    .toString()
-                                    .isNotEmpty) ||
-                            (listing.category ==
-                                    MarketplaceCategory.motorcycles &&
-                                listing.motorcycleDetails?['make'] != null &&
-                                listing.motorcycleDetails!['make']
-                                    .toString()
-                                    .isNotEmpty))) ...[
+                            listing.vehicleDetails?['make'] != null &&
+                            listing.vehicleDetails!['make']
+                                .toString()
+                                .isNotEmpty) ||
+                        (listing.category == MarketplaceCategory.motorcycles &&
+                            listing.motorcycleDetails?['make'] != null &&
+                            listing.motorcycleDetails!['make']
+                                .toString()
+                                .isNotEmpty))) ...[
                       GestureDetector(
                         onTap: () {
-                          final make = listing.category ==
+                          final make =
+                              listing.category ==
                                   MarketplaceCategory.motorcycles
                               ? (listing.motorcycleDetails?['make'] ??
-                                      listing.vehicleDetails?['make'] ??
-                                      '')
-                                  .toString()
+                                        listing.vehicleDetails?['make'] ??
+                                        '')
+                                    .toString()
                               : listing.vehicleDetails!['make'].toString();
-                          final model = listing.category ==
+                          final model =
+                              listing.category ==
                                   MarketplaceCategory.motorcycles
                               ? (listing.motorcycleDetails?['model'] ??
-                                      listing.vehicleDetails?['model'] ??
-                                      '')
-                                  .toString()
+                                        listing.vehicleDetails?['model'] ??
+                                        '')
+                                    .toString()
                               : (listing.vehicleDetails?['model'] ?? '')
-                                  .toString();
-                          final year = listing.category ==
+                                    .toString();
+                          final year =
+                              listing.category ==
                                   MarketplaceCategory.motorcycles
                               ? (listing.motorcycleDetails?['year'] ??
-                                      listing.vehicleDetails?['year'] ??
-                                      '')
-                                  .toString()
+                                        listing.vehicleDetails?['year'] ??
+                                        '')
+                                    .toString()
                               : (listing.vehicleDetails?['year'] ?? '')
-                                  .toString();
+                                    .toString();
 
                           final encodedMake = Uri.encodeComponent(make);
                           var path = '/marketplace/parts/$encodedMake';
@@ -371,20 +383,25 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.12),
+                            color: Colors.orange.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: Colors.orange.withOpacity(0.3),
+                              color: Colors.orange.withValues(alpha: 0.3),
                               width: 1,
                             ),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(LucideIcons.wrench,
-                                  size: 12, color: Colors.orange),
+                              Icon(
+                                LucideIcons.wrench,
+                                size: 12,
+                                color: Colors.orange,
+                              ),
                               SizedBox(width: 5),
                               Text(
                                 'Find Parts',
@@ -450,13 +467,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                       listing.listingType == ListingType.product
                           ? LucideIcons.package
                           : listing.listingType == ListingType.job
-                              ? LucideIcons.briefcase
-                              : LucideIcons.wrench,
+                          ? LucideIcons.briefcase
+                          : LucideIcons.wrench,
                       listing.listingType == ListingType.product
                           ? 'Product'
                           : listing.listingType == ListingType.job
-                              ? 'Job'
-                              : 'Service',
+                          ? 'Job'
+                          : 'Service',
                       isDark,
                     ),
                   ],
@@ -471,7 +488,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                   listing.description,
                   style: TextStyle(
                     fontSize: 14,
-                    color: theme.colorScheme.onSurface.withOpacity(0.75),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
                     height: 1.5,
                   ),
                 ),
@@ -504,17 +521,18 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 const SizedBox(height: 20),
                 Row(
                   children: [
-                    _buildStat(
-                        LucideIcons.eye, '${listing.viewCount}', theme),
+                    _buildStat(LucideIcons.eye, '${listing.viewCount}', theme),
                     const SizedBox(width: 16),
-                    _buildStat(LucideIcons.bookmark, '${listing.savedCount}',
-                        theme),
+                    _buildStat(
+                      LucideIcons.bookmark,
+                      '${listing.savedCount}',
+                      theme,
+                    ),
                     const Spacer(),
                     if (listing.createdAt != null)
                       Text(
                         'Listed ${timeago.format(listing.createdAt!)}',
-                        style:
-                            TextStyle(fontSize: 11, color: theme.hintColor),
+                        style: TextStyle(fontSize: 11, color: theme.hintColor),
                       ),
                   ],
                 ),
@@ -587,7 +605,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 label: Text(
                   primaryLabel,
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 15),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: sageGreen,
@@ -606,8 +626,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               child: ElevatedButton(
                 onPressed: () => _contactSeller(listing),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      theme.colorScheme.surfaceContainerHighest,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
                   foregroundColor: sageGreen,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -627,8 +646,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 child: ElevatedButton(
                   onPressed: () => _openApplicationLink(applicationUrl),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        theme.colorScheme.surfaceContainerHighest,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
                     foregroundColor: theme.colorScheme.primary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -697,7 +715,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
-
   // ─── Contextual Category Details ──────────────────────────────────────
   Widget _buildContextualDetails(
     MarketplaceListing listing,
@@ -739,6 +756,26 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           _detailItem('Power', '${v['horsepower']} hp', isDark),
         if (v['doors'] != null)
           _detailItem('Doors', v['doors'].toString(), isDark),
+        if (v['trim'] != null)
+          _detailItem('Trim', v['trim'].toString(), isDark),
+        if (v['series'] != null)
+          _detailItem('Series', v['series'].toString(), isDark),
+        if (v['vehicleType'] != null)
+          _detailItem('Type', v['vehicleType'].toString(), isDark),
+      ];
+
+      // Safety & EV specs
+      final safetySpecs = <Widget>[
+        if (v['abs'] != null)
+          _detailItem('ABS', v['abs'].toString(), isDark),
+        if (v['airbagLocations'] != null)
+          _detailItem('Airbags', v['airbagLocations'].toString(), isDark),
+        if (v['gvwr'] != null)
+          _detailItem('GVWR', v['gvwr'].toString(), isDark),
+        if (v['electrificationType'] != null)
+          _detailItem('Electrification', v['electrificationType'].toString(), isDark),
+        if (v['batteryKWh'] != null)
+          _detailItem('Battery', '${v['batteryKWh']} kWh', isDark),
       ];
 
       widgets.addAll([
@@ -749,21 +786,27 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           const SizedBox(height: 10),
           _buildDetailGrid(secondarySpecs),
         ],
-        // Plant country badge
-        if (v['plantCountry'] != null &&
-            v['plantCountry'].toString().isNotEmpty) ...[
+        if (safetySpecs.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _buildDetailGrid(safetySpecs),
+        ],
+        // Plant origin badge
+        if ((v['plantCountry'] != null &&
+            v['plantCountry'].toString().isNotEmpty) ||
+            (v['plantCity'] != null &&
+            v['plantCity'].toString().isNotEmpty)) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : Colors.black.withOpacity(0.02),
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.02),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withOpacity(0.06)
-                    : Colors.black.withOpacity(0.06),
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.06),
               ),
             ),
             child: Row(
@@ -772,7 +815,12 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 Icon(LucideIcons.factory, size: 13, color: theme.hintColor),
                 const SizedBox(width: 6),
                 Text(
-                  'Made in ${v['plantCountry']}',
+                  'Made in ${[
+                    if (v['plantCity'] != null && v['plantCity'].toString().isNotEmpty)
+                      v['plantCity'].toString(),
+                    if (v['plantCountry'] != null && v['plantCountry'].toString().isNotEmpty)
+                      v['plantCountry'].toString(),
+                  ].join(', ')}',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -791,13 +839,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : Colors.black.withOpacity(0.02),
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.02),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withOpacity(0.06)
-                    : Colors.black.withOpacity(0.06),
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.06),
               ),
             ),
             child: Row(
@@ -831,9 +879,12 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         _buildSection('Motorcycle Details', theme),
         const SizedBox(height: 8),
         _buildDetailGrid([
-          if (m['make'] != null) _detailItem('Make', m['make'].toString(), isDark),
-          if (m['model'] != null) _detailItem('Model', m['model'].toString(), isDark),
-          if (m['year'] != null) _detailItem('Year', m['year'].toString(), isDark),
+          if (m['make'] != null)
+            _detailItem('Make', m['make'].toString(), isDark),
+          if (m['model'] != null)
+            _detailItem('Model', m['model'].toString(), isDark),
+          if (m['year'] != null)
+            _detailItem('Year', m['year'].toString(), isDark),
           if (m['mileage'] != null && m['mileage'].toString().isNotEmpty)
             _detailItem('Mileage', '${m['mileage']} km', isDark),
           if (m['engineSize'] != null)
@@ -853,7 +904,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         _buildSection('Part Details', theme),
         const SizedBox(height: 8),
         _buildDetailGrid([
-          if (cp['partNumber'] != null && cp['partNumber'].toString().isNotEmpty)
+          if (cp['partNumber'] != null &&
+              cp['partNumber'].toString().isNotEmpty)
             _detailItem('Part #', cp['partNumber'].toString(), isDark),
           if (cp['carMake'] != null)
             _detailItem('Fits Make', cp['carMake'].toString(), isDark),
@@ -883,20 +935,24 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
             spacing: 6,
             runSpacing: 4,
             children: (cp['compatibleModels'] as List)
-                .map((m) => Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        m.toString(),
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                    ))
+                .map(
+                  (m) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      m.toString(),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -918,17 +974,17 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         _buildDetailGrid([
           if (purpose != null)
             _detailItem(
-                'Type',
-                purpose.toString().toLowerCase() == 'rent'
-                    ? 'For Rent'
-                    : purpose.toString(),
-                isDark),
+              'Type',
+              purpose.toString().toLowerCase() == 'rent'
+                  ? 'For Rent'
+                  : purpose.toString(),
+              isDark,
+            ),
           if (r['bedrooms'] != null)
             _detailItem('Beds', r['bedrooms'].toString(), isDark),
           if (r['bathrooms'] != null)
             _detailItem('Baths', r['bathrooms'].toString(), isDark),
-          if (area != null)
-            _detailItem('Area', '$area sqft', isDark),
+          if (area != null) _detailItem('Area', '$area sqft', isDark),
           if (address != null)
             _detailItem('Location', address.toString(), isDark),
         ]),
@@ -944,8 +1000,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         _buildSection('Device Details', theme),
         const SizedBox(height: 8),
         _buildDetailGrid([
-          if (e['brand'] != null) _detailItem('Brand', e['brand'].toString(), isDark),
-          if (e['model'] != null) _detailItem('Model', e['model'].toString(), isDark),
+          if (e['brand'] != null)
+            _detailItem('Brand', e['brand'].toString(), isDark),
+          if (e['model'] != null)
+            _detailItem('Model', e['model'].toString(), isDark),
           if (e['storage'] != null)
             _detailItem('Specs', e['storage'].toString(), isDark),
         ]),
@@ -975,8 +1033,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
 
     // Job
-    if (listing.jobDetails != null &&
-        listing.listingType == ListingType.job) {
+    if (listing.jobDetails != null && listing.listingType == ListingType.job) {
       final j = listing.jobDetails!;
       widgets.addAll([
         _buildSection('Job Details', theme),
@@ -993,9 +1050,17 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           if (j['workMode'] != null)
             _detailItem('Work Mode', j['workMode'].toString(), isDark),
           if (j['applicationDeadline'] != null)
-            _detailItem('Deadline', j['applicationDeadline'].toString(), isDark),
+            _detailItem(
+              'Deadline',
+              j['applicationDeadline'].toString(),
+              isDark,
+            ),
           if (j['visaSponsorship'] != null)
-            _detailItem('Visa Sponsor', j['visaSponsorship'].toString(), isDark),
+            _detailItem(
+              'Visa Sponsor',
+              j['visaSponsorship'].toString(),
+              isDark,
+            ),
         ]),
         const SizedBox(height: 16),
       ]);
@@ -1008,11 +1073,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   }
 
   Widget _buildDetailGrid(List<Widget> items) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items,
-    );
+    return Wrap(spacing: 8, runSpacing: 8, children: items);
   }
 
   Widget _detailItem(String label, String value, bool isDark) {
@@ -1020,8 +1081,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.03)
-            : Colors.black.withOpacity(0.02),
+            ? Colors.white.withValues(alpha: 0.03)
+            : Colors.black.withValues(alpha: 0.02),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -1033,8 +1094,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
             style: TextStyle(
               fontSize: 10,
               color: isDark
-                  ? Colors.white.withOpacity(0.4)
-                  : Colors.black.withOpacity(0.4),
+                  ? Colors.white.withValues(alpha: 0.4)
+                  : Colors.black.withValues(alpha: 0.4),
             ),
           ),
           const SizedBox(height: 2),
@@ -1044,8 +1105,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: isDark
-                  ? Colors.white.withOpacity(0.8)
-                  : Colors.black.withOpacity(0.8),
+                  ? Colors.white.withValues(alpha: 0.8)
+                  : Colors.black.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -1071,12 +1132,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     final roleLabel = listing.listingType == ListingType.job
         ? 'Posted by'
         : listing.listingType == ListingType.service
-            ? 'Offered by'
-            : 'Sold by';
+        ? 'Offered by'
+        : 'Sold by';
 
     return sellerProfileAsync.when(
       data: (profile) {
-        final displayName = listing.orgName ??
+        final displayName =
+            listing.orgName ??
             (profile != null
                 ? '${profile.firstName} ${profile.lastName}'
                 : listing.sellerName);
@@ -1090,8 +1152,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.2),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.2,
+              ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1106,8 +1169,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                       ? Colors.white.withValues(alpha: 0.06)
                       : Colors.black.withValues(alpha: 0.04),
                   child: (photoUrl == null || photoUrl.isEmpty)
-                      ? Icon(LucideIcons.user, size: 18,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5))
+                      ? Icon(
+                          LucideIcons.user,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        )
                       : null,
                 ),
                 const SizedBox(width: 12),
@@ -1135,21 +1203,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.verified,
-                              size: 14, color: AppTheme.info),
+                          const Icon(
+                            Icons.verified,
+                            size: 14,
+                            color: AppTheme.info,
+                          ),
                         ],
                       ),
                       if (city != null && city.isNotEmpty) ...[
                         const SizedBox(height: 1),
                         Row(
                           children: [
-                            Icon(LucideIcons.mapPin,
-                                size: 10, color: theme.hintColor),
+                            Icon(
+                              LucideIcons.mapPin,
+                              size: 10,
+                              color: theme.hintColor,
+                            ),
                             const SizedBox(width: 3),
                             Text(
                               city,
                               style: TextStyle(
-                                  fontSize: 11, color: theme.hintColor),
+                                fontSize: 11,
+                                color: theme.hintColor,
+                              ),
                             ),
                           ],
                         ),
@@ -1162,26 +1238,34 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                   // WhatsApp button (if phone available)
                   if (phone != null && phone.isNotEmpty)
                     IconButton(
-                      icon: const Icon(LucideIcons.phone,
-                          size: 18, color: Colors.green),
+                      icon: const Icon(
+                        LucideIcons.phone,
+                        size: 18,
+                        color: Colors.green,
+                      ),
                       tooltip: 'WhatsApp Call',
                       visualDensity: VisualDensity.compact,
                       onPressed: () => _launchWhatsApp(phone),
                     ),
                   // In-app chat button
                   IconButton(
-                    icon: Icon(LucideIcons.messageCircle,
-                        size: 18, color: theme.colorScheme.primary),
+                    icon: Icon(
+                      LucideIcons.messageCircle,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
                     tooltip: 'Send Message',
                     visualDensity: VisualDensity.compact,
-                    onPressed: () => context.push(
-                      '/chat/direct/${listing.sellerId}',
-                    ),
+                    onPressed: () =>
+                        context.push('/chat/direct/${listing.sellerId}'),
                   ),
                 ],
                 if (isOwner)
-                  Icon(LucideIcons.chevronRight,
-                      size: 16, color: theme.hintColor),
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 16,
+                    color: theme.hintColor,
+                  ),
               ],
             ),
           ),
@@ -1190,24 +1274,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       loading: () => Container(
         height: 56,
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest
-              .withValues(alpha: 0.2),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.2,
+          ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(child: LinearProgressIndicator()),
       ),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 
   // ─── Chips & Badges ───────────────────────────────────────────────────
-  Widget _buildIconChip(IconData? icon, String label, bool isDark,
-      {Color? color}) {
+  Widget _buildIconChip(
+    IconData? icon,
+    String label,
+    bool isDark, {
+    Color? color,
+  }) {
     final chipColor = color ?? (isDark ? Colors.white70 : Colors.black54);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (color ?? Colors.grey).withOpacity(isDark ? 0.15 : 0.08),
+        color: (color ?? Colors.grey).withValues(alpha: isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1236,7 +1325,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w700,
-        color: theme.colorScheme.onSurface.withOpacity(0.7),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
       ),
     );
   }
@@ -1288,7 +1377,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -1309,8 +1398,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       ),
     );
   }
-
-
 
   IconData _deliveryIcon(String d) {
     switch (d) {
@@ -1342,39 +1429,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
-  String _contactLabel(String method, {String listingType = ''}) {
-    final actor = listingType == ListingType.job
-        ? 'Employer'
-        : listingType == ListingType.service
-            ? 'Provider'
-            : 'Seller';
-    switch (method) {
-      case ContactMethod.chat:
-        return 'Chat with $actor';
-      case ContactMethod.phone:
-        return 'Call $actor';
-      case ContactMethod.whatsapp:
-        return 'WhatsApp $actor';
-      case ContactMethod.email:
-        return listingType == ListingType.job
-            ? 'Apply via Email'
-            : 'Email $actor';
-      default:
-        return listingType == ListingType.job
-            ? 'Apply Now'
-            : 'Contact $actor';
-    }
-  }
-
   void _openFullScreenViewer(List<String> images, int index) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
-        pageBuilder: (_, __, ___) => _FullScreenImageViewer(
-          images: images,
-          initialIndex: index,
-        ),
-        transitionsBuilder: (_, anim, __, child) {
+        pageBuilder: (_, _, _) =>
+            _FullScreenImageViewer(images: images, initialIndex: index),
+        transitionsBuilder: (_, anim, _, child) {
           return FadeTransition(opacity: anim, child: child);
         },
       ),
@@ -1451,7 +1512,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       // Record listing's fiat value as GDP output
       if (listing.priceAmount > 0) {
         try {
-          await ref.read(pointsServiceProvider).recordFiatGdp(
+          await ref
+              .read(pointsServiceProvider)
+              .recordFiatGdp(
                 amount: listing.priceAmount,
                 countryCode: listing.sellerCountryCode,
                 activityType: 'marketplace_engagement',
@@ -1484,15 +1547,11 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         if (phone != null && phone.isNotEmpty) {
           _launchWhatsApp(phone);
         } else {
-          await _navigateToListingChat(
-            listing, sellerRole, listingType,
-          );
+          await _navigateToListingChat(listing, sellerRole, listingType);
         }
         break;
       case ContactMethod.chat:
-        await _navigateToListingChat(
-          listing, sellerRole, listingType,
-        );
+        await _navigateToListingChat(listing, sellerRole, listingType);
         break;
       case ContactMethod.phone:
         final profileAsync = ref.read(
@@ -1511,16 +1570,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       case ContactMethod.email:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Contacting ${listing.sellerName} via email...'),
+            content: Text('Contacting ${listing.sellerName} via email...'),
             backgroundColor: AppTheme.accent,
           ),
         );
         break;
       default:
-        await _navigateToListingChat(
-          listing, sellerRole, listingType,
-        );
+        await _navigateToListingChat(listing, sellerRole, listingType);
     }
   }
 
@@ -1538,7 +1594,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         listingTitle: listing.title,
         listingType: listingType,
         sellerRole: sellerRole,
-        listingImageUrl: listing.images.isNotEmpty ? listing.images.first : null,
+        listingImageUrl: listing.images.isNotEmpty
+            ? listing.images.first
+            : null,
       );
 
       if (!mounted) return;
@@ -1547,46 +1605,27 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         debugPrint('✅ [Marketplace] Navigating to listing chat: ${chat.id}');
         context.push('/chats/${chat.id}');
       } else {
-        debugPrint('⚠️ [Marketplace] Chat creation returned null, falling back to direct DM');
+        debugPrint(
+          '⚠️ [Marketplace] Chat creation returned null, falling back to direct DM',
+        );
         context.push('/chat/direct/${listing.sellerId}');
       }
     } catch (e) {
-      debugPrint('❌ [Marketplace] Chat creation error: $e — falling back to direct DM');
+      debugPrint(
+        '❌ [Marketplace] Chat creation error: $e — falling back to direct DM',
+      );
       if (!mounted) return;
       context.push('/chat/direct/${listing.sellerId}');
     }
   }
 
-
-
   /// Launch WhatsApp with the given phone number
   Future<void> _launchWhatsApp(String phone) async {
-    final appPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
-    final webPhone = phone.replaceAll(RegExp(r'\D'), '');
-
-    final appUrl = Uri.parse('whatsapp://send?phone=$appPhone');
-    final webUrl = Uri.parse('https://wa.me/$webPhone');
-
-    try {
-      bool launched = false;
-      if (await canLaunchUrl(appUrl)) {
-        launched = await launchUrl(appUrl,
-            mode: LaunchMode.externalApplication);
-      }
-      if (!launched) {
-        if (await canLaunchUrl(webUrl)) {
-          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
-        } else {
-          throw 'Could not launch WhatsApp';
-        }
-      }
-    } catch (e) {
-      debugPrint('WhatsApp Launch Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch WhatsApp')),
-        );
-      }
+    final success = await WhatsAppUtils.launchWhatsApp(phone);
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not launch WhatsApp')),
+      );
     }
   }
 
@@ -1622,15 +1661,17 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete',
-                    style: TextStyle(color: AppTheme.error)),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: AppTheme.error),
+                ),
               ),
             ],
           ),
         );
         if (confirmed == true && mounted) {
           await repo.deleteListing(listing.id);
-          context.pop();
+          if (mounted) context.pop();
         }
     }
   }
@@ -1656,8 +1697,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
             ),
             TextButton(
               onPressed: () async {
-                final user =
-                    ref.read(authRepositoryProvider).currentUser;
+                final messenger = ScaffoldMessenger.of(context);
+                final user = ref.read(authRepositoryProvider).currentUser;
                 if (user != null) {
                   await ref
                       .read(marketplaceRepositoryProvider)
@@ -1667,15 +1708,17 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                         reasonController.text,
                       );
                 }
-                if (mounted) {
+                if (ctx.mounted) {
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Report submitted')),
-                  );
                 }
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Report submitted')),
+                );
               },
-              child: const Text('Submit',
-                  style: TextStyle(color: AppTheme.error)),
+              child: const Text(
+                'Submit',
+                style: TextStyle(color: AppTheme.error),
+              ),
             ),
           ],
         );
@@ -1734,11 +1777,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   imageUrl: widget.images[i],
                   fit: BoxFit.contain,
                   width: double.infinity,
-                  placeholder: (_, __) => const Center(
+                  placeholder: (_, _) => const Center(
                     child: CircularProgressIndicator(
-                        color: AppTheme.accent, strokeWidth: 2),
+                      color: AppTheme.accent,
+                      strokeWidth: 2,
+                    ),
                   ),
-                  errorWidget: (_, __, ___) => const Icon(
+                  errorWidget: (_, _, _) => const Icon(
                     Icons.broken_image,
                     color: Colors.white38,
                     size: 48,

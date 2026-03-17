@@ -259,7 +259,20 @@ class MarketplaceCategory {
       case vehicles:
         return ['Sedans', 'SUVs', 'Trucks', 'Vans', 'Buses', 'Other'];
       case motorcycles:
-        return ['Sport', 'Naked / Street', 'Cruiser', 'Adventure', 'Touring', 'Scooter', 'Commuter', 'Off-Road', 'Tricycle / Tuk-Tuk', 'Trike', 'Electric', 'Other'];
+        return [
+          'Sport',
+          'Naked / Street',
+          'Cruiser',
+          'Adventure',
+          'Touring',
+          'Scooter',
+          'Commuter',
+          'Off-Road',
+          'Tricycle / Tuk-Tuk',
+          'Trike',
+          'Electric',
+          'Other',
+        ];
       case carParts:
         return [
           'Engine & Drivetrain',
@@ -389,33 +402,112 @@ class MarketplaceCategory {
           'Hotel Booking',
         ];
       case jobTechnology:
-        return ['Software Engineering', 'Data Science', 'Cybersecurity', 'DevOps', 'IT Support', 'Product Management'];
+        return [
+          'Software Engineering',
+          'Data Science',
+          'Cybersecurity',
+          'DevOps',
+          'IT Support',
+          'Product Management',
+        ];
       case jobHealthcare:
-        return ['Nursing', 'Doctors', 'Pharmacists', 'Lab Technicians', 'Home Health Aides', 'Dentistry'];
+        return [
+          'Nursing',
+          'Doctors',
+          'Pharmacists',
+          'Lab Technicians',
+          'Home Health Aides',
+          'Dentistry',
+        ];
       case jobFinance:
-        return ['Accounting', 'Financial Analysis', 'Banking', 'Insurance', 'Tax Advisory', 'Auditing'];
+        return [
+          'Accounting',
+          'Financial Analysis',
+          'Banking',
+          'Insurance',
+          'Tax Advisory',
+          'Auditing',
+        ];
       case jobEngineering:
-        return ['Civil', 'Mechanical', 'Electrical', 'Chemical', 'Environmental'];
+        return [
+          'Civil',
+          'Mechanical',
+          'Electrical',
+          'Chemical',
+          'Environmental',
+        ];
       case jobEducation:
-        return ['Teaching', 'Training', 'Curriculum Design', 'Tutoring', 'Administration'];
+        return [
+          'Teaching',
+          'Training',
+          'Curriculum Design',
+          'Tutoring',
+          'Administration',
+        ];
       case jobMarketing:
-        return ['Digital Marketing', 'Content Strategy', 'PR & Comms', 'SEO/SEM', 'Brand Management'];
+        return [
+          'Digital Marketing',
+          'Content Strategy',
+          'PR & Comms',
+          'SEO/SEM',
+          'Brand Management',
+        ];
       case jobSales:
-        return ['Account Executive', 'Business Development', 'Retail Sales', 'Inside Sales', 'Partnerships'];
+        return [
+          'Account Executive',
+          'Business Development',
+          'Retail Sales',
+          'Inside Sales',
+          'Partnerships',
+        ];
       case jobCustomerService:
-        return ['Call Center', 'Help Desk', 'Client Relations', 'Technical Support'];
+        return [
+          'Call Center',
+          'Help Desk',
+          'Client Relations',
+          'Technical Support',
+        ];
       case jobAdminHR:
-        return ['Office Admin', 'Recruiting', 'Payroll', 'Executive Assistant', 'HR Management'];
+        return [
+          'Office Admin',
+          'Recruiting',
+          'Payroll',
+          'Executive Assistant',
+          'HR Management',
+        ];
       case jobConstruction:
-        return ['General Labor', 'Electricians', 'Plumbing', 'Carpentry', 'Project Management'];
+        return [
+          'General Labor',
+          'Electricians',
+          'Plumbing',
+          'Carpentry',
+          'Project Management',
+        ];
       case jobTransportLogistics:
-        return ['Driving', 'Warehouse', 'Supply Chain', 'Dispatching', 'Fleet Management'];
+        return [
+          'Driving',
+          'Warehouse',
+          'Supply Chain',
+          'Dispatching',
+          'Fleet Management',
+        ];
       case jobHospitality:
         return ['Restaurant', 'Hotel', 'Catering', 'Event Staff', 'Barista'];
       case jobRetail:
-        return ['Cashier', 'Store Management', 'Inventory', 'Visual Merchandising'];
+        return [
+          'Cashier',
+          'Store Management',
+          'Inventory',
+          'Visual Merchandising',
+        ];
       case jobCreativeMedia:
-        return ['Graphic Design', 'Video Production', 'Photography', 'Copywriting', 'Social Media'];
+        return [
+          'Graphic Design',
+          'Video Production',
+          'Photography',
+          'Copywriting',
+          'Social Media',
+        ];
       case jobOther:
         return ['Internship', 'Volunteer', 'Freelance', 'Contract', 'Other'];
       default:
@@ -678,9 +770,8 @@ class MarketplaceListing {
       electronicsDetails: map['electronicsDetails'] as Map<String, dynamic>?,
       serviceDetails: map['serviceDetails'] as Map<String, dynamic>?,
       jobDetails: map['jobDetails'] as Map<String, dynamic>?,
-      images: (map['images'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
+      images:
+          (map['images'] as List<dynamic>?)?.map((e) => e as String).toList() ??
           [],
       tags: (map['tags'] as List<dynamic>?)?.map((e) => e as String).toList(),
       location: map['location'] != null

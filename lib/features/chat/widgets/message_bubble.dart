@@ -78,10 +78,7 @@ class MessageBubble extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Align(
           alignment: Alignment.centerLeft,
-          child: HostingRequestMessageContent(
-            message: message,
-            isOwn: isOwn,
-          ),
+          child: HostingRequestMessageContent(message: message, isOwn: isOwn),
         ),
       );
     }
@@ -173,7 +170,7 @@ class MessageBubble extends ConsumerWidget {
                                     decoration: BoxDecoration(
                                       color: isHighlighted
                                           ? theme.colorScheme.primary
-                                                .withOpacity(0.4)
+                                                .withValues(alpha: 0.4)
                                           : (isOwn
                                                 ? theme.colorScheme.primary
                                                 : theme.cardColor),
@@ -381,10 +378,15 @@ class MessageBubble extends ConsumerWidget {
                                         _buildMessageContent(context),
 
                                         // [NEW] Verified Solution Badge
-                                        if (message.metadata?['isVerifiedSolution'] == true)
+                                        if (message
+                                                .metadata?['isVerifiedSolution'] ==
+                                            true)
                                           const Padding(
                                             padding: EdgeInsets.fromLTRB(
-                                              12, 4, 12, 0,
+                                              12,
+                                              4,
+                                              12,
+                                              0,
                                             ),
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
@@ -483,8 +485,8 @@ class MessageBubble extends ConsumerWidget {
                                         ignoring: false, // Catch touches
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(
-                                              0.3,
+                                            color: Colors.black.withValues(
+                                              alpha: 0.3,
                                             ),
                                             borderRadius: BorderRadius.only(
                                               topLeft: const Radius.circular(
@@ -600,15 +602,16 @@ class MessageBubble extends ConsumerWidget {
             if (sellerRole != null && !isOwn) ...[
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _getRoleBadgeColor(sellerRole!).withOpacity(0.15),
+                  color: _getRoleBadgeColor(
+                    sellerRole!,
+                  ).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
-                    color: _getRoleBadgeColor(sellerRole!).withOpacity(0.4),
+                    color: _getRoleBadgeColor(
+                      sellerRole!,
+                    ).withValues(alpha: 0.4),
                     width: 0.5,
                   ),
                 ),
@@ -708,15 +711,9 @@ class MessageBubble extends ConsumerWidget {
       case 'system':
         // Check for hosting request system messages
         if (message.metadata?['systemType'] == 'hosting_request') {
-          return HostingRequestMessageContent(
-            message: message,
-            isOwn: isOwn,
-          );
+          return HostingRequestMessageContent(message: message, isOwn: isOwn);
         }
-        return TextMessageContent(
-          message: message,
-          isOwn: isOwn,
-        );
+        return TextMessageContent(message: message, isOwn: isOwn);
       default:
         return TextMessageContent(message: message, isOwn: isOwn);
     }
@@ -751,7 +748,7 @@ class MessageBubble extends ConsumerWidget {
         icon = LucideIcons.clock;
     }
 
-    return Icon(icon, size: 12, color: color.withOpacity(0.8));
+    return Icon(icon, size: 12, color: color.withValues(alpha: 0.8));
   }
 
   Widget _buildDeletedMessage(ThemeData theme) {
@@ -759,9 +756,11 @@ class MessageBubble extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

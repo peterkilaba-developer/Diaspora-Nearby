@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'dart:async';
@@ -8,11 +11,10 @@ import 'package:diaspora_nearby/core/data/countries.dart'
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/features/dsp/repository/interest_repository.dart';
+
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/governance/repository/governance_repository.dart';
-import 'package:diaspora_nearby/features/governance/models/governance_unit.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
@@ -21,10 +23,11 @@ import 'package:diaspora_nearby/features/dsp/screens/gvi_corridor_list_screen.da
 import 'package:diaspora_nearby/features/dsp/screens/ddi_treasury_detail_screen.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
+import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 
 class DiasporaCryptoScreen extends ConsumerStatefulWidget {
   const DiasporaCryptoScreen({super.key});
@@ -38,12 +41,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  bool _isLoading = false;
-  bool _hasRegistered = false;
 
-  final TextEditingController _walletController = TextEditingController();
-  bool _isSavingWallet = false;
-  bool _isEditingWallet = false;
+  bool _walletCreationTriggered = false;
 
   Future<void> _trackExploration(String actionId) async {
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
@@ -70,17 +69,40 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
-
-    _checkStatus();
-    _loadWalletData();
     // Trigger governance election checks on load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(governanceServiceProvider).checkAndTriggerElections();
       // Track initial tab
       _trackExploration(ExplorationAction.dspDashboard);
+      // Migrate legacy 'eoa' walletType to 'smart' in Firestore
+      _migrateWalletType();
     });
+  }
+
+  /// Patches legacy 'eoa' walletType in Firestore to 'smart'.
+  /// This is a one-time self-healing migration for existing users.
+  Future<void> _migrateWalletType() async {
+    try {
+      final user = ref.read(authRepositoryProvider).currentUser;
+      if (user == null) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!doc.exists) return;
+      final currentType = doc.data()?['walletType'] as String?;
+      if (currentType != null && currentType != 'smart') {
+        debugPrint('[CryptoScreen] Migrating walletType "$currentType" → "smart"');
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({'walletType': 'smart'});
+      }
+    } catch (e) {
+      debugPrint('[CryptoScreen] walletType migration error (non-blocking): $e');
+    }
   }
 
   void _handleTabSelection() {
@@ -88,8 +110,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       if (_tabController.index == 0) {
         _trackExploration(ExplorationAction.dspDashboard);
       } else if (_tabController.index == 1) {
-        _trackExploration(ExplorationAction.dspTokenomics);
-      } else if (_tabController.index == 2) {
         _trackExploration(ExplorationAction.dspTreasuries);
       }
     }
@@ -100,120 +120,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
     _corridorTimer?.cancel();
-    _walletController.dispose();
     super.dispose();
   }
 
-  Future<void> _checkStatus() async {
-    final user = ref.read(authRepositoryProvider).currentUser;
-    if (user == null) return;
 
-    final hasRegistered = await ref
-        .read(interestRepositoryProvider)
-        .checkInterest(userId: user.uid, service: 'crypto');
-
-    if (mounted) {
-      setState(() {
-        _hasRegistered = hasRegistered;
-      });
-    }
-  }
-
-  Future<void> _loadWalletData() async {
-    final user = ref.read(authRepositoryProvider).currentUser;
-    if (user == null) return;
-
-    final userPoints = await ref
-        .read(pointsRepositoryProvider)
-        .getUserPoints(user.uid);
-    if (userPoints?.walletAddress != null) {
-      _walletController.text = userPoints!.walletAddress!;
-    }
-  }
-
-  Future<void> _saveWalletAddress() async {
-    final user = ref.read(authRepositoryProvider).currentUser;
-    if (user == null) return;
-
-    final address = _walletController.text.trim();
-
-    // Validate EVM address (0x followed by 40 hex chars)
-    final ethRegex = RegExp(r'^0x[a-fA-F0-0]{40}$');
-    if (!ethRegex.hasMatch(address)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter a valid wallet address (starts with 0x, 42 characters)',
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSavingWallet = true);
-
-    try {
-      await ref
-          .read(pointsRepositoryProvider)
-          .updateWalletAddress(user.uid, address);
-
-      if (mounted) {
-        setState(() {
-          _isSavingWallet = false;
-          _isEditingWallet = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wallet address saved successfully!')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSavingWallet = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error saving wallet: $e')));
-      }
-    }
-  }
-
-  Future<void> _registerInterest() async {
-    final user = ref.read(authRepositoryProvider).currentUser;
-    final profile = ref.read(userProfileProvider).value;
-
-    if (user == null || profile == null) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await ref
-          .read(interestRepositoryProvider)
-          .registerInterest(
-            userId: user.uid,
-            service: 'crypto',
-            country: profile.homeCountry ?? 'Unknown',
-          );
-
-      if (mounted) {
-        setState(() {
-          _hasRegistered = true;
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You have been added to the whitelist!'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +163,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               ),
               tabs: const [
                 Tab(text: 'DASHBOARD'),
-                Tab(text: 'TOKENOMICS'),
                 Tab(text: 'TREASURIES'),
               ],
             ),
@@ -266,7 +175,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 controller: _tabController,
                 children: [
                   _buildDashboardTab(context, country, profile?.uid ?? ''),
-                  _buildTokenomicsTab(context, country, profile),
                   _buildTreasuriesTab(context, profile),
                 ],
               ),
@@ -283,104 +191,78 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     String userId,
   ) {
     return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHero(country),
-          const SizedBox(height: 24), // Added 24px bottom margin
-          // Move Token Transactions here
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.pageHorizontalPadding,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            _buildHero(country),
+            const SizedBox(height: 24),
+            // Token Transactions
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTheme.pageHorizontalPadding,
+              ),
+              child: _buildTokenTransactionsSection(context, userId),
             ),
-            child: _buildTokenTransactionsSection(context, userId),
-          ),
-          _buildFooter(context),
-        ],
+            // Learn More link to website
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => launchUrl(
+                      Uri.parse('https://diasporanearby.com/#economy'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.accent.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.bookOpen,
+                            size: 16,
+                            color: AppTheme.accent,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Learn More About \$DIASPORA Economy',
+                            style: TextStyle(
+                              color: AppTheme.accent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(
+                            LucideIcons.externalLink,
+                            size: 12,
+                            color: AppTheme.accent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTokenomicsTab(
-    BuildContext context,
-    String country,
-    ProfileData? profile,
-  ) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. LIVE ECONOMY DASHBOARD — flush to top & sides
-          _buildEconomyDashboard(country),
-          const SizedBox(height: 24),
 
-          // Remaining sections with horizontal padding
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.pageHorizontalPadding,
-            ).copyWith(bottom: 48),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 2. HOW YOUR ACTIVITY CREATES VALUE
-                _buildValueCreationSection(),
-                const SizedBox(height: 24),
-
-                // 3. THE VALUE FLOW
-                _buildValueFlowSection(),
-                const SizedBox(height: 24),
-
-                // 4. THE ASSET
-                _buildSectionHeader('THE ASSET', '\$DIASPORA Token'),
-                const Text(
-                  'A sovereign digital currency for the 1.5 billion global Diaspora — backed not by speculation, but by the real economic activity of our people.',
-                  style: TextStyle(fontSize: 15, color: Colors.grey, height: 1.6),
-                ),
-                const SizedBox(height: 16),
-                _buildUtilityItem(
-                  LucideIcons.globe2,
-                  'Sovereign Currency',
-                  'Built on Base blockchain. Your DSP converts to \$DIASPORA at each Token Generation Event.',
-                ),
-                _buildUtilityItem(
-                  LucideIcons.shieldCheck,
-                  'Trust-Backed Efficiency',
-                  'Your PoCT trust score determines your DSP→\$DIASPORA conversion rate via decile scaling.',
-                ),
-                const SizedBox(height: 24),
-
-                // 5. MONETARY POLICY
-                _buildSectionHeader('MONETARY POLICY', 'Supply Mechanics'),
-                const Text(
-                  'For every 1 DSP you earn, an additional 1 DSP is minted for community treasuries, founders, and protocol reserves — the 1:1 Match.',
-                  style: TextStyle(fontSize: 15, color: Colors.grey, height: 1.6),
-                ),
-                const SizedBox(height: 16),
-                _buildUtilityItem(
-                  LucideIcons.share2,
-                  '1:1 Treasury Matching',
-                  '70% Community Treasuries + 10% Founders + 10% Investors + 10% Burn.',
-                ),
-                _buildUtilityItem(
-                  LucideIcons.flame,
-                  'Dual-Burn',
-                  'Equilibrium Burn (transaction fees) + Natural Burn (protocol reserve) reduce supply over time.',
-                ),
-                const SizedBox(height: 24),
-
-                // 6. BILATERAL CORRIDORS
-                _buildBilateralMatrix(profile),
-                const SizedBox(height: 24),
-
-                // 7. EPOCH PROGRESS
-                _buildRaceTo1Billion(context),
-                const SizedBox(height: 48),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ─── ECONOMY DASHBOARD ───────────────────────────────────────────────
   Widget _buildEconomyDashboard(String country) {
@@ -414,10 +296,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               Row(
                 children: [
                   Image.asset(
-                    'assets/icons/logo-original.png',
+                    'assets/icons/logo-orange-transparent-32.png',
                     width: 32,
                     height: 32,
-                    color: Colors.orange,
                   ),
                   const SizedBox(width: 12),
                   const Text(
@@ -463,65 +344,41 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               ),
               const SizedBox(height: 20),
 
-              // Floor Price
-              gdpAsync.when(
-                data: (gdp) => supplyAsync.when(
-                  data: (supply) {
-                    final floorPrice = supply > 0 ? (gdp / supply) : 0.0;
-                    final projectedPrice = floorPrice * 3.5;
+              // Dynamic DSP Value — mirrors DSP page dashboard
+              Builder(
+                builder: (context) {
+                  final valuation = ref.watch(dspValuationProvider);
+                  final projectedPrice = valuation.impliedValueUsd * 3.5;
 
-                    return Column(
-                      children: [
-                        const Text(
-                          'Floor Price',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                  return Column(
+                    children: [
+                      const Text(
+                        'Current Floor Price',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '1 DSP = ${valuation.formattedImpliedValue}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -1,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '\$${floorPrice.toStringAsFixed(4)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -1,
-                          ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Projected: \$${projectedPrice.toStringAsFixed(4)}',
+                        style: const TextStyle(
+                          color: Colors.orange,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Projected: \$${projectedPrice.toStringAsFixed(4)}',
-                          style: const TextStyle(
-                            color: Colors.orange,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Floor Price = Total Fiat GDP ÷ DSP Supply',
-                            style: TextStyle(
-                              color: Colors.white60,
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, _) => const SizedBox.shrink(),
-                ),
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
+                      ),
+
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -606,170 +463,76 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     );
   }
 
-  // ─── VALUE CREATION SECTION ─────────────────────────────────────────
-  Widget _buildValueCreationSection() {
-    return Container(
-      padding: AppTheme.cardPaddingEdgeInsets,
-      decoration: AppTheme.cardDecoration(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader(
-            'HOW YOUR ACTIVITY CREATES VALUE',
-            'Real Economy',
-          ),
-          const Text(
-            'Every real transaction inside the app is tracked in its local fiat currency, normalized to USD, and added to our Fiat GDP — the real-world economic backbone of \$DIASPORA.',
-            style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
 
-
-  // ─── VALUE FLOW SECTION ─────────────────────────────────────────────
-  Widget _buildValueFlowSection() {
-    return Container(
-      padding: AppTheme.cardPaddingEdgeInsets,
-      decoration: AppTheme.cardDecoration(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader('THE VALUE FLOW', 'DSP → \$DIASPORA'),
-          const Text(
-            'DSP are off-chain social points you earn before the Token Generation Event (TGE). At TGE, your DSP is burned and converted into \$DIASPORA tokens on the Base blockchain.',
-            style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
-          ),
-          const SizedBox(height: 20),
-
-          // Flow Steps
-          _buildFlowStep(
-            '1',
-            'You Earn DSP',
-            'Through activities, sharing, and community engagement.',
-            LucideIcons.arrowDown,
-          ),
-          _buildFlowStep(
-            '2',
-            'Fiat GDP Tracked',
-            'Real purchases (flights, marketplace, stays) accumulate in Fiat GDP.',
-            LucideIcons.arrowDown,
-          ),
-          _buildFlowStep(
-            '3',
-            'Floor Price Computed',
-            'Floor Price = Total Fiat GDP ÷ Circulating Supply.',
-            LucideIcons.arrowDown,
-          ),
-          _buildFlowStep(
-            '4',
-            'TGE: DSP → \$DIASPORA',
-            'At each epoch milestone, DSP is burned and \$DIASPORA is minted on Base.',
-            LucideIcons.arrowDown,
-            isLast: true,
-          ),
-          const SizedBox(height: 16),
-
-          // Final Note
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
-            ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(LucideIcons.info, size: 16, color: Colors.orange),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Post-TGE, \$DIASPORA becomes the exclusive medium of exchange within the app. DSP accumulation restarts each epoch for new supply.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFlowStep(
-    String number,
-    String title,
-    String description,
-    IconData arrowIcon, {
-    bool isLast = false,
-  }) {
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppTheme.accent.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  number,
-                  style: const TextStyle(
-                    color: AppTheme.accent,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        if (!isLast)
-          const SizedBox(height: 32),
-      ],
-    );
-  }
 
   Widget _buildTreasuriesTab(BuildContext context, ProfileData? profile) {
+    final country = profile?.homeCountry ?? 'Home Country';
     return SingleChildScrollView(
-      padding: AppTheme.pagePaddingEdgeInsets.copyWith(top: 16),
       child: SafeArea(
         top: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildCommunityTreasuries(profile),
-            // Add extra space at the bottom to ensure nothing is cut off
-            const SizedBox(height: 100),
+            // Economy dashboard flush to top
+            _buildEconomyDashboard(country),
+            const SizedBox(height: 24),
+            // Bilateral corridors + treasuries
+            Padding(
+              padding: AppTheme.pagePaddingEdgeInsets,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildBilateralMatrix(profile),
+                  const SizedBox(height: 24),
+                  _buildCommunityTreasuries(profile),
+                  const SizedBox(height: 24),
+                  // Learn More link
+                  GestureDetector(
+                    onTap: () => launchUrl(
+                      Uri.parse('https://diasporanearby.com/#decoupling'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.accent.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.bookOpen,
+                            size: 16,
+                            color: AppTheme.accent,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Full Tokenomics & Governance',
+                            style: TextStyle(
+                              color: AppTheme.accent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(
+                            LucideIcons.externalLink,
+                            size: 12,
+                            color: AppTheme.accent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -781,7 +544,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
       decoration: AppTheme.pageDecoration(context).copyWith(
-        borderRadius: BorderRadius.zero,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(15),
+          bottomRight: Radius.circular(15),
+        ),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -791,11 +557,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       child: Column(
         children: [
           Image.asset(
-            'assets/icons/logo-original.png',
+            'assets/icons/logo-orange-transparent-80.png',
             width: 80,
             height: 80,
             fit: BoxFit.contain,
-            color: Colors.orange,
           ),
           const SizedBox(height: 16),
           const Text(
@@ -818,34 +583,50 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 6),
+          const Text(
+            'Reputation-to-Asset Engine',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white54,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 1.2,
+            ),
+          ),
           const SizedBox(height: 24),
-          if (!_hasRegistered)
-            FilledButton(
-              onPressed: _isLoading ? null : _registerInterest,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppTheme.accentDark,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
+          _buildMyWalletSection(context),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () => launchUrl(
+              Uri.parse(
+                'https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c',
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'Join the \$Diaspora Whitelist',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-            )
-          else
-            _buildMyWalletSection(context),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  LucideIcons.externalLink,
+                  size: 14,
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'View \$DIASPORA on Blockchain',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Colors.white.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1015,7 +796,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               decoration: AppTheme.cardDecoration(context),
               child: Column(
                 children: [
-                  _buildSectionHeader('EPOCH STATUS', 'The Race to Epoch 1'),
+                  _buildSectionHeader('THE GREAT RESET', 'Race to Epoch 1'),
                   const SizedBox(height: 16),
                   Text(
                     '${NumberFormat('#,###').format(totalMinted)} / 1,000,000 DSP',
@@ -1037,7 +818,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 completes. You must meet the Genesis Gate (10,000 DSP) to qualify.',
+                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Reach 10,000 DSP to qualify for TGE.', 
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -1074,6 +855,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               c.id != 'global_community',
         )
         .toList();
+
 
     // Sort by type (Continent > Country > State > City)
     int getTypeWeight(String? type) {
@@ -1119,14 +901,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     );
     final int globalMembers = globalCommunity.memberCount;
     final int globalCumulative = globalCommunity.cumulativeEarnings;
-    epochService.getCurrentCommunityEpoch(
-      globalCumulative,
-      globalMembers,
-    );
-    epochService.getCurrentTgeEventNumber(
-      globalCumulative,
-      globalMembers,
-    );
+    epochService.getCurrentCommunityEpoch(globalCumulative, globalMembers);
+    epochService.getCurrentTgeEventNumber(globalCumulative, globalMembers);
 
     // Calculate Circulating Wealth (Post-TGE only)
     double circulatingWealth = 0;
@@ -1219,21 +995,29 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                           Row(
                             children: [
                               Image.asset(
-                                'assets/icons/logo-original.png',
+                                'assets/icons/logo-orange-transparent-32.png',
                                 width: 28,
                                 height: 28,
                                 fit: BoxFit.contain,
-                                color: Colors.orange,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                '${NumberFormat('#,###').format(circulatingWealth.round())} \$DIASPORA',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.orange,
-                                ),
-                              ),
+                              // Use actual on-chain totalDistributed from batch provider
+                              (() {
+                                final batchAsync = ref.watch(batchTokenBalancesProvider);
+                                final total = batchAsync.when(
+                                  data: (b) => b.totalDistributed,
+                                  loading: () => '...',
+                                  error: (_, __) => '0',
+                                );
+                                return Text(
+                                  '$total \$DIASPORA',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.orange,
+                                  ),
+                                );
+                              })(),
                             ],
                           ),
                         ],
@@ -1270,12 +1054,13 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           child: _GovernanceUnitCard(
             unitId: 'global_community',
             communityId: 'global_community',
-            defaultTitle: 'Global Community Treasury',
-            subtitle: 'DDI — Community Investment Loans',
+            defaultTitle: 'Global Fund Reserve',
+            subtitle: 'Global Fund Reserve — 10% Tribute',
             icon: LucideIcons.globe,
             governanceType: 'Global Council Multi-sig',
           ),
         ),
+
 
         // 3. Home Communities Pool
         if (homePool.isNotEmpty) ...[
@@ -1294,19 +1079,31 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ? community.id.substring(community.id.indexOf('_') + 1)
                 : community.id;
 
+            // Determine allocation % based on hierarchy depth
+            final bool hasHomeState = homePool.any((c) => c.type == 'state');
+            String tributeLabel;
+            if (community.type == 'country' && hasHomeState) {
+              tributeLabel = 'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
+            } else if (community.type == 'state') {
+              tributeLabel = 'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
+            } else {
+              tributeLabel = 'Foreign Diaspora Direct Investments — 10% Tribute';
+            }
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: _GovernanceUnitCard(
                 unitId: unitId,
                 communityId: community.id,
-                // homeCountryCode: community.homeCountryCode, // REMOVED to force specific community display
                 defaultTitle: '${community.name} Treasury',
-                subtitle: 'DDI — Community Investment Loans',
+                subtitle: tributeLabel,
                 icon: community.type == 'continent'
                     ? LucideIcons.map
                     : (community.type == 'country'
                           ? LucideIcons.flag
-                          : LucideIcons.home),
+                          : community.type == 'state'
+                              ? LucideIcons.landmark
+                              : LucideIcons.home),
                 governanceType: 'Leader Multi-sig',
               ),
             );
@@ -1331,16 +1128,29 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ? community.id.substring(community.id.indexOf('_') + 1)
                 : community.id;
 
+            // Determine allocation % based on hierarchy depth
+            final bool hasHostState = hostPool.any((c) => c.type == 'state');
+            String tributeLabel;
+            if (community.type == 'country' && hasHostState) {
+              tributeLabel = 'Diaspora Direct Investments Loans — 5% Tribute (Split)';
+            } else if (community.type == 'state') {
+              tributeLabel = 'Diaspora Direct Investments Loans — 5% Tribute (Split)';
+            } else {
+              tributeLabel = 'Diaspora Direct Investments Loans — 10% Tribute';
+            }
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: _GovernanceUnitCard(
                 unitId: unitId,
                 communityId: community.id,
                 defaultTitle: '${community.name} Treasury',
-                subtitle: 'DDI — Community Investment Loans',
+                subtitle: tributeLabel,
                 icon: community.type == 'city'
                     ? LucideIcons.mapPin
-                    : LucideIcons.map,
+                    : (community.type == 'state'
+                          ? LucideIcons.landmark
+                          : LucideIcons.map),
                 governanceType: 'Leader Multi-sig',
               ),
             );
@@ -1368,18 +1178,18 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             subtitle: 'Core Maintenance (10%)',
             icon: LucideIcons.users,
             governanceType: 'Vesting Schedule',
-            customAvatarAsset: 'assets/icons/logo-original.png',
+            customAvatarAsset: 'assets/icons/logo-orange-transparent-48.png',
           ),
         ),
         const Padding(
           padding: EdgeInsets.only(bottom: 16),
           child: _GovernanceUnitCard(
             unitId: 'investors',
-            defaultTitle: 'Investors & Partners',
-            subtitle: 'Strategic Ecosystem Support',
-            icon: LucideIcons.briefcase,
-            governanceType: 'Institutional Allocation',
-            customAvatarAsset: 'assets/icons/logo-original.png',
+            defaultTitle: 'Liquidity Treasury',
+            subtitle: 'DEX Liquidity & Market Access',
+            icon: LucideIcons.droplets,
+            governanceType: 'Protocol Managed Liquidity',
+            customAvatarAsset: 'assets/icons/logo-orange-transparent-48.png',
           ),
         ),
         const Padding(
@@ -1390,76 +1200,15 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             subtitle: 'Protocol Deflationary Sink',
             icon: LucideIcons.flame,
             governanceType: 'Automated Protocol Burn',
-            customAvatarAsset: 'assets/icons/logo-original.png',
+            customAvatarAsset: 'assets/icons/logo-orange-transparent-48.png',
           ),
         ),
 
         const SizedBox(height: 16),
         _buildRaceTo1Billion(context),
         const SizedBox(height: 24),
-        _buildLeaderSelectionInfo(),
+
       ],
-    );
-  }
-
-  Widget _buildLeaderSelectionInfo() {
-    return Container(
-      padding: AppTheme.cardPaddingEdgeInsets,
-      decoration: BoxDecoration(
-        color: AppTheme.accentDark.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(AppTheme.standardBorderRadius),
-      ),
-      child: const Column(
-        children: [
-          Row(
-            children: [
-              Icon(LucideIcons.vote, color: AppTheme.accent, size: 20),
-              SizedBox(width: 12),
-              Text(
-                'Democratic Selection',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          Text(
-            'Every community member votes to elect leaders in their Community "Council of Community Leaders", to represent their interests and these leaders are selected by their peers to oversee community funds.',
-            style: TextStyle(fontSize: 13, color: Colors.blueGrey),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        children: [
-          const Text(
-            '\$DIASPORA Token: Wealth for you. Wealth for your community.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 32),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppTheme.accent),
-                foregroundColor: AppTheme.accent,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              child: const Text('Back to My Dashboard'),
-            ),
-          ),
-          const SizedBox(height: 48),
-        ],
-      ),
     );
   }
 
@@ -1486,46 +1235,43 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     );
   }
 
-  Widget _buildUtilityItem(IconData icon, String title, String desc) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppTheme.accent, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  desc,
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
+  Widget _buildMyWalletSection(BuildContext context) {
+    final walletAsync = ref.watch(userWalletProvider);
+    
+    return walletAsync.when(
+      loading: () => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
       ),
+      error: (_, __) => _buildSmartWalletContent(null),
+      data: (walletData) {
+        // Auto-trigger wallet creation if user doesn't have one yet
+        if ((walletData == null || !walletData.hasWallet) && !_walletCreationTriggered) {
+          _walletCreationTriggered = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            debugPrint('[CryptoScreen] Triggering smart wallet creation...');
+            ref.read(smartWalletServiceProvider).ensureSmartWallet();
+          });
+        }
+        return _buildSmartWalletContent(walletData);
+      },
     );
   }
 
-  Widget _buildMyWalletSection(BuildContext context) {
-    bool hasWallet = _walletController.text.isNotEmpty;
-    bool showInput = !hasWallet || _isEditingWallet;
+  Widget _buildSmartWalletContent(SmartWalletData? walletData) {
+    final hasWallet = walletData?.hasWallet == true;
+    final displayAddress = walletData?.address ?? '';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(20),
-      // White background with slight opacity to blend with Hero gradient
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
@@ -1540,159 +1286,213 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header Row ──
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(
-                    LucideIcons.wallet,
-                    color: Colors.white,
-                  ), // White for Hero contrast
-                  SizedBox(width: 12),
-                  Text(
-                    'My Wallet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              if (hasWallet && !showInput)
-                IconButton(
-                  icon: const Icon(
-                    LucideIcons.edit2,
-                    color: Colors.white70,
-                    size: 18,
-                  ),
-                  onPressed: () => setState(() => _isEditingWallet = true),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  tooltip: 'Edit Address',
+              const Icon(LucideIcons.wallet, color: Colors.white),
+              const SizedBox(width: 12),
+              const Text(
+                'Smart Wallet',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.shield, color: Colors.white, size: 10),
+                    SizedBox(width: 4),
+                    Text(
+                      'Gasless',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+
+          // ── Description ──
           const Center(
             child: Text(
-              'Connect your wallet or create new to receive \$DIASPORA Token payout.',
+              'Auto-created from your phone number. No keys to manage, no gas fees.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.white70),
+              style: TextStyle(fontSize: 13, color: Colors.white70),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Metamask/Base Buttons
+          // ── Key Features ──
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _launchURL('https://metamask.io/download/'),
-                  icon: const Icon(LucideIcons.link, size: 16),
-                  label: const Text('MetaMask'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
-                    backgroundColor: Colors.white.withValues(alpha: 0.05),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () =>
-                      _launchURL('https://keys.coinbase.com/onboarding'),
-                  icon: const Icon(LucideIcons.circle, size: 16),
-                  label: const Text('Base'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.5)),
-                    backgroundColor: Colors.white.withValues(alpha: 0.05),
-                  ),
-                ),
-              ),
+              _buildWalletFeature(LucideIcons.smartphone, 'Phone-Based'),
+              const SizedBox(width: 8),
+              _buildWalletFeature(LucideIcons.zap, 'Zero Gas Fees'),
+              const SizedBox(width: 8),
+              _buildWalletFeature(LucideIcons.lock, 'Non-Custodial'),
             ],
           ),
           const SizedBox(height: 16),
 
-          if (showInput) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                // Using app logo orange for the input container
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.orange.withValues(alpha: 0.5),
-                  width: 2,
-                ),
-              ),
-              child: TextField(
-                controller: _walletController,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  filled: false, // Ensure no background fill
-                  contentPadding: EdgeInsets.symmetric(vertical: 12),
-                  hintText: 'Enter Wallet Address (0x...)',
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.white54),
-                ),
-                // Style text with orange and bold as requested
-                style: const TextStyle(
-                  color: Colors.orange,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-                onChanged: (_) {
-                  if (!_isEditingWallet) {
-                    setState(() => _isEditingWallet = true);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _isSavingWallet ? null : _saveWalletAddress,
-                style: FilledButton.styleFrom(
-                  backgroundColor:
-                      AppTheme.accentDark, // Dark accent for button
-                  foregroundColor: Colors.white,
-                ),
-                child: _isSavingWallet
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Secure Your Whitelist Spot'),
-              ),
-            ),
-          ] else ...[
+          // ── Wallet Address or Creating State ──
+          if (hasWallet) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              // Removed the black background (Colors.black.withValues(alpha: 0.2))
-              // and replaced it with a subtle white transparent bg.
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
-              child: Text(
-                _walletController.text,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Address Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          displayAddress,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                          ),
+                          maxLines: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: displayAddress));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Wallet address copied!'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            LucideIcons.copy,
+                            color: Colors.white70,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Balance Row
+                  const SizedBox(height: 10),
+                  Divider(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                  const SizedBox(height: 10),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final balanceAsync = ref.watch(tokenBalanceProvider);
+                      return balanceAsync.when(
+                        data: (balance) => Row(
+                          children: [
+                            Text(
+                              'Balance: ',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.6),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Image.asset(
+                              'assets/icons/logo-orange-transparent-32.png',
+                              width: 28,
+                              height: 28,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              balance,
+                              style: const TextStyle(
+                                color: Colors.orange,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              r'$DIASPORA',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.4),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        loading: () => Row(
+                          children: [
+                            Text(
+                              'Balance: ',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.6),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                        error: (_, __) => Row(
+                          children: [
+                            Text(
+                              'Balance: ',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.6),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const Text(
+                              '—',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -1700,13 +1500,13 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  LucideIcons.checkCircle,
+                  LucideIcons.shieldCheck,
                   color: Colors.lightGreenAccent,
                   size: 16,
                 ),
                 SizedBox(width: 8),
                 Text(
-                  'Ready for \$Diaspora TGE',
+                  'Smart Wallet Active',
                   style: TextStyle(
                     color: Colors.lightGreenAccent,
                     fontWeight: FontWeight.bold,
@@ -1714,8 +1514,66 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ),
               ],
             ),
+          ] else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'Creating your smart wallet...',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildWalletFeature(IconData icon, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 16, color: Colors.white70),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.white70,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1723,146 +1581,546 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
   Widget _buildTokenTransactionsSection(BuildContext context, String userId) {
     if (userId.isEmpty) return const SizedBox.shrink();
 
-    final transactionsAsync = ref.watch(userTransactionsProvider(userId));
+    final onChainAsync = ref.watch(onChainTransfersProvider);
+    final userPoints = ref.watch(userPointsProvider(userId)).value;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('TGE LEDGER', 'Blockchain Transactions'),
-        Container(
-          padding: AppTheme.cardPaddingEdgeInsets,
-          decoration: AppTheme.cardDecoration(context),
-          child: transactionsAsync.when(
-            data: (transactions) {
-              final userPoints = ref.watch(userPointsProvider(userId)).value;
-              final List<_BlockchainEvent> activities = [];
-              // 1. Add Filtered Transactions (On-chain/Token only)
-              for (final tx in transactions) {
-                final action = tx.action.toLowerCase();
-                final isTokenAsset = tx.metadata?['assetType'] == 'token';
-                final isOnChain = tx.metadata?['onChain'] == true;
-                final isTgeSpecific =
-                    action.contains('tge') || action.contains('distribution');
+        _buildSectionHeader('BLOCKCHAIN ACTIVITIES', 'On-chain transactions & distributions'),
+        onChainAsync.when(
+          data: (onChainTransfers) {
+            final List<_BlockchainEvent> activities = [];
 
-                // Final Check: MUST be a token asset, or the action must be a TGE distribution, or explicitly on-chain
-                if (isTokenAsset || isOnChain || isTgeSpecific) {
-                  // Final sanity check: exclude anything that looks like a point reward even if tagged weirdly
-                  final isReward =
-                      action.contains('reward') ||
-                      action.contains('bonus') ||
-                      action.contains('streak');
-                  if (isReward && !isTgeSpecific) continue;
+            // 1. Add real on-chain ERC-20 transfer events from Base blockchain
+            for (final tx in onChainTransfers) {
+              final title = tx.isIncoming
+                  ? 'Received from ${tx.shortFrom}'
+                  : 'Sent to ${tx.shortTo}';
 
-                  activities.add(
-                    _BlockchainEvent(
-                      title: tx.displayAction,
-                      timestamp: tx.timestamp,
-                      amount: tx.points.toDouble(),
-                      isPositive: tx.points >= 0,
-                    ),
-                  );
+              activities.add(
+                _BlockchainEvent(
+                  title: title,
+                  timestamp: tx.timestamp,
+                  amount: tx.amount,
+                  isPositive: tx.isIncoming,
+                  txHash: tx.txHash,
+                  category: tx.isIncoming ? _TxCategory.token : _TxCategory.transfer,
+                ),
+              );
+            }
+
+            // 2. Add TGE distributions (these are on-chain mints)
+            if (userPoints != null) {
+              for (final record in userPoints.tgeHistory) {
+                // Skip if already present from on-chain logs
+                if (record.txHash != null &&
+                    activities.any((a) => a.txHash == record.txHash)) {
+                  continue;
                 }
-              }
-
-              // 2. Add TGE Distributions from History
-              if (userPoints != null) {
-                for (final record in userPoints.tgeHistory) {
-                  activities.add(
-                    _BlockchainEvent(
-                      title:
-                          'Epoch ${record.epoch} TGE ${record.tgeNumber} Distribution',
-                      timestamp: record.date,
-                      amount: record.amount,
-                      isPositive: record.amount >= 0,
-                      subtitle:
-                          'Efficiency: ${(record.efficiency * 100).toStringAsFixed(1)}%',
-                    ),
-                  );
-                }
-              }
-
-              // 3. Sort by date descending
-              activities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-              if (activities.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Center(
-                    child: Text(
-                      'No blockchain activities recorded yet.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                activities.add(
+                  _BlockchainEvent(
+                    title:
+                        'Epoch ${record.epoch} TGE ${record.tgeNumber} Distribution',
+                    timestamp: record.date,
+                    amount: record.amount,
+                    isPositive: record.amount >= 0,
+                    subtitle:
+                        'Efficiency: ${(record.efficiency * 100).toStringAsFixed(1)}%',
+                    txHash: record.txHash,
+                    category: _TxCategory.token,
                   ),
                 );
               }
+            }
 
-              return ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: min(activities.length, 10), // Show top 10
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final act = activities[index];
-                  final sign = act.isPositive ? '+' : '';
-                  final color = act.isPositive ? Colors.green : Colors.red;
+            // 3. Also include Firestore token transfer records (assetType == 'token')
+            //    to catch any on-chain txns that might be outside the RPC log window
+            final firestoreTxAsync = ref.watch(userTransactionsProvider(userId));
+            firestoreTxAsync.whenData((transactions) {
+              for (final tx in transactions) {
+                final isTokenAsset = tx.metadata?['assetType'] == 'token' ||
+                    tx.action.toLowerCase().contains('token_transfer');
+                if (!isTokenAsset) continue;
 
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        act.isPositive
-                            ? LucideIcons.arrowDownLeft
-                            : LucideIcons.arrowUpRight,
-                        color: color,
-                        size: 16,
-                      ),
+                final txHash = tx.metadata?['txHash'] as String?;
+                // Skip duplicates already from on-chain logs
+                if (txHash != null && activities.any((a) => a.txHash == txHash)) {
+                  continue;
+                }
+
+                activities.add(
+                  _BlockchainEvent(
+                    title: tx.displayAction,
+                    timestamp: tx.timestamp,
+                    amount: tx.points.toDouble(),
+                    isPositive: tx.points >= 0,
+                    txHash: txHash,
+                    category: _TxCategory.token,
+                  ),
+                );
+              }
+            });
+
+            // 4. Sort by date descending
+            activities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+            if (activities.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                decoration: AppTheme.cardDecoration(context),
+                child: Column(
+                  children: [
+                    Icon(
+                      LucideIcons.hexagon,
+                      size: 32,
+                      color: Colors.orange.withValues(alpha: 0.3),
                     ),
-                    title: Text(
-                      act.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    subtitle: Text(
-                      act.subtitle ??
-                          DateFormat.yMMMd().add_jm().format(
-                            act.timestamp.toLocal(),
-                          ),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    trailing: Text(
-                      '$sign${NumberFormat('#,###').format(act.amount)} \$DIASPORA',
+                    const SizedBox(height: 12),
+                    Text(
+                      'No on-chain activity yet',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: color,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
-                  );
-                },
-              );
-            },
-            loading: () => const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (err, stack) => Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Center(
-                child: Text(
-                  'Error: $err',
-                  style: const TextStyle(color: Colors.red),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$DIASPORA token transfers and TGE\ndistributions will appear here.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ],
                 ),
+              );
+            }
+
+            final displayCount = min(activities.length, 8);
+            final hasMore = activities.length > 8;
+
+            return Column(
+              children: [
+                ...List.generate(displayCount, (index) {
+                  final act = activities[index];
+                  final isLast = index == displayCount - 1 && !hasMore;
+                  return _buildActivityTile(context, act, showDivider: !isLast);
+                }),
+                if (hasMore)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: TextButton(
+                      onPressed: () {
+                        // Show all activities in a bottom sheet
+                        _showAllActivities(context, activities);
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'View All ${activities.length} Transactions',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            LucideIcons.chevronDown,
+                            size: 14,
+                            color: AppTheme.accent,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+          loading: () => Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            decoration: AppTheme.cardDecoration(context),
+            child: const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
           ),
+          error: (err, stack) => Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: AppTheme.cardDecoration(context),
+            child: Row(
+              children: [
+                Icon(LucideIcons.alertTriangle, size: 16, color: Colors.orange.shade400),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Could not fetch blockchain data',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityTile(BuildContext context, _BlockchainEvent act, {bool showDivider = true}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sign = act.isPositive ? '+' : '-';
+
+    // All blockchain activities use orange/token styling
+    final IconData icon;
+    if (act.category == _TxCategory.transfer && !act.isPositive) {
+      icon = LucideIcons.arrowUpRight;
+    } else if (act.isPositive) {
+      icon = LucideIcons.arrowDownLeft;
+    } else {
+      icon = LucideIcons.hexagon;
+    }
+    const accentColor = Colors.orange;
+
+    final amountColor = act.isPositive
+        ? (isDark ? Colors.greenAccent.shade200 : AppTheme.accent)
+        : Colors.red.shade400;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accentColor, size: 16),
+              ),
+              const SizedBox(width: 12),
+              // Title & timestamp
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      act.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          act.subtitle ?? _formatRelativeTime(act.timestamp),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: const Text(
+                            'ON-CHAIN',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Amount
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$sign${NumberFormat('#,###.##').format(act.amount.abs())}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: amountColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    '\$DIASPORA',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: accentColor.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+              // Basescan link (always present for on-chain tx)
+              if (act.txHash != null && act.txHash!.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => launchUrl(
+                    Uri.parse('https://basescan.org/tx/${act.txHash}'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: Icon(
+                    LucideIcons.externalLink,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
+          ),
+      ],
+    );
+  }
+
+  void _showAllActivities(BuildContext context, List<_BlockchainEvent> activities) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                // Handle bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.hexagon, size: 18, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Text(
+                        'All On-Chain Transactions (${activities.length})',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: activities.length,
+                    itemBuilder: (context, index) {
+                      return _buildActivityTile(
+                        context,
+                        activities[index],
+                        showDivider: index < activities.length - 1,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _formatRelativeTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat.MMMd().format(timestamp);
+  }
+
+
+  /// Builds a compact card showing the DSP estimated value and factor breakdown.
+  Widget _buildDspEstimatedValueCard(BuildContext context) {
+    final valuation = ref.watch(dspValuationProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subTextColor = isDark ? Colors.white54 : Colors.black54;
+
+    return Container(
+      padding: AppTheme.cardPaddingEdgeInsets,
+      decoration: AppTheme.cardDecoration(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.trendingUp, size: 16, color: AppTheme.accent),
+              const SizedBox(width: 8),
+              Text(
+                'DSP ESTIMATED VALUE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: subTextColor,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'LIVE',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.accent,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => launchUrl(
+                  Uri.parse(
+                    'https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c',
+                  ),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.externalLink, size: 10, color: Colors.blue),
+                      SizedBox(width: 4),
+                      Text(
+                        'TOKEN',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Price per DSP
+          Text(
+            '1 DSP = ${valuation.formattedImpliedValue}',
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.accent,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Factor breakdown
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              _buildFactorChip(
+                'Network',
+                '+${(valuation.networkMultiplier * 100).toStringAsFixed(1)}%',
+                LucideIcons.users,
+              ),
+              _buildFactorChip(
+                'Deflation',
+                '+${(valuation.deflationRatio * 100).toStringAsFixed(1)}%',
+                LucideIcons.flame,
+              ),
+              _buildFactorChip(
+                'Epoch',
+                '×${valuation.epochScarcity.toStringAsFixed(1)}',
+                LucideIcons.clock,
+              ),
+              _buildFactorChip(
+                'GDP',
+                '×${valuation.fiatGdpBoost.toStringAsFixed(2)}',
+                LucideIcons.dollarSign,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Compact factor chip for the valuation card.
+  Widget _buildFactorChip(String label, String value, IconData icon) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 10, color: Colors.grey),
+        const SizedBox(width: 4),
+        Text(
+          '$label $value',
+          style: const TextStyle(fontSize: 10, color: Colors.grey),
         ),
       ],
     );
@@ -1890,9 +2148,11 @@ class _GovernanceUnitCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unitAsync = ref
-        .watch(governanceRepositoryProvider)
-        .watchGovernanceUnit(unitId);
+    // Use Riverpod StreamProvider instead of StreamBuilder so that
+    // ref.watch(treasuryTokenBalanceProvider) chains properly.
+    final unitAsync = ref.watch(governanceUnitStreamProvider(unitId));
+    final unit = unitAsync.value;
+    final String walletAddr = unit?.walletAddress ?? '';
 
     // [SYSTEM RESERVES] System stats available via systemTreasuryProvider if needed
 
@@ -1900,166 +2160,184 @@ class _GovernanceUnitCard extends ConsumerWidget {
         ? ref.watch(communityProvider(communityId!))
         : const AsyncValue<Community?>.data(null);
 
-    return StreamBuilder<GovernanceUnit?>(
-      stream: unitAsync,
-      builder: (context, snapshot) {
-        final unit = snapshot.data;
+    // Read on-chain $DIASPORA balance from batch provider (avoids rate-limiting)
+    // Fall back to Firestore treasury DSP balance when no wallet assigned
+    final double firestoreBalance = unit?.treasuryBalance ?? 0;
+    final batchAsync = ref.watch(batchTokenBalancesProvider);
 
-        // Pre-TGE: token balance is 0 for all treasuries
-        // After TGE, this will read from blockchain wallet balance
-        const String balance = '0';
-        final bool isSystemReserve =
-            unitId == 'founders' || unitId == 'investors' || unitId == 'burn';
+    final String balance = batchAsync.when(
+      data: (batch) {
+        final onChain = batch.balances[unitId];
+        if (onChain != null && onChain != '0') return onChain;
+        // Fallback to Firestore DSP balance
+        return firestoreBalance > 0
+            ? firestoreBalance.toInt().toString()
+            : '0';
+      },
+      loading: () => '...',
+      error: (_, __) => firestoreBalance > 0
+          ? firestoreBalance.toInt().toString()
+          : '0',
+    );
+    // Show DSP label when using Firestore fallback (no on-chain balance available)
+    final bool hasOnChain = batchAsync.value?.balances[unitId] != null &&
+        batchAsync.value!.balances[unitId] != '0';
+    final bool showingDsp = !hasOnChain && walletAddr.isEmpty && firestoreBalance > 0;
+    final bool isSystemReserve =
+        unitId == 'founders' || unitId == 'investors' || unitId == 'burn';
 
-        return communityAsync.when(
-          data: (community) {
-            final cleanName = community?.name
-                .replaceAll('Community', '')
-                .replaceAll('Treasury', '')
-                .trim();
-            final title = cleanName != null && cleanName.isNotEmpty
-                ? '$cleanName Community Treasury'
-                : defaultTitle;
+    // Show loading state while governance unit hasn't loaded yet
+    if (unitAsync.isLoading) {
+      return Container(
+        padding: AppTheme.cardPaddingEdgeInsets,
+        decoration: AppTheme.cardDecoration(context),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
-            final walletAddr = unit?.walletAddress;
+    return communityAsync.when(
+      data: (community) {
+        final cleanName = community?.name
+            .replaceAll('Community', '')
+            .replaceAll('Treasury', '')
+            .trim();
+        final title = cleanName != null && cleanName.isNotEmpty
+            ? '$cleanName Community Treasury'
+            : defaultTitle;
 
-            return GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DdiTreasuryDetailScreen(
-                    title: title,
-                    subtitle: subtitle,
-                    walletAddress: walletAddr,
-                    balance: balance,
-                    isSystemReserve: isSystemReserve,
-                  ),
-                ),
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DdiTreasuryDetailScreen(
+                title: title,
+                subtitle: subtitle,
+                walletAddress: walletAddr,
+                balance: balance,
+                isSystemReserve: isSystemReserve,
               ),
-              child: Container(
-                padding: AppTheme.cardPaddingEdgeInsets,
-                decoration: AppTheme.cardDecoration(context),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+          ),
+          child: Container(
+            padding: AppTheme.cardPaddingEdgeInsets,
+            decoration: AppTheme.cardDecoration(context),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        if (customAvatarAsset != null)
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.transparent,
+                    if (customAvatarAsset != null)
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.transparent,
+                        ),
+                        child: Image.asset(
+                          customAvatarAsset!,
+                          fit: BoxFit.contain,
+                        ),
+                      )
+                    else
+                      CommunityChatUtils.getCommunityAvatar(
+                        context: context,
+                        type: community?.type,
+                        locationType: community?.locationType,
+                        homeCountryCode: community?.homeCountryCode,
+                        flag: community?.flag,
+                        profileImage: community?.profileImage,
+                        communityId: community?.id,
+                        size: 44,
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
-                            child: Image.asset(
-                              customAvatarAsset!,
-                              fit: BoxFit.contain,
-                            ),
-                          )
-                        else
-                          CommunityChatUtils.getCommunityAvatar(
-                            context: context,
-                            type: community?.type,
-                            locationType: community?.locationType,
-                            homeCountryCode: community?.homeCountryCode,
-                            flag: community?.flag,
-                            profileImage: community?.profileImage,
-                            communityId: community?.id,
-                            size: 44,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 4),
+                          Row(
                             children: [
+                              Image.asset(
+                                'assets/icons/logo-orange-transparent-32.png',
+                                width: 28,
+                                height: 28,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(width: 6),
                               Text(
-                                title,
+                                showingDsp
+                                    ? '$balance DSP'
+                                    : '$balance \$DIASPORA',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontSize: 13,
+                                  color: Colors.orange,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Image.asset(
-                                    'assets/icons/logo-original.png',
-                                    width: 28,
-                                    height: 28,
-                                    fit: BoxFit.contain,
-                                    color: Colors.orange,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  const Text(
-                                    '$balance \$DIASPORA',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: Colors.orange,
-                                    ),
-                                  ),
-                                ],
                               ),
                             ],
                           ),
-                        ),
-                        // Chevron hint that card is tappable
-                        const Icon(
-                          LucideIcons.chevronRight,
-                          size: 18,
-                          color: Colors.grey,
-                        ),
-                      ],
-                    ),
-
-                    // Wallet address (if available)
-                    if (walletAddr != null && walletAddr.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.wallet,
-                            size: 10,
-                            color: Colors.blueGrey,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              walletAddr,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.blueGrey,
-                                fontFamily: 'monospace',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
                         ],
                       ),
-                    ],
-
-                    // Subtitle
-                    const SizedBox(height: 8),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                      ),
+                    ),
+                    // Chevron hint that card is tappable
+                    const Icon(
+                      LucideIcons.chevronRight,
+                      size: 18,
+                      color: Colors.grey,
                     ),
                   ],
                 ),
-              ),
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => _buildErrorCard(context, defaultTitle),
+
+                // Wallet address (if available)
+                if (walletAddr.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(
+                        LucideIcons.wallet,
+                        size: 10,
+                        color: Colors.blueGrey,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          walletAddr,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.blueGrey,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                // Subtitle
+                const SizedBox(height: 8),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
         );
       },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => _buildErrorCard(context, defaultTitle),
     );
   }
 
@@ -2070,8 +2348,9 @@ class _GovernanceUnitCard extends ConsumerWidget {
       child: Text('Error loading $title'),
     );
   }
-
 }
+
+enum _TxCategory { token, transfer }
 
 class _BlockchainEvent {
   final String title;
@@ -2079,6 +2358,8 @@ class _BlockchainEvent {
   final DateTime timestamp;
   final double amount;
   final bool isPositive;
+  final String? txHash;
+  final _TxCategory category;
 
   _BlockchainEvent({
     required this.title,
@@ -2086,5 +2367,8 @@ class _BlockchainEvent {
     required this.timestamp,
     required this.amount,
     required this.isPositive,
+    this.txHash,
+    this.category = _TxCategory.token,
   });
 }
+

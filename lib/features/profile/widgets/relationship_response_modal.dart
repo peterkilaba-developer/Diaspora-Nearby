@@ -37,7 +37,8 @@ class _RelationshipResponseModalState
 
     final theme = Theme.of(context);
     return PopScope(
-      canPop: true, // User can dismiss without accepting — they can handle it later in their relationship section
+      canPop:
+          true, // User can dismiss without accepting — they can handle it later in their relationship section
       child: Material(
         // [FIX] Added Material widget to fix "No Material widget found" error
         type: MaterialType.transparency,
@@ -51,6 +52,33 @@ class _RelationshipResponseModalState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Sender's profile photo
+              Center(
+                child: CircleAvatar(
+                  radius: 32,
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  backgroundImage:
+                      widget.request.fromUserPhoto != null &&
+                          widget.request.fromUserPhoto!.isNotEmpty
+                      ? NetworkImage(widget.request.fromUserPhoto!)
+                      : null,
+                  child:
+                      widget.request.fromUserPhoto == null ||
+                          widget.request.fromUserPhoto!.isEmpty
+                      ? Text(
+                          widget.request.fromUserName.isNotEmpty
+                              ? widget.request.fromUserName[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 12),
               Text(
                 'Relationship Request',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -89,14 +117,20 @@ class _RelationshipResponseModalState
               ),
               const SizedBox(height: 12),
               if (possibleTypes.length > 1)
-                ...possibleTypes.map(
-                  (type) => RadioListTile<String>(
-                    title: Text(type),
-                    value: type,
-                    groupValue: _selectedReciprocalType,
-                    onChanged: (val) =>
-                        setState(() => _selectedReciprocalType = val),
-                    contentPadding: EdgeInsets.zero,
+                RadioGroup<String>(
+                  groupValue: _selectedReciprocalType,
+                  onChanged: (val) =>
+                      setState(() => _selectedReciprocalType = val),
+                  child: Column(
+                    children: possibleTypes
+                        .map(
+                          (type) => RadioListTile<String>(
+                            title: Text(type),
+                            value: type,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        )
+                        .toList(),
                   ),
                 )
               else
@@ -214,7 +248,6 @@ class _RelationshipResponseModalState
     if (confirm == true) {
       setState(() => _isLoading = true);
       try {
-
         await ref
             .read(relationshipRepositoryProvider)
             .rejectRequest(widget.request);
@@ -225,10 +258,12 @@ class _RelationshipResponseModalState
           ).showSnackBar(const SnackBar(content: Text('Request rejected.')));
         }
       } catch (e) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
       }
     }
   }

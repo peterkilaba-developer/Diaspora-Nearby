@@ -8,6 +8,12 @@ import 'package:uuid/uuid.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
+/// Firebase Cloud Functions base URL for CORS proxy
+/// On web, we route Google Places API calls through this proxy
+/// because the Places REST API does not support CORS.
+const String _placesProxyBaseUrl =
+    'https://us-central1-diaspora-nearby-a3dac.cloudfunctions.net/placesProxy';
+
 class GooglePlacesService {
   String? _sessionToken;
   final Uuid _uuid = const Uuid();
@@ -59,12 +65,26 @@ class GooglePlacesService {
       }
       // For VENUES, we leave requestTypes as null to fetch everything, then filter in code
 
-      var urlString =
-          'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$input&key=$apiKey&sessiontoken=$_sessionToken';
-      if (requestTypes != null) {
-        urlString += '&types=$requestTypes';
+      // On web, use the Cloud Functions proxy to avoid CORS issues
+      // On mobile, call the Google Places API directly
+      String urlString;
+      if (kIsWeb) {
+        urlString =
+            '$_placesProxyBaseUrl?type=autocomplete&input=${Uri.encodeComponent(input)}&key=$apiKey&sessiontoken=$_sessionToken';
+        if (requestTypes != null) {
+          urlString += '&types=${Uri.encodeComponent(requestTypes)}';
+        }
+      } else {
+        urlString =
+            'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$input&key=$apiKey&sessiontoken=$_sessionToken';
+        if (requestTypes != null) {
+          urlString += '&types=$requestTypes';
+        }
       }
 
+      debugPrint(
+        '[Places] Autocomplete request (web=$kIsWeb): ${kIsWeb ? 'via proxy' : 'direct'}',
+      );
       final url = Uri.parse(urlString);
       final response = await http.get(url);
 
@@ -105,7 +125,15 @@ class GooglePlacesService {
           }
 
           return predictions;
+        } else {
+          debugPrint(
+            '[Places] Autocomplete response status: ${data['status']}, error: ${data['error_message']}',
+          );
         }
+      } else {
+        debugPrint(
+          '[Places] Autocomplete HTTP error: ${response.statusCode} ${response.body}',
+        );
       }
       return [];
     } catch (e) {
@@ -132,8 +160,20 @@ class GooglePlacesService {
       // Request critical fields and rich data
       final fields =
           'formatted_address,geometry,name,place_id,types,address_components,website,international_phone_number,url,rating,user_ratings_total,opening_hours,photos,price_level,editorial_summary';
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=$fields&key=$apiKey$sessionTokenParam',
+
+      // On web, use the Cloud Functions proxy to avoid CORS issues
+      final Uri url;
+      if (kIsWeb) {
+        url = Uri.parse(
+          '$_placesProxyBaseUrl?type=details&place_id=$placeId&fields=${Uri.encodeComponent(fields)}&key=$apiKey${sessionTokenParam.isNotEmpty ? sessionTokenParam : ''}',
+        );
+      } else {
+        url = Uri.parse(
+          'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=$fields&key=$apiKey$sessionTokenParam',
+        );
+      }
+      debugPrint(
+        '[Places] Details request (web=$kIsWeb): ${kIsWeb ? 'via proxy' : 'direct'}',
       );
 
       final response = await http.get(url);
@@ -273,11 +313,7 @@ class GooglePlacesService {
       final city = place.locality ?? place.subAdministrativeArea;
       final state = place.administrativeArea;
 
-      final formattedAddress = [
-        ?city,
-        ?state,
-        ?country,
-      ].join(', ');
+      final formattedAddress = [?city, ?state, ?country].join(', ');
 
       return {
         'formattedAddress': formattedAddress,

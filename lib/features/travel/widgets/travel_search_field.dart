@@ -34,8 +34,10 @@ class TravelSearchField extends StatelessWidget {
           hintStyle: TextStyle(fontSize: 12, color: theme.hintColor),
           prefixIcon: Icon(icon, size: 16, color: AppTheme.accent),
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
           isDense: true,
         ),
       ),

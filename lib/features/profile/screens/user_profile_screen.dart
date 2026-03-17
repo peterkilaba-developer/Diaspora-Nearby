@@ -88,6 +88,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     _refreshProfile();
     _checkLocationPermission();
     _handleIncomingAction();
+    _refreshTrustData();
   }
 
   Future<void> _handleIncomingAction() async {
@@ -134,7 +135,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('In-Person Connection Verified! 10,000 DSP Earned.'),
+            content: Text('In-Person Connection Verified! 100 DSP Earned.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -197,16 +198,30 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     );
   }
 
-  Future<void> _refreshProfile() async {
-    setState(() {
-      _isLoadingProfile = true;
-      _errorMessage = null;
-    });
+  /// Refresh profile data from Firestore.
+  ///
+  /// [showLoading] – when `false` the existing profile data stays visible
+  /// while we fetch in the background (used after save to avoid flashing a
+  /// loading spinner and to prevent timeout errors from overwriting the
+  /// already-known good profile).
+  Future<void> _refreshProfile({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoadingProfile = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
+      debugPrint('🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading)');
       final profile = await ref
           .read(profileRepositoryProvider)
           .getUserProfile(widget.userId);
+      debugPrint('🔍 [ProfileScreen] _refreshProfile result → '
+          'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
+          'profileImage="${profile?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
+          'homeCity="${profile?.homeLocation.city}", '
+          'hostCity="${profile?.hostLocation.city}"');
       if (mounted) {
         setState(() {
           _profile = profile;
@@ -214,12 +229,36 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         });
       }
     } catch (e) {
+      debugPrint('Error loading profile: $e');
       if (mounted) {
-        setState(() {
-          _errorMessage = e.toString();
-          _isLoadingProfile = false;
-        });
+        // [FIX] If we already have profile data (e.g. after a save), don't
+        // overwrite it with an error — the profile was just saved successfully
+        // and only the background refresh failed (timeout / network).
+        if (_profile != null && !showLoading) {
+          debugPrint('📋 [ProfileScreen] Background refresh failed but using existing profile data');
+          setState(() => _isLoadingProfile = false);
+        } else {
+          setState(() {
+            _errorMessage = e.toString();
+            _isLoadingProfile = false;
+          });
+        }
       }
+    }
+  }
+
+  /// Background trust recalculation to ensure milestone genesis IDs are current
+  Future<void> _refreshTrustData() async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    // Only recalculate for own profile view
+    if (user == null || user.uid != widget.userId) return;
+
+    try {
+      debugPrint('🔄 [Profile] Triggering background trust recalculation for ${user.uid}');
+      await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
+      debugPrint('✅ [Profile] Trust recalculation complete');
+    } catch (e) {
+      debugPrint('⚠️ [Profile] Trust recalculation failed: $e');
     }
   }
 
@@ -364,7 +403,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         }
       }
 
-      print('UserProfileScreen: Saving profile...'); // [DEBUG]
+      debugPrint('UserProfileScreen: Saving profile...'); // [DEBUG]
       await ref
           .read(profileRepositoryProvider)
           .saveUserProfile(user.uid, profileToSave);
@@ -373,7 +412,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       // Await is better here so user sees immediate feedback if we show trust score on profile
       await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
 
-      print('UserProfileScreen: Profile saved to repository.'); // [DEBUG]
+      debugPrint('UserProfileScreen: Profile saved to repository.'); // [DEBUG]
 
       if (mounted) {
         setState(() {
@@ -383,7 +422,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
         // Update global provider safely
         ref.read(userProfileProvider.notifier).updateProfile(profileToSave);
-        _refreshProfile(); // [NEW] Refresh data dependencies
+        _refreshProfile(showLoading: false); // [FIX] Don't show loading spinner or error on post-save refresh
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
@@ -411,9 +450,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                             AppTheme.pageHorizontalPadding,
                           ),
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primaryContainer.withOpacity(0.3),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.3),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -451,7 +491,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                               final user = ref
                                   .read(authRepositoryProvider)
                                   .currentUser;
-                              String shareUrl = 'https://diasporanearby.com';
+                              String shareUrl = 'https://diasporanearby.com/invite';
 
                               if (user != null) {
                                 try {
@@ -470,15 +510,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                                           countryCode,
                                         );
                                   }
-                                  shareUrl = '$shareUrl/invite?code=$code';
-                                                                } catch (e) {
+                                  shareUrl = '$shareUrl?code=$code';
+                                } catch (e) {
                                   debugPrint('Error getting referral code: $e');
                                 }
                               }
 
-                              Share.share(
-                                'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
-                                subject: 'Diaspora Nearby',
+                              SharePlus.instance.share(
+                                ShareParams(
+                                  text:
+                                      'Join me in ${newCommunityNames.first} on Diaspora Nearby! \n\n$shareUrl',
+                                  subject: 'Diaspora Nearby',
+                                ),
                               );
                             },
                             icon: const Icon(LucideIcons.share2),
@@ -499,7 +542,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         }
       }
     } catch (e, stack) {
-      print('UserProfileScreen: Error saving profile: $e\n$stack'); // [DEBUG]
+      debugPrint(
+        'UserProfileScreen: Error saving profile: $e\n$stack',
+      ); // [DEBUG]
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -537,7 +582,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         else
           PopScope(
             canPop: !_isEditing,
-            onPopInvoked: (didPop) {
+            onPopInvokedWithResult: (didPop, _) {
               if (didPop) return;
               if (_isEditing) {
                 setState(() => _isEditing = false);
@@ -560,7 +605,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       _trackExploration(ExplorationAction.profileEdit);
                       setState(() => _isEditing = true);
                     },
-
+                    onShowCompleteProfile: (missingFields) {
+                      return _showCompleteProfileModal(missingFields);
+                    },
                     src: _src,
                     distanceKm: () {
                       if (isSelf) return 0.0;

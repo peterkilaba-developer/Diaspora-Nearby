@@ -129,7 +129,7 @@ class _GviCorridorListScreenState extends State<GviCorridorListScreen> {
             child: ListView.separated(
               padding: AppTheme.pagePaddingEdgeInsets.copyWith(
                 top: 16,
-                bottom: 32,
+                bottom: 32 + MediaQuery.of(context).padding.bottom,
               ),
               itemCount: filteredCountries.length,
               separatorBuilder: (context, index) => const Divider(height: 1),

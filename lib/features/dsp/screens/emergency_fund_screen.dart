@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/dsp/models/emergency_fund_model.dart';
 import 'package:diaspora_nearby/features/dsp/services/emergency_fund_service.dart';
@@ -19,6 +20,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 
 class EmergencyFundScreen extends ConsumerStatefulWidget {
   const EmergencyFundScreen({super.key});
@@ -109,153 +112,74 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
+      padding: EdgeInsets.only(
+        left: AppTheme.pageHorizontalPadding,
+        right: AppTheme.pageHorizontalPadding,
+        top: 8,
+        bottom: MediaQuery.of(context).padding.bottom + 24,
+      ),
       children: [
         const SizedBox(height: 16),
         _buildHeroCard(context),
         const SizedBox(height: 24),
 
-        // Mission Statement
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(LucideIcons.quote, size: 18,
-                      color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text('Our Mission',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      )),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'The Community Emergency Fund is a member-governed collective safety net built on the African principle of Ubuntu \u2014 "I am because we are." When a diaspora member faces a crisis far from home, this fund ensures they are never alone.',
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.6,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 28),
-        Text('Support Areas', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 4),
+        // Concise support areas — icon + title only
         Text(
-          'Members can request community support in the following situations:',
-          style: TextStyle(fontSize: 13, color: Theme.of(context).hintColor),
-        ),
-        const SizedBox(height: 16),
-        _buildFeatureItem(
-          context,
-          icon: LucideIcons.stethoscope,
-          title: 'Medical Emergency',
-          desc:
-              'Critical medical situations requiring urgent financial support \u2014 surgeries, hospitalization, or unforeseen health crises abroad.',
-        ),
-        _buildFeatureItem(
-          context,
-          icon: LucideIcons.gavel,
-          title: 'Legal Aid',
-          desc:
-              'Urgent legal matters including wrongful detention, immigration emergencies, or situations requiring immediate legal representation.',
-        ),
-        _buildFeatureItem(
-          context,
-          icon: LucideIcons.heartHandshake,
-          title: 'Bereavement Support',
-          desc:
-              'Financial and logistical assistance during the loss of a loved one \u2014 funeral arrangements, emergency travel, and family support.',
-        ),
-        _buildFeatureItem(
-          context,
-          icon: LucideIcons.plane,
-          title: 'Repatriation',
-          desc:
-              'Emergency travel assistance for members or their remains to their home country when the unexpected happens.',
-        ),
-
-        const SizedBox(height: 28),
-        Text('Our Principles', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 16),
-        _buildPrincipleItem(
-          context,
-          icon: LucideIcons.users,
-          title: 'Community Governed',
-          desc: 'Decisions are made collectively by elected community leaders \u2014 not by a corporate entity.',
-        ),
-        _buildPrincipleItem(
-          context,
-          icon: LucideIcons.eye,
-          title: 'Full Transparency',
-          desc: 'All contributions, disbursements, and decisions are recorded on-chain for complete accountability.',
-        ),
-        _buildPrincipleItem(
-          context,
-          icon: LucideIcons.heart,
-          title: 'Solidarity, Not Profit',
-          desc: 'Every dollar contributed goes directly to helping members. There are no premiums, no shareholders, no profit motive.',
-        ),
-        _buildPrincipleItem(
-          context,
-          icon: LucideIcons.globe,
-          title: 'Global Reach',
-          desc: 'Wherever a diaspora member is in the world, the community stands behind them.',
-        ),
-
-        const SizedBox(height: 28),
-
-        // Important Distinction
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.orange.withOpacity(0.2)),
+          'What We Cover',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
           ),
-          child: Column(
+        ),
+        const SizedBox(height: 12),
+        _buildCoverageRow(context, LucideIcons.stethoscope, 'Medical Emergency'),
+        _buildCoverageRow(context, LucideIcons.gavel, 'Legal Aid'),
+        _buildCoverageRow(context, LucideIcons.heartHandshake, 'Bereavement Support'),
+        _buildCoverageRow(context, LucideIcons.plane, 'Repatriation'),
+
+        const SizedBox(height: 24),
+
+        // How it works — condensed to 3 short steps
+        Text(
+          'How It Works',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildStepRow(context, '1', 'Submit a Support Request via the Support tab'),
+        _buildStepRow(context, '2', 'Provide documentation to your Community Secretary'),
+        _buildStepRow(context, '3', 'Leadership reviews and authorizes disbursement'),
+
+        const SizedBox(height: 24),
+
+        // Important Distinction — kept concise
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.orange.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+          ),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(LucideIcons.alertTriangle,
-                      size: 18, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Text('Important Distinction',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      )),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'This is not an insurance product. It is a voluntary community mutual aid fund. Disbursements are based on community review and available resources \u2014 not contractual guarantees. The amount of support provided depends on the fund\'s balance and the nature of the emergency.',
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.5,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+              const Icon(LucideIcons.alertTriangle, size: 16, color: Colors.orange),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'This is a voluntary community mutual aid fund — not insurance. Disbursements depend on available resources and community review.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
                 ),
               ),
             ],
           ),
         ),
 
-        const SizedBox(height: 28),
+        const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
@@ -265,38 +189,39 @@ class _OverviewTab extends StatelessWidget {
             style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
           ),
         ),
-        const SizedBox(height: 32),
-        Text('How It Works', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+
+        // Learn More link
+        Center(
+          child: GestureDetector(
+            onTap: () => launchUrl(
+              Uri.parse('https://diasporanearby.com/#emergency-fund'),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Text(
+              'Learn more about the Emergency Fund →',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
-        _buildProcessStep(
-          context,
-          '1',
-          'Submit a Support Request',
-          'Navigate to the Support tab and describe the emergency with relevant details.',
-        ),
-        _buildProcessStep(
-          context,
-          '2',
-          'Provide Documentation',
-          'Work with your Community Secretary to provide supporting evidence (e.g., medical reports, legal notices, death certificates).',
-        ),
-        _buildProcessStep(
-          context,
-          '3',
-          'Community Review & Disbursement',
-          'The community leadership reviews the request and authorizes appropriate financial support from the fund.',
-        ),
-        const SizedBox(height: 40),
       ],
     );
   }
 
   Widget _buildHeroCard(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: AppTheme.cardDecoration(context).copyWith(
-        borderRadius: BorderRadius.circular(24),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.cardHorizontalPadding,
+        vertical: 20,
       ),
+      decoration: AppTheme.cardDecoration(
+        context,
+      ).copyWith(borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -324,43 +249,27 @@ class _OverviewTab extends StatelessWidget {
                   ),
                 ),
               ),
-              // Add a subtle "Hero" indicator or just keep it clean
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Text(
-            'Collective Protection',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              height: 1.0,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'For Our Diaspora Community',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'A member-funded safety net for medical, legal, bereavement, and repatriation emergencies. Because no one in our community should face a crisis alone.',
+            'A member-funded safety net for medical, legal, bereavement, and repatriation emergencies.',
             style: TextStyle(
               fontSize: 14,
               height: 1.5,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Row(
             children: [
-              _buildStatBadge(context, '\$100/yr', 'Contribution'),
-              const SizedBox(width: 16),
-              _buildStatBadge(context, 'Global', 'Coverage'),
+              Expanded(
+                child: _buildStatBadge(context, '\$100/yr', 'Contribution'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _buildStatBadge(context, 'Global', 'Coverage')),
+              const SizedBox(width: 8),
+              Expanded(child: _buildStatBadge(context, 'Ubuntu', 'Principle')),
             ],
           ),
         ],
@@ -370,96 +279,66 @@ class _OverviewTab extends StatelessWidget {
 
   Widget _buildStatBadge(BuildContext context, String value, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
         children: [
           Text(
             value,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
               fontSize: 12,
             ),
           ),
+          Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              fontSize: 10,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFeatureItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String desc,
-  }) {
+  Widget _buildCoverageRow(BuildContext context, IconData icon, String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              color: Theme.of(context).colorScheme.primary,
-              size: 20,
-            ),
+            child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 18),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  desc,
-                  style: TextStyle(color: Theme.of(context).hintColor, fontSize: 14, height: 1.4),
-                ),
-              ],
-            ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProcessStep(
-    BuildContext context,
-    String number,
-    String title,
-    String desc,
-  ) {
+  Widget _buildStepRow(BuildContext context, String number, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 24,
+            height: 24,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.primaryContainer,
@@ -469,72 +348,20 @@ class _OverviewTab extends StatelessWidget {
               number,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
+                fontSize: 11,
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  desc,
-                  style: TextStyle(color: Theme.of(context).hintColor, fontSize: 14, height: 1.4),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPrincipleItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String desc,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: Colors.green, size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    )),
-                const SizedBox(height: 3),
-                Text(desc,
-                    style: TextStyle(
-                      color: Theme.of(context).hintColor,
-                      fontSize: 13,
-                      height: 1.4,
-                    )),
-              ],
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -543,7 +370,7 @@ class _OverviewTab extends StatelessWidget {
   }
 }
 
-class _MembershipTab extends ConsumerWidget {
+class _MembershipTab extends ConsumerStatefulWidget {
   final String userId;
   final Future<EligibilityResult> eligibilityFuture;
   final Stream<EmergencyFundMembership?> membershipStream;
@@ -555,9 +382,152 @@ class _MembershipTab extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MembershipTab> createState() => _MembershipTabState();
+}
+
+class _MembershipTabState extends ConsumerState<_MembershipTab> {
+  bool _hasStakedDSP = false;
+  bool _isProcessingPayment = false;
+  int _stakerCount = 0;
+
+  // Inline card form state
+  String? _clientSecret;
+  bool _isCardComplete = false;
+  bool _isLoadingIntent = false;
+  CardFormEditController? _cardController;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStakerStatus();
+    if (!kIsWeb) {
+      _cardController = CardFormEditController();
+      _cardController!.addListener(_onCardChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    _cardController?.removeListener(_onCardChanged);
+    _cardController?.dispose();
+    super.dispose();
+  }
+
+  void _onCardChanged() {
+    final complete = _cardController?.details.complete ?? false;
+    if (complete != _isCardComplete) {
+      setState(() => _isCardComplete = complete);
+    }
+  }
+
+  Future<void> _loadStakerStatus() async {
+    final service = ref.read(emergencyFundServiceProvider);
+    final results = await Future.wait([
+      service.hasStaked(widget.userId),
+      service.getStakerCount(),
+    ]);
+    if (mounted) {
+      setState(() {
+        _hasStakedDSP = results[0] as bool;
+        _stakerCount = results[1] as int;
+      });
+      // Pre-fetch PaymentIntent if already staked
+      if (_hasStakedDSP && _clientSecret == null) {
+        _fetchPaymentIntent();
+      }
+    }
+  }
+
+  /// Fetch PaymentIntent for inline card form
+  Future<void> _fetchPaymentIntent() async {
+    if (_isLoadingIntent) return;
+    setState(() => _isLoadingIntent = true);
+    try {
+      final service = ref.read(emergencyFundServiceProvider);
+      debugPrint('▶ [EmergencyFund] Fetching PaymentIntent...');
+      final secret = await service.fetchPaymentIntentSecret();
+      debugPrint(
+        '✅ [EmergencyFund] PaymentIntent secret received: ${secret.substring(0, 20)}...',
+      );
+      if (mounted) {
+        setState(() {
+          _clientSecret = secret;
+          _isLoadingIntent = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [EmergencyFund] PaymentIntent fetch error: $e');
+      if (mounted) {
+        setState(() => _isLoadingIntent = false);
+        debugPrint('❌ [EmergencyFund] Failed to fetch PaymentIntent: $e');
+      }
+    }
+  }
+
+  /// Confirm inline card payment
+  Future<void> _confirmPayment() async {
+    // Dismiss keyboard
+    FocusScope.of(context).unfocus();
+
+    // Fetch secret on-demand if not yet available
+    if (_clientSecret == null) {
+      await _fetchPaymentIntent();
+      if (_clientSecret == null) return;
+    }
+    setState(() => _isProcessingPayment = true);
+    try {
+      debugPrint(
+        '▶ [EmergencyFund] Confirming payment with secret: ${_clientSecret!.substring(0, 20)}...',
+      );
+      final service = ref.read(emergencyFundServiceProvider);
+      await service.confirmInlinePayment(_clientSecret!, widget.userId);
+      debugPrint(
+        '✅ [EmergencyFund] Payment confirmed and membership activated!',
+      );
+      if (mounted) {
+        // Reset state so StreamBuilder picks up the new active membership
+        setState(() {
+          _isProcessingPayment = false;
+          _clientSecret = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '🎉 Payment successful! Welcome to the Emergency Fund.',
+            ),
+            backgroundColor: Color(0xFF7CAE7A),
+          ),
+        );
+      }
+    } on StripeException catch (e) {
+      debugPrint(
+        '❌ [EmergencyFund] StripeException: ${e.error.localizedMessage}',
+      );
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        final msg = e.error.localizedMessage ?? 'Payment failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [EmergencyFund] Payment error: $e');
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<EmergencyFundMembership?>(
-      stream: membershipStream,
+      stream: widget.membershipStream,
       builder: (context, memSnapshot) {
         final membership = memSnapshot.data;
 
@@ -566,240 +536,567 @@ class _MembershipTab extends ConsumerWidget {
           return _buildActiveMemberView(context, membership);
         }
 
-        return FutureBuilder<EligibilityResult>(
-          future: eligibilityFuture,
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final result = snapshot.data!;
+        if (membership != null &&
+            membership.status == MembershipStatus.pending_proxy) {
+          return _buildPendingProxyView(context, membership);
+        }
 
-            return ListView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.pageHorizontalPadding,
-                vertical: 16,
-              ),
-              children: [
-                _buildStatusCard(context, membership, result),
-                const SizedBox(height: 24),
-                const Text(
-                  'Eligibility Requirements',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                const SizedBox(height: 16),
-                _buildReqItem(
-                  context,
-                  'Complete Profile',
-                  result.isProfileComplete,
-                ),
-                _buildReqItem(
-                  context,
-                  'Financial Stake (10,000 DSP)',
-                  result.hasEnoughPoints,
-                ),
-                _buildReqItem(
-                  context,
-                  '10 Family Connections (${result.familyCount}/10)',
-                  result.hasEnoughFamily,
-                ),
-                _buildReqItem(
-                  context,
-                  '10 Friend Connections (${result.friendCount}/10)',
-                  result.hasEnoughFriends,
-                ),
+        // pending_payment = user staked but hasn't paid yet → show join flow
+        // with the card form visible
+        if (membership != null &&
+            membership.status == MembershipStatus.pending_payment) {
+          // Ensure staked state is reflected in UI
+          if (!_hasStakedDSP) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _hasStakedDSP = true);
+            });
+          }
+          return _buildJoinFlow(context);
+        }
 
-                const SizedBox(height: 32),
-
-                if (membership == null)
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: result.isEligible
-                          ? () => _showSetupCoverageDialog(context, ref, userId)
-                          : null,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.all(16),
-                      ),
-                      child: Text(
-                        result.isEligible
-                            ? 'Join Now'
-                            : 'Complete Requirements to Join',
-                      ),
-                    ),
-                  )
-                else if (membership.status == MembershipStatus.pending_payment)
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () => _processPayment(context, ref, userId),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.all(16),
-                        backgroundColor: Colors.green,
-                      ),
-                      child: const Text('Pay Annual Contribution (\$100)'),
-                    ),
-                  )
-                else if (membership.status == MembershipStatus.pending_proxy)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          LucideIcons.clock,
-                          color: Colors.orange,
-                          size: 32,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Waiting for Proxy Acceptance',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Request sent to: ${membership.proxyUserId ?? "Pending"}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
+        // Not a member — show the new join flow
+        return _buildJoinFlow(context);
       },
     );
   }
 
-  // Reuse existing dialog from old file
-  void _showSetupCoverageDialog(
-    BuildContext context,
-    WidgetRef ref,
-    String userId,
-  ) async {
-    // Retrieve data first
-    final relatives = await ref
-        .read(emergencyFundServiceProvider)
-        .getQualifiedRelatives(userId);
-    final proxies = await ref
-        .read(emergencyFundServiceProvider)
-        .getPotentialProxies(userId);
+  bool _isStaking = false;
 
-    if (!context.mounted) return;
+  Widget _buildJoinFlow(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool thresholdMet = _stakerCount >= 10000;
 
-    showDialog(
-      context: context,
-      builder: (context) => _SetupCoverageDialog(
-        initialRelatives: relatives,
-        potentialProxies: proxies,
-        onConfirm: (proxyId, coveredIds) async {
-          // Call join
-          await ref
-              .read(emergencyFundServiceProvider)
-              .requestProxyAndJoin(
-                userId: userId,
-                country: 'Loading...', // Ideally fetch country from profile
-                proxyUserId: proxyId,
-                coveredFamilyMembers: coveredIds,
-              );
-        }, // Need to implement onConfirm logic in dialog to call service
+    return ListView(
+      padding: EdgeInsets.only(
+        left: AppTheme.pageHorizontalPadding,
+        right: AppTheme.pageHorizontalPadding,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 24,
       ),
+      children: [
+        // --- HEADER ---
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          decoration: AppTheme.cardDecoration(context).copyWith(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.15),
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                LucideIcons.shieldCheck,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Community Emergency Fund',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Fund Join Opens when 10,000 Members stake 1,000 DSP Promissory to Join',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // --- ELIGIBILITY REQUIREMENTS ---
+        FutureBuilder<EligibilityResult>(
+          future: widget.eligibilityFuture,
+          builder: (context, snap) {
+            final result = snap.data;
+            final isLoading = !snap.hasData;
+
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: AppTheme.cardDecoration(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.clipboardCheck,
+                        size: 18,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Eligibility Requirements',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _buildEligibilityRow(
+                    theme,
+                    icon: LucideIcons.userCheck,
+                    title: 'Complete Profile',
+                    subtitle: 'All profile fields must be filled',
+                    met: isLoading ? null : result!.isProfileComplete,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildEligibilityRow(
+                    theme,
+                    icon: LucideIcons.heartHandshake,
+                    title: '1 Family Member',
+                    subtitle: isLoading
+                        ? 'Checking...'
+                        : '${result!.familyCount}/1 family connection',
+                    met: isLoading ? null : result!.hasEnoughFamily,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildEligibilityRow(
+                    theme,
+                    icon: LucideIcons.users,
+                    title: '1 Friend',
+                    subtitle: isLoading
+                        ? 'Checking...'
+                        : '${result!.friendCount}/1 friend connection',
+                    met: isLoading ? null : result!.hasEnoughFriends,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // --- MIDDLE: stake info or card form ---
+        Column(
+          children: [
+            // Before staking: stake details
+                if (!_hasStakedDSP)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: AppTheme.cardDecoration(context),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Stake details (inline, no popup)
+                        _buildStakeInfoRow(
+                          theme,
+                          LucideIcons.coins,
+                          'Amount',
+                          '1,000 DSP',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildStakeInfoRow(
+                          theme,
+                          LucideIcons.dollarSign,
+                          'Contribution',
+                          '\$100 annual contribution',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildStakeInfoRow(
+                          theme,
+                          LucideIcons.refreshCw,
+                          'Refund',
+                          'DSP refunded after contribution',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildStakeInfoRow(
+                          theme,
+                          LucideIcons.shieldCheck,
+                          'Purpose',
+                          'Secures your membership slot',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildStakeInfoRow(
+                          theme,
+                          LucideIcons.award,
+                          'Benefit',
+                          '+10 PoCT when you contribute',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // After staking: card form with button integrated
+                if (_hasStakedDSP)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: AppTheme.cardDecoration(context),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with staked badge
+                        Row(
+                          children: [
+                            Icon(
+                              LucideIcons.creditCard,
+                              size: 18,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Payment',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.checkCircle,
+                                    size: 12,
+                                    color: Colors.green.shade700,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '1,000 DSP Staked',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.green.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Loading state while fetching PaymentIntent
+                        if (_isLoadingIntent)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        else ...[
+                          // Compact Stripe CardField (no country dropdown)
+                          // CardField is not supported on web
+                          if (kIsWeb)
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(LucideIcons.smartphone, size: 18, color: theme.hintColor),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Card payment is available on the mobile app. Please use the Diaspora Nearby app to complete your membership.',
+                                      style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            CardField(
+                              enablePostalCode: false,
+                              cursorColor: const Color(0xFF7CAE7A),
+                              onCardChanged: (details) {
+                                final complete = details?.complete ?? false;
+                                debugPrint('▶ [CardField] complete=$complete');
+                                if (complete != _isCardComplete) {
+                                  setState(() => _isCardComplete = complete);
+                                }
+                              },
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: theme.colorScheme.surface,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: theme.colorScheme.outline.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: theme.colorScheme.outline.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF7CAE7A),
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+
+                          // Pay button integrated in form
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: (thresholdMet && !_isProcessingPayment)
+                                  ? _confirmPayment
+                                  : null,
+                              icon: _isProcessingPayment
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Icon(
+                                      thresholdMet
+                                          ? LucideIcons.creditCard
+                                          : LucideIcons.users,
+                                      size: 16,
+                                    ),
+                              label: Text(
+                                _isProcessingPayment
+                                    ? 'Processing Payment...'
+                                    : thresholdMet
+                                    ? 'Pay \$100 to Join Now'
+                                    : '${NumberFormat('#,###').format(_stakerCount)} / 10,000 Members Staked',
+                              ),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.all(16),
+                                backgroundColor: const Color(0xFF7CAE7A),
+                                disabledBackgroundColor: const Color(
+                                  0xFF7CAE7A,
+                                ).withValues(alpha: 0.4),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                LucideIcons.lock,
+                                size: 12,
+                                color: theme.hintColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Secure payment powered by Stripe',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+          ],
+        ),
+
+        // --- STICKY BOTTOM: Stake button only (before staking) ---
+        if (!_hasStakedDSP) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _isStaking ? null : _stakeAndTransition,
+              icon: _isStaking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(LucideIcons.coins, size: 16),
+              label: Text(
+                _isStaking ? 'Staking...' : 'Stake 1,000 DSP Promissory',
+              ),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                backgroundColor: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 8),
+      ],
     );
   }
 
-  void _processPayment(
-    BuildContext context,
-    WidgetRef ref,
-    String userId,
-  ) async {
-    // Mock payment
-    await ref
-        .read(emergencyFundServiceProvider)
-        .completeMembershipPayment(userId);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment Successful! Membership Active.')),
-      );
+
+  /// One-tap stake: deducts DSP and transitions to card form
+  Future<void> _stakeAndTransition() async {
+    setState(() => _isStaking = true);
+    try {
+      await ref
+          .read(emergencyFundServiceProvider)
+          .stakePromissory(widget.userId);
+      if (mounted) {
+        setState(() {
+          _hasStakedDSP = true;
+          _stakerCount++;
+          _isStaking = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('1,000 DSP Promissory staked successfully!'),
+          ),
+        );
+        // Fetch PaymentIntent for inline card form
+        _fetchPaymentIntent();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isStaking = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error staking: $e')));
+      }
     }
   }
 
-  Widget _buildReqItem(BuildContext context, String label, bool isMet) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        children: [
-          Icon(
-            isMet ? LucideIcons.checkCircle : LucideIcons.circle,
-            color: isMet ? Colors.green : Colors.grey,
-            size: 20,
+  Widget _buildStakeInfoRow(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: TextStyle(fontSize: 12, color: theme.hintColor),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: TextStyle(
-              color: isMet
-                  ? Theme.of(context).colorScheme.onSurface
-                  : Colors.grey,
-              fontWeight: isMet ? FontWeight.w500 : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildStatusCard(
+  Widget _buildEligibilityRow(
+    ThemeData theme, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool? met,
+  }) {
+    final Color statusColor = met == null
+        ? theme.hintColor
+        : met
+            ? const Color(0xFF7CAE7A)
+            : Colors.redAccent;
+    final IconData statusIcon = met == null
+        ? LucideIcons.loader
+        : met
+            ? LucideIcons.checkCircle
+            : LucideIcons.xCircle;
+
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(statusIcon, size: 18, color: statusColor),
+      ],
+    );
+  }
+
+  Widget _buildPendingProxyView(
     BuildContext context,
-    EmergencyFundMembership? membership,
-    EligibilityResult result,
+    EmergencyFundMembership membership,
   ) {
-    // Logic for status card header
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: membership != null
-                ? Colors.blue.withOpacity(0.1)
-                : Colors.grey.withOpacity(0.1),
-            child: Icon(
-              membership != null ? LucideIcons.shieldCheck : LucideIcons.shield,
-              color: membership != null ? Colors.blue : Colors.grey,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(LucideIcons.clock, color: Colors.orange, size: 64),
+            const SizedBox(height: 24),
+            const Text(
+              'Waiting for Proxy Acceptance',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  membership?.status.name.toUpperCase().replaceAll('_', ' ') ??
-                      'NOT A MEMBER',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  membership != null
-                      ? 'Joined: ${DateFormat.yMMMd().format(membership.joinedDate)}'
-                      : 'Join to get protected',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+            const SizedBox(height: 12),
+            Text(
+              'Request sent to: ${membership.proxyUserId ?? "Pending"}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, height: 1.5),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -808,69 +1105,303 @@ class _MembershipTab extends ConsumerWidget {
     BuildContext context,
     EmergencyFundMembership membership,
   ) {
+    final theme = Theme.of(context);
+
     return ListView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.pageHorizontalPadding,
-        vertical: 16,
+      padding: EdgeInsets.only(
+        left: 8,
+        right: 8,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 24,
       ),
       children: [
+        // --- MEMBER CARD ---
         Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.green.withOpacity(0.3)),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          decoration: AppTheme.cardDecoration(
+            context,
+          ).copyWith(borderRadius: BorderRadius.circular(20)),
           child: Column(
             children: [
-              const Icon(
-                LucideIcons.shieldCheck,
-                color: Colors.green,
-                size: 48,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Active Coverage',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
+              // Status badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7CAE7A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.shieldCheck,
+                      size: 16,
+                      color: Colors.green.shade600,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Active Member',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green.shade600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Support ID: ${membership.supportNumber}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 24),
-              const Divider(),
               const SizedBox(height: 16),
-              _buildInfoRow(
-                'Next Contribution',
-                DateFormat.yMMMd().format(membership.nextPaymentDate!),
+
+              // Title
+              Text(
+                'Community Emergency Fund',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
-              _buildInfoRow(
-                'Covered Members',
+              const SizedBox(height: 6),
+
+              // Member ID (referral code)
+              FutureBuilder<String?>(
+                future: ref
+                    .read(pointsServiceProvider)
+                    .getReferralCode(widget.userId),
+                builder: (context, snap) {
+                  final code = snap.data ?? membership.supportNumber;
+                  return Text(
+                    'Member ID: $code',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+              Divider(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+              const SizedBox(height: 12),
+
+              // Info rows
+              _buildMemberInfoRow(
+                theme,
+                LucideIcons.calendarCheck,
+                'Member Since',
+                DateFormat.yMMMd().format(membership.joinedDate),
+              ),
+              const SizedBox(height: 10),
+              _buildMemberInfoRow(
+                theme,
+                LucideIcons.refreshCw,
+                'Next Contribution',
+                membership.nextPaymentDate != null
+                    ? DateFormat.yMMMd().format(membership.nextPaymentDate!)
+                    : 'N/A',
+              ),
+              const SizedBox(height: 10),
+              _buildMemberInfoRow(
+                theme,
+                LucideIcons.users,
+                'Family Protected',
                 '${membership.coveredFamilyMembers.length + 1} People',
               ),
-              _buildInfoRow('Proxy', membership.proxyUserId ?? 'None'),
+              const SizedBox(height: 10),
+              _buildMemberInfoRow(
+                theme,
+                LucideIcons.userCheck,
+                'Proxy',
+                membership.proxyUserId ?? 'Not Assigned',
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        // Add Suggested Proxies List here if needed, or other member utils
+
+        const SizedBox(height: 20),
+
+        // --- MEMBERSHIP ACTIVITIES ---
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Row(
+            children: [
+              Icon(
+                LucideIcons.activity,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Membership Activity',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: AppTheme.cardDecoration(
+            context,
+          ).copyWith(borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Activity items
+              _buildActivityItem(
+                theme,
+                icon: LucideIcons.checkCircle,
+                iconColor: Colors.green.shade600,
+                title: 'Joined Community Fund',
+                subtitle: DateFormat.yMMMd().format(membership.joinedDate),
+              ),
+              _buildActivityItem(
+                theme,
+                icon: LucideIcons.creditCard,
+                iconColor: const Color(0xFF7CAE7A),
+                title: 'Annual Contribution Paid',
+                subtitle:
+                    '\$${membership.annualContribution.toStringAsFixed(0)} • ${DateFormat.yMMMd().format(membership.joinedDate)}',
+              ),
+              _buildActivityItem(
+                theme,
+                icon: LucideIcons.coins,
+                iconColor: Colors.amber.shade700,
+                title: '1,000 DSP Staked',
+                subtitle: 'Promissory stake for membership',
+              ),
+              _buildActivityItem(
+                theme,
+                icon: LucideIcons.refreshCw,
+                iconColor: Colors.blue.shade600,
+                title: '1,000 DSP Unstaked',
+                subtitle: 'DSP returned after contribution confirmed',
+                isLast: true,
+              ),
+
+              const SizedBox(height: 12),
+              // Empty state hint
+              Center(
+                child: Text(
+                  'Future support requests and contributions will appear here',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 40),
       ],
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+  Widget _buildMemberInfoRow(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityItem(
+    ThemeData theme, {
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    bool isLast = false,
+  }) {
+    return IntrinsicHeight(
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          // Timeline line + dot
+          Column(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 14, color: iconColor),
+              ),
+              if (!isLast)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: theme.colorScheme.outline.withValues(alpha: 0.15),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          // Content
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -887,8 +1418,19 @@ class _SupportTab extends ConsumerStatefulWidget {
 
 class _SupportTabState extends ConsumerState<_SupportTab> {
   static const _familyTypes = {
-    'wife', 'husband', 'daughter', 'son', 'mother', 'father',
-    'sister', 'brother', 'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+    'wife',
+    'husband',
+    'daughter',
+    'son',
+    'mother',
+    'father',
+    'sister',
+    'brother',
+    'aunt',
+    'uncle',
+    'nephew',
+    'niece',
+    'cousin',
   };
 
   bool _isSecretary = false;
@@ -937,23 +1479,29 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     final claimsStream = ref
         .watch(emergencyFundServiceProvider)
         .streamUserClaims(widget.userId);
-    final relationshipsAsync = ref.watch(userRelationshipsProvider(widget.userId));
+    final relationshipsAsync = ref.watch(
+      userRelationshipsProvider(widget.userId),
+    );
     final theme = Theme.of(context);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.pageHorizontalPadding,
-        vertical: 16,
+      padding: EdgeInsets.only(
+        left: AppTheme.pageHorizontalPadding,
+        right: AppTheme.pageHorizontalPadding,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 24,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Pending Proxy Requests (for this user as proxy) ───
+          // â”€â”€â”€ Pending Proxy Requests (for this user as proxy) â”€â”€â”€
           _buildPendingProxyRequests(context),
-          // ─── Support Request Types ───
+          // â”€â”€â”€ Support Request Types â”€â”€â”€
           Text(
             'Request Support',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -967,14 +1515,20 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           const Divider(),
           const SizedBox(height: 12),
 
-          // ─── Family Members Section ───
+          // â”€â”€â”€ Family Members Section â”€â”€â”€
           Row(
             children: [
-              Icon(LucideIcons.users, size: 20, color: theme.colorScheme.primary),
+              Icon(
+                LucideIcons.users,
+                size: 20,
+                color: theme.colorScheme.primary,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Family Members',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -999,10 +1553,12 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 future: _filterFundMembers(family),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(),
-                    ));
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
                   }
 
                   final fundFamily = snapshot.data ?? [];
@@ -1012,7 +1568,9 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   }
 
                   return Column(
-                    children: fundFamily.map((rel) => _buildFamilyMemberCard(context, rel)).toList(),
+                    children: fundFamily
+                        .map((rel) => _buildFamilyMemberCard(context, rel))
+                        .toList(),
                   );
                 },
               );
@@ -1021,7 +1579,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
             error: (e, _) => Text('Error loading family: $e'),
           ),
 
-          // ─── Secretary: Community Announcements ───
+          // â”€â”€â”€ Secretary: Community Announcements â”€â”€â”€
           if (_isSecretary) ...[
             const SizedBox(height: 28),
             const Divider(),
@@ -1033,14 +1591,16 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           const Divider(),
           const SizedBox(height: 20),
 
-          // ─── Memorials / Claims Section ───
+          // ——— Memorials / Support Requests Section ———â”€â”€â”€
           Row(
             children: [
               Icon(LucideIcons.heart, size: 20, color: Colors.red.shade400),
               const SizedBox(width: 8),
               Text(
                 'Memorials & Requests',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -1057,17 +1617,24 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        Icon(LucideIcons.inbox, color: theme.hintColor, size: 20),
+                        Icon(
+                          LucideIcons.inbox,
+                          color: theme.hintColor,
+                          size: 20,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'No memorials or support requests submitted yet.',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
+                            ),
                           ),
                         ),
                       ],
@@ -1078,17 +1645,19 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
 
               final claims = snapshot.data!;
               return Column(
-                children: claims.map((claim) => _buildClaimCard(context, claim)).toList(),
+                children: claims
+                    .map((claim) => _buildClaimCard(context, claim))
+                    .toList(),
               );
             },
           ),
-          const SizedBox(height: 80),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  // ─── Support Request Type Cards ───
+  // â”€â”€â”€ Support Request Type Cards â”€â”€â”€
   Widget _buildSupportRequestCards(BuildContext context) {
     final types = [
       _SupportType(
@@ -1127,7 +1696,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
   }
 
   Widget _buildSupportCard(BuildContext context, _SupportType st) {
-    final theme = Theme.of(context);
     return GestureDetector(
       onTap: () => _openSupportForm(context, st.type),
       child: Container(
@@ -1140,7 +1708,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: st.color.withOpacity(0.3),
+              color: st.color.withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -1152,7 +1720,11 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
             Positioned(
               right: -8,
               bottom: -8,
-              child: Icon(st.icon, size: 64, color: Colors.white.withOpacity(0.15)),
+              child: Icon(
+                st.icon,
+                size: 64,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
@@ -1165,7 +1737,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(st.icon, color: Colors.white, size: 18),
@@ -1176,7 +1748,11 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                         child: PopupMenuButton<String>(
                           padding: EdgeInsets.zero,
                           iconSize: 16,
-                          icon: const Icon(LucideIcons.moreVertical, color: Colors.white, size: 16),
+                          icon: const Icon(
+                            LucideIcons.moreVertical,
+                            color: Colors.white,
+                            size: 16,
+                          ),
                           onSelected: (value) {
                             if (value == 'submit') {
                               _openSupportForm(context, st.type);
@@ -1210,7 +1786,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   Text(
                     st.subtitle,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                       fontSize: 11,
                     ),
                   ),
@@ -1228,14 +1804,16 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _SupportRequestForm(type: type, userId: widget.userId),
+      builder: (context) =>
+          _SupportRequestForm(type: type, userId: widget.userId),
     );
   }
 
-  // ─── Family Member Card with Proxy & Announce ───
+  // â”€â”€â”€ Family Member Card with Proxy & Announce â”€â”€â”€
   Widget _buildFamilyMemberCard(BuildContext context, Relationship rel) {
     final profileAsync = ref.watch(userProfileByIdProvider(rel.id));
-    final membershipStream = ref.watch(emergencyFundServiceProvider)
+    final membershipStream = ref
+        .watch(emergencyFundServiceProvider)
         .streamMembership(widget.userId);
     final theme = Theme.of(context);
 
@@ -1251,26 +1829,35 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           builder: (context, memberSnap) {
             final membership = memberSnap.data;
             final isProxy = membership?.proxyUserId == rel.id;
-            final proxyAccepted = isProxy && membership?.proxyStatus == ProxyStatus.accepted;
-            final proxyPending = isProxy && membership?.proxyStatus == ProxyStatus.pending;
+            final proxyAccepted =
+                isProxy && membership?.proxyStatus == ProxyStatus.accepted;
+            final proxyPending =
+                isProxy && membership?.proxyStatus == ProxyStatus.pending;
 
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
                 color: isDeceased
                     ? Colors.grey.shade100
-                    : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                    : theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.3,
+                      ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isDeceased ? Colors.grey.shade300 : Colors.transparent,
                 ),
               ),
               child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 leading: CircleAvatar(
                   radius: 20,
                   backgroundColor: Colors.grey.shade300,
-                  backgroundImage: CachedNetworkImageProvider(profile.profileImage),
+                  backgroundImage: CachedNetworkImageProvider(
+                    profile.profileImage,
+                  ),
                 ),
                 title: Row(
                   children: [
@@ -1280,7 +1867,9 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
-                          decoration: isDeceased ? TextDecoration.lineThrough : null,
+                          decoration: isDeceased
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1288,7 +1877,10 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                     if (isDeceased) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red.shade50,
                           borderRadius: BorderRadius.circular(6),
@@ -1306,13 +1898,16 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                     if (proxyAccepted) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.green.shade50,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'Proxy ✓',
+                          'Proxy âœ“',
                           style: TextStyle(
                             color: Colors.green.shade700,
                             fontSize: 10,
@@ -1324,7 +1919,10 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                     if (proxyPending) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.orange.shade50,
                           borderRadius: BorderRadius.circular(6),
@@ -1348,12 +1946,16 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 trailing: isDeceased
                     ? null
                     : PopupMenuButton<String>(
-                        icon: Icon(LucideIcons.moreVertical, size: 18, color: theme.hintColor),
+                        icon: Icon(
+                          LucideIcons.moreVertical,
+                          size: 18,
+                          color: theme.hintColor,
+                        ),
                         onSelected: (value) {
                           if (value == 'proxy') {
-                            _designateProxy(context, rel);
+                            _designateProxy(rel);
                           } else if (value == 'announce') {
-                            _announcePassingForFamily(context, rel);
+                            _announcePassingForFamily(rel);
                           }
                         },
                         itemBuilder: (_) => [
@@ -1361,14 +1963,20 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                             value: 'proxy',
                             child: ListTile(
                               leading: Icon(
-                                proxyAccepted ? LucideIcons.shieldCheck : LucideIcons.shield,
+                                proxyAccepted
+                                    ? LucideIcons.shieldCheck
+                                    : LucideIcons.shield,
                                 size: 20,
                                 color: proxyAccepted ? Colors.green : null,
                               ),
-                              title: Text(proxyAccepted ? 'Change Proxy' : 'Set as Proxy'),
-                              subtitle: Text(proxyPending
-                                  ? 'Awaiting acceptance...'
-                                  : 'Point of contact if you pass'),
+                              title: Text(
+                                proxyAccepted ? 'Change Proxy' : 'Set as Proxy',
+                              ),
+                              subtitle: Text(
+                                proxyPending
+                                    ? 'Awaiting acceptance...'
+                                    : 'Point of contact if you pass',
+                              ),
                               dense: true,
                               contentPadding: EdgeInsets.zero,
                             ),
@@ -1380,7 +1988,9 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                               child: ListTile(
                                 leading: Icon(LucideIcons.flag, size: 20),
                                 title: Text('Announce Passing'),
-                                subtitle: Text('Create memorial & alert community'),
+                                subtitle: Text(
+                                  'Create memorial & alert community',
+                                ),
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
                               ),
@@ -1392,12 +2002,15 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           },
         );
       },
-      loading: () => const SizedBox(height: 60, child: Center(child: LinearProgressIndicator())),
-      error: (_, __) => const SizedBox.shrink(),
+      loading: () => const SizedBox(
+        height: 60,
+        child: Center(child: LinearProgressIndicator()),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 
-  void _designateProxy(BuildContext context, Relationship rel) async {
+  void _designateProxy(Relationship rel) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1409,8 +2022,14 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           'emergency fund on your behalf if you are unable to.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirm')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm'),
+          ),
         ],
       ),
     );
@@ -1418,39 +2037,54 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     if (confirmed == true && mounted) {
       try {
         // Get the current user's name for the request
-        final myProfile = await ref.read(profileRepositoryProvider)
+        final myProfile = await ref
+            .read(profileRepositoryProvider)
             .getUserProfile(widget.userId);
         final myName = myProfile != null
             ? '${myProfile.firstName} ${myProfile.lastName}'.trim()
             : 'Someone';
 
-        await ref.read(emergencyFundServiceProvider).updateProxy(
-          userId: widget.userId,
-          userName: myName,
-          proxyUserId: rel.id,
-        );
+        await ref
+            .read(emergencyFundServiceProvider)
+            .updateProxy(
+              userId: widget.userId,
+              userName: myName,
+              proxyUserId: rel.id,
+            );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Proxy request sent to ${rel.name}. Waiting for acceptance.')),
+            SnackBar(
+              content: Text(
+                'Proxy request sent to ${rel.name}. Waiting for acceptance.',
+              ),
+            ),
           );
         }
       } catch (e) {
-        debugPrint('❌ [EmergencyFund] Failed to set proxy: $e');
+        debugPrint('âŒ [EmergencyFund] Failed to set proxy: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to set proxy at this time. Please try again later.')),
+            const SnackBar(
+              content: Text(
+                'Unable to set proxy at this time. Please try again later.',
+              ),
+            ),
           );
         }
       }
     }
   }
 
-  void _announcePassingForFamily(BuildContext context, Relationship rel) async {
+  void _announcePassingForFamily(Relationship rel) async {
     // Guard: one announcement per person
     final alreadyAnnounced = rel.status == 'deceased';
     if (alreadyAnnounced) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This person has already been announced as passed away.')),
+        const SnackBar(
+          content: Text(
+            'This person has already been announced as passed away.',
+          ),
+        ),
       );
       return;
     }
@@ -1461,10 +2095,11 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
-  // ─── Pending Proxy Requests (addressed to this user) ───
+  // â”€â”€â”€ Pending Proxy Requests (addressed to this user) â”€â”€â”€
   Widget _buildPendingProxyRequests(BuildContext context) {
     final theme = Theme.of(context);
-    final proxyStream = ref.watch(emergencyFundServiceProvider)
+    final proxyStream = ref
+        .watch(emergencyFundServiceProvider)
         .streamPendingProxyRequests(widget.userId);
 
     return StreamBuilder<QuerySnapshot>(
@@ -1481,11 +2116,17 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           children: [
             Row(
               children: [
-                Icon(LucideIcons.shield, size: 20, color: Colors.orange.shade600),
+                Icon(
+                  LucideIcons.shield,
+                  size: 20,
+                  color: Colors.orange.shade600,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Proxy Requests',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -1509,7 +2150,10 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   children: [
                     Text(
                       '$fromName wants you to be their emergency fund proxy.',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1522,7 +2166,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                       children: [
                         OutlinedButton.icon(
                           onPressed: () => _respondToProxy(
-                            context,
                             requestId: requestId,
                             fromUserId: fromUserId,
                             fromName: fromName,
@@ -1538,7 +2181,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                         const SizedBox(width: 8),
                         FilledButton.icon(
                           onPressed: () => _respondToProxy(
-                            context,
                             requestId: requestId,
                             fromUserId: fromUserId,
                             fromName: fromName,
@@ -1564,33 +2206,38 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
-  void _respondToProxy(
-    BuildContext context, {
+  void _respondToProxy({
     required String requestId,
     required String fromUserId,
     required String fromName,
     required bool accepted,
   }) async {
     try {
-      await ref.read(emergencyFundServiceProvider).respondToProxyRequest(
-        requestId: requestId,
-        fromUserId: fromUserId,
-        accepted: accepted,
-      );
+      await ref
+          .read(emergencyFundServiceProvider)
+          .respondToProxyRequest(
+            requestId: requestId,
+            fromUserId: fromUserId,
+            accepted: accepted,
+          );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(accepted
-                ? 'You accepted $fromName\'s proxy request.'
-                : 'You declined $fromName\'s proxy request.'),
+            content: Text(
+              accepted
+                  ? 'You accepted $fromName\'s proxy request.'
+                  : 'You declined $fromName\'s proxy request.',
+            ),
           ),
         );
       }
     } catch (e) {
-      debugPrint('❌ [EmergencyFund] Failed to respond to proxy: $e');
+      debugPrint('âŒ [EmergencyFund] Failed to respond to proxy: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to respond at this time. Please try again.')),
+          const SnackBar(
+            content: Text('Unable to respond at this time. Please try again.'),
+          ),
         );
       }
     }
@@ -1601,7 +2248,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -1611,7 +2258,9 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
           Expanded(
             child: Text(
               'No immediate family members found. Add family in your profile to see them here.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
+              ),
             ),
           ),
         ],
@@ -1621,7 +2270,9 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
 
   /// Filters a list of family relationships, returning only those
   /// whose related user is also an active Emergency Fund member.
-  Future<List<Relationship>> _filterFundMembers(List<Relationship> family) async {
+  Future<List<Relationship>> _filterFundMembers(
+    List<Relationship> family,
+  ) async {
     final results = <Relationship>[];
     for (final rel in family) {
       if (await _isFundMember(rel.id)) {
@@ -1644,7 +2295,11 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(LucideIcons.shieldAlert, color: Colors.orange.shade700, size: 20),
+          Icon(
+            LucideIcons.shieldAlert,
+            color: Colors.orange.shade700,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1661,7 +2316,9 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 Text(
                   'You have $totalFamily family connection${totalFamily == 1 ? '' : 's'}, but none are Emergency Fund members. '
                   'Family members must also be fund members to be eligible for bereavement and repatriation support.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange.shade700),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.orange.shade700,
+                  ),
                 ),
               ],
             ),
@@ -1671,7 +2328,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
-  // ─── Secretary Section: Community Announcements ───
+  // â”€â”€â”€ Secretary Section: Community Announcements â”€â”€â”€
   Widget _buildSecretarySection(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -1680,11 +2337,17 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
       children: [
         Row(
           children: [
-            Icon(LucideIcons.badgeCheck, size: 20, color: Colors.amber.shade700),
+            Icon(
+              LucideIcons.badgeCheck,
+              size: 20,
+              color: Colors.amber.shade700,
+            ),
             const SizedBox(width: 8),
             Text(
               'Secretary Actions',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -1695,16 +2358,20 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
         ),
         const SizedBox(height: 16),
         Container(
-          decoration: AppTheme.cardDecoration(context).copyWith(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: AppTheme.cardDecoration(
+            context,
+          ).copyWith(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(LucideIcons.megaphone, size: 18, color: Colors.amber.shade800),
+                  Icon(
+                    LucideIcons.megaphone,
+                    size: 18,
+                    color: Colors.amber.shade800,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Announce Member Passing',
@@ -1718,7 +2385,11 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
               const SizedBox(height: 8),
               Text(
                 'Search for a community member to formally announce their passing and initiate bereavement support.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700, height: 1.4),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -1752,7 +2423,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
     );
   }
 
-  // ─── Claim Card ───
+  // â”€â”€â”€ Claim Card â”€â”€â”€
   Widget _buildClaimCard(BuildContext context, EmergencyFundClaim claim) {
     final theme = Theme.of(context);
     Color statusColor;
@@ -1788,7 +2459,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.1),
+            color: statusColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(typeIcon, color: statusColor, size: 20),
@@ -1809,7 +2480,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
+                color: statusColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -1842,7 +2513,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
   }
 }
 
-// ─── Helper Model ───
+// â”€â”€â”€ Helper Model â”€â”€â”€
 class _SupportType {
   final EmergencyType type;
   final String title;
@@ -1861,14 +2532,15 @@ class _SupportType {
   });
 }
 
-// ─── Support Request Form (Bottom Sheet) ───
+// â”€â”€â”€ Support Request Form (Bottom Sheet) â”€â”€â”€
 class _SupportRequestForm extends ConsumerStatefulWidget {
   final EmergencyType type;
   final String userId;
   const _SupportRequestForm({required this.type, required this.userId});
 
   @override
-  ConsumerState<_SupportRequestForm> createState() => _SupportRequestFormState();
+  ConsumerState<_SupportRequestForm> createState() =>
+      _SupportRequestFormState();
 }
 
 class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
@@ -1880,7 +2552,6 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
   final _lawyerController = TextEditingController();
   // Google Places for hospital
   String? _hospitalName;
-  String? _hospitalPlaceId;
   DateTime? _incidentDate;
   bool _isLoading = false;
 
@@ -1945,9 +2616,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_incidentDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a date')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a date')));
       return;
     }
 
@@ -1955,20 +2626,30 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
 
     // Build description with type-specific fields
     final desc = StringBuffer(_descController.text);
-    if (_hospitalName != null && _hospitalName!.isNotEmpty) desc.write('\nHospital: $_hospitalName');
-    if (_diagnosisController.text.isNotEmpty) desc.write('\nDiagnosis: ${_diagnosisController.text}');
-    if (_caseNumberController.text.isNotEmpty) desc.write('\nCase #: ${_caseNumberController.text}');
-    if (_lawyerController.text.isNotEmpty) desc.write('\nLawyer/Contact: ${_lawyerController.text}');
+    if (_hospitalName != null && _hospitalName!.isNotEmpty) {
+      desc.write('\nHospital: $_hospitalName');
+    }
+    if (_diagnosisController.text.isNotEmpty) {
+      desc.write('\nDiagnosis: ${_diagnosisController.text}');
+    }
+    if (_caseNumberController.text.isNotEmpty) {
+      desc.write('\nCase #: ${_caseNumberController.text}');
+    }
+    if (_lawyerController.text.isNotEmpty) {
+      desc.write('\nLawyer/Contact: ${_lawyerController.text}');
+    }
 
     try {
-      await ref.read(emergencyFundServiceProvider).submitClaim(
-        userId: widget.userId,
-        type: widget.type,
-        beneficiaryName: 'Self',
-        relationship: 'Self',
-        incidentDate: _incidentDate!,
-        description: desc.toString(),
-      );
+      await ref
+          .read(emergencyFundServiceProvider)
+          .submitClaim(
+            userId: widget.userId,
+            type: widget.type,
+            beneficiaryName: 'Self',
+            relationship: 'Self',
+            incidentDate: _incidentDate!,
+            description: desc.toString(),
+          );
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1977,9 +2658,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -2030,7 +2711,7 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: _themeColor.withOpacity(0.1),
+                          color: _themeColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(_themeIcon, color: _themeColor, size: 24),
@@ -2042,11 +2723,15 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
                           children: [
                             Text(
                               _formTitle,
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             Text(
                               'Fill in the details below to submit your request.',
-                              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.hintColor,
+                              ),
                             ),
                           ],
                         ),
@@ -2062,7 +2747,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
                       decoration: InputDecoration(
                         labelText: 'Incident Date',
                         prefixIcon: const Icon(LucideIcons.calendar),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: Text(
                         _incidentDate == null
@@ -2086,7 +2773,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
                     decoration: InputDecoration(
                       labelText: 'Description & Additional Details',
                       prefixIcon: const Icon(LucideIcons.fileText),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       alignLabelWithHint: true,
                     ),
                     maxLines: 4,
@@ -2112,11 +2801,23 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
                       onPressed: _isLoading ? null : _submit,
                       style: FilledButton.styleFrom(
                         backgroundColor: _themeColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: _isLoading
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Submit Request',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                     ),
                   ),
                 ],
@@ -2138,7 +2839,6 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
             onSelected: (desc, placeId) {
               setState(() {
                 _hospitalName = desc;
-                _hospitalPlaceId = placeId;
               });
             },
           ),
@@ -2149,7 +2849,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
             decoration: InputDecoration(
               labelText: 'Diagnosis / Condition',
               prefixIcon: const Icon(LucideIcons.stethoscope),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -2162,7 +2864,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
             decoration: InputDecoration(
               labelText: 'Case / Reference Number (if any)',
               prefixIcon: const Icon(LucideIcons.hash),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -2172,7 +2876,9 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
             decoration: InputDecoration(
               labelText: 'Lawyer / Legal Contact',
               prefixIcon: const Icon(LucideIcons.phone),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -2183,17 +2889,22 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
   }
 }
 
-// ─── Secretary Announcement Sheet ───
+// â”€â”€â”€ Secretary Announcement Sheet â”€â”€â”€
 class _SecretaryAnnouncementSheet extends ConsumerStatefulWidget {
   final String communityId;
   final String secretaryUserId;
-  const _SecretaryAnnouncementSheet({required this.communityId, required this.secretaryUserId});
+  const _SecretaryAnnouncementSheet({
+    required this.communityId,
+    required this.secretaryUserId,
+  });
 
   @override
-  ConsumerState<_SecretaryAnnouncementSheet> createState() => _SecretaryAnnouncementSheetState();
+  ConsumerState<_SecretaryAnnouncementSheet> createState() =>
+      _SecretaryAnnouncementSheetState();
 }
 
-class _SecretaryAnnouncementSheetState extends ConsumerState<_SecretaryAnnouncementSheet> {
+class _SecretaryAnnouncementSheetState
+    extends ConsumerState<_SecretaryAnnouncementSheet> {
   final _searchController = TextEditingController();
   List<ProfileData> _communityMembers = [];
   List<ProfileData> _filteredMembers = [];
@@ -2261,7 +2972,11 @@ class _SecretaryAnnouncementSheetState extends ConsumerState<_SecretaryAnnouncem
     if (deceased) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This member has already been announced as passed away.')),
+          const SnackBar(
+            content: Text(
+              'This member has already been announced as passed away.',
+            ),
+          ),
         );
       }
       return;
@@ -2321,18 +3036,26 @@ class _SecretaryAnnouncementSheetState extends ConsumerState<_SecretaryAnnouncem
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        Icon(LucideIcons.badgeCheck, color: Colors.amber.shade700, size: 22),
+                        Icon(
+                          LucideIcons.badgeCheck,
+                          color: Colors.amber.shade700,
+                          size: 22,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Announce Member Passing',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Search for a community member. This action can only be done once per person.',
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -2341,8 +3064,13 @@ class _SecretaryAnnouncementSheetState extends ConsumerState<_SecretaryAnnouncem
                       decoration: InputDecoration(
                         hintText: 'Search by name...',
                         prefixIcon: const Icon(LucideIcons.search, size: 18),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(LucideIcons.x, size: 16),
@@ -2362,46 +3090,76 @@ class _SecretaryAnnouncementSheetState extends ConsumerState<_SecretaryAnnouncem
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : _filteredMembers.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(LucideIcons.userX, size: 48, color: theme.hintColor),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'No members found',
-                                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-                                ),
-                              ],
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.userX,
+                              size: 48,
+                              color: theme.hintColor,
                             ),
-                          )
-                        : ListView.builder(
-                            controller: scrollController,
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            itemCount: _filteredMembers.length,
-                            itemBuilder: (context, index) {
-                              final member = _filteredMembers[index];
-                              final name = '${member.firstName} ${member.lastName}'.trim();
-                              return ListTile(
-                                contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                                leading: CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: Colors.grey.shade300,
-                                  backgroundImage: CachedNetworkImageProvider(member.profileImage),
-                                ),
-                                title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                subtitle: member.profession != null && member.profession!.isNotEmpty
-                                    ? Text(member.profession!.join(', '), style: TextStyle(fontSize: 12, color: theme.hintColor))
-                                    : null,
-                                trailing: TextButton.icon(
-                                  onPressed: () => _announceForMember(member),
-                                  icon: const Icon(LucideIcons.flag, size: 14),
-                                  label: const Text('Announce', style: TextStyle(fontSize: 12)),
-                                  style: TextButton.styleFrom(foregroundColor: Colors.red.shade400),
-                                ),
-                              );
-                            },
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'No members found',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.hintColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        itemCount: _filteredMembers.length,
+                        itemBuilder: (context, index) {
+                          final member = _filteredMembers[index];
+                          final name = '${member.firstName} ${member.lastName}'
+                              .trim();
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                            ),
+                            leading: CircleAvatar(
+                              radius: 20,
+                              backgroundColor: Colors.grey.shade300,
+                              backgroundImage: CachedNetworkImageProvider(
+                                member.profileImage,
+                              ),
+                            ),
+                            title: Text(
+                              name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle:
+                                member.profession != null &&
+                                    member.profession!.isNotEmpty
+                                ? Text(
+                                    member.profession!.join(', '),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: theme.hintColor,
+                                    ),
+                                  )
+                                : null,
+                            trailing: TextButton.icon(
+                              onPressed: () => _announceForMember(member),
+                              icon: const Icon(LucideIcons.flag, size: 14),
+                              label: const Text(
+                                'Announce',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red.shade400,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           );

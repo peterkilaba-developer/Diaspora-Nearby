@@ -52,7 +52,7 @@ class _CommunityMembersScreenState
         showExplorationRewardToast(
           context,
           message: 'Visited your community',
-          points: 10,
+          points: 100,
         );
       }
     }
@@ -122,12 +122,95 @@ class _CommunityMembersScreenState
             final members = snapshot.data ?? [];
             final currentUser = ref.watch(authRepositoryProvider).currentUser;
 
+            // [FIX] Check if current user is actually a member of this community
+            final currentProfile = ref.watch(userProfileProvider).value;
+            final isMember =
+                currentProfile?.communityMemberships?.contains(
+                  widget.communityId,
+                ) ??
+                false;
+
             // Consolidate "Empty" and "Single self member" into First Member state
-            // In this context, if the list is empty or only contains the current user,
-            // they are effectively the "first member".
+            // Only show "first member" celebration if user IS a member
             final isFirstMember =
-                members.isEmpty ||
-                (members.length == 1 && members.first.uid == currentUser?.uid);
+                isMember &&
+                (members.isEmpty ||
+                    (members.length == 1 &&
+                        members.first.uid == currentUser?.uid));
+
+            // [FIX] If NOT a member and no members found, show neutral empty state
+            final isEmptyForNonMember = !isMember && members.isEmpty;
+
+            if (isEmptyForNonMember) {
+              return Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.5),
+                          shape: BoxShape.rectangle,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          LucideIcons.users,
+                          size: 48,
+                          color: Theme.of(context).hintColor,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'No Members Yet',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'This community doesn\'t have any members yet.\nKnow someone who belongs here? Invite them!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => ShareCommunityDialog(
+                                community: widget.community,
+                              ),
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 14,
+                            ),
+                          ),
+                          icon: const Icon(LucideIcons.share2),
+                          label: const Text('Invite Friends'),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+              );
+            }
 
             if (isFirstMember) {
               // Derive contextual names
@@ -183,7 +266,7 @@ class _CommunityMembersScreenState
                         decoration: BoxDecoration(
                           color: Theme.of(
                             context,
-                          ).colorScheme.primaryContainer.withOpacity(0.3),
+                          ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                           shape: BoxShape.rectangle,
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -251,7 +334,7 @@ class _CommunityMembersScreenState
                 bottom: MediaQuery.of(context).padding.bottom + 24,
               ),
               itemCount: members.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final member = members[index];
                 return UserCardView(

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -41,7 +42,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
   @override
   void initState() {
     super.initState();
-    _isScanning = !widget.isCreator; // Creator shows code by default
+    _isScanning = kIsWeb ? false : !widget.isCreator; // Creator shows code by default
 
     if (widget.isCreator) {
       _generateCode();
@@ -113,7 +114,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
           if (mounted) {
             switch (result) {
               case VerificationResult.success:
-                setState(() => _scanSuccess = 'Check-in Confirmed! +1,000 DSP');
+                setState(() => _scanSuccess = 'Check-in Confirmed! +100 DSP');
                 break;
               case VerificationResult.alreadyCheckedIn:
                 // Show as success state but with different message
@@ -220,9 +221,11 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                     margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -248,9 +251,11 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                     margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      border: Border.all(
+                        color: Colors.green.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -294,7 +299,9 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                     Container(
                                       decoration: BoxDecoration(
                                         border: Border.all(
-                                          color: Colors.white.withOpacity(0.5),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.5,
+                                          ),
                                           width: 2,
                                         ),
                                         borderRadius: BorderRadius.circular(24),
@@ -361,8 +368,8 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.green.withOpacity(
-                                                0.1,
+                                              color: Colors.green.withValues(
+                                                alpha: 0.1,
                                               ),
                                               blurRadius: 20,
                                               offset: const Offset(0, 10),
@@ -399,7 +406,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                                 false) ...[
                                               const SizedBox(height: 8),
                                               const Text(
-                                                '+1,000 DSP Awarded',
+                                                '+100 DSP Awarded',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   color: Colors.black54,
@@ -419,8 +426,8 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(
-                                                0.1,
+                                              color: Colors.black.withValues(
+                                                alpha: 0.1,
                                               ),
                                               blurRadius: 20,
                                               offset: const Offset(0, 10),

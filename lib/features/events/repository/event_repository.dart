@@ -99,7 +99,10 @@ class EventRepository {
 
             return events.where((event) {
               // Show events until midnight after they end
-              final effectiveEndDate = (event.endDate != null && event.endDate!.isNotEmpty) ? event.endDate! : event.startDate;
+              final effectiveEndDate =
+                  (event.endDate != null && event.endDate!.isNotEmpty)
+                  ? event.endDate!
+                  : event.startDate;
               if (effectiveEndDate.compareTo(todayStr) < 0) return false;
 
               // Visibility Logic (Reproduced from mobile logic)
@@ -329,8 +332,6 @@ class EventRepository {
     return null;
   }
 
-
-
   // Fetch Single Event by ID
   Future<Event?> getEvent(String eventId, {bool force = false}) async {
     // 1. Try Local
@@ -424,8 +425,6 @@ class EventRepository {
       eventData['attendeeCount'] = 1;
       eventData['createdAt'] = DateTime.now().toIso8601String();
 
-
-
       // 1. Immediately Cache
       final eventDataWithId = Event.fromJson(eventData);
       await _localService.saveEvent(eventDataWithId);
@@ -490,10 +489,7 @@ class EventRepository {
           .doc(userId)
           .collection('userChats')
           .doc(chatId);
-      batch.set(userChatRef, {
-        'chatId': chatId,
-        'updatedAt': now,
-      });
+      batch.set(userChatRef, {'chatId': chatId, 'updatedAt': now});
     }
     await batch.commit();
 
@@ -567,7 +563,9 @@ class EventRepository {
         event.ticketPrice != null &&
         event.ticketPrice! > 0) {
       try {
-        await _ref.read(pointsServiceProvider).recordFiatGdp(
+        await _ref
+            .read(pointsServiceProvider)
+            .recordFiatGdp(
               amount: event.ticketPrice!,
               countryCode: event.hostCountryCode,
               activityType: 'event_ticket_purchase',
@@ -593,7 +591,7 @@ class EventRepository {
         try {
           await _addUserToEventChat(chatId, userId, title);
         } catch (e) {
-          print('JoinEvent Chat Error (Ignored): $e');
+          debugPrint('JoinEvent Chat Error (Ignored): $e');
         }
       }
     }
@@ -620,7 +618,7 @@ class EventRepository {
         try {
           await _removeUserFromEventChat(chatId, userId);
         } catch (e) {
-          print('LeaveEvent Chat Error (Ignored): $e');
+          debugPrint('LeaveEvent Chat Error (Ignored): $e');
         }
       }
     }

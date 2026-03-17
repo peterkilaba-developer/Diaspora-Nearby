@@ -45,7 +45,10 @@ class _AdminCommunitiesScreenState
                       hintText: 'Search communities by name or type...',
                       prefixIcon: const Icon(LucideIcons.search, size: 20),
                       filled: true,
-                      fillColor: AppTheme.elevationColor(context, 2), // Level 2 input
+                      fillColor: AppTheme.elevationColor(
+                        context,
+                        2,
+                      ), // Level 2 input
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -268,7 +271,9 @@ class _ActionButton extends StatelessWidget {
       icon: Icon(icon, size: 18),
       label: Text(label),
       style: ElevatedButton.styleFrom(
-        backgroundColor: primary ? Colors.blue : AppTheme.elevationColor(context, 1),
+        backgroundColor: primary
+            ? Colors.blue
+            : AppTheme.elevationColor(context, 1),
         foregroundColor: primary ? Colors.white : Colors.black,
         elevation: 0,
         padding: const EdgeInsets.symmetric(

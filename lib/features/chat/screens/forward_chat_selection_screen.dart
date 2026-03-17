@@ -52,8 +52,8 @@ class _ForwardChatSelectionScreenState
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              color: theme.colorScheme.surface.withOpacity(
-                0.8,
+              color: theme.colorScheme.surface.withValues(
+                alpha: 0.8,
               ), // Semi-transparent background
             ),
           ),
@@ -101,12 +101,13 @@ class _ForwardChatSelectionScreenState
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: greenColor.withOpacity(0.5),
+                    color: greenColor.withValues(alpha: 0.5),
                   ), // Subtle focus
                 ),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest
-                    .withOpacity(0.3),
+                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
               ),
             ),
           ),
@@ -175,7 +176,7 @@ class _ForwardChatSelectionScreenState
                                 vertical: 4,
                               ), // Match ChatCard margin if any?
                               decoration: BoxDecoration(
-                                color: greenColor.withOpacity(0.1),
+                                color: greenColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(
                                   12,
                                 ), // Match typical card radius
@@ -200,8 +201,8 @@ class _ForwardChatSelectionScreenState
                               border: Border.all(
                                 color: isSelected
                                     ? greenColor
-                                    : theme.colorScheme.outline.withOpacity(
-                                        0.3,
+                                    : theme.colorScheme.outline.withValues(
+                                        alpha: 0.3,
                                       ),
                                 width: 2,
                               ),
@@ -233,7 +234,7 @@ class _ForwardChatSelectionScreenState
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                   child: Container(
-                    color: theme.colorScheme.surface.withOpacity(0.8),
+                    color: theme.colorScheme.surface.withValues(alpha: 0.8),
                     child: SafeArea(
                       top:
                           false, // Ensure top doesn't add padding if keyboard moves it?

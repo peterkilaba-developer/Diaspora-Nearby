@@ -28,21 +28,23 @@ class TravelDateField extends StatelessWidget {
           color: AppTheme.elevationColor(context, 2),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(children: [
-          Icon(icon, size: 16, color: AppTheme.accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              controller.text.isNotEmpty ? controller.text : hint,
-              style: TextStyle(
-                fontSize: 12,
-                color: controller.text.isNotEmpty
-                    ? theme.colorScheme.onSurface
-                    : theme.hintColor,
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: AppTheme.accent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                controller.text.isNotEmpty ? controller.text : hint,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: controller.text.isNotEmpty
+                      ? theme.colorScheme.onSurface
+                      : theme.hintColor,
+                ),
               ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }

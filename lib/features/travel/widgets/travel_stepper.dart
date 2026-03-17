@@ -20,6 +20,7 @@ class TravelStepper extends StatelessWidget {
   });
 
   final String label;
+
   /// Icon shown to the left of the label. Ignored when [bare] is true.
   final IconData? icon;
   final int value;
@@ -44,9 +45,14 @@ class TravelStepper extends StatelessWidget {
           const SizedBox(width: 8),
           Text(label, style: TextStyle(fontSize: 12, color: theme.hintColor)),
         ] else
-          Text(label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface.withOpacity(0.5))),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
         const Spacer(),
         _StepperButton(
           icon: LucideIcons.minus,
@@ -105,13 +111,13 @@ class _StepperButton extends StatelessWidget {
         height: 28,
         decoration: BoxDecoration(
           color: enabled
-              ? AppTheme.accent.withOpacity(isDark ? 0.2 : 0.1)
+              ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: enabled
-                ? AppTheme.accent.withOpacity(0.3)
-                : Theme.of(context).hintColor.withOpacity(0.2),
+                ? AppTheme.accent.withValues(alpha: 0.3)
+                : Theme.of(context).hintColor.withValues(alpha: 0.2),
           ),
         ),
         child: Icon(
@@ -119,7 +125,7 @@ class _StepperButton extends StatelessWidget {
           size: 14,
           color: enabled
               ? AppTheme.accent
-              : Theme.of(context).hintColor.withOpacity(0.3),
+              : Theme.of(context).hintColor.withValues(alpha: 0.3),
         ),
       ),
     );

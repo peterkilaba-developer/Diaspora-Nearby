@@ -123,10 +123,12 @@ class _PeerListingDetailScreenState
       if (mounted) setState(() => _isSaved = !_isSaved);
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_isSaved ? 'Listing saved!' : 'Removed from saved'),
-        duration: const Duration(seconds: 1),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isSaved ? 'Listing saved!' : 'Removed from saved'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
     }
   }
 
@@ -162,7 +164,8 @@ class _PeerListingDetailScreenState
   }
 
   Future<void> _pickEndDate() async {
-    final first = _startDate?.add(const Duration(days: 1)) ??
+    final first =
+        _startDate?.add(const Duration(days: 1)) ??
         DateTime.now().add(const Duration(days: 1));
     final date = await SmartDatePicker.show(
       context: context,
@@ -191,7 +194,7 @@ class _PeerListingDetailScreenState
 
     try {
       final user = ref.read(authRepositoryProvider).currentUser;
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       if (user == null || profile == null) throw Exception('Not logged in');
 
       final repo = ref.read(peerListingRepositoryProvider);
@@ -239,8 +242,9 @@ class _PeerListingDetailScreenState
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           backgroundColor: AppTheme.elevationColor(context, 3),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -249,17 +253,21 @@ class _PeerListingDetailScreenState
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(LucideIcons.checkCircle,
-                    color: Colors.green, size: 32),
+                child: const Icon(
+                  LucideIcons.checkCircle,
+                  color: Colors.green,
+                  size: 32,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
                 'Booking Request Sent!',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -267,13 +275,15 @@ class _PeerListingDetailScreenState
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(height: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(10),
@@ -283,7 +293,9 @@ class _PeerListingDetailScreenState
                   children: [
                     Text(
                       CurrencyHelper.formatLocalPrice(
-                          _totalPrice, widget.listing.countryCode),
+                        _totalPrice,
+                        widget.listing.countryCode,
+                      ),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -294,7 +306,9 @@ class _PeerListingDetailScreenState
                       ' for $_days ${_isStay ? 'night' : 'day'}${_days > 1 ? 's' : ''}',
                       style: TextStyle(
                         fontSize: 13,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -314,12 +328,15 @@ class _PeerListingDetailScreenState
                   backgroundColor: AppTheme.accent,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   elevation: 0,
                 ),
-                child: const Text('Done',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Done',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -345,11 +362,15 @@ class _PeerListingDetailScreenState
             leading: Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha: 0.4),
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -359,7 +380,7 @@ class _PeerListingDetailScreenState
                 Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
+                    color: Colors.black.withValues(alpha: 0.4),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
@@ -381,258 +402,308 @@ class _PeerListingDetailScreenState
           // ── Content ──
           SliverPadding(
             padding: EdgeInsets.only(
-              left: 8, right: 8, top: 12,
+              left: 8,
+              right: 8,
+              top: 12,
               bottom: MediaQuery.of(context).padding.bottom + 16,
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-          // Header card
-          Container(
-            decoration: AppTheme.cardDecoration(context),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Type badge
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                // Header card
+                Container(
+                  decoration: AppTheme.cardDecoration(context),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Type badge
+                      Row(
                         children: [
-                          Icon(
-                            _isHotel ? LucideIcons.hotel : _isStay ? LucideIcons.home : LucideIcons.car,
-                            size: 14,
-                            color: AppTheme.accent,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _isHotel
+                                      ? LucideIcons.hotel
+                                      : _isStay
+                                      ? LucideIcons.home
+                                      : LucideIcons.car,
+                                  size: 14,
+                                  color: AppTheme.accent,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _isApiHotel
+                                      ? 'Partner Hotel'
+                                      : _isHotel
+                                      ? 'Community Hotel'
+                                      : _isStay
+                                      ? listing.propertyType ?? 'Stay'
+                                      : 'Car Rental',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.accent,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _isApiHotel
-                                ? 'Partner Hotel'
-                                : _isHotel
-                                    ? 'Community Hotel'
-                                    : _isStay
-                                        ? listing.propertyType ?? 'Stay'
-                                        : 'Car Rental',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                          const Spacer(),
+                          CurrencyPriceDisplay(
+                            amount: listing.pricePerUnit,
+                            sellerCountryCode: listing.countryCode,
+                            viewerCountryCode: ref
+                                .read(userProfileProvider)
+                                .value
+                                ?.hostCountryCode,
+                            priceSuffix: _isHotel || _isStay
+                                ? '/night'
+                                : '/day',
+                            primaryColor: AppTheme.accent,
+                            primaryStyle: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
                               color: AppTheme.accent,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const Spacer(),
-                    CurrencyPriceDisplay(
-                      amount: listing.pricePerUnit,
-                      sellerCountryCode: listing.countryCode,
-                      viewerCountryCode: ref.read(userProfileProvider).valueOrNull?.hostCountryCode,
-                      priceSuffix: _isHotel || _isStay ? '/night' : '/day',
-                      primaryColor: AppTheme.accent,
-                      primaryStyle: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.accent,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                // Title
-                Text(
-                  listing.title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                // Subtitle — shown for stays & cars only.
-                // Hotels skip this because the same info (stars, category,
-                // rooms, guests) is already in the Hotel Details card below.
-                if (!_isHotel && listing.subtitleLabel.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    listing.subtitleLabel,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
-                    ),
-                  ),
-                ],
-
-                // Location
-                if (listing.locationLabel.isNotEmpty ||
-                    (listing.city != null && listing.city!.isNotEmpty)) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(LucideIcons.mapPin,
-                          size: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          listing.locationLabel.isNotEmpty
-                              ? [listing.locationLabel, listing.country]
-                                  .where(
-                                      (s) => s != null && s.isNotEmpty)
-                                  .join(', ')
-                              : [listing.address, listing.city, listing.country]
-                                  .where(
-                                      (s) => s != null && s.isNotEmpty)
-                                  .join(', '),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color:
-                                theme.colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Description / About
-          Container(
-            decoration: AppTheme.cardDecoration(context),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionLabel(theme, 'About'),
-                const SizedBox(height: 8),
-                if (listing.description.isNotEmpty)
-                  Text(
-                    listing.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                  )
-                else
-                  Text(
-                    _isOwner
-                        ? 'No description added yet. Edit your listing to add one.'
-                        : 'No description available.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontStyle: FontStyle.italic,
-                      color: theme.colorScheme.onSurface.withOpacity(0.35),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Hotel details section
-          if (_isHotel)
-            _buildHotelDetails(theme, listing),
-
-          // Stay amenities, Hotel amenities, or Car features
-          _buildAmenitiesSection(theme, listing),
-          const SizedBox(height: 12),
-
-          // Host info
-          Container(
-            decoration: AppTheme.cardDecoration(context),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundImage: !_isApiHotel && listing.ownerPhoto.isNotEmpty
-                      ? NetworkImage(listing.ownerPhoto)
-                      : null,
-                  backgroundColor: AppTheme.accent.withOpacity(0.1),
-                  child: (_isApiHotel || listing.ownerPhoto.isEmpty)
-                      ? Icon(
-                          _isApiHotel ? LucideIcons.building2 : LucideIcons.user,
-                          size: 18, color: AppTheme.accent)
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                      // Title
                       Text(
-                        _isApiHotel
-                            ? 'Managed by'
-                            : _isHotel
-                                ? 'Owned by'
-                                : _isStay
-                                    ? 'Hosted by'
-                                    : 'Listed by',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.4),
+                        listing.title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        listing.ownerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!_isOwner)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.messageCircle,
-                            size: 14, color: AppTheme.accent),
-                        SizedBox(width: 4),
+                      // Subtitle — shown for stays & cars only.
+                      // Hotels skip this because the same info (stars, category,
+                      // rooms, guests) is already in the Hotel Details card below.
+                      if (!_isHotel && listing.subtitleLabel.isNotEmpty) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          'Message',
+                          listing.subtitleLabel,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.accent,
+                            fontSize: 14,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                         ),
                       ],
-                    ),
+
+                      // Location
+                      if (listing.locationLabel.isNotEmpty ||
+                          (listing.city != null &&
+                              listing.city!.isNotEmpty)) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(
+                              LucideIcons.mapPin,
+                              size: 14,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.4,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                listing.locationLabel.isNotEmpty
+                                    ? [listing.locationLabel, listing.country]
+                                          .where(
+                                            (s) => s != null && s.isNotEmpty,
+                                          )
+                                          .join(', ')
+                                    : [
+                                            listing.address,
+                                            listing.city,
+                                            listing.country,
+                                          ]
+                                          .where(
+                                            (s) => s != null && s.isNotEmpty,
+                                          )
+                                          .join(', '),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
-              ],
-            ),
-          ),
+                ),
+                const SizedBox(height: 12),
 
-          // ── Owner Dashboard OR Guest Booking ────────────────
-          if (_isOwner) ...[
-            const SizedBox(height: 12),
-            _buildOwnerDashboard(theme, listing),
-          ] else ...[
-            const SizedBox(height: 12),
-            _buildGuestBookingSection(theme, listing),
-          ],
+                // Description / About
+                Container(
+                  decoration: AppTheme.cardDecoration(context),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionLabel(theme, 'About'),
+                      const SizedBox(height: 8),
+                      if (listing.description.isNotEmpty)
+                        Text(
+                          listing.description,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          _isOwner
+                              ? 'No description added yet. Edit your listing to add one.'
+                              : 'No description available.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.35,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-          SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
+                // Hotel details section
+                if (_isHotel) _buildHotelDetails(theme, listing),
+
+                // Stay amenities, Hotel amenities, or Car features
+                _buildAmenitiesSection(theme, listing),
+                const SizedBox(height: 12),
+
+                // Host info
+                Container(
+                  decoration: AppTheme.cardDecoration(context),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundImage:
+                            !_isApiHotel && listing.ownerPhoto.isNotEmpty
+                            ? NetworkImage(listing.ownerPhoto)
+                            : null,
+                        backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
+                        child: (_isApiHotel || listing.ownerPhoto.isEmpty)
+                            ? Icon(
+                                _isApiHotel
+                                    ? LucideIcons.building2
+                                    : LucideIcons.user,
+                                size: 18,
+                                color: AppTheme.accent,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _isApiHotel
+                                  ? 'Managed by'
+                                  : _isHotel
+                                  ? 'Owned by'
+                                  : _isStay
+                                  ? 'Hosted by'
+                                  : 'Listed by',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              listing.ownerName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!_isOwner)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                LucideIcons.messageCircle,
+                                size: 14,
+                                color: AppTheme.accent,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Message',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.accent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // ── Owner Dashboard OR Guest Booking ────────────────
+                if (_isOwner) ...[
+                  const SizedBox(height: 12),
+                  _buildOwnerDashboard(theme, listing),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  _buildGuestBookingSection(theme, listing),
+                ],
+
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
               ]),
             ),
           ),
@@ -650,7 +721,11 @@ class _PeerListingDetailScreenState
     final totalRevenue = bookings
         .where((b) => b.status == 'confirmed' || b.status == 'completed')
         .fold(0.0, (sum, b) => sum + b.totalPrice);
-    final typeLabel = _isHotel ? 'Hotel' : _isStay ? 'Stay' : 'Car';
+    final typeLabel = _isHotel
+        ? 'Hotel'
+        : _isStay
+        ? 'Stay'
+        : 'Car';
 
     return Column(
       children: [
@@ -668,32 +743,44 @@ class _PeerListingDetailScreenState
                   child: Padding(
                     padding: EdgeInsets.all(20),
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.accent),
+                      strokeWidth: 2,
+                      color: AppTheme.accent,
+                    ),
                   ),
                 )
               else
                 Row(
                   children: [
-                    _statTile(theme,
-                        icon: LucideIcons.calendarCheck,
-                        value: '${bookings.length}',
-                        label: 'Total\nBookings'),
-                    _statTile(theme,
-                        icon: LucideIcons.clock,
-                        value: '$pending',
-                        label: 'Pending',
-                        color: const Color(0xFFF59E0B)),
-                    _statTile(theme,
-                        icon: LucideIcons.checkCircle,
-                        value: '$confirmed',
-                        label: 'Confirmed',
-                        color: const Color(0xFF22C55E)),
-                    _statTile(theme,
-                        icon: LucideIcons.wallet,
-                        value: CurrencyHelper.formatLocalPrice(
-                            totalRevenue, listing.countryCode),
-                        label: 'Revenue',
-                        color: AppTheme.accent),
+                    _statTile(
+                      theme,
+                      icon: LucideIcons.calendarCheck,
+                      value: '${bookings.length}',
+                      label: 'Total\nBookings',
+                    ),
+                    _statTile(
+                      theme,
+                      icon: LucideIcons.clock,
+                      value: '$pending',
+                      label: 'Pending',
+                      color: const Color(0xFFF59E0B),
+                    ),
+                    _statTile(
+                      theme,
+                      icon: LucideIcons.checkCircle,
+                      value: '$confirmed',
+                      label: 'Confirmed',
+                      color: const Color(0xFF22C55E),
+                    ),
+                    _statTile(
+                      theme,
+                      icon: LucideIcons.wallet,
+                      value: CurrencyHelper.formatLocalPrice(
+                        totalRevenue,
+                        listing.countryCode,
+                      ),
+                      label: 'Revenue',
+                      color: AppTheme.accent,
+                    ),
                   ],
                 ),
             ],
@@ -764,7 +851,7 @@ class _PeerListingDetailScreenState
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.accent.withOpacity(0.8),
+                          color: AppTheme.accent.withValues(alpha: 0.8),
                         ),
                       ),
                     ),
@@ -776,32 +863,40 @@ class _PeerListingDetailScreenState
                   child: Padding(
                     padding: EdgeInsets.all(16),
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.accent),
+                      strokeWidth: 2,
+                      color: AppTheme.accent,
+                    ),
                   ),
                 )
               else if (bookings.isEmpty)
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 24,
+                    horizontal: 16,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.elevationColor(context, 2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     children: [
-                      Icon(LucideIcons.inbox,
-                          size: 32,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.15)),
+                      Icon(
+                        LucideIcons.inbox,
+                        size: 32,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.15,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'No bookings yet',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.35),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.35,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -810,8 +905,9 @@ class _PeerListingDetailScreenState
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11,
-                          color:
-                              theme.colorScheme.onSurface.withOpacity(0.25),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.25,
+                          ),
                         ),
                       ),
                     ],
@@ -863,7 +959,7 @@ class _PeerListingDetailScreenState
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
           ],
@@ -887,9 +983,9 @@ class _PeerListingDetailScreenState
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: c.withOpacity(0.08),
+            color: c.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: c.withOpacity(0.15)),
+            border: Border.all(color: c.withValues(alpha: 0.15)),
           ),
           child: Column(
             children: [
@@ -933,7 +1029,7 @@ class _PeerListingDetailScreenState
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Center(
@@ -957,7 +1053,7 @@ class _PeerListingDetailScreenState
                   '${_formatDate(booking.startDate)} → ${_formatDate(booking.endDate)}  •  ${booking.nights} night${booking.nights > 1 ? 's' : ''}',
                   style: TextStyle(
                     fontSize: 11,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                   ),
                 ),
               ],
@@ -966,7 +1062,7 @@ class _PeerListingDetailScreenState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -1032,7 +1128,9 @@ class _PeerListingDetailScreenState
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Listing ${newStatus == 'active' ? 'activated' : 'paused'}'),
+          content: Text(
+            'Listing ${newStatus == 'active' ? 'activated' : 'paused'}',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1049,8 +1147,14 @@ class _PeerListingDetailScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionLabel(theme,
-              _isHotel ? 'Book this hotel' : _isStay ? 'Book this stay' : 'Rent this car'),
+          _sectionLabel(
+            theme,
+            _isHotel
+                ? 'Book this hotel'
+                : _isStay
+                ? 'Book this stay'
+                : 'Rent this car',
+          ),
           const SizedBox(height: 14),
 
           // Date pickers
@@ -1060,15 +1164,19 @@ class _PeerListingDetailScreenState
                 child: _dateButton(
                   theme,
                   label: (_isStay || _isHotel) ? 'Check-in' : 'Pick-up',
-                  value: _startDate != null ? _formatDate(_startDate!) : 'Select',
+                  value: _startDate != null
+                      ? _formatDate(_startDate!)
+                      : 'Select',
                   onTap: _pickStartDate,
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Icon(LucideIcons.arrowRight,
-                    size: 16,
-                    color: theme.colorScheme.onSurface.withOpacity(0.3)),
+                child: Icon(
+                  LucideIcons.arrowRight,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                ),
               ),
               Expanded(
                 child: _dateButton(
@@ -1132,7 +1240,9 @@ class _PeerListingDetailScreenState
                     theme,
                     'Total',
                     CurrencyHelper.formatLocalPrice(
-                        _totalPrice, listing.countryCode),
+                      _totalPrice,
+                      listing.countryCode,
+                    ),
                     isBold: true,
                   ),
                 ],
@@ -1149,10 +1259,11 @@ class _PeerListingDetailScreenState
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accent,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: AppTheme.accent.withOpacity(0.3),
+                disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.3),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 elevation: 0,
               ),
               child: _isBooking
@@ -1165,7 +1276,9 @@ class _PeerListingDetailScreenState
                       ),
                     )
                   : Text(
-                      _isHotel || _isStay ? 'Request to Book' : 'Request to Rent',
+                      _isHotel || _isStay
+                          ? 'Request to Book'
+                          : 'Request to Rent',
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -1213,14 +1326,17 @@ class _PeerListingDetailScreenState
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(LucideIcons.calendar,
-                    size: 14, color: AppTheme.accent),
+                const Icon(
+                  LucideIcons.calendar,
+                  size: 14,
+                  color: AppTheme.accent,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   value,
@@ -1228,7 +1344,7 @@ class _PeerListingDetailScreenState
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: value == 'Select'
-                        ? theme.colorScheme.onSurface.withOpacity(0.4)
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
                         : theme.colorScheme.onSurface,
                   ),
                 ),
@@ -1240,8 +1356,12 @@ class _PeerListingDetailScreenState
     );
   }
 
-  Widget _priceRow(ThemeData theme, String label, String value,
-      {bool isBold = false}) {
+  Widget _priceRow(
+    ThemeData theme,
+    String label,
+    String value, {
+    bool isBold = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1252,7 +1372,7 @@ class _PeerListingDetailScreenState
             fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
             color: isBold
                 ? theme.colorScheme.onSurface
-                : theme.colorScheme.onSurface.withOpacity(0.6),
+                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
         Text(
@@ -1262,7 +1382,7 @@ class _PeerListingDetailScreenState
             fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
             color: isBold
                 ? AppTheme.accent
-                : theme.colorScheme.onSurface.withOpacity(0.6),
+                : theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
       ],
@@ -1291,34 +1411,41 @@ class _PeerListingDetailScreenState
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: items!
-                  .map((a) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.elevationColor(context, 2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_isHotel) ...[
-                              Icon(_amenityIcon(a),
-                                  size: 12,
-                                  color: AppTheme.accent.withOpacity(0.6)),
-                              const SizedBox(width: 6),
-                            ],
-                            Text(
-                              a,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.onSurface
-                                    .withOpacity(0.6),
+              children: items
+                  .map(
+                    (a) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.elevationColor(context, 2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_isHotel) ...[
+                            Icon(
+                              _amenityIcon(a),
+                              size: 12,
+                              color: AppTheme.accent.withValues(alpha: 0.6),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            a,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
                               ),
                             ),
-                          ],
-                        ),
-                      ))
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                   .toList(),
             )
           else
@@ -1329,14 +1456,13 @@ class _PeerListingDetailScreenState
               style: TextStyle(
                 fontSize: 13,
                 fontStyle: FontStyle.italic,
-                color: theme.colorScheme.onSurface.withOpacity(0.35),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
               ),
             ),
         ],
       ),
     );
   }
-
 
   // ─── Hero image carousel (SliverAppBar) ──────────────────────────
 
@@ -1353,10 +1479,10 @@ class _PeerListingDetailScreenState
                 _isHotel
                     ? LucideIcons.hotel
                     : _isCar
-                        ? LucideIcons.car
-                        : LucideIcons.home,
+                    ? LucideIcons.car
+                    : LucideIcons.home,
                 size: 56,
-                color: AppTheme.accent.withOpacity(0.25),
+                color: AppTheme.accent.withValues(alpha: 0.25),
               ),
               const SizedBox(height: 12),
               Text(
@@ -1364,7 +1490,7 @@ class _PeerListingDetailScreenState
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: theme.colorScheme.onSurface.withOpacity(0.3),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
                 ),
               ),
             ],
@@ -1385,25 +1511,32 @@ class _PeerListingDetailScreenState
             imageUrl: listing.photos[i],
             fit: BoxFit.cover,
             width: double.infinity,
-            placeholder: (_, __) => Container(
+            placeholder: (_, _) => Container(
               color: AppTheme.elevationColor(context, 2),
               child: const Center(
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: AppTheme.accent),
+                  strokeWidth: 2,
+                  color: AppTheme.accent,
+                ),
               ),
             ),
-            errorWidget: (_, __, ___) => Container(
-              color: AppTheme.accent.withOpacity(0.08),
+            errorWidget: (_, _, _) => Container(
+              color: AppTheme.accent.withValues(alpha: 0.08),
               child: const Center(
-                child: Icon(LucideIcons.imageOff,
-                    size: 40, color: AppTheme.accent),
+                child: Icon(
+                  LucideIcons.imageOff,
+                  size: 40,
+                  color: AppTheme.accent,
+                ),
               ),
             ),
           ),
         ),
         // Bottom gradient for readability
         Positioned(
-          bottom: 0, left: 0, right: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
           height: 120,
           child: Container(
             decoration: BoxDecoration(
@@ -1412,7 +1545,7 @@ class _PeerListingDetailScreenState
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withOpacity(0.6),
+                  Colors.black.withValues(alpha: 0.6),
                 ],
               ),
             ),
@@ -1436,7 +1569,7 @@ class _PeerListingDetailScreenState
                   decoration: BoxDecoration(
                     color: i == _currentImageIndex
                         ? Colors.white
-                        : Colors.white.withOpacity(0.4),
+                        : Colors.white.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -1451,13 +1584,17 @@ class _PeerListingDetailScreenState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(LucideIcons.image, size: 12, color: Colors.white70),
+                  const Icon(
+                    LucideIcons.image,
+                    size: 12,
+                    color: Colors.white70,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     '${_currentImageIndex + 1}/${listing.photos.length}',
@@ -1480,8 +1617,8 @@ class _PeerListingDetailScreenState
   Widget _buildHotelDetails(ThemeData theme, PeerListing listing) {
     // API hotels store dates in checkInTime/checkOutTime,
     // community hotels store actual times (e.g. "15:00").
-    final isTimeFormat = listing.checkInTime != null &&
-        !listing.checkInTime!.contains('-');
+    final isTimeFormat =
+        listing.checkInTime != null && !listing.checkInTime!.contains('-');
 
     return Column(
       children: [
@@ -1495,37 +1632,63 @@ class _PeerListingDetailScreenState
               const SizedBox(height: 12),
               // Star rating row
               if (listing.starRating != null && listing.starRating! > 0)
-                _hotelInfoRow(theme, LucideIcons.star, 'Rating',
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(
-                        listing.starRating!,
-                        (_) => const Padding(
-                          padding: EdgeInsets.only(right: 2),
-                          child: Icon(LucideIcons.star,
-                              size: 14, color: Colors.amber),
+                _hotelInfoRow(
+                  theme,
+                  LucideIcons.star,
+                  'Rating',
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      listing.starRating!,
+                      (_) => const Padding(
+                        padding: EdgeInsets.only(right: 2),
+                        child: Icon(
+                          LucideIcons.star,
+                          size: 14,
+                          color: Colors.amber,
                         ),
                       ),
-                    )),
+                    ),
+                  ),
+                ),
               // Category — skip for API hotels since chain name
               // already appears in the "Managed by" host section.
               if (listing.hotelCategory != null && !_isApiHotel)
                 _hotelInfoRowText(
-                    theme, LucideIcons.tag, 'Category', listing.hotelCategory!),
+                  theme,
+                  LucideIcons.tag,
+                  'Category',
+                  listing.hotelCategory!,
+                ),
               if (listing.beds != null)
-                _hotelInfoRowText(theme, LucideIcons.bedDouble,
-                    _isApiHotel ? 'Beds' : 'Rooms',
-                    '${listing.beds} ${listing.beds! > 1 ? (_isApiHotel ? 'beds' : 'rooms') : (_isApiHotel ? 'bed' : 'room')}'),
+                _hotelInfoRowText(
+                  theme,
+                  LucideIcons.bedDouble,
+                  _isApiHotel ? 'Beds' : 'Rooms',
+                  '${listing.beds} ${listing.beds! > 1 ? (_isApiHotel ? 'beds' : 'rooms') : (_isApiHotel ? 'bed' : 'room')}',
+                ),
               if (listing.maxGuests != null)
-                _hotelInfoRowText(theme, LucideIcons.users, 'Max Guests',
-                    '${listing.maxGuests}'),
+                _hotelInfoRowText(
+                  theme,
+                  LucideIcons.users,
+                  'Max Guests',
+                  '${listing.maxGuests}',
+                ),
               // Check-in/out — times for community, dates for API
               if (listing.checkInTime != null && isTimeFormat)
                 _hotelInfoRowText(
-                    theme, LucideIcons.logIn, 'Check-in', listing.checkInTime!),
+                  theme,
+                  LucideIcons.logIn,
+                  'Check-in',
+                  listing.checkInTime!,
+                ),
               if (listing.checkOutTime != null && isTimeFormat)
-                _hotelInfoRowText(theme, LucideIcons.logOut, 'Check-out',
-                    listing.checkOutTime!),
+                _hotelInfoRowText(
+                  theme,
+                  LucideIcons.logOut,
+                  'Check-out',
+                  listing.checkOutTime!,
+                ),
             ],
           ),
         ),
@@ -1535,39 +1698,58 @@ class _PeerListingDetailScreenState
   }
 
   Widget _hotelInfoRow(
-      ThemeData theme, IconData icon, String label, Widget trailing) {
+    ThemeData theme,
+    IconData icon,
+    String label,
+    Widget trailing,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Icon(icon, size: 16,
-              color: theme.colorScheme.onSurface.withOpacity(0.4)),
+          Icon(
+            icon,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
           const SizedBox(width: 10),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6))),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
           const SizedBox(width: 12),
-          Flexible(child: Align(alignment: Alignment.centerRight, child: trailing)),
+          Flexible(
+            child: Align(alignment: Alignment.centerRight, child: trailing),
+          ),
         ],
       ),
     );
   }
 
   Widget _hotelInfoRowText(
-      ThemeData theme, IconData icon, String label, String value) {
+    ThemeData theme,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return _hotelInfoRow(
       theme,
       icon,
       label,
-      Text(value,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.end,
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface)),
+      Text(
+        value,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.end,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: theme.colorScheme.onSurface,
+        ),
+      ),
     );
   }
 

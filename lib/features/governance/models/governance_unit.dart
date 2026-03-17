@@ -11,9 +11,9 @@ class GovernanceUnit {
   final String? walletAddress;
   final List<String> signers;
   final List<String> councilMembers;
-  final List<String> candidateIds; // [LEGACY] Users who registered as candidates
-  final Map<String, String>
-  councilRoles; // userId -> role (President, etc)
+  final List<String>
+  candidateIds; // [LEGACY] Users who registered as candidates
+  final Map<String, String> councilRoles; // userId -> role (President, etc)
   final Map<String, List<String>>
   roleCandidates; // [NEW] role -> [userId1, userId2] — candidates per role
   final int requiredSignatures;
@@ -50,13 +50,18 @@ class GovernanceUnit {
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? 'Unknown Unit',
       communityId: json['communityId'] as String?,
-      level: GovernanceLevel.values[json['level'] as int? ?? 0],
-      type: GovernanceType.values[json['type'] as int? ?? 0],
+      level: _parseGovernanceLevel(json['level']),
+      type: _parseGovernanceType(json['type']),
       walletAddress: json['walletAddress'] as String?,
       signers: (json['signers'] as List<dynamic>?)?.cast<String>() ?? [],
-      councilMembers: (json['councilMembers'] as List<dynamic>?)?.cast<String>() ?? [],
-      candidateIds: (json['candidateIds'] as List<dynamic>?)?.cast<String>() ?? [],
-      councilRoles: (json['councilRoles'] as Map<dynamic, dynamic>?)?.cast<String, String>() ?? {},
+      councilMembers:
+          (json['councilMembers'] as List<dynamic>?)?.cast<String>() ?? [],
+      candidateIds:
+          (json['candidateIds'] as List<dynamic>?)?.cast<String>() ?? [],
+      councilRoles:
+          (json['councilRoles'] as Map<dynamic, dynamic>?)
+              ?.cast<String, String>() ??
+          {},
       roleCandidates: _parseRoleCandidates(json['roleCandidates']),
       requiredSignatures: json['requiredSignatures'] as int? ?? 3,
       totalPillars: json['totalPillars'] as int? ?? 0,
@@ -153,5 +158,37 @@ class GovernanceUnit {
       final value = (v as List<dynamic>?)?.cast<String>() ?? [];
       return MapEntry(key, value);
     });
+  }
+
+  /// Parse [GovernanceLevel] from either an int index or a string name.
+  static GovernanceLevel _parseGovernanceLevel(dynamic raw) {
+    if (raw is int) {
+      return (raw >= 0 && raw < GovernanceLevel.values.length)
+          ? GovernanceLevel.values[raw]
+          : GovernanceLevel.local;
+    }
+    if (raw is String) {
+      return GovernanceLevel.values.firstWhere(
+        (e) => e.name == raw,
+        orElse: () => GovernanceLevel.local,
+      );
+    }
+    return GovernanceLevel.local;
+  }
+
+  /// Parse [GovernanceType] from either an int index or a string name.
+  static GovernanceType _parseGovernanceType(dynamic raw) {
+    if (raw is int) {
+      return (raw >= 0 && raw < GovernanceType.values.length)
+          ? GovernanceType.values[raw]
+          : GovernanceType.local;
+    }
+    if (raw is String) {
+      return GovernanceType.values.firstWhere(
+        (e) => e.name == raw,
+        orElse: () => GovernanceType.local,
+      );
+    }
+    return GovernanceType.local;
   }
 }

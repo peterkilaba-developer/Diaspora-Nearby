@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Whitepaper — Diaspora Nearby</title>
+    <meta name="description" content="The comprehensive $DIASPORA token whitepaper. Covers tokenomics, smart contracts, valuation model, epoch scaling, governance, and the team behind Diaspora Nearby.">
+    <link rel="canonical" href="https://diasporanearby.com/whitepaper">
+    <meta property="og:title" content="Token Whitepaper — Diaspora Nearby">
+    <meta property="og:description" content="Everything you need to know about the $DIASPORA token: architecture, economics, valuation, and governance.">
+    <meta property="og:image" content="https://diasporanearby.com/images/og-share-card.png">
+    <meta property="og:url" content="https://diasporanearby.com/whitepaper">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Microsoft Clarity Analytics -->
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "vwwrhkj22s");
+    </script>
+    <link rel="stylesheet" href="styles.css?v=20260312nav3">
+    <style>
+        html,body{overflow-x:hidden;}
+        .wp-toc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 32px;margin-bottom:40px;}
+        .wp-toc h3{font-size:14px;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-muted);margin-bottom:12px;}
+        .wp-toc ol{padding-left:20px;columns:2;column-gap:32px;}
+        .wp-toc li{font-size:14px;margin-bottom:8px;break-inside:avoid;}
+        .wp-toc a{color:var(--fg);text-decoration:none;transition:color 0.2s;}
+        .wp-toc a:hover{color:var(--orange);}
+
+        .wp-section{margin-bottom:56px;}
+        .wp-section h2{font-size:clamp(1.3rem,3vw,1.8rem);font-weight:800;margin-bottom:8px;scroll-margin-top:80px;}
+        .wp-section h3{font-size:1.1rem;font-weight:700;margin-top:24px;margin-bottom:8px;color:var(--orange);}
+        .wp-section p,.wp-section li{color:var(--fg-muted);line-height:1.8;font-size:15px;}
+        .wp-section ul,.wp-section ol{padding-left:20px;margin-bottom:12px;}
+        .wp-section li{margin-bottom:6px;}
+
+        .wp-hero{padding:120px 0 48px;text-align:center;}
+        .wp-hero .section-label{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;}
+        .wp-hero h1{font-size:clamp(2rem,5vw,3rem);font-weight:800;margin-bottom:16px;}
+        .wp-hero p{max-width:700px;margin:0 auto;color:var(--fg-muted);font-size:16px;line-height:1.7;}
+        .wp-hero .wp-meta{display:flex;justify-content:center;gap:24px;margin-top:24px;flex-wrap:wrap;}
+        .wp-hero .wp-meta-item{font-size:13px;color:var(--fg-muted);display:flex;align-items:center;gap:6px;}
+
+        .wp-body{max-width:860px;margin:0 auto;padding:0 24px 60px;}
+
+        .highlight-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px 24px;margin:16px 0;}
+        .highlight-box.orange-border{border-left:3px solid var(--orange);}
+        .highlight-box.sage-border{border-left:3px solid var(--sage);}
+        .highlight-box p{margin:0;}
+        .highlight-box strong{color:var(--fg);}
+
+        .wp-formula{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 20px;text-align:center;font-family:'Inter',monospace;font-size:18px;font-weight:700;color:var(--orange);margin:16px 0;word-break:break-word;overflow-wrap:break-word;}
+        @media(max-width:640px){.wp-formula{font-size:13px;padding:12px 14px;}}
+
+        .wp-epoch-table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;}
+        .wp-epoch-table th{background:var(--surface);color:var(--fg);font-weight:700;text-align:left;padding:12px 16px;border-bottom:2px solid var(--border-strong);}
+        .wp-epoch-table td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--fg-muted);}
+        .wp-epoch-table tr.active-row{background:rgba(229,147,58,0.08);}
+        .wp-epoch-table tr.active-row td{color:var(--fg);}
+        @media(max-width:640px){.wp-epoch-table{font-size:12px;}.wp-epoch-table th,.wp-epoch-table td{padding:8px 10px;}}
+
+        .wp-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:16px 0;}
+        .wp-table-scroll .wp-epoch-table{margin:0;}
+
+        .wp-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0;}
+        @media(max-width:640px){.wp-grid-2{grid-template-columns:1fr;}.wp-toc ol{columns:1;}}
+
+        .wp-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;text-align:center;}
+        .wp-stat-card .value{font-size:24px;font-weight:800;color:var(--orange);}
+        .wp-stat-card .label{font-size:12px;color:var(--fg-muted);margin-top:4px;}
+
+        .wp-epoch-table{width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;}
+        .wp-epoch-table th{text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);border-bottom:2px solid var(--border);font-weight:600;}
+        .wp-epoch-table td{padding:10px 12px;border-bottom:1px solid var(--border);}
+        .wp-epoch-table tr:last-child td{border-bottom:none;}
+        .wp-epoch-table .active-row{background:rgba(103,150,110,0.08);}
+
+        .wp-dist-bar{display:flex;border-radius:8px;overflow:hidden;height:32px;margin:16px 0;}
+        .wp-dist-bar .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;}
+
+        .wp-legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+        .wp-legend-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg-muted);}
+        .wp-legend-item .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+    </style>
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav class="nav" id="nav">
+        <div class="container nav-inner">
+            <a href="/" class="nav-logo">
+                <img src="icons/token-logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
+                Diaspora Nearby
+            </a>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                <i data-lucide="menu"></i>
+            </button>
+            <ul class="nav-links" id="nav-links">
+                <li><a href="/#social">Community</a></li>
+                <li><a href="/#economy">Economy</a></li>
+                <li><a href="/#treasuries">Treasuries</a></li>
+                <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
+                <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
+                <li><a href="https://app.diasporanearby.com" class="nav-cta">Open App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="wp-hero">
+        <div class="container">
+            <div class="section-label orange"><i data-lucide="file-text" style="width:14px;height:14px"></i> Token Whitepaper</div>
+            <h1>The <span class="accent-orange">$DIASPORA</span> Token</h1>
+            <p>
+                A comprehensive overview of the world's first Reputation-to-Asset Engine — covering tokenomics, 
+                smart contracts, the dynamic valuation model, epoch-based scaling, governance, and the team building it.
+            </p>
+            <div class="wp-meta">
+                <div class="wp-meta-item"><i data-lucide="calendar" style="width:14px;height:14px"></i> Last Updated: March 12, 2026</div>
+                <div class="wp-meta-item"><i data-lucide="layers" style="width:14px;height:14px"></i> Version 1.0</div>
+                <div class="wp-meta-item"><i data-lucide="shield-check" style="width:14px;height:14px"></i> Base Mainnet (Chain ID: 8453)</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BODY -->
+    <div class="wp-body">
+
+        <!-- Table of Contents -->
+        <nav class="wp-toc">
+            <h3>Table of Contents</h3>
+            <ol>
+                <li><a href="#abstract">Abstract</a></li>
+                <li><a href="#token-identity">Token Identity</a></li>
+                <li><a href="#dsp-vs-diaspora">DSP vs $DIASPORA</a></li>
+                <li><a href="#earning-model">How You Earn</a></li>
+                <li><a href="#distribution">Token Distribution Model</a></li>
+                <li><a href="#epoch-scaling">Epoch Scaling & TGE</a></li>
+                <li><a href="#valuation">Dynamic Valuation Model</a></li>
+                <li><a href="#smart-contracts">Smart Contracts</a></li>
+                <li><a href="#security">Security Architecture</a></li>
+                <li><a href="#transparency">Transparency & Verification</a></li>
+                <li><a href="#governance">Community Governance</a></li>
+                <li><a href="#liquidity">Liquidity Treasury</a></li>
+                <li><a href="#team">Team</a></li>
+                <li><a href="#legal">Legal Disclaimer</a></li>
+            </ol>
+        </nav>
+
+        <!-- 1. Abstract -->
+        <div class="wp-section" id="abstract">
+            <h2>1. Abstract</h2>
+            <p>
+                Diaspora Nearby is the world's first <strong>Reputation-to-Asset Engine</strong> — a platform that converts 
+                social capital and community participation into liquid, on-chain assets. The $DIASPORA token (ERC-20 on Base Mainnet) 
+                represents the economic layer of a social network purpose-built for the global diaspora community.
+            </p>
+            <p>
+                Unlike traditional tokens that are purchased, $DIASPORA is primarily <strong>earned</strong> through daily social activity — 
+                making it one of the few tokens whose value is directly derived from genuine human engagement rather than speculation.
+            </p>
+            <div class="highlight-box orange-border">
+                <p><strong>Core Thesis:</strong> Every connection you build and every trust you earn is minting your future liquid assets. 
+                The community controls the value through real economic activity.</p>
+            </div>
+        </div>
+
+        <!-- 2. Token Identity -->
+        <div class="wp-section" id="token-identity">
+            <h2>2. Token Identity</h2>
+            <div class="wp-grid-2">
+                <div class="wp-stat-card">
+                    <div class="value">$DIASPORA</div>
+                    <div class="label">Token Symbol</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">Base</div>
+                    <div class="label">Blockchain (Coinbase L2)</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">1 Quadrillion</div>
+                    <div class="label">Hard Cap (1,000,000,000,000,000)</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">ERC-20</div>
+                    <div class="label">Standard + ERC-20Permit · UUPS Proxy</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">18</div>
+                    <div class="label">Decimals</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">$0</div>
+                    <div class="label">Transaction Fees (Gasless)</div>
+                </div>
+            </div>
+            <p>
+                $DIASPORA is a <strong>utility token</strong> used within the Diaspora Nearby platform. 
+                The primary method of token distribution is community participation through the epoch-based TGE (Token Generation Event) system.
+                A Liquidity Treasury allocates 5% of total epoch supply to provide DEX liquidity for open market access.
+                There is no public sale, ICO, or IEO.
+            </p>
+        </div>
+
+        <!-- 3. DSP vs $DIASPORA -->
+        <div class="wp-section" id="dsp-vs-diaspora">
+            <h2>3. DSP vs $DIASPORA — Two Systems, One Journey</h2>
+            <p>
+                DSP (Diaspora Social Points) and $DIASPORA are intentionally <strong>decoupled</strong>. Understanding the difference 
+                is essential to understanding the economic model.
+            </p>
+
+            <h3>Diaspora Social Points (DSP)</h3>
+            <ul>
+                <li><strong>Off-chain</strong> reputation score stored in Firestore</li>
+                <li>Earned through daily social activity (verifying, vouching, messaging, transacting)</li>
+                <li>Tracks your social contribution to the community</li>
+                <li>Accumulates until the next TGE milestone is triggered</li>
+                <li>1:1 matching — for every 1 DSP earned, another 1 DSP is created for distribution</li>
+            </ul>
+
+            <h3>$DIASPORA Token</h3>
+            <ul>
+                <li><strong>On-chain</strong> ERC-20 on Base Mainnet — a real, liquid asset you own</li>
+                <li>Pre-minted and locked per epoch by the TGE Controller contract</li>
+                <li>Conversion rate at TGE depends on your PoCT (Proof of Community Trust) score</li>
+                <li>Fully verifiable on <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank" rel="noopener" style="color:var(--orange);">Basescan</a></li>
+                <li>Burns are permanent — sent to address zero, verifiable on-chain</li>
+            </ul>
+
+            <div class="highlight-box sage-border">
+                <p><strong>TGE Conversion:</strong> When the community reaches the epoch milestone (verified user count), 
+                all accumulated off-chain DSP points convert into liquid $DIASPORA tokens at your PoCT efficiency rate.</p>
+            </div>
+        </div>
+
+        <!-- 4. How You Earn -->
+        <div class="wp-section" id="earning-model">
+            <h2>4. How You Earn DSP</h2>
+            <p>
+                DSP is earned through <strong>Proof of Activity</strong> — genuine social actions within the Diaspora Nearby platform. 
+                There is no way to buy DSP. Every point reflects actual community contribution.
+            </p>
+            <div class="wp-table-scroll">
+            <table class="wp-epoch-table">
+                <tr><th>Activity</th><th>Reward</th></tr>
+                <tr><td>Welcome Bonus</td><td><strong>+1,000 DSP</strong></td></tr>
+                <tr><td>Complete Profile</td><td><strong>+10,000 DSP</strong></td></tr>
+                <tr><td>Refer a Friend</td><td><strong>+1,000 DSP each</strong></td></tr>
+                <tr><td>QR Identity Exchange</td><td><strong>+1,000 DSP</strong></td></tr>
+                <tr><td>Family Connection</td><td><strong>+1,000 DSP</strong></td></tr>
+                <tr><td>Verify a Profile</td><td><strong>+1,000 DSP</strong></td></tr>
+                <tr><td>Vouch for Trust</td><td><strong>+1,000 DSP</strong></td></tr>
+                <tr><td>Community Event</td><td><strong>+1,000 DSP</strong></td></tr>
+                <tr><td>Host a Traveler</td><td><strong>+1,000 DSP each</strong></td></tr>
+                <tr><td>Economy Transaction</td><td><strong>$1 = 1 DSP</strong></td></tr>
+            </table>
+            </div>
+        </div>
+
+        <!-- 5. Token Distribution -->
+        <div class="wp-section" id="distribution">
+            <h2>5. Token Distribution Model — 1:1 Matching Expansion</h2>
+            <p>
+                For every <strong>1 DSP</strong> earned by a user, the protocol creates a <strong>matching 1 DSP</strong> — 
+                distributed across 10 equal slots. This ensures that community value creation simultaneously funds all ecosystem layers.
+            </p>
+
+            <div class="wp-dist-bar">
+                <div class="seg" style="flex:70;background:var(--sage);">70%</div>
+                <div class="seg" style="flex:10;background:#5c6bc0;">10%</div>
+                <div class="seg" style="flex:10;background:#7e57c2;">10%</div>
+                <div class="seg" style="flex:10;background:#ef5350;">10%</div>
+            </div>
+            <div class="wp-legend">
+                <div class="wp-legend-item"><div class="dot" style="background:var(--sage)"></div> Community Treasuries — 7 slots × 10%</div>
+                <div class="wp-legend-item"><div class="dot" style="background:#5c6bc0"></div> Founders & Development (10%)</div>
+                <div class="wp-legend-item"><div class="dot" style="background:#7e57c2"></div> Liquidity Treasury (10%)</div>
+                <div class="wp-legend-item"><div class="dot" style="background:#ef5350"></div> Permanent Burn (10%)</div>
+            </div>
+
+            <h3>Community Treasury Distribution (70%)</h3>
+            <p>
+                The 70% Community Treasuries allocation flows into <strong>7 treasury slots</strong> across the user's geographic hierarchy:
+            </p>
+            <ul>
+                <li><strong>Global Fund Reserve</strong> — shared across all users globally</li>
+                <li><strong>Home Continent</strong> — user's country of origin continent</li>
+                <li><strong>Home Country</strong> — user's country of origin</li>
+                <li><strong>Home City</strong> — user's city of origin</li>
+                <li><strong>Host Continent</strong> — where user currently lives</li>
+                <li><strong>Host Country</strong> — current country of residence</li>
+                <li><strong>Host City</strong> — current city of residence</li>
+            </ul>
+            <p>
+                These treasuries power <strong>Diaspora Direct Investments</strong> (DDI) — community-governed loans and investments 
+                that fund businesses, large infrastructure projects, and economic development in both home and host communities.
+            </p>
+        </div>
+
+        <!-- 6. Epoch Scaling -->
+        <div class="wp-section" id="epoch-scaling">
+            <h2>6. Epoch Scaling & Token Generation Events</h2>
+            <p>
+                The $DIASPORA ecosystem follows a <strong>10-epoch scaling model</strong>. Each epoch represents a 10x growth milestone 
+                in verified community members. When the community reaches an epoch's milestone, a Token Generation Event (TGE) converts 
+                all accumulated DSP into liquid $DIASPORA tokens.
+            </p>
+
+            <div class="wp-table-scroll">
+            <table class="wp-epoch-table">
+                <tr><th>Epoch</th><th>Milestone</th><th>$DIASPORA Pre-Minted</th><th>Name</th></tr>
+                <tr class="active-row"><td><strong>1</strong></td><td>100 Verified</td><td>1,000,000</td><td>"Genesis Believer"</td></tr>
+                <tr><td>2</td><td>1,000</td><td>10,000,000</td><td>"Growth Partner"</td></tr>
+                <tr><td>3</td><td>10,000</td><td>100,000,000</td><td>"Scale Investor"</td></tr>
+                <tr><td>4</td><td>100,000</td><td>1,000,000,000</td><td>"Institutional Partner"</td></tr>
+                <tr><td>5</td><td>1,000,000</td><td>10,000,000,000</td><td>"Strategic Partner"</td></tr>
+                <tr><td>6</td><td>10,000,000</td><td>100,000,000,000</td><td>"Sovereign Fund"</td></tr>
+                <tr><td>7</td><td>100,000,000</td><td>1,000,000,000,000</td><td>"Global Reserve"</td></tr>
+                <tr><td>8</td><td>1,000,000,000</td><td>10,000,000,000,000</td><td>"Planetary"</td></tr>
+                <tr><td>9</td><td>10,000,000,000</td><td>100,000,000,000,000</td><td>"Universal"</td></tr>
+                <tr><td>10</td><td>100,000,000,000</td><td>1,000,000,000,000,000</td><td>"Infinite"</td></tr>
+            </table>
+            </div>
+
+            <div class="highlight-box orange-border">
+                <p><strong>Why 10x scaling?</strong> Each epoch requires 10x more verified humans than the last. This creates an 
+                exponential growth curve where early participants earn at the lowest difficulty, rewarding founding believers.</p>
+            </div>
+        </div>
+
+        <!-- 7. Valuation Model -->
+        <div class="wp-section" id="valuation">
+            <h2>7. Dynamic Valuation Model</h2>
+            <p>
+                $DIASPORA's value is <strong>not speculative</strong> — it's anchored to real economic activity. The implied token price 
+                is determined by a multi-factor model that considers network effects, deflation, epoch progression, and fiat GDP.
+            </p>
+
+            <h3>Pre-TGE Implied Pricing Formula</h3>
+            <div class="wp-formula">
+                Implied Price = Base × (1 + NetworkFactor) × (1 + DeflationFactor) × EpochMultiplier × (1 + GDPFactor)
+            </div>
+
+            <h3>Factor Breakdown</h3>
+            <ul>
+                <li><strong>Network Factor (N):</strong> Based on Metcalfe's Law — value scales with the square of the user count, 
+                normalized to a 0–3 range. More users = exponentially higher value.</li>
+                <li><strong>Deflation Factor (D):</strong> Measures the burn ratio (totalBurned ÷ totalMinted). As more tokens are 
+                permanently burned, scarcity increases and the price floor rises.</li>
+                <li><strong>Epoch Multiplier (E):</strong> Each epoch compounds growth — Epoch 1 = 1x, Epoch 2 = 1.5x, Epoch 3 = 2.25x, etc.</li>
+                <li><strong>GDP Factor (G):</strong> Actual fiat GDP processed through the platform. Every flight booked, product sold, 
+                and service hired adds real fiat value to the floor. Formula: <code>$1 fiat GDP = $0.0001 per DSP boost</code>.</li>
+            </ul>
+
+            <h3>Floor Price</h3>
+            <div class="wp-formula">
+                Floor Price = Total Fiat GDP ÷ Circulating Supply
+            </div>
+            <p>
+                This floor price ensures that $DIASPORA always has a minimum value anchored to real economic activity on the platform, 
+                not market speculation.
+            </p>
+        </div>
+
+        <!-- 8. Smart Contracts -->
+        <div class="wp-section" id="smart-contracts">
+            <h2>8. Smart Contracts (Base Mainnet)</h2>
+            <p>
+                All contracts are deployed on <strong>Base Mainnet</strong> (Coinbase L2, Chain ID: 8453). They are upgradeable 
+                via the UUPS proxy pattern and secured with OpenZeppelin role-based access control.
+            </p>
+
+            <div class="contract-box" style="margin-top:16px;">
+                <div class="contract-row">
+                    <span class="contract-label">Token (Proxy)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank" rel="noopener">
+                            0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">TGE Controller (Proxy)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED" target="_blank" rel="noopener">
+                            0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Network</span>
+                    <span class="contract-value neutral">Base Mainnet (Chain ID: 8453)</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Token Name / Symbol</span>
+                    <span class="contract-value">Diaspora / DIASPORA</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Decimals</span>
+                    <span class="contract-value neutral">18</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Hard Cap</span>
+                    <span class="contract-value">1,000,000,000,000,000 (1 Quadrillion)</span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Standard</span>
+                    <span class="contract-value neutral">ERC-20 + ERC-20Permit · UUPS Proxy</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 9. Security -->
+        <div class="wp-section" id="security">
+            <h2>9. Security Architecture</h2>
+            <div class="wp-grid-2">
+                <div class="wp-stat-card" style="text-align:left;">
+                    <h3 style="margin-top:0;font-size:15px;"><i data-lucide="lock-keyhole" style="width:16px;height:16px;color:var(--orange);vertical-align:middle;"></i> UUPS Proxy Pattern</h3>
+                    <p style="font-size:13px;color:var(--fg-muted);margin:8px 0 0;">Contracts are upgradeable via UUPS proxies with OpenZeppelin's battle-tested libraries, allowing bug fixes while preserving state.</p>
+                </div>
+                <div class="wp-stat-card" style="text-align:left;">
+                    <h3 style="margin-top:0;font-size:15px;"><i data-lucide="users" style="width:16px;height:16px;color:var(--orange);vertical-align:middle;"></i> Role-Based Access</h3>
+                    <p style="font-size:13px;color:var(--fg-muted);margin:8px 0 0;">Admin, Minter, Upgrader, and TGE Oracle roles are separated. No single key controls everything.</p>
+                </div>
+                <div class="wp-stat-card" style="text-align:left;">
+                    <h3 style="margin-top:0;font-size:15px;"><i data-lucide="search-check" style="width:16px;height:16px;color:var(--orange);vertical-align:middle;"></i> On-Chain Verification</h3>
+                    <p style="font-size:13px;color:var(--fg-muted);margin:8px 0 0;">All minting, locking, and distribution events are recorded on-chain. Anyone can verify on the blockchain.</p>
+                </div>
+                <div class="wp-stat-card" style="text-align:left;">
+                    <h3 style="margin-top:0;font-size:15px;"><i data-lucide="flame" style="width:16px;height:16px;color:var(--orange);vertical-align:middle;"></i> Immutable Burns</h3>
+                    <p style="font-size:13px;color:var(--fg-muted);margin:8px 0 0;">Burned tokens are sent to the zero address — permanently removed from circulation, verifiable on-chain.</p>
+                </div>
+            </div>
+
+            <h3>Smart Wallet Architecture</h3>
+            <p>
+                Users interact with the blockchain through <strong>non-custodial Smart Wallets</strong> based on Account Abstraction. 
+                These wallets are deterministically generated from phone numbers using CREATE2, enabling <strong>gasless transactions</strong> 
+                where the platform sponsors gas fees on behalf of users.
+            </p>
+        </div>
+
+        <!-- 10. Transparency -->
+        <div class="wp-section" id="transparency">
+            <h2>10. Transparency & Verification</h2>
+            <p>
+                $DIASPORA's value isn't speculative — it's anchored to real economic activity. The floor price is 
+                determined by actual Fiat GDP processed through the platform.
+            </p>
+
+            <div class="wp-grid-2" style="grid-template-columns:repeat(4,1fr);">
+                <div class="wp-stat-card">
+                    <div class="value">Base</div>
+                    <div class="label">Blockchain (Coinbase L2)</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">$0</div>
+                    <div class="label">Transaction Fees</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">10x</div>
+                    <div class="label">Epoch Growth Model</div>
+                </div>
+                <div class="wp-stat-card">
+                    <div class="value">10%</div>
+                    <div class="label">Fixed Burn Rate</div>
+                </div>
+            </div>
+
+            <div class="wp-formula">
+                Floor Price = Total Fiat GDP ÷ Circulating Supply
+            </div>
+            <p>
+                Every flight booked, product sold, and service hired adds real fiat value to the GDP floor. 
+                More activity = higher floor price. The community controls the value.
+            </p>
+
+            <h3>How to Verify</h3>
+            <ul>
+                <li><a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank" rel="noopener" style="color:var(--orange);">View Token on Basescan</a> — verify supply, holders, transfers</li>
+                <li><a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED" target="_blank" rel="noopener" style="color:var(--orange);">View TGE Controller on Basescan</a> — verify minting and locking events</li>
+                <li>All contract source code is verified and readable on Basescan</li>
+            </ul>
+        </div>
+
+        <!-- 11. Governance -->
+        <div class="wp-section" id="governance">
+            <h2>11. Community Governance</h2>
+            <p>
+                Governance in Diaspora Nearby is merit-based, not plutocratic. Only community members who meet strict 
+                eligibility requirements can participate in governance decisions.
+            </p>
+
+            <h3>Governance Eligibility</h3>
+            <ul>
+                <li><strong>100 days</strong> active participation minimum</li>
+                <li>Must be an <strong>admin of a 100+ member group</strong></li>
+                <li><strong>PoCT score ≥ 90</strong> (Proof of Community Trust)</li>
+                <li>Staking requirement: PoCT score must stay above 90</li>
+            </ul>
+
+            <h3>Governance Types</h3>
+            <ul>
+                <li><strong>Host Community DDI Loans:</strong> 51% vote required, 10-day window — for starting, expanding, or operating businesses</li>
+                <li><strong>Home Country Large Projects:</strong> 67% supermajority, 100-day window — for $1M+ capital expansions and infrastructure</li>
+            </ul>
+
+            <div class="highlight-box sage-border">
+                <p><strong>No Token Voting:</strong> Governance is based on reputation and community contribution, not token holdings. 
+                This prevents whale dominance and ensures decisions are made by active, trusted community members.</p>
+            </div>
+        </div>
+
+        <!-- 12. Liquidity Treasury -->
+        <div class="wp-section" id="liquidity">
+            <h2>12. Liquidity Treasury</h2>
+            <p>
+                The <strong>Liquidity Treasury</strong> allocates 5% of total epoch supply to provide DEX liquidity 
+                for the $DIASPORA ecosystem. Rather than private sales, SAFT offerings, or VC allocations, this approach 
+                gives everyone equal access to $DIASPORA on decentralized exchanges.
+            </p>
+
+            <h3>How It Works</h3>
+            <p>
+                Each epoch has 10 TGE milestones. At each milestone, the Liquidity Treasury releases tokens 
+                to the DEX pool with a decile conversion model — earlier releases provide higher conversion rates, 
+                creating natural price discovery.
+            </p>
+
+            <h3>Why Open Market Instead of Private Sales</h3>
+            <ul>
+                <li><strong>No VCs, no private rounds</strong> — anyone can access $DIASPORA on equal terms via DEX</li>
+                <li><strong>Only 5% of total epoch supply</strong> — a modest, controlled release</li>
+                <li><strong>Earned tokens stay held</strong> — users who earn through community participation tend to hold, 
+                creating natural scarcity and making the Liquidity Treasury a key accessible source</li>
+                <li><strong>No securities complexity</strong> — the Liquidity Treasury provides protocol-managed liquidity, 
+                not a securities offering</li>
+            </ul>
+
+            <div class="highlight-box sage-border">
+                <p><strong>Community-First:</strong> The Liquidity Treasury ensures that token access isn't gatekept by 
+                    accreditation requirements or minimum investment thresholds. Anyone, anywhere, can participate 
+                    through a decentralized exchange.</p>
+            </div>
+
+            <div style="text-align:center;margin-top:20px;">
+                <a href="/liquidity_treasury" class="btn btn-orange" style="font-size:16px;padding:14px 32px;">
+                    View Liquidity Treasury Details <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- 13. Team -->
+        <div class="wp-section" id="team">
+            <h2>13. Team</h2>
+            <p>Diaspora Nearby is built by diaspora members, for diaspora members.</p>
+            <div class="team-grid" style="margin-top:16px;">
+                <div class="team-card">
+                    <img src="images/peter-swai.jpg" alt="Peter Swai" class="team-avatar-img">
+                    <div class="team-info">
+                        <h3 style="color:var(--fg);margin-top:0;">Peter Swai</h3>
+                        <span class="role">Founder & Lead Developer</span>
+                        <p class="bio">Full-stack & blockchain developer. Building tools for the global diaspora.</p>
+                        <a href="https://www.linkedin.com/in/peter-swai" target="_blank" rel="noopener">
+                            <i data-lucide="linkedin" style="width:12px;height:12px"></i> LinkedIn
+                        </a>
+                        <a href="https://github.com/peterkilaba-developer" target="_blank" rel="noopener" style="margin-left:12px;">
+                            <i data-lucide="github" style="width:12px;height:12px"></i> GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 14. Legal -->
+        <div class="wp-section" id="legal">
+            <h2>14. Legal Disclaimer</h2>
+            <p>
+                $DIASPORA is a <strong>utility token</strong> used within the Diaspora Nearby platform.
+                The primary method of token distribution is community participation.
+                The Liquidity Treasury allocates a portion of epoch supply to provide DEX liquidity — it is not a securities offering.
+                There is no public sale, ICO, or IEO.
+            </p>
+            <p>
+                This whitepaper is for informational purposes only and does not constitute a prospectus, offering document, 
+                or solicitation for investment. The information provided is subject to change without notice.
+            </p>
+            <p>
+                Please refer to the <a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury page</a> 
+                for full details on the token distribution mechanism.
+            </p>
+        </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-inner">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <img src="icons/token-logo-transparent.png" alt="Diaspora Nearby" width="28" height="28">
+                        Diaspora Nearby
+                    </div>
+                    <p>The world's first Reputation-to-Asset Engine. Connecting diaspora communities globally with an
+                        earn-to-own social economy.</p>
+                </div>
+                <div class="footer-links">
+                    <h4>Platform</h4>
+                    <ul>
+                        <li><a href="https://app.diasporanearby.com">Web App</a></li>
+                        <li><a href="/#social">Community</a></li>
+                        <li><a href="/#economy">Economy</a></li>
+                        <li><a href="/#treasuries">Treasuries</a></li>
+                        <li><a href="/#governance">Governance</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Token</h4>
+                    <ul>
+                        <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
+                        <li><a href="/#decoupling">DSP vs $DIASPORA</a></li>
+                        <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
+                        <li><a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                                target="_blank" rel="noopener">Basescan <i data-lucide="external-link"
+                                    style="width:10px;height:10px;display:inline;vertical-align:middle"></i></a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="/privacy-policy">Privacy Policy</a></li>
+                        <li><a href="/terms-of-service">Terms of Service</a></li>
+                        <li><a href="mailto:support@diasporanearby.com">Support</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Diaspora Nearby. All rights reserved.</p>
+                <p class="disclaimer">
+                    $DIASPORA is a utility token used within the Diaspora Nearby platform.
+                    The primary method of token distribution is community participation. The Liquidity Treasury provides DEX liquidity — it is not a securities offering.
+                    There is no public sale, ICO, or IEO.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    lucide.createIcons();
+    // Smooth scroll for TOC links
+    document.querySelectorAll('.wp-toc a').forEach(a=>{
+        a.addEventListener('click',e=>{
+            e.preventDefault();
+            const target=document.querySelector(a.getAttribute('href'));
+            if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+        });
+    });
+    </script>
+    <script src="script.js?v=20260312nav"></script>
+</body>
+</html>

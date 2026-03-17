@@ -14,7 +14,6 @@ import 'package:geolocator/geolocator.dart'; // [NEW]
 @pragma('vm:entry-point')
 class BackgroundLocationService {
   static bool _isInitialized = false;
-  static const String _notificationChannelId = 'diaspora_location_channel';
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
@@ -34,7 +33,7 @@ class BackgroundLocationService {
           android: initializationSettingsAndroid,
           iOS: DarwinInitializationSettings(),
         );
-    await _notificationsPlugin.initialize(initializationSettings);
+    await _notificationsPlugin.initialize(settings: initializationSettings);
 
     // [FIX] Explicitly create the Notification Channel with HIGH importance
     const String newChannelId = 'diaspora_location_v2';
@@ -126,7 +125,7 @@ class BackgroundLocationService {
           const AndroidInitializationSettings('@mipmap/ic_launcher');
       final InitializationSettings initializationSettings =
           InitializationSettings(android: initializationSettingsAndroid);
-      await _notificationsPlugin.initialize(initializationSettings);
+      await _notificationsPlugin.initialize(settings: initializationSettings);
 
       // [DEBUG] Explicit startup log
       // No-log start logic

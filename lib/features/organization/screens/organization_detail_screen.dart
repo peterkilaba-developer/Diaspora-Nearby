@@ -277,7 +277,7 @@ class _OrganizationDetailScreenState
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      theme.colorScheme.primary.withOpacity(0.8),
+                      theme.colorScheme.primary.withValues(alpha: 0.8),
                       theme.colorScheme.primaryContainer,
                     ],
                   ),
@@ -444,11 +444,7 @@ class _OrganizationDetailScreenState
                     _buildInfoTile(
                       LucideIcons.mapPin,
                       'Location',
-                      [
-                        city,
-                        ?state,
-                        ?country,
-                      ].join(', '),
+                      [city, ?state, ?country].join(', '),
                       onTap: () => _openDirections(),
                     ),
 
@@ -494,7 +490,7 @@ class _OrganizationDetailScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: 20, color: theme.colorScheme.primary),
@@ -633,7 +629,9 @@ class _OrganizationDetailScreenState
               Icon(
                 LucideIcons.chevronRight,
                 size: 20,
-                color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.5,
+                ),
               ),
             ],
           ),
@@ -672,7 +670,7 @@ class _OrganizationDetailScreenState
               width: double.infinity,
               child: FilledButton(
                 onPressed: () => _handleEnableListing(),
-                child: const Text('Enable Specialized Listing (1,000 DSP)'),
+                child: const Text('Enable Specialized Listing'),
               ),
             ),
           ],
@@ -696,7 +694,7 @@ class _OrganizationDetailScreenState
                   // TODO: Navigate to products management
                 },
                 icon: const Icon(LucideIcons.plus, size: 16),
-                label: const Text('Add Item (100 DSP)'),
+                label: const Text('Add Item'),
               ),
           ],
         ),
@@ -726,7 +724,7 @@ class _OrganizationDetailScreenState
       builder: (ctx) => AlertDialog(
         title: const Text('Enable Specialized Listing?'),
         content: const Text(
-          'This will charge your account 1,000 DSP to enable a dedicated products and services page for your organization.',
+          'This will enable a dedicated products and services page for your organization.',
         ),
         actions: [
           TextButton(
@@ -735,7 +733,7 @@ class _OrganizationDetailScreenState
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enable (1,000 DSP)'),
+            child: const Text('Enable'),
           ),
         ],
       ),

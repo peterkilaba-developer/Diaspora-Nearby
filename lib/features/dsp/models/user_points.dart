@@ -6,6 +6,7 @@ class TgeDistributionRecord {
   final double amount;
   final double efficiency;
   final DateTime date;
+  final String? txHash; // On-chain transaction hash for Basescan
 
   TgeDistributionRecord({
     required this.epoch,
@@ -13,6 +14,7 @@ class TgeDistributionRecord {
     required this.amount,
     required this.efficiency,
     required this.date,
+    this.txHash,
   });
 
   factory TgeDistributionRecord.fromMap(Map<String, dynamic> map) {
@@ -22,6 +24,7 @@ class TgeDistributionRecord {
       amount: (map['amount'] as num? ?? 0).toDouble(),
       efficiency: (map['efficiency'] as num? ?? 0).toDouble(),
       date: _parseDateTime(map['date']) ?? DateTime.now(),
+      txHash: map['txHash'] as String?,
     );
   }
 
@@ -39,6 +42,7 @@ class TgeDistributionRecord {
       'amount': amount,
       'efficiency': efficiency,
       'date': date.toIso8601String(),
+      if (txHash != null) 'txHash': txHash,
     };
   }
 }

@@ -165,7 +165,9 @@ class _ShareChatSelectionScreenState
         flexibleSpace: ClipRRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(color: theme.colorScheme.surface.withValues(alpha: 0.8)),
+            child: Container(
+              color: theme.colorScheme.surface.withValues(alpha: 0.8),
+            ),
           ),
         ),
         title: _isSelectionMode
@@ -214,8 +216,9 @@ class _ShareChatSelectionScreenState
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.3),
+                fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
               ),
             ),
           ),
@@ -314,8 +317,8 @@ class _ShareChatSelectionScreenState
                                 border: Border.all(
                                   color: isSelected
                                       ? greenColor
-                                      : theme.colorScheme.outline.withValues(alpha: 
-                                          0.5,
+                                      : theme.colorScheme.outline.withValues(
+                                          alpha: 0.5,
                                         ),
                                   width: 2,
                                 ),

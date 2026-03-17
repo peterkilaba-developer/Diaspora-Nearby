@@ -26,6 +26,120 @@ enum NotificationType {
   /// DSP transfer received
   dspTransfer,
 
+  // ── Travel / Peer Bookings ──────────────────────────────────────────
+
+  /// Guest created a booking request for a host's listing
+  travelBookingRequest,
+
+  /// Host confirmed a booking request
+  travelBookingConfirmed,
+
+  /// Host declined a booking request
+  travelBookingDeclined,
+
+  /// Guest or host cancelled an existing booking
+  travelBookingCancelled,
+
+  /// Reminder 24h before a confirmed trip
+  travelTripReminder,
+
+  // ── Events ──────────────────────────────────────────────────────────
+
+  /// New event created in the user's community
+  eventNew,
+
+  /// Reminder before event start (24h / 1h)
+  eventReminder,
+
+  /// Organizer updated event details
+  eventUpdate,
+
+  /// Event the user joined was cancelled
+  eventCancelled,
+
+  /// Someone joined the organizer's event
+  eventNewAttendee,
+
+  // ── Governance / Elections ──────────────────────────────────────────
+
+  /// An election started in the user's community
+  electionStarted,
+
+  /// Election ending within 24h
+  electionEndingSoon,
+
+  /// Election results are available
+  electionResults,
+
+  // ── Marketplace ─────────────────────────────────────────────────────
+
+  /// Buyer inquired about seller's listing
+  marketplaceInquiry,
+
+  /// Listing the user saved changed status (sold, etc.)
+  marketplaceStatusChange,
+
+  /// Price drop on a saved listing
+  marketplacePriceDrop,
+
+  // ── Real Estate ─────────────────────────────────────────────────────
+
+  /// Buyer inquired about a real estate listing
+  realEstateInquiry,
+
+  /// New property matching user's saved search
+  realEstateMatch,
+
+  /// Price changed on a saved property
+  realEstatePriceChange,
+
+  /// Property status changed (sold / rented)
+  realEstateStatusChange,
+
+  // ── Trust & Verification ────────────────────────────────────────────
+
+  /// A peer verified the user's identity
+  trustPeerVerified,
+
+  /// A peer vouched for the user
+  trustPeerVouched,
+
+  /// A peer gave the user full trust (staked 100 DSP)
+  trustFullTrustReceived,
+
+  /// User reached a PoCT milestone (10, 100, 1K, etc.)
+  trustMilestone,
+
+  // ── Community ───────────────────────────────────────────────────────
+
+  /// User was auto-added to a community
+  communityJoined,
+
+  /// New member joined the user's community (for admins)
+  communityNewMember,
+
+  // ── Organization ────────────────────────────────────────────────────
+
+  /// User was invited to join an organization
+  orgInvitation,
+
+  /// Admin posted an announcement to organization members
+  orgAnnouncement,
+
+  // ── Emergency Fund ──────────────────────────────────────────────────
+
+  /// User staked DSP promissory for emergency fund
+  emergencyFundStaked,
+
+  /// User's annual contribution payment succeeded
+  emergencyFundPaymentSuccess,
+
+  /// User's emergency fund membership is now active
+  emergencyFundMembershipActive,
+
+  /// User's staked DSP has been refunded after payment
+  emergencyFundDspRefunded,
+
   /// Generic system notification
   system,
 }

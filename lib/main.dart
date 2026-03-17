@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 import 'package:diaspora_nearby/features/sharing/services/share_receiver_service.dart';
 import 'package:diaspora_nearby/core/initialization/app_bootstrap.dart'; // [NEW] Bootstrap import
+import 'package:google_fonts/google_fonts.dart'; // [PERF] For disabling runtime fetching
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -19,6 +20,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -107,13 +110,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           '@mipmap/ic_launcher',
         );
         const settings = InitializationSettings(android: androidSettings);
-        await flutterLocalNotificationsPlugin.initialize(settings);
+        await flutterLocalNotificationsPlugin.initialize(settings: settings);
 
         await flutterLocalNotificationsPlugin.show(
-          message.hashCode,
-          title,
-          body,
-          const NotificationDetails(
+          id: message.hashCode,
+          title: title,
+          body: body,
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
               'high_importance_channel',
               'High Importance Notifications',
@@ -136,6 +139,32 @@ void main() async {
     () async {
       // [NEW] Centralized Initialization
       await AppBootstrap.init();
+
+      // [PERF] Disable runtime font fetching on native (fonts bundled in release).
+      // On web, allow runtime fetching since .ttf files aren't bundled as assets.
+      try {
+        // ignore: deprecated_member_use
+        GoogleFonts.config.allowRuntimeFetching = kIsWeb;
+      } catch (_) {
+        // GoogleFonts config may not be available on all platforms
+      }
+
+      // Initialize Stripe (non-blocking — not supported on web)
+      // Key is injected at build time: --dart-define=STRIPE_PUBLISHABLE_KEY=pk_live_...
+      try {
+        const stripeKey = String.fromEnvironment(
+          'STRIPE_PUBLISHABLE_KEY',
+          defaultValue:
+              'pk_test_51SCn3gI1F9UMWfaWdPiGbCBhcv2jpHOC06TrLhU2iHS5GxslRN4ltU4Chqc0rhTo7aW01BzxOjoXEPcCN7bafrlJ00jxw3bQsJ',
+        );
+        Stripe.publishableKey = stripeKey;
+        await Stripe.instance.applySettings();
+        debugPrint(
+          '▶ Stripe initialized ✓ (live=${stripeKey.startsWith("pk_live")})',
+        );
+      } catch (e) {
+        debugPrint('▶ Stripe init skipped: $e');
+      }
 
       // Initialize Providers requiring SharedPreferences
       final sharedPreferences = await SharedPreferences.getInstance();

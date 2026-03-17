@@ -52,7 +52,8 @@ String getCategorySpecs(MarketplaceListing listing) {
     if (cp['carMake'] != null) parts.add('Fits ${cp['carMake']}');
     if (cp['vin'] != null && cp['vin'].toString().length >= 8) {
       parts.add(
-          'VIN …${cp['vin'].toString().substring(cp['vin'].toString().length - 6)}');
+        'VIN …${cp['vin'].toString().substring(cp['vin'].toString().length - 6)}',
+      );
     }
   } else if (listing.category == MarketplaceCategory.realEstate &&
       listing.realEstateDetails != null) {
@@ -91,10 +92,7 @@ String getCategorySpecs(MarketplaceListing listing) {
 
 /// Placeholder shown when a listing has no photo.
 class MarketplaceImagePlaceholder extends StatelessWidget {
-  const MarketplaceImagePlaceholder({
-    super.key,
-    required this.listing,
-  });
+  const MarketplaceImagePlaceholder({super.key, required this.listing});
 
   final MarketplaceListing listing;
 
@@ -104,13 +102,13 @@ class MarketplaceImagePlaceholder extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     return Container(
       color: isDark
-          ? Colors.white.withOpacity(0.05)
-          : Colors.black.withOpacity(0.03),
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.03),
       child: Center(
         child: Icon(
           categoryIcon(listing.category),
           size: 32,
-          color: theme.hintColor.withOpacity(0.25),
+          color: theme.hintColor.withValues(alpha: 0.25),
         ),
       ),
     );
@@ -119,10 +117,7 @@ class MarketplaceImagePlaceholder extends StatelessWidget {
 
 /// Listing image with fallback placeholder.
 class MarketplaceListingImage extends StatelessWidget {
-  const MarketplaceListingImage({
-    super.key,
-    required this.listing,
-  });
+  const MarketplaceListingImage({super.key, required this.listing});
 
   final MarketplaceListing listing;
 
@@ -134,23 +129,24 @@ class MarketplaceListingImage extends StatelessWidget {
       return CachedNetworkImage(
         imageUrl: listing.images.first,
         fit: BoxFit.cover,
-        placeholder: (_, __) => Container(
+        placeholder: (_, _) => Container(
           color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.black.withOpacity(0.04),
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.04),
           child: Center(
-              child: Icon(LucideIcons.image,
-                  color: theme.hintColor.withOpacity(0.3), size: 24)),
+            child: Icon(
+              LucideIcons.image,
+              color: theme.hintColor.withValues(alpha: 0.3),
+              size: 24,
+            ),
+          ),
         ),
-        errorWidget: (_, __, ___) =>
-            MarketplaceImagePlaceholder(listing: listing),
+        errorWidget: (_, _, _) => MarketplaceImagePlaceholder(listing: listing),
       );
     }
     return MarketplaceImagePlaceholder(listing: listing);
   }
 }
-
-
 
 /// Seller's local-currency price row with optional viewer currency toggle.
 class LocalPriceRow extends StatelessWidget {
@@ -180,8 +176,11 @@ class LocalPriceRow extends StatelessWidget {
         ),
         if (listing.priceNegotiable) ...[
           const SizedBox(width: 6),
-          Icon(LucideIcons.tag,
-              size: 12, color: marketplaceSageGreen.withOpacity(0.7)),
+          Icon(
+            LucideIcons.tag,
+            size: 12,
+            color: marketplaceSageGreen.withValues(alpha: 0.7),
+          ),
         ],
       ],
     );
@@ -205,7 +204,7 @@ class QuickSpecs extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         fontSize: 11,
-        color: theme.hintColor.withOpacity(0.7),
+        color: theme.hintColor.withValues(alpha: 0.7),
       ),
     );
   }
@@ -234,7 +233,7 @@ class MarketplaceCardFooter extends StatelessWidget {
               ? LucideIcons.globe
               : LucideIcons.mapPin,
           size: 11,
-          color: theme.hintColor.withOpacity(0.5),
+          color: theme.hintColor.withValues(alpha: 0.5),
         ),
         const SizedBox(width: 3),
         Flexible(
@@ -246,8 +245,7 @@ class MarketplaceCardFooter extends StatelessWidget {
           ),
         ),
         if (listing.createdAt != null) ...[
-          Text(' · ',
-              style: TextStyle(fontSize: 10, color: theme.hintColor)),
+          Text(' · ', style: TextStyle(fontSize: 10, color: theme.hintColor)),
           Text(
             timeago.format(listing.createdAt!, locale: 'en_short'),
             style: TextStyle(fontSize: 10, color: theme.hintColor),
@@ -266,21 +264,34 @@ class MarketplaceCardFooter extends StatelessWidget {
         ],
         if (showStats) ...[
           const SizedBox(width: 6),
-          Icon(LucideIcons.eye,
-              size: 10, color: theme.hintColor.withOpacity(0.5)),
+          Icon(
+            LucideIcons.eye,
+            size: 10,
+            color: theme.hintColor.withValues(alpha: 0.5),
+          ),
           const SizedBox(width: 2),
-          Text('${listing.viewCount}',
-              style: TextStyle(fontSize: 9, color: theme.hintColor)),
+          Text(
+            '${listing.viewCount}',
+            style: TextStyle(fontSize: 9, color: theme.hintColor),
+          ),
           const SizedBox(width: 5),
-          Icon(LucideIcons.bookmark,
-              size: 10, color: theme.hintColor.withOpacity(0.5)),
+          Icon(
+            LucideIcons.bookmark,
+            size: 10,
+            color: theme.hintColor.withValues(alpha: 0.5),
+          ),
           const SizedBox(width: 2),
-          Text('${listing.savedCount}',
-              style: TextStyle(fontSize: 9, color: theme.hintColor)),
+          Text(
+            '${listing.savedCount}',
+            style: TextStyle(fontSize: 9, color: theme.hintColor),
+          ),
         ],
         const Spacer(),
-        Icon(LucideIcons.chevronRight,
-            size: 14, color: theme.hintColor.withOpacity(0.4)),
+        Icon(
+          LucideIcons.chevronRight,
+          size: 14,
+          color: theme.hintColor.withValues(alpha: 0.4),
+        ),
       ],
     );
   }

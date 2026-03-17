@@ -28,11 +28,12 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   final _destController = TextEditingController();
   final _departDateController = TextEditingController();
   final _returnDateController = TextEditingController();
-  
+
   bool _isSearching = false;
   List<FlightOffer> _flightOffers = [];
   bool _isRoundTrip = false; // Default to one-way for auto-search
-  bool _showSearchForm = true;
+  bool _showSearchForm = false;
+  bool _initialLoading = true;
 
   // Store raw IATA codes separately from display text
   String _originIata = '';
@@ -54,7 +55,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
   bool _isAutoSearching = false;
   bool _autoSearchComplete = false;
   int _autoSearchDaysLoaded = 0;
-  final int _autoSearchDaysTotal = 5;
+  final int _autoSearchDaysTotal = 3;
 
   // Date-grouped results: date string → list of offers
   Map<String, List<FlightOffer>> _dateGroupedOffers = {};
@@ -73,10 +74,12 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
     final today = DateTime.now();
     final tomorrow = today.add(const Duration(days: 1));
 
-    final tomorrowApi = '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
+    final tomorrowApi =
+        '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
 
     _departDateApi = tomorrowApi;
-    _departDateController.text = '${tomorrow.month}/${tomorrow.day}/${tomorrow.year}';
+    _departDateController.text =
+        '${tomorrow.month}/${tomorrow.day}/${tomorrow.year}';
   }
 
   @override
@@ -90,55 +93,100 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
   /// Auto-populate airports using international airport lookup, then auto-search
   Future<void> _autoPopulateAndSearch() async {
-    final userId = ref.read(authRepositoryProvider).currentUser?.uid;
-    if (userId == null) return;
-    
-    final profileData = await ref.read(profileRepositoryProvider).getUserProfile(userId);
-    if (profileData == null) return;
+    try {
+      final userId = ref.read(authRepositoryProvider).currentUser?.uid;
+      if (userId == null) {
+        debugPrint('✈️ [FlightSearch] No user ID, skipping auto-populate');
+        if (mounted) setState(() => _initialLoading = false);
+        return;
+      }
 
-    final airportService = ref.read(airportServiceProvider);
+      final profileData = await ref
+          .read(profileRepositoryProvider)
+          .getUserProfile(userId);
+      if (profileData == null || !mounted) {
+        debugPrint('✈️ [FlightSearch] No profile data, skipping auto-populate');
+        if (mounted) setState(() => _initialLoading = false);
+        return;
+      }
 
-    // Resolve origin: closest international airport to current location
-    if (profileData.currentLocation?.geometry.location != null) {
-      final lat = profileData.currentLocation!.geometry.location.lat;
-      final lng = profileData.currentLocation!.geometry.location.lng;
-      final originAirport = await airportService.getClosestInternationalAirport(lat, lng);
-      if (originAirport != null && mounted) {
-        _resolvedOriginAirport = originAirport;
+      final airportService = ref.read(airportServiceProvider);
+
+      // Resolve origin: closest international airport to current location
+      if (profileData.currentLocation?.geometry.location != null) {
+        final lat = profileData.currentLocation!.geometry.location.lat;
+        final lng = profileData.currentLocation!.geometry.location.lng;
+        debugPrint(
+          '✈️ [FlightSearch] Resolving origin airport near ($lat, $lng)',
+        );
+        final originAirport = await airportService
+            .getClosestInternationalAirport(lat, lng);
+        if (originAirport != null && mounted) {
+          _resolvedOriginAirport = originAirport;
+          setState(() {
+            _originIata = originAirport.iataCode;
+            _originController.text =
+                '${originAirport.iataCode} - ${originAirport.name}';
+          });
+          debugPrint('✈️ [FlightSearch] Origin: ${originAirport.iataCode}');
+        } else {
+          debugPrint('✈️ [FlightSearch] No origin airport found');
+        }
+      } else {
+        debugPrint('✈️ [FlightSearch] No currentLocation in profile');
+      }
+
+      // Resolve destination: closest international airport to home location
+      if (profileData.homeLocation.geometry?.location != null) {
+        final lat = profileData.homeLocation.geometry!.location.lat;
+        final lng = profileData.homeLocation.geometry!.location.lng;
+        debugPrint(
+          '✈️ [FlightSearch] Resolving dest airport near ($lat, $lng)',
+        );
+        final destAirport = await airportService.getClosestInternationalAirport(
+          lat,
+          lng,
+        );
+        if (destAirport != null && mounted) {
+          _resolvedDestAirport = destAirport;
+          setState(() {
+            _destIata = destAirport.iataCode;
+            _destController.text =
+                '${destAirport.iataCode} - ${destAirport.name}';
+          });
+          debugPrint('✈️ [FlightSearch] Dest: ${destAirport.iataCode}');
+        } else {
+          debugPrint('✈️ [FlightSearch] No dest airport found');
+        }
+      } else {
+        debugPrint('✈️ [FlightSearch] No homeLocation geometry in profile');
+      }
+
+      // Store home country for contextual empty state
+      if (profileData.homeCountry != null && mounted) {
         setState(() {
-          _originIata = originAirport.iataCode;
-          _originController.text = '${originAirport.iataCode} - ${originAirport.name}';
+          _homeCountry = profileData.homeCountry;
         });
       }
-    }
 
-    // Resolve destination: closest international airport to home location
-    if (profileData.homeLocation.geometry?.location != null) {
-      final lat = profileData.homeLocation.geometry!.location.lat;
-      final lng = profileData.homeLocation.geometry!.location.lng;
-      final destAirport = await airportService.getClosestInternationalAirport(lat, lng);
-      if (destAirport != null && mounted) {
-        _resolvedDestAirport = destAirport;
-        setState(() {
-          _destIata = destAirport.iataCode;
-          _destController.text = '${destAirport.iataCode} - ${destAirport.name}';
-        });
+      // Set default dates
+      _setDefaultDates();
+
+      // Auto-trigger multi-day search if both airports resolved
+      if (_originIata.isNotEmpty && _destIata.isNotEmpty && mounted) {
+        debugPrint(
+          '✈️ [FlightSearch] Starting auto-search: $_originIata → $_destIata',
+        );
+        _autoSearchMultiDay();
+      } else {
+        debugPrint(
+          '✈️ [FlightSearch] Cannot auto-search: origin=$_originIata dest=$_destIata',
+        );
+        if (mounted) setState(() => _initialLoading = false);
       }
-    }
-
-    // Store home country for contextual empty state
-    if (profileData.homeCountry != null && mounted) {
-      setState(() {
-        _homeCountry = profileData.homeCountry;
-      });
-    }
-
-    // Set default dates
-    _setDefaultDates();
-
-    // Auto-trigger multi-day search if both airports resolved
-    if (_originIata.isNotEmpty && _destIata.isNotEmpty && mounted) {
-      _autoSearchMultiDay();
+    } catch (e, s) {
+      debugPrint('✈️ [FlightSearch] Auto-populate error: $e\n$s');
+      if (mounted) setState(() => _initialLoading = false);
     }
   }
 
@@ -153,6 +201,7 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       _dateGroupedOffers = {};
       _cheapestDate = null;
       _showSearchForm = false;
+      _initialLoading = false;
     });
 
     final amadeus = ref.read(amadeusServiceProvider);
@@ -174,10 +223,13 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
           adults: 1,
           maxResults: 5, // Top 5 per day to keep it manageable
         );
+        debugPrint('✈️ [FlightSearch] $date → ${offers.length} offers');
         return MapEntry(date, offers);
-      } on AmadeusException {
+      } on AmadeusException catch (e) {
+        debugPrint('✈️ [FlightSearch] $date → AmadeusException: $e');
         return MapEntry(date, <FlightOffer>[]);
-      } catch (_) {
+      } catch (e, s) {
+        debugPrint('✈️ [FlightSearch] $date → Error: $e\n$s');
         return MapEntry(date, <FlightOffer>[]);
       }
     }).toList();
@@ -199,6 +251,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
     }
 
     if (!mounted) return;
+    debugPrint(
+      '✈️ [FlightSearch] Auto-search complete: ${_dateGroupedOffers.length} days with results, total offers: ${_dateGroupedOffers.values.expand((e) => e).length}',
+    );
     setState(() {
       _isAutoSearching = false;
       _autoSearchComplete = true;
@@ -276,12 +331,18 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
   /// Standard manual search
   void _handleSearch() async {
-    final origin = _originIata.isNotEmpty ? _originIata : _extractIata(_originController.text);
-    final dest = _destIata.isNotEmpty ? _destIata : _extractIata(_destController.text);
+    final origin = _originIata.isNotEmpty
+        ? _originIata
+        : _extractIata(_originController.text);
+    final dest = _destIata.isNotEmpty
+        ? _destIata
+        : _extractIata(_destController.text);
 
     if (origin.isEmpty || dest.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select origin and destination airports')),
+        const SnackBar(
+          content: Text('Please select origin and destination airports'),
+        ),
       );
       return;
     }
@@ -307,7 +368,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
         originIata: origin,
         destinationIata: dest,
         departureDate: _departDateApi,
-        returnDate: _isRoundTrip && _returnDateApi.isNotEmpty ? _returnDateApi : null,
+        returnDate: _isRoundTrip && _returnDateApi.isNotEmpty
+            ? _returnDateApi
+            : null,
         adults: 1,
         maxResults: 15,
       );
@@ -322,22 +385,30 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
       if (_flightOffers.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No flights found for this route and date')),
+          const SnackBar(
+            content: Text('No flights found for this route and date'),
+          ),
         );
-        setState(() { _showSearchForm = true; });
+        setState(() {
+          _showSearchForm = true;
+        });
       }
     } on AmadeusException catch (e) {
       if (!mounted) return;
-      setState(() { _isSearching = false; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Search error: ${e.message}')),
-      );
+      setState(() {
+        _isSearching = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Search error: ${e.message}')));
     } catch (e) {
       if (!mounted) return;
-      setState(() { _isSearching = false; });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection error: $e')),
-      );
+      setState(() {
+        _isSearching = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Connection error: $e')));
     }
   }
 
@@ -356,20 +427,24 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       _showOriginSuggestions = false;
       _showDestSuggestions = false;
       _flightOffers.clear();
-      _showSearchForm = true;
+      _showSearchForm = false;
+      _initialLoading = true;
       _autoSearchComplete = false;
       _dateGroupedOffers = {};
       _cheapestDate = null;
-      _autoPopulateAndSearch();
     });
+    _autoPopulateAndSearch();
   }
 
-  Future<void> _pickDate(TextEditingController controller, {required bool isDeparture}) async {
+  Future<void> _pickDate(
+    TextEditingController controller, {
+    required bool isDeparture,
+  }) async {
     final now = DateTime.now();
-    
+
     DateTime firstDate = now;
     DateTime initialDate = now.add(const Duration(days: 1));
-    
+
     if (isDeparture) {
       if (_departDateApi.isNotEmpty) {
         try {
@@ -384,7 +459,8 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
           initialDate = departDate;
           if (_returnDateApi.isNotEmpty) {
             final existingReturn = DateTime.parse(_returnDateApi);
-            if (existingReturn.isAfter(departDate) || existingReturn.isAtSameMomentAs(departDate)) {
+            if (existingReturn.isAfter(departDate) ||
+                existingReturn.isAtSameMomentAs(departDate)) {
               initialDate = existingReturn;
             }
           }
@@ -404,7 +480,8 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       lastDate: lastDate,
     );
     if (date != null && mounted) {
-      final apiFormat = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final apiFormat =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
       final displayFormat = '${date.month}/${date.day}/${date.year}';
       setState(() {
         controller.text = displayFormat;
@@ -444,10 +521,17 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       hintText: hint,
-      prefixIcon: Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+      prefixIcon: Icon(
+        icon,
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+      ),
       suffixIcon: controller.text.isNotEmpty
           ? IconButton(
-              icon: Icon(LucideIcons.x, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              icon: Icon(
+                LucideIcons.x,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
               onPressed: () => setState(() {
                 controller.clear();
                 if (isOrigin) {
@@ -500,16 +584,26 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                 final airport = suggestions[index];
                 return ListTile(
                   dense: true,
-                  leading: Icon(LucideIcons.plane, size: 16, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                  leading: Icon(
+                    LucideIcons.plane,
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                   title: Text(
                     '${airport.iataCode} - ${airport.name}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
                     '${airport.municipality}, ${airport.isoCountry}',
-                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                   onTap: () => _selectAirport(airport, isOrigin: isOrigin),
                 );
@@ -546,17 +640,23 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: _isRoundTrip ? theme.colorScheme.primary : Colors.transparent,
+                      color: _isRoundTrip
+                          ? theme.colorScheme.primary
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: _isRoundTrip ? theme.colorScheme.primary : theme.dividerColor,
+                        color: _isRoundTrip
+                            ? theme.colorScheme.primary
+                            : theme.dividerColor,
                       ),
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       'Round Trip',
                       style: TextStyle(
-                        color: _isRoundTrip ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+                        color: _isRoundTrip
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurface,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -575,17 +675,23 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: !_isRoundTrip ? theme.colorScheme.primary : Colors.transparent,
+                      color: !_isRoundTrip
+                          ? theme.colorScheme.primary
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: !_isRoundTrip ? theme.colorScheme.primary : theme.dividerColor,
+                        color: !_isRoundTrip
+                            ? theme.colorScheme.primary
+                            : theme.dividerColor,
                       ),
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       'One Way',
                       style: TextStyle(
-                        color: !_isRoundTrip ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+                        color: !_isRoundTrip
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurface,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -626,10 +732,15 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
               child: TextField(
                 controller: _departDateController,
                 readOnly: true,
-                onTap: () => _pickDate(_departDateController, isDeparture: true),
+                onTap: () =>
+                    _pickDate(_departDateController, isDeparture: true),
                 decoration: inputDecoration.copyWith(
                   hintText: 'Depart',
-                  prefixIcon: Icon(LucideIcons.calendarDays, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                  prefixIcon: Icon(
+                    LucideIcons.calendarDays,
+                    size: 18,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                 ),
                 style: const TextStyle(fontSize: 13),
               ),
@@ -640,10 +751,15 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                 child: TextField(
                   controller: _returnDateController,
                   readOnly: true,
-                  onTap: () => _pickDate(_returnDateController, isDeparture: false),
+                  onTap: () =>
+                      _pickDate(_returnDateController, isDeparture: false),
                   decoration: inputDecoration.copyWith(
                     hintText: 'Return',
-                    prefixIcon: Icon(LucideIcons.calendarCheck, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                    prefixIcon: Icon(
+                      LucideIcons.calendarCheck,
+                      size: 18,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -681,7 +797,11 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(LucideIcons.plane, size: 20, color: AppTheme.accent),
+                  const Icon(
+                    LucideIcons.plane,
+                    size: 20,
+                    color: AppTheme.accent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -714,11 +834,14 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      _resolvedOriginAirport != null && _resolvedDestAirport != null
+                      _resolvedOriginAirport != null &&
+                              _resolvedDestAirport != null
                           ? '${_resolvedOriginAirport!.municipality} → ${_resolvedDestAirport!.municipality}'
                           : 'One-way flights',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
                   ),
@@ -741,7 +864,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                     Text(
                       'Checking $_autoSearchDaysLoaded of $_autoSearchDaysTotal days...',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -787,7 +912,9 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                         size: 16,
                         color: isCheapest
                             ? Colors.green
-                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                            : theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -825,28 +952,28 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                         'from \$${cheapestPrice.toStringAsFixed(0)}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: isCheapest
-                              ? Colors.green
-                              : AppTheme.accent,
+                          color: isCheapest ? Colors.green : AppTheme.accent,
                         ),
                       ),
                     ],
                   ),
                 ),
                 // Flight cards for this date
-                ...offers.map((offer) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: FlightResultCard(
-                    offer: offer,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => FlightDetailScreen(offer: offer),
-                        ),
-                      );
-                    },
+                ...offers.map(
+                  (offer) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: FlightResultCard(
+                      offer: offer,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => FlightDetailScreen(offer: offer),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                )),
+                ),
               ],
             ),
           );
@@ -860,8 +987,29 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasAutoResults = _autoSearchComplete && _dateGroupedOffers.isNotEmpty;
-    final bool showAppBarSearch = (!_showSearchForm && _flightOffers.isNotEmpty) || hasAutoResults;
+    final bool hasAutoResults =
+        _autoSearchComplete && _dateGroupedOffers.isNotEmpty;
+    // Always show search icon when form is hidden so the user can access it
+    final bool showAppBarSearch = !_showSearchForm;
+
+    // Initial loading — show skeleton until airports are resolved
+    if (_initialLoading) {
+      return Scaffold(
+        resizeToAvoidBottomInset: false,
+        appBar: AppBar(
+          titleSpacing: 0,
+          title: const Text('Flight Search'),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          actions: const [TravelManagementMenu(category: 'Flight')],
+        ),
+        body: TravelApiSkeletonLoader(
+          label: _homeCountry != null
+              ? 'Finding flights to $_homeCountry...'
+              : 'Finding flights...',
+        ),
+      );
+    }
 
     // If auto-search produced results, show the date-grouped view
     if (hasAutoResults && !_showSearchForm && !_isSearching) {
@@ -893,15 +1041,13 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
               const TravelManagementMenu(category: 'Flight'),
             ],
           ),
-          body: SingleChildScrollView(
-            child: _buildAutoSearchResults(),
-          ),
+          body: SingleChildScrollView(child: _buildAutoSearchResults()),
         ),
       );
     }
 
-    // Auto-search in progress (no results yet)
-    if (_isAutoSearching && _dateGroupedOffers.isEmpty) {
+    // Auto-search in progress — keep skeleton until fully complete
+    if (_isAutoSearching) {
       return Scaffold(
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
@@ -923,16 +1069,21 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
             const TravelManagementMenu(category: 'Flight'),
           ],
         ),
-        body: const TravelApiSkeletonLoader(
-          label: 'Finding flights...',
+        body: TravelApiSkeletonLoader(
+          label: _autoSearchDaysLoaded > 0
+              ? 'Searching flights... ($_autoSearchDaysLoaded/$_autoSearchDaysTotal days)'
+              : 'Finding flights...',
         ),
       );
     }
 
     // Fallback: standard search interface (manual search or auto-search showing partial results)
-    final dummyResults = _flightOffers.map((o) => TravelSearchResult(
-      id: o.id, title: '', subtitle: '', price: '',
-    )).toList();
+    final dummyResults = _flightOffers
+        .map(
+          (o) =>
+              TravelSearchResult(id: o.id, title: '', subtitle: '', price: ''),
+        )
+        .toList();
 
     return GestureDetector(
       onTap: () {

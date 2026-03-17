@@ -28,9 +28,9 @@ class DocumentMessageContent extends StatelessWidget {
               if (docUrl != null) {
                 final url = docUrl;
                 final isPdf =
-                    message.documentName?.toLowerCase().endsWith('.pdf') ??
-                    url.toLowerCase().contains('.pdf') ??
-                    false;
+                    (message.documentName?.toLowerCase().endsWith('.pdf') ??
+                        false) ||
+                    url.toLowerCase().contains('.pdf');
 
                 if (isPdf) {
                   Navigator.push(

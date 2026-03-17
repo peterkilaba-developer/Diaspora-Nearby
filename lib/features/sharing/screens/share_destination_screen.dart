@@ -48,7 +48,9 @@ class _ShareDestinationScreenState
           // Preview Section
           Container(
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.3,
+            ),
             child: Row(
               children: [
                 if (widget.sharedFiles != null &&
@@ -125,6 +127,9 @@ class _ShareDestinationScreenState
 
           Expanded(
             child: ListView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 16,
+              ),
               children: [
                 ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.group)),
@@ -183,11 +188,13 @@ class _ShareDestinationScreenState
     }
 
     // TODO: Implement actual sharing logic
-    showExplorationRewardToast(
-      context,
-      message: 'Personal Stake increased!',
-      points: 100,
-    );
+    if (context.mounted) {
+      showExplorationRewardToast(
+        context,
+        message: 'Personal Stake increased!',
+        points: 100,
+      );
+    }
 
     // Delay pop to show snackbar
     Future.delayed(const Duration(seconds: 1), () {

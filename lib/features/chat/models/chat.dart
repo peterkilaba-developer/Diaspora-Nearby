@@ -249,7 +249,8 @@ class Chat {
               Map<String, dynamic>.from(data['profileImage'] as Map),
             )
           : null,
-      participants: (data['participants'] as List<dynamic>?)?.cast<String>() ?? [],
+      participants:
+          (data['participants'] as List<dynamic>?)?.cast<String>() ?? [],
       admins: (data['admins'] as List<dynamic>?)?.cast<String>(),
       createdBy: data['createdBy'] as String?,
       lastMessage: (data['lastMessage'] is Map)

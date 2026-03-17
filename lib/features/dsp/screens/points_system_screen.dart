@@ -18,7 +18,6 @@ import 'countries_leaderboard_screen.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/country_leaderboard_item.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_progress_card.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 
 final referralStatsProvider =
@@ -308,17 +307,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                       );
                     },
                   ),
-                  const SizedBox(height: 16),
-                  ExplorationProgressCard(userPoints: userPoints),
-                  const SizedBox(height: AppTheme.sectionVerticalPadding),
-
-                  // Quick Actions / Streak
-                  _buildStreakCard(context, userPoints),
                   const SizedBox(height: 24),
 
-                  // Proof of Community Action
+                  // Activity Earnings DSP Distribution
                   _buildSectionHeader(
-                    'PROOF OF ACTION',
+                    'ACTIVITY EARNINGS DSP DISTRIBUTION',
                     'Community & System Treasuries',
                   ),
                   const SizedBox(height: 8),
@@ -394,91 +387,34 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 16),
 
             const Text(
-              'Proof of Activity',
+              'Activity Earnings DSP Distribution',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Earn DSP by using the app. The more you engage, the more you earn.',
+              'Earn DSP through real actions that build community value. Every connection, transaction, and contribution counts.',
               style: TextStyle(color: Theme.of(context).hintColor),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // --- Messaging ---
+            // === SECTION: Getting Started ===
+            _buildSubHeader('Getting Started'),
+            const SizedBox(height: 8),
+
             _buildActivityCard(
               context,
-              title: 'New Chat',
-              subtitle: 'Start a new conversation',
-              amount: '100 DSP',
-              earned: lifetimeEarnings['started_new_dm'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Message Sent',
-              subtitle: 'Send a message in any chat',
-              amount: '10 DSP',
-              earned: (lifetimeEarnings['daily_message'] ?? 0) +
-                  (lifetimeEarnings['message_sent'] ?? 0),
+              title: 'Welcome Bonus',
+              subtitle: 'Awarded automatically when you sign up',
+              amount: '1,000 DSP',
+              earned: lifetimeEarnings['welcome_bonus'] ?? 0,
             ),
 
-            // --- Sharing (drives streak) ---
-            _buildActivityCard(
-              context,
-              title: 'Share Out',
-              subtitle: 'Send any content outside the app. Counts toward your daily streak.',
-              amount: '100 DSP',
-              earned: lifetimeEarnings['content_shared'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Share In',
-              subtitle: 'Someone opens a link you shared. Counts toward your daily streak.',
-              amount: '100 DSP',
-              earned: lifetimeEarnings['daily_share_incoming'] ?? 0,
-            ),
-            
-            // --- Daily Engagement ---
-            _buildActivityCard(
-              context,
-              title: 'Daily Check-in',
-              subtitle: 'Open the app each day',
-              amount: '100 DSP',
-              earned: lifetimeEarnings['daily_check_in'] ?? 0,
-            ),
+            const SizedBox(height: 24),
 
-            // --- Streak Bonuses ---
-            _buildActivityCard(
-              context,
-              title: '10-Day Sharing Streak',
-              subtitle: 'Share every day for 10 days in a row',
-              amount: '1,000 DSP bonus',
-              earned: lifetimeEarnings['streak_10'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: '100-Day Sharing Streak',
-              subtitle: 'Share every day for 100 days in a row',
-              amount: '10,000 DSP bonus',
-              earned: lifetimeEarnings['streak_100'] ?? 0,
-            ),
+            // === SECTION: Identity & Connections ===
+            _buildSubHeader('Identity & Connections'),
+            const SizedBox(height: 8),
 
-            // --- Exploration ---
-            _buildActivityCard(
-              context,
-              title: 'Explore the App',
-              subtitle: 'Visit new features for the first time',
-              amount: '10 DSP each',
-              earned: lifetimeEarnings['exploration_reward'] ?? 0,
-            ),
-
-            // --- Community & Identity ---
-            _buildActivityCard(
-              context,
-              title: 'First Community Message',
-              subtitle: 'First message in a community each day',
-              amount: '100 DSP',
-              earned: lifetimeEarnings['community_first_message'] ?? 0,
-            ),
             _buildActivityCard(
               context,
               title: 'Invite Family & Friends',
@@ -508,6 +444,13 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               amount: '1,000 DSP',
               earned: lifetimeEarnings['identity_qr_exchange'] ?? 0,
             ),
+
+            const SizedBox(height: 24),
+
+            // === SECTION: Verification ===
+            _buildSubHeader('Verification'),
+            const SizedBox(height: 8),
+
             _buildActivityCard(
               context,
               title: 'Verify Peer',
@@ -524,8 +467,29 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             _buildActivityCard(
               context,
+              title: 'Verify a Solution',
+              subtitle: 'Mark a chat answer as a verified solution',
+              amount: '1,000 DSP',
+              earned: lifetimeEarnings['verified_solution_verifier_reward'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Verified Solution Author',
+              subtitle: 'Your answer hits 10 unique verifiers (repeatable)',
+              amount: '1,000 DSP',
+              earned: lifetimeEarnings['verified_solution_milestone'] ?? 0,
+            ),
+
+            const SizedBox(height: 24),
+
+            // === SECTION: Vouching ===
+            _buildSubHeader('Vouching'),
+            const SizedBox(height: 8),
+
+            _buildActivityCard(
+              context,
               title: 'Vouch for Peer',
-              subtitle: 'Vouch for someone\'s trustworthiness',
+              subtitle: 'Vouch for someone\'s trustworthiness (+ 1,000 DSP staked)',
               amount: '1,000 DSP',
               earned: lifetimeEarnings['vouch_reward'] ?? 0,
             ),
@@ -537,55 +501,48 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               earned: lifetimeEarnings['vouched_by_peer'] ?? 0,
             ),
 
-            // --- Travel ---
+            const SizedBox(height: 24),
+
+            // === SECTION: Economy & Travel ===
+            _buildSubHeader('Economy & Travel'),
+            const SizedBox(height: 8),
+
             _buildActivityCard(
               context,
-              title: 'Book a Flight',
-              subtitle: 'Complete a flight booking',
-              amount: '1,000 DSP',
-              earned: lifetimeEarnings['travel_booking_flight'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Book a Hotel',
-              subtitle: 'Complete a hotel booking',
-              amount: '1,000 DSP',
-              earned: lifetimeEarnings['travel_booking_hotel'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Book a Stay',
-              subtitle: 'Complete a stay booking',
-              amount: '1,000 DSP',
-              earned: lifetimeEarnings['travel_booking_stay'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Rent a Car',
-              subtitle: 'Complete a car rental booking',
-              amount: '1,000 DSP',
-              earned: lifetimeEarnings['travel_booking_car_rental'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Travel Review',
-              subtitle: 'Leave a review after your trip',
-              amount: '100 DSP',
-              earned: lifetimeEarnings['travel_review'] ?? 0,
-            ),
-            _buildActivityCard(
-              context,
-              title: 'Save to Wishlist',
-              subtitle: 'Save a flight, hotel, stay, or car rental',
-              amount: '10 DSP',
-              earned: lifetimeEarnings['travel_save'] ?? 0,
+              title: 'Economy Transaction',
+              subtitle: 'Buy or sell on the marketplace (\$1 USD = 1 DSP)',
+              amount: '\$1 = 1 DSP',
+              earned: (lifetimeEarnings['economy_transaction_buyer'] ?? 0) +
+                  (lifetimeEarnings['economy_transaction_seller'] ?? 0),
             ),
             _buildActivityCard(
               context,
               title: 'Host a Traveler',
               subtitle: 'Host someone visiting your area',
-              amount: '10 DSP per day',
-              earned: lifetimeEarnings['hosting_traveler_income'] ?? 0,
+              amount: '1,000 DSP',
+              earned: (lifetimeEarnings['host_traveler_host_reward'] ?? 0) +
+                  (lifetimeEarnings['hosting_traveler_income'] ?? 0),
+            ),
+
+            const SizedBox(height: 24),
+
+            // === SECTION: Community Participation ===
+            _buildSubHeader('Community Participation'),
+            const SizedBox(height: 8),
+
+            _buildActivityCard(
+              context,
+              title: 'Event QR Check-in',
+              subtitle: 'Attend a community event (QR verified)',
+              amount: '1,000 DSP',
+              earned: lifetimeEarnings['event_attendance'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Host an Event',
+              subtitle: 'Earn per verified attendee at your event',
+              amount: '1,000 DSP each',
+              earned: lifetimeEarnings['event_hosting_per_attendee'] ?? 0,
             ),
 
             const SizedBox(height: 32),
@@ -647,7 +604,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               standing: '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
             ),
 
-            // --- Trust & Verification (Received & Given) ---
+            // --- Verification ---
+            _buildSubHeader('Verification'),
+            const SizedBox(height: 8),
           _buildTrustCard(
             context,
             title: 'Verified by Peer',
@@ -662,6 +621,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             amount: '0 PoCT',
             standing: '-- Given',
           ),
+
+            const SizedBox(height: 16),
+
+            // --- Vouching ---
+            _buildSubHeader('Vouching'),
+            const SizedBox(height: 8),
           _buildTrustCard(
             context,
             title: 'Vouched by Peer',
@@ -672,7 +637,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           _buildTrustCard(
             context,
             title: 'Vouch for Peer',
-            subtitle: 'You vouching for someone else. Earn 1,000 DSP instantly. Does not award PoCT (action builds trust for them, not you).',
+            subtitle: 'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award PoCT (action builds trust for them, not you).',
             amount: '0 PoCT',
             standing: '-- Given',
           ),
@@ -1213,7 +1178,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   const SizedBox(height: 24),
 
                   // Main Progress Bars
-                  _buildSectionHeader('GLOBAL SCALE', 'Proof of Action'),
+                  _buildSectionHeader('GLOBAL SCALE', 'Activity Earnings DSP Distribution'),
                   const SizedBox(height: 12),
 
                   // Supply Progress (1QD)
@@ -2659,15 +2624,15 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
           const SizedBox(height: 12),
 
-          // 6. Investors & Partners
+          // 6. Liquidity Treasury
           _buildWalletDisplayCard(
-            title: 'Investors & Partners',
-            icon: LucideIcons.briefcase,
-            color: Colors.amber,
+            title: 'Liquidity Treasury',
+            icon: LucideIcons.droplets,
+            color: Colors.cyan,
             percentage: '10%',
             points: investorsPoints,
             efficiency: 1.0,
-            epochLabel: 'Strategic Liquidity • TGE $globalTgeEvent/10',
+            epochLabel: 'DEX Liquidity & Market Access • TGE $globalTgeEvent/10',
           ),
           const SizedBox(height: 12),
 

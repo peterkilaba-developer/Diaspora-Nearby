@@ -112,7 +112,7 @@ class _CountryPickerSheetState extends State<CountryPickerSheet>
                               scale: _scaleAnimation,
                               child: IconButton(
                                 icon: Image.asset(
-                                  'assets/icons/logo-original.png',
+                                  'assets/icons/logo-transparent-24.png',
                                   width: 24,
                                   height: 24,
                                 ),

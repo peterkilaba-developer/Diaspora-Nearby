@@ -21,6 +21,17 @@ class PointsTransaction {
   });
 
   factory PointsTransaction.fromMap(Map<String, dynamic> map, String id) {
+    // Merge top-level transfer fields into metadata so UI can access them uniformly
+    final rawMeta = (map['metadata'] as Map<String, dynamic>?) ?? {};
+    final mergedMeta = <String, dynamic>{
+      ...rawMeta,
+      if (map['txHash'] != null) 'txHash': map['txHash'],
+      if (map['toUserId'] != null && !rawMeta.containsKey('toUserId'))
+        'toUserId': map['toUserId'],
+      if (map['fromUserId'] != null && !rawMeta.containsKey('fromUserId'))
+        'fromUserId': map['fromUserId'],
+    };
+
     return PointsTransaction(
       id: id,
       userId: map['userId'] as String? ?? '',
@@ -28,7 +39,7 @@ class PointsTransaction {
       action: map['action'] as String? ?? 'unknown',
       points: (map['points'] as num? ?? 0).toInt(),
       timestamp: _parseDateTime(map['timestamp']) ?? DateTime.now(),
-      metadata: map['metadata'] as Map<String, dynamic>?,
+      metadata: mergedMeta.isNotEmpty ? mergedMeta : null,
     );
   }
 
@@ -75,10 +86,18 @@ class PointsTransaction {
 
     // 2. Specific System Actions
     switch (action) {
+      case 'welcome_bonus':
+        return 'Welcome Bonus';
       case 'referral_signup':
         return 'Referral Signup';
+      case 'referral_reward_referrer':
+        return 'Referral Reward (Inviter)';
+      case 'referral_reward_referee':
+        return 'Referral Reward (Signup Bonus)';
       case 'daily_open':
-        return 'Maintenance Streak'; // [UPDATED] Rebranded from "Daily App Open"
+        return 'Maintenance Streak';
+      case 'daily_check_in':
+        return 'Daily Check-In';
       case 'daily_share':
         return 'Daily Share';
       case 'message_sent':
@@ -91,6 +110,26 @@ class PointsTransaction {
         return 'DSP Sent';
       case 'dsp_transfer_received':
         return 'DSP Received';
+      case 'token_transfer_sent':
+        return '\$DIASPORA Sent';
+      case 'token_transfer_received':
+        return '\$DIASPORA Received';
+      case 'exploration_reward':
+        return 'Exploration Reward';
+      case 'exploration':
+        return 'Exploration Reward';
+      case 'profile_completion':
+        return 'Profile Completion Bonus';
+      case 'family_connection':
+        return 'Family Connection';
+      case 'friend_connection':
+        return 'Friend Connection';
+      case 'qr_connection':
+        return 'QR Code Connection';
+      case 'trust_vouch_reward':
+        return 'Trust Vouch Reward';
+      case 'token_welcome_bonus':
+        return 'Welcome Bonus — \$DIASPORA';
     }
 
     // 3. Fallback: Humanize Snake Case (e.g. 'joined_community' -> 'Joined Community')

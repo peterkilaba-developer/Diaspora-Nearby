@@ -46,7 +46,8 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
             final saves = earnings['travel_save'] ?? 0;
             final hosting = earnings['hosting_traveler_income'] ?? 0;
 
-            final totalTravelDSP = flightBookings +
+            final totalTravelDSP =
+                flightBookings +
                 hotelBookings +
                 stayBookings +
                 carBookings +
@@ -64,12 +65,7 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Points Balance Card
-                  _buildBalanceCard(
-                    theme,
-                    totalTravelDSP,
-                    tier,
-                    nextTier,
-                  ),
+                  _buildBalanceCard(theme, totalTravelDSP, tier, nextTier),
 
                   const SizedBox(height: 16),
 
@@ -96,9 +92,7 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
                   ),
 
                   // Bottom safe area padding
-                  SizedBox(
-                    height: MediaQuery.of(context).padding.bottom + 24,
-                  ),
+                  SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
                 ],
               ),
             );
@@ -112,34 +106,79 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
 
   static _TierInfo _getTier(int dsp) {
     if (dsp >= 10000) {
-      return const _TierInfo('GLOBE TROTTER', LucideIcons.globe, Color(0xFFFFA726), 10000);
+      return const _TierInfo(
+        'GLOBE TROTTER',
+        LucideIcons.globe,
+        Color(0xFFFFA726),
+        10000,
+      );
     }
     if (dsp >= 1000) {
-      return const _TierInfo('VOYAGER', LucideIcons.ship, Color(0xFF2196F3), 1000);
+      return const _TierInfo(
+        'VOYAGER',
+        LucideIcons.ship,
+        Color(0xFF2196F3),
+        1000,
+      );
     }
     if (dsp >= 100) {
-      return const _TierInfo('ADVENTURER', LucideIcons.mountain, Color(0xFF4CAF50), 100);
+      return const _TierInfo(
+        'ADVENTURER',
+        LucideIcons.mountain,
+        Color(0xFF4CAF50),
+        100,
+      );
     }
     if (dsp >= 10) {
-      return const _TierInfo('TRAVELER', LucideIcons.compass, Color(0xFF78909C), 10);
+      return const _TierInfo(
+        'TRAVELER',
+        LucideIcons.compass,
+        Color(0xFF78909C),
+        10,
+      );
     }
     return const _TierInfo('EXPLORER', LucideIcons.eye, Color(0xFF9E9E9E), 0);
   }
 
   static _TierInfo _getNextTier(int dsp) {
     if (dsp >= 10000) {
-      return const _TierInfo('MAX TIER', LucideIcons.crown, Color(0xFFFFA726), 10000);
+      return const _TierInfo(
+        'MAX TIER',
+        LucideIcons.crown,
+        Color(0xFFFFA726),
+        10000,
+      );
     }
     if (dsp >= 1000) {
-      return const _TierInfo('GLOBE TROTTER', LucideIcons.globe, Color(0xFFFFA726), 10000);
+      return const _TierInfo(
+        'GLOBE TROTTER',
+        LucideIcons.globe,
+        Color(0xFFFFA726),
+        10000,
+      );
     }
     if (dsp >= 100) {
-      return const _TierInfo('VOYAGER', LucideIcons.ship, Color(0xFF2196F3), 1000);
+      return const _TierInfo(
+        'VOYAGER',
+        LucideIcons.ship,
+        Color(0xFF2196F3),
+        1000,
+      );
     }
     if (dsp >= 10) {
-      return const _TierInfo('ADVENTURER', LucideIcons.mountain, Color(0xFF4CAF50), 100);
+      return const _TierInfo(
+        'ADVENTURER',
+        LucideIcons.mountain,
+        Color(0xFF4CAF50),
+        100,
+      );
     }
-    return const _TierInfo('TRAVELER', LucideIcons.compass, Color(0xFF78909C), 10);
+    return const _TierInfo(
+      'TRAVELER',
+      LucideIcons.compass,
+      Color(0xFF78909C),
+      10,
+    );
   }
 
   // --- Widget Builders ---
@@ -151,9 +190,8 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
     _TierInfo nextTier,
   ) {
     final progress = nextTier.threshold > tier.threshold
-        ? ((totalDSP - tier.threshold) /
-                (nextTier.threshold - tier.threshold))
-            .clamp(0.0, 1.0)
+        ? ((totalDSP - tier.threshold) / (nextTier.threshold - tier.threshold))
+              .clamp(0.0, 1.0)
         : 1.0;
 
     return Container(
@@ -183,9 +221,12 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -240,7 +281,7 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: progress,
-                backgroundColor: Colors.white.withOpacity(0.2),
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 minHeight: 6,
               ),
@@ -260,70 +301,70 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
       builder: (context) => Container(
         padding: const EdgeInsets.all(16),
         decoration: AppTheme.cardDecoration(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Travel Tiers',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Travel Tiers',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Milestones at 10× intervals — just like DSP',
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.colorScheme.onSurface.withOpacity(0.4),
-              fontStyle: FontStyle.italic,
+            const SizedBox(height: 6),
+            Text(
+              'Milestones at 10× intervals — just like DSP',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                fontStyle: FontStyle.italic,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
-          const _TierRow(
-            tier: 'Explorer',
-            dsp: '0',
-            perks: 'Access travel search',
-            isActive: true,
-            icon: LucideIcons.eye,
-            color: Color(0xFF9E9E9E),
-          ),
-          _TierRow(
-            tier: 'Traveler',
-            dsp: '10',
-            perks: 'Save to wishlist',
-            isActive: totalDSP >= 10,
-            icon: LucideIcons.compass,
-            color: const Color(0xFF78909C),
-          ),
-          _TierRow(
-            tier: 'Adventurer',
-            dsp: '100',
-            perks: 'Price alerts, saved searches',
-            isActive: totalDSP >= 100,
-            icon: LucideIcons.mountain,
-            color: const Color(0xFF4CAF50),
-          ),
-          _TierRow(
-            tier: 'Voyager',
-            dsp: '1,000',
-            perks: 'Priority support, exclusive deals',
-            isActive: totalDSP >= 1000,
-            icon: LucideIcons.ship,
-            color: const Color(0xFF2196F3),
-          ),
-          _TierRow(
-            tier: 'Globe Trotter',
-            dsp: '10,000',
-            perks: 'VIP access, cashback rewards',
-            isActive: totalDSP >= 10000,
-            icon: LucideIcons.globe,
-            color: const Color(0xFFFFA726),
-            isLast: true,
-          ),
-        ],
-      ),
+            const SizedBox(height: 14),
+            const _TierRow(
+              tier: 'Explorer',
+              dsp: '0',
+              perks: 'Access travel search',
+              isActive: true,
+              icon: LucideIcons.eye,
+              color: Color(0xFF9E9E9E),
+            ),
+            _TierRow(
+              tier: 'Traveler',
+              dsp: '10',
+              perks: 'Save to wishlist',
+              isActive: totalDSP >= 10,
+              icon: LucideIcons.compass,
+              color: const Color(0xFF78909C),
+            ),
+            _TierRow(
+              tier: 'Adventurer',
+              dsp: '100',
+              perks: 'Price alerts, saved searches',
+              isActive: totalDSP >= 100,
+              icon: LucideIcons.mountain,
+              color: const Color(0xFF4CAF50),
+            ),
+            _TierRow(
+              tier: 'Voyager',
+              dsp: '1,000',
+              perks: 'Priority support, exclusive deals',
+              isActive: totalDSP >= 1000,
+              icon: LucideIcons.ship,
+              color: const Color(0xFF2196F3),
+            ),
+            _TierRow(
+              tier: 'Globe Trotter',
+              dsp: '10,000',
+              perks: 'VIP access, cashback rewards',
+              isActive: totalDSP >= 10000,
+              icon: LucideIcons.globe,
+              color: const Color(0xFFFFA726),
+              isLast: true,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -348,37 +389,27 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
             const _EarnRow(
               icon: LucideIcons.plane,
               action: 'Book a flight',
-              points: '+1,000 DSP',
+              points: '\$1 = 1 DSP',
             ),
             const _EarnRow(
               icon: LucideIcons.hotel,
               action: 'Book a hotel',
-              points: '+1,000 DSP',
+              points: '\$1 = 1 DSP',
             ),
             const _EarnRow(
               icon: LucideIcons.home,
               action: 'Book a stay',
-              points: '+1,000 DSP',
+              points: '\$1 = 1 DSP',
             ),
             const _EarnRow(
               icon: LucideIcons.car,
               action: 'Rent a car',
-              points: '+1,000 DSP',
-            ),
-            const _EarnRow(
-              icon: LucideIcons.messageSquare,
-              action: 'Leave a review',
-              points: '+100 DSP',
-            ),
-            const _EarnRow(
-              icon: LucideIcons.heart,
-              action: 'Save to wishlist',
-              points: '+10 DSP',
+              points: '\$1 = 1 DSP',
             ),
             const _EarnRow(
               icon: LucideIcons.home,
               action: 'Host a traveler',
-              points: '+10 DSP / day',
+              points: '+100 DSP each',
               isLast: true,
             ),
           ],
@@ -397,7 +428,8 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
     required int saves,
     required int hosting,
   }) {
-    final total = flightBookings +
+    final total =
+        flightBookings +
         hotelBookings +
         stayBookings +
         carBookings +
@@ -443,14 +475,18 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
                       Icon(
                         LucideIcons.receipt,
                         size: 36,
-                        color: theme.colorScheme.onSurface.withOpacity(0.15),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.15,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Text(
                         'No travel DSP earned yet',
                         style: TextStyle(
                           fontSize: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -458,7 +494,9 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
                         'Book your first trip to start earning!',
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withOpacity(0.3),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                       ),
                     ],
@@ -466,13 +504,42 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
                 ),
               )
             else ...[
-              _ActivityRow(label: 'Flight Bookings', dsp: flightBookings, icon: LucideIcons.plane),
-              _ActivityRow(label: 'Hotel Bookings', dsp: hotelBookings, icon: LucideIcons.hotel),
-              _ActivityRow(label: 'Stay Bookings', dsp: stayBookings, icon: LucideIcons.home),
-              _ActivityRow(label: 'Car Rentals', dsp: carBookings, icon: LucideIcons.car),
-              _ActivityRow(label: 'Reviews', dsp: reviews, icon: LucideIcons.messageSquare),
-              _ActivityRow(label: 'Wishlist Saves', dsp: saves, icon: LucideIcons.heart),
-              _ActivityRow(label: 'Hosting Income', dsp: hosting, icon: LucideIcons.home, isLast: true),
+              _ActivityRow(
+                label: 'Flight Bookings',
+                dsp: flightBookings,
+                icon: LucideIcons.plane,
+              ),
+              _ActivityRow(
+                label: 'Hotel Bookings',
+                dsp: hotelBookings,
+                icon: LucideIcons.hotel,
+              ),
+              _ActivityRow(
+                label: 'Stay Bookings',
+                dsp: stayBookings,
+                icon: LucideIcons.home,
+              ),
+              _ActivityRow(
+                label: 'Car Rentals',
+                dsp: carBookings,
+                icon: LucideIcons.car,
+              ),
+              _ActivityRow(
+                label: 'Reviews',
+                dsp: reviews,
+                icon: LucideIcons.messageSquare,
+              ),
+              _ActivityRow(
+                label: 'Wishlist Saves',
+                dsp: saves,
+                icon: LucideIcons.heart,
+              ),
+              _ActivityRow(
+                label: 'Hosting Income',
+                dsp: hosting,
+                icon: LucideIcons.home,
+                isLast: true,
+              ),
             ],
           ],
         ),
@@ -528,20 +595,22 @@ class _TierRow extends StatelessWidget {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: isActive ? color : color.withOpacity(0.15),
+                    color: isActive ? color : color.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     isActive ? LucideIcons.check : icon,
                     size: 13,
-                    color: isActive ? Colors.white : color.withOpacity(0.6),
+                    color: isActive
+                        ? Colors.white
+                        : color.withValues(alpha: 0.6),
                   ),
                 ),
                 if (!isLast)
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: theme.dividerColor.withOpacity(0.3),
+                      color: theme.dividerColor.withValues(alpha: 0.3),
                     ),
                   ),
               ],
@@ -569,7 +638,9 @@ class _TierRow extends StatelessWidget {
                         '$dsp DSP',
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                     ],
@@ -579,7 +650,7 @@ class _TierRow extends StatelessWidget {
                     perks,
                     style: TextStyle(
                       fontSize: 12,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -617,7 +688,7 @@ class _EarnRow extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(0.1),
+              color: AppTheme.accent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16, color: AppTheme.accent),
@@ -667,14 +738,18 @@ class _ActivityRow extends StatelessWidget {
       padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurface.withOpacity(0.4)),
+          Icon(
+            icon,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
           ),
@@ -683,7 +758,9 @@ class _ActivityRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: dsp > 0 ? AppTheme.accent : theme.colorScheme.onSurface.withOpacity(0.3),
+              color: dsp > 0
+                  ? AppTheme.accent
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.3),
             ),
           ),
         ],

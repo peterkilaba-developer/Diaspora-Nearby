@@ -31,7 +31,9 @@ class DatabaseService {
       await FirebaseFirestore.instance.clearPersistence();
       debugPrint('🧹 Firestore local cache cleared successfully');
     } catch (e) {
-      debugPrint('⚠️ DatabaseService: Could not clear Firestore persistence: $e');
+      debugPrint(
+        '⚠️ DatabaseService: Could not clear Firestore persistence: $e',
+      );
       // clearPersistence can only run before Firestore is used,
       // so this may throw if the app is already using Firestore.
       // In that case, the cache will be cleared on next app restart.

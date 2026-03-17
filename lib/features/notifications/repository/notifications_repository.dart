@@ -8,7 +8,9 @@ import 'package:diaspora_nearby/features/notifications/models/notification_item.
 // Provider
 // ─────────────────────────────────────────────────────────────────────────────
 
-final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) {
+final notificationsRepositoryProvider = Provider<NotificationsRepository>((
+  ref,
+) {
   return NotificationsRepository(FirebaseFirestore.instance);
 });
 
@@ -54,10 +56,9 @@ class NotificationsRepository {
     required NotificationItem item,
   }) async {
     try {
-      final existing = await _userNotifications(userId)
-          .where('payload.dedupKey', isEqualTo: dedupKey)
-          .limit(1)
-          .get();
+      final existing = await _userNotifications(
+        userId,
+      ).where('payload.dedupKey', isEqualTo: dedupKey).limit(1).get();
 
       if (existing.docs.isEmpty) {
         final data = item.toMap();
@@ -90,9 +91,9 @@ class NotificationsRepository {
   /// Mark a single notification as read.
   Future<void> markAsRead(String userId, String notificationId) async {
     try {
-      await _userNotifications(userId).doc(notificationId).update({
-        'isRead': true,
-      });
+      await _userNotifications(
+        userId,
+      ).doc(notificationId).update({'isRead': true});
     } catch (e) {
       debugPrint('❌ [NotificationsRepo] Error marking as read: $e');
     }
@@ -101,9 +102,9 @@ class NotificationsRepository {
   /// Mark all notifications as read.
   Future<void> markAllAsRead(String userId) async {
     try {
-      final unread = await _userNotifications(userId)
-          .where('isRead', isEqualTo: false)
-          .get();
+      final unread = await _userNotifications(
+        userId,
+      ).where('isRead', isEqualTo: false).limit(500).get();
       final batch = _firestore.batch();
       for (final doc in unread.docs) {
         batch.update(doc.reference, {'isRead': true});
@@ -120,12 +121,38 @@ class NotificationsRepository {
   /// Mark a notification's action as completed.
   Future<void> markActionCompleted(String userId, String notificationId) async {
     try {
-      await _userNotifications(userId).doc(notificationId).update({
-        'actionCompleted': true,
-        'isRead': true,
-      });
+      await _userNotifications(
+        userId,
+      ).doc(notificationId).update({'actionCompleted': true, 'isRead': true});
     } catch (e) {
       debugPrint('❌ [NotificationsRepo] Error marking action completed: $e');
+    }
+  }
+
+  /// Mark a notification's action as completed by its dedup key.
+  /// This is used when actions are completed outside the notifications screen
+  /// (e.g. accepting a relationship request from the profile page).
+  Future<void> markActionCompletedByDedupKey(
+    String userId,
+    String dedupKey,
+  ) async {
+    try {
+      final snap = await _userNotifications(
+        userId,
+      ).where('payload.dedupKey', isEqualTo: dedupKey).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        await snap.docs.first.reference.update({
+          'actionCompleted': true,
+          'isRead': true,
+        });
+        debugPrint(
+          '🔔 [NotificationsRepo] Marked action completed by dedupKey: $dedupKey',
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '❌ [NotificationsRepo] Error marking action completed by dedupKey: $e',
+      );
     }
   }
 
@@ -143,7 +170,7 @@ class NotificationsRepository {
   /// Clear all notifications for a user.
   Future<void> clearAll(String userId) async {
     try {
-      final all = await _userNotifications(userId).get();
+      final all = await _userNotifications(userId).limit(500).get();
       final batch = _firestore.batch();
       for (final doc in all.docs) {
         batch.delete(doc.reference);
@@ -162,9 +189,11 @@ class NotificationsRepository {
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
   /// Stream only actionable (action required & not completed) notifications.
@@ -173,16 +202,35 @@ class NotificationsRepository {
         .where('actionRequired', isEqualTo: true)
         .where('actionCompleted', isEqualTo: false)
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  /// Stream completed action-required notifications.
+  Stream<List<NotificationItem>> watchCompletedActions(String userId) {
+    return _userNotifications(userId)
+        .where('actionRequired', isEqualTo: true)
+        .where('actionCompleted', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => NotificationItem.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
   /// Stream count of unread notifications.
   Stream<int> watchUnreadCount(String userId) {
     return _userNotifications(userId)
         .where('isRead', isEqualTo: false)
+        .limit(500)
         .snapshots()
         .map((snap) => snap.docs.length);
   }
@@ -192,20 +240,18 @@ class NotificationsRepository {
     return _userNotifications(userId)
         .where('actionRequired', isEqualTo: true)
         .where('actionCompleted', isEqualTo: false)
+        .limit(500)
         .snapshots()
         .map((snap) => snap.docs.length);
   }
 
   /// One-shot fetch of all notifications for a user.
   Future<List<NotificationItem>> getNotificationsOnce(String userId) async {
-    final snap = await _userNotifications(userId)
-        .orderBy('createdAt', descending: true)
-        .get();
+    final snap = await _userNotifications(
+      userId,
+    ).orderBy('createdAt', descending: true).limit(200).get();
     return snap.docs
-        .map((d) => NotificationItem.fromMap(
-              d.id,
-              d.data(),
-            ))
+        .map((d) => NotificationItem.fromMap(d.id, d.data()))
         .toList();
   }
 }

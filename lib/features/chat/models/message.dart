@@ -24,10 +24,7 @@ class MessageReaction {
   }
 
   /// Convert to Firestore-compatible map
-  Map<String, dynamic> toFirestore() => {
-    'emoji': emoji,
-    'userIds': userIds,
-  };
+  Map<String, dynamic> toFirestore() => {'emoji': emoji, 'userIds': userIds};
 }
 
 /// Location data for location messages
@@ -54,8 +51,12 @@ class MessageLocation {
   /// Create from Firestore data
   factory MessageLocation.fromFirestore(Map<String, dynamic> data) {
     return MessageLocation(
-      lat: (data['lat'] as num?)?.toDouble() ?? 0.0,
-      lng: (data['lng'] as num?)?.toDouble() ?? 0.0,
+      lat: (data['lat'] as num?)?.toDouble() ??
+          (data['latitude'] as num?)?.toDouble() ??
+          0.0,
+      lng: (data['lng'] as num?)?.toDouble() ??
+          (data['longitude'] as num?)?.toDouble() ??
+          0.0,
       address: data['address'] as String? ?? '',
       placeName: data['placeName'] as String?,
       placeType: data['placeType'] as String?,
@@ -308,9 +309,11 @@ class Message {
     List<MessageReaction>? reactions;
     if (data['reactions'] != null && data['reactions'] is List) {
       reactions = (data['reactions'] as List<dynamic>)
-          .map((r) => MessageReaction.fromFirestore(
-                Map<String, dynamic>.from(r as Map),
-              ))
+          .map(
+            (r) => MessageReaction.fromFirestore(
+              Map<String, dynamic>.from(r as Map),
+            ),
+          )
           .toList();
     }
 
@@ -378,8 +381,10 @@ class Message {
     'senderId': senderId,
     'senderName': senderName,
     if (senderImage != null) 'senderImage': senderImage,
-    if (senderHostCountryCode != null) 'senderHostCountryCode': senderHostCountryCode,
-    if (senderHomeCountryCode != null) 'senderHomeCountryCode': senderHomeCountryCode,
+    if (senderHostCountryCode != null)
+      'senderHostCountryCode': senderHostCountryCode,
+    if (senderHomeCountryCode != null)
+      'senderHomeCountryCode': senderHomeCountryCode,
     'content': content,
     'type': type,
     'timestamp': timestamp,
@@ -395,7 +400,8 @@ class Message {
     if (documentName != null) 'documentName': documentName,
     if (documentSize != null) 'documentSize': documentSize,
     if (audioDuration != null) 'audioDuration': audioDuration,
-    if (reactions != null) 'reactions': reactions!.map((r) => r.toFirestore()).toList(),
+    if (reactions != null)
+      'reactions': reactions!.map((r) => r.toFirestore()).toList(),
     if (starred != null) 'starred': starred,
     if (deletedFor != null) 'deletedFor': deletedFor,
     if (deletedForEveryone != null) 'deletedForEveryone': deletedForEveryone,
@@ -404,8 +410,10 @@ class Message {
     if (originalSenderId != null) 'originalSenderId': originalSenderId,
     if (originalSenderName != null) 'originalSenderName': originalSenderName,
     if (originalSenderImage != null) 'originalSenderImage': originalSenderImage,
-    if (originalSenderHostCountryCode != null) 'originalSenderHostCountryCode': originalSenderHostCountryCode,
-    if (originalSenderHomeCountryCode != null) 'originalSenderHomeCountryCode': originalSenderHomeCountryCode,
+    if (originalSenderHostCountryCode != null)
+      'originalSenderHostCountryCode': originalSenderHostCountryCode,
+    if (originalSenderHomeCountryCode != null)
+      'originalSenderHomeCountryCode': originalSenderHomeCountryCode,
     if (originalTimestamp != null) 'originalTimestamp': originalTimestamp,
     if (pinned != null) 'pinned': pinned,
     if (adminId != null) 'adminId': adminId,

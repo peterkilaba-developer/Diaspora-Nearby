@@ -31,9 +31,10 @@ class Community {
   memberPoints; // [NEW] Total points earned by members (basis for 10% target)
   final double awardedBalance; // [NEW] Track distributed rewards
   final double averagePoCT; // [NEW] Track community average trust score
-  final String? walletAddress; // New: Metamask address for $DSP
+  final String? walletAddress; // Smart wallet address for $DSP
   final int cumulativeGdp; // [NEW] Total transaction volume within community
-  final double averageHoldingPeriod; // [NEW] Average time tokens are held (Velocity inverse)
+  final double
+  averageHoldingPeriod; // [NEW] Average time tokens are held (Velocity inverse)
 
   Community({
     required this.id,

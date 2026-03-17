@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diaspora Nearby — Connect, Earn, Build Community Wealth</title>
+    <meta name="description"
+        content="The world's first Reputation-to-Asset Engine for the global diaspora. Find your community, earn $DIASPORA tokens through social activity, and build collective wealth across borders.">
+    <link rel="canonical" href="https://diasporanearby.com/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Diaspora Nearby — Connect, Earn, Build Community Wealth">
+    <meta property="og:description"
+        content="Turn your reputation into revenue. Every connection you build and every trust you earn is minting your future liquid assets.">
+    <meta property="og:image" content="https://diasporanearby.com/images/og-share-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="https://diasporanearby.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Diaspora Nearby">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Diaspora Nearby — Connect, Earn, Build Community Wealth">
+    <meta name="twitter:description"
+        content="Turn your reputation into revenue. Every connection you build and every trust you earn is minting your future liquid assets.">
+    <meta name="twitter:image" content="https://diasporanearby.com/images/og-share-card.png">
+
+    <!-- Favicon & Icons -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Microsoft Clarity Analytics -->
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "vwwrhkj22s");
+    </script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css?v=20260314a">
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Diaspora Nearby",
+    "url": "https://diasporanearby.com",
+    "logo": "https://diasporanearby.com/icons/Icon-512.png",
+    "description": "The world's first Reputation-to-Asset Engine connecting diaspora communities globally with an earn-to-own social economy.",
+    "sameAs": [],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "support@diasporanearby.com",
+      "contactType": "Customer Support"
+    }
+  }
+  </script>
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Diaspora Nearby",
+    "operatingSystem": "Android, iOS, Web",
+    "applicationCategory": "SocialNetworkingApplication",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "description": "Connect with people from your home country nearby. Earn $DIASPORA tokens through Proof of Activity and Proof of Community Trust.",
+    "url": "https://app.diasporanearby.com"
+  }
+  </script>
+</head>
+
+<body>
+
+    <!-- ═══ NAVIGATION ═══ -->
+    <nav class="nav" id="nav">
+        <div class="container nav-inner">
+            <a href="/" class="nav-logo">
+                <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
+                Diaspora Nearby
+            </a>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                <i data-lucide="menu"></i>
+            </button>
+            <ul class="nav-links" id="nav-links">
+                <li><a href="#social">Community</a></li>
+                <li><a href="#economy">Economy</a></li>
+                <li><a href="#treasuries">Treasuries</a></li>
+                <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
+                <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
+                <li><a href="#get-app">Get App</a></li>
+                <li><a href="https://app.diasporanearby.com" class="nav-cta">Open App <i data-lucide="arrow-right"
+                            style="width:16px;height:16px"></i></a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- ═══ HERO ═══ -->
+    <section class="hero" id="hero" style="padding: 80px 0 32px;">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    Epoch 1 — Early Access
+                </div>
+                <h1>
+                    Turn Your <span class="accent-green">Reputation</span>
+                    into <span class="accent-orange">Revenue</span>.
+                </h1>
+                <p>
+                    Your community value is no longer invisible. In Diaspora Nearby, every connection you build and
+                    every trust you earn is minting your future liquid assets on the blockchain.
+                </p>
+                <div class="hero-signup-form" id="hero-signup">
+                    <div class="platform-badge" id="hero-platform-badge">
+                        <i data-lucide="smartphone" style="width:14px;height:14px"></i>
+                        <span id="hero-platform-text">Detecting your platform…</span>
+                    </div>
+                    <div class="form-row">
+                        <input type="email" id="hero-email" placeholder="your@email.com" autocomplete="email">
+                        <button class="btn btn-sage" id="hero-signup-btn" onclick="submitEarlyAccess('hero')">
+                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                            <span id="hero-btn-text">Get Early Access</span>
+                        </button>
+                    </div>
+                    <div class="form-message" id="hero-signup-message"></div>
+                </div>
+
+                <!-- Epoch Progress Card -->
+                <div class="epoch-progress-card">
+                    <div class="epoch-header">
+                        <div class="epoch-title">
+                            <i data-lucide="layers" style="width:16px;height:16px;color:var(--sage)"></i>
+                            <span>Epoch 1 Progress</span>
+                        </div>
+                        <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                            rel="noopener" class="epoch-verify-link">
+                            <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on-chain
+                        </a>
+                    </div>
+                    <div class="epoch-stats epoch-stats-3">
+                        <div class="epoch-stat">
+                            <span class="epoch-stat-label">Pre-Minted</span>
+                            <span class="epoch-stat-value accent-green"><img src="icons/token-logo-transparent.png" alt="" style="width:14px;height:14px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1,000,000 $DIASPORA</span>
+                        </div>
+                        <div class="epoch-stat">
+                            <span class="epoch-stat-label">Community DSP Earned</span>
+                            <span class="epoch-stat-value" id="epoch-dsp-earned">—</span>
+                        </div>
+                        <div class="epoch-stat">
+                            <span class="epoch-stat-label">Members</span>
+                            <span class="epoch-stat-value" id="epoch-members">—</span>
+                        </div>
+                    </div>
+                    <div class="epoch-bar-wrapper">
+                        <div class="epoch-bar">
+                            <div class="epoch-bar-fill" id="epoch-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="epoch-bar-labels">
+                            <span id="epoch-pct">0%</span>
+                            <span>Genesis: 1M DSP</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ SOCIAL PLATFORM ═══ -->
+    <section class="section" id="social">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="users" style="width:14px;height:14px"></i> Social
+                    Platform</div>
+                <h2>Find Your People, Anywhere in the World</h2>
+                <p>
+                    Diaspora Nearby bridges the gap between you and your home community. Whether you've just moved to a
+                    new city or have been abroad for years — find your people.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="globe"></i></div>
+                    <h3>Nearby Discovery</h3>
+                    <p>See who from your diaspora is living around you using precise location technology. Your "Also
+                        Lived In" profile showcases your global journey.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="bell-ring"></i></div>
+                    <h3>Proximity Notifications</h3>
+                    <p>Get real-time alerts when someone from your diaspora is nearby. Never miss a chance to connect
+                        with
+                        a fellow community member in person.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="message-circle"></i></div>
+                    <h3>Connect & Chat</h3>
+                    <p>Start conversations instantly. Text, voice notes, photos, videos. Create community group chats
+                        with @mentions and media sharing.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="heart-handshake"></i></div>
+                    <h3>Family Relationships</h3>
+                    <p>Define family connections within the app. Link parents, siblings, and extended family. Dedicated
+                        family group chats keep your closest bonds strong across borders.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="home"></i></div>
+                    <h3>Peer Hosting</h3>
+                    <p>Open your home to fellow diaspora travelers. Host or be hosted by trusted community members —
+                        verified through PoCT reputation scores. Both host and traveler earn 1,000 DSP.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="calendar"></i></div>
+                    <h3>Events & Organizations</h3>
+                    <p>Never miss a cultural gathering. Find community meetups, festivals, and networking events.
+                        Join verified organizations and community groups.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="radio"></i></div>
+                    <h3>Community Radio</h3>
+                    <p>Tune into community radio stations. Stay connected to the sounds and voices of your homeland,
+                        wherever you are.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="network"></i></div>
+                    <h3>Community Hierarchy</h3>
+                    <p>Every community is structured geographically — from city to state to country to continent to
+                        global.
+                        Your participation funds every level of the hierarchy.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ DSP vs $DIASPORA ═══ -->
+    <section class="section" id="decoupling">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="coins" style="width:14px;height:14px"></i> DSP vs
+                    <img src="icons/token-logo-transparent.png" alt="$DIASPORA" style="width:14px;height:14px;border-radius:0;object-fit:contain;vertical-align:middle;"> $DIASPORA</div>
+                <h2>Two Systems, One Journey</h2>
+                <p>
+                    DSP (Diaspora Social Points) and $DIASPORA are intentionally decoupled. Understanding the difference
+                    is key to maximizing your value.
+                </p>
+            </div>
+            <div class="decouple-grid fade-in">
+                <div class="decouple-card dsp">
+                    <div class="decouple-header">
+                        <i data-lucide="coins"></i>
+                        <h3>Diaspora Social Points</h3>
+                    </div>
+                    <ul class="decouple-list">
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Off-chain reputation score</li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Earned through daily activity
+                        </li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Tracks your social contribution
+                        </li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Accumulates until TGE event</li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> 1:1 matching: you earn 1,
+                            another 1 is created for the 10-slot distribution</li>
+                    </ul>
+                </div>
+                <div class="decouple-divider">
+                    <i data-lucide="chevrons-left" class="divider-icon-left"></i>
+                    <div class="divider-label">TGE Conversion</div>
+                    <i data-lucide="chevrons-right" class="divider-icon-right"></i>
+                </div>
+                <div class="decouple-card diaspora">
+                    <div class="decouple-header">
+                        <img src="icons/token-logo-transparent.png" alt="$DIASPORA"
+                            style="width:24px;height:24px;border-radius:0;object-fit:contain;">
+                        <h3>$DIASPORA Token</h3>
+                    </div>
+                    <ul class="decouple-list">
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> On-chain ERC-20 on Base Mainnet
+                        </li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Real liquid asset you own</li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Pre-minted & locked per epoch
+                        </li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Conversion rate = your PoCT score
+                        </li>
+                        <li><i data-lucide="check" style="width:14px;height:14px"></i> Verifiable on Basescan</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ═══ $DIASPORA ECONOMY ═══ -->
+    <section class="section" id="economy">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><img src="icons/token-logo-transparent.png" alt="$DIASPORA" style="width:14px;height:14px;border-radius:0;object-fit:contain;vertical-align:middle;"> $DIASPORA
+                    Economy</div>
+                <h2>The World's First Social Equity Asset</h2>
+                <p>
+                    $DIASPORA isn't something you buy — it's something you <strong>earn</strong> through Proof of
+                    Activity and Proof of Community Trust. Your daily actions mint real value.
+                </p>
+            </div>
+
+            <!-- How to earn -->
+            <div class="fade-in">
+                <h3 style="margin-bottom:16px; color: var(--orange);">How You Earn</h3>
+                <div class="rewards-grid">
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="user-check" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Welcome Bonus</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="user-pen" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Complete Profile</div>
+                            <div class="reward-amount">+10,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="scan-line" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">QR Identity Exchange</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="heart-handshake"
+                                style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Family Connection</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="users"
+                                style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Friend Connection</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="link" style="width:18px;height:18px"></i></div>
+                        <div class="reward-info">
+                            <div class="reward-action">Refer a Friend</div>
+                            <div class="reward-amount">+1,000 DSP each</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="shield-check" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Verify a Profile</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="badge-check"
+                                style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Vouch for Trust</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon orange"><i data-lucide="banknote" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Economy Transaction</div>
+                            <div class="reward-amount">$1 = 1 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="calendar" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Community Event</div>
+                            <div class="reward-amount">+1,000 DSP</div>
+                        </div>
+                    </div>
+                    <div class="reward-item">
+                        <div class="reward-icon sage"><i data-lucide="home" style="width:18px;height:18px"></i>
+                        </div>
+                        <div class="reward-info">
+                            <div class="reward-action">Host a Traveler</div>
+                            <div class="reward-amount">+1,000 DSP each</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1:1 Expansion -->
+            <div class="economy-highlight fade-in">
+                <h3 style="margin-bottom:8px;">The 1:1 Expansion + 10-Way Distribution</h3>
+                <p style="color:var(--fg-muted); margin-bottom:16px;">
+                    For every 1 DSP you earn, the protocol creates a matching 1 DSP — distributed
+                    across 10 equal allocations: 7 community treasuries, Founders, Liquidity Treasury, and Burn.
+                </p>
+                <div class="dist-bar-wrap">
+                    <div class="dist-bar">
+                        <div class="seg seg-treasury" style="flex:70;background:var(--sage)">70%</div>
+                        <div class="seg seg-founders" style="flex:10">10%</div>
+                        <div class="seg seg-investors" style="flex:10">10%</div>
+                        <div class="seg seg-burn" style="flex:10">10%</div>
+                    </div>
+                    <div class="dist-legend">
+                        <div class="dist-legend-item">
+                            <div class="dot" style="background:var(--sage)"></div> Community Treasuries — 7 allocations × 10%
+                            (70%)
+                        </div>
+                        <div class="dist-legend-item">
+                            <div class="dot" style="background:#5c6bc0"></div> Founders & Development Team (10%)
+                        </div>
+                        <div class="dist-legend-item">
+                            <div class="dot" style="background:#7e57c2"></div> Liquidity Treasury (10%)
+                        </div>
+                        <div class="dist-legend-item">
+                            <div class="dot" style="background:#ef5350"></div> Permanent Burn — to address zero after
+                            TGE (10%)
+                        </div>
+                    </div>
+                    <p style="font-size: 13px; color: var(--fg-muted); margin-top: 12px;">
+                        <i data-lucide="info"
+                            style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                        The 70% <strong style="color:var(--sage)">Community Treasuries</strong> allocation flows
+                        into 7 treasuries across the user's geographic hierarchy (Global Fund Reserve, Home
+                        Continent/Country/City,
+                        Host Continent/Country/City) — powering Diaspora Direct Investments and localized governance.
+                    </p>
+                </div>
+            </div>
+
+            <!-- TGE / Epochs -->
+            <div style="margin-top:48px;" class="fade-in">
+                <h3 style="margin-bottom:8px;">The Great Reset: Token Generation Event</h3>
+                <p
+                    style="color:var(--fg-muted); margin-bottom:24px; max-width:600px; margin-left:auto; margin-right:auto;">
+                    When the community reaches key milestones, all off-chain DSP points convert into liquid
+                    $DIASPORA tokens on the Base blockchain at your PoCT efficiency rate. Each Epoch scales 10x.
+                </p>
+                <div class="epoch-grid">
+                    <div class="epoch-card active">
+                        <div class="epoch-number">1</div>
+                        <div class="epoch-label">Current Epoch</div>
+                        <div class="epoch-value">100 Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1M $DIASPORA</div>
+                        <a class="epoch-link"
+                            href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                            rel="noopener">
+                            <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on Basescan
+                        </a>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">2</div>
+                        <div class="epoch-label">10x growth</div>
+                        <div class="epoch-value">1,000 Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">10M $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">3</div>
+                        <div class="epoch-label">10x growth</div>
+                        <div class="epoch-value">10,000 Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">100M $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">4</div>
+                        <div class="epoch-label">10x growth</div>
+                        <div class="epoch-value">100,000 Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1B $DIASPORA</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ COMMUNITY TREASURIES ═══ -->
+    <section class="section" id="treasuries">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="landmark" style="width:14px;height:14px"></i>
+                    Community Treasuries</div>
+                <h2>The Engine of Localized Economic Sovereignty</h2>
+                <p>
+                    Every DSP-earning activity automatically funds a hierarchical network of 7 community treasuries —
+                    from
+                    global down through continents, countries, states, and cities. These treasuries accumulate real
+                    economic value that communities govern collectively.
+                </p>
+            </div>
+
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="git-branch"></i></div>
+                    <h3>Automatic Allocation</h3>
+                    <p>When a user earns DSP, <strong>70% of the matching DSP</strong> (7 out of 10 allocations) is
+                        automatically split
+                        across <strong>7 community treasuries</strong> based on their home and host locations.
+                        No manual transfers needed.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="map-pin"></i></div>
+                    <h3>Geographic Hierarchy</h3>
+                    <p>Each user funds both home-country and host-country treasuries. A Kenyan in Canada simultaneously
+                        funds treasuries in Kenya <em>and</em> Canada — from continent down to city level.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="vote"></i></div>
+                    <h3>Community Governance</h3>
+                    <p>Each community elects its own leadership council — President, Treasurer, Secretary, and Council
+                        Members — who govern treasury operations through transparent Yay/Nay/Abstain voting.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="badge-check"></i></div>
+                    <h3>APoCT TGE Efficiency</h3>
+                    <p>Community treasuries convert at the <strong style="color:var(--sage)">Average PoCT
+                            (APoCT)</strong> of their members
+                        during TGE events. Higher collective trust = more $DIASPORA for the community.</p>
+                </div>
+            </div>
+
+            <!-- Hierarchy visual -->
+            <div class="treasury-hierarchy fade-in">
+                <div style="text-align:center; margin-bottom: 12px;">
+                    <div class="hier-node global" style="display:inline-flex;">
+                        <i data-lucide="globe"></i> Global Fund Reserve
+                        <span class="hier-label">1 unit</span>
+                    </div>
+                </div>
+                <div class="hierarchy-flow">
+                    <div class="hierarchy-col">
+                        <div class="hier-heading"><i data-lucide="home"
+                                style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                            Home Country</div>
+                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span>
+                        </div>
+                    </div>
+                    <div class="hierarchy-col-center">
+                        <div class="vline"></div>
+                        <div class="vline"></div>
+                        <div class="vline"></div>
+                        <div class="vline"></div>
+                    </div>
+                    <div class="hierarchy-col">
+                        <div class="hier-heading"><i data-lucide="plane"
+                                style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                            Host Country</div>
+                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5
+                                unit</span></div>
+                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span>
+                        </div>
+                    </div>
+                </div>
+                <p style="font-size: 12px; color: var(--fg-muted); margin-top: 12px;">
+                    Each "unit" = 10% of the matched DSP. 7 allocations flow to community treasuries (70% of the match). If a
+                    state is not
+                    set, its fraction rolls up to the
+                    country level.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ DDI — DIASPORA DIRECT INVESTMENT ═══ -->
+    <section class="section" id="ddi">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="trending-up" style="width:14px;height:14px"></i>
+                    Diaspora Direct Investment</div>
+                <h2>Community Capital, Not Bank Capital</h2>
+                <p>
+                    Community treasuries aren't for savings — they're <strong>active capital</strong>. The DDI
+                    framework enables post-TGE lending and investment, powered entirely by the diaspora economy.
+                    Funds are for <strong>investment, not savings</strong>.
+                </p>
+            </div>
+
+            <!-- Host Community Loans -->
+            <h3 style="margin-bottom:16px; color: var(--orange);" class="fade-in">
+                <i data-lucide="map-pin"
+                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                Diaspora Direct Investments Loans — Host Community
+            </h3>
+            <div class="economy-highlight fade-in" style="margin-bottom: 24px;">
+                <p style="color:var(--fg-muted); max-width:660px; margin:0 auto;">
+                    Host location treasuries fund <strong>community loans</strong> for members to start, expand
+                    or operate a business within their host local community. Applicants must have a
+                    <strong>PoCT score of 91+</strong> before voting opens. A <strong>public discussion group
+                        chat</strong> is created when the application is submitted so community members can discuss
+                    before voting. Loan approval requires a <strong>51%+ majority vote</strong> from community
+                    members (minimum 10-member quorum), with a <strong>10-day voting window</strong> at each
+                    level. If local treasury funds are insufficient, requests <strong>cascade upward</strong>
+                    — city → state → country → continent → global.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="vote"></i></div>
+                    <h3>Community Vote</h3>
+                    <p>Loan decisions are made by 51%+ of community member votes — not leaders. A minimum quorum
+                        of 10 voters is required. Voting is open for 10 days at each community level, auto-closing
+                        when quorum is met and the period elapses.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="briefcase"></i></div>
+                    <h3>Business Loans</h3>
+                    <p>Loans are exclusively for starting, expanding, or operating a business based in the
+                        host local community. PoCT score and $DIASPORA token balance determine eligibility and
+                        maximum loan capacity.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="file-code-2"></i></div>
+                    <h3>Smart Contract Managed</h3>
+                    <p>Disbursement and repayment are tracked by a <strong>Loan Management Controller
+                            smart contract</strong>, ensuring transparent and automated enforcement of loan terms,
+                        disbursement schedules, and repayment tracking.</p>
+                </div>
+            </div>
+
+            <!-- Home Country DDI Projects -->
+            <h3 style="margin-top:40px; margin-bottom:16px; color: var(--orange);" class="fade-in">
+                <i data-lucide="landmark"
+                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                Foreign Diaspora Direct Investments — Home Country ($1M+)
+            </h3>
+            <div class="economy-highlight fade-in" style="margin-bottom: 24px;">
+                <p style="color:var(--fg-muted); max-width:660px; margin:0 auto;">
+                    Home location treasuries fund <strong>large-scale expansion projects of $1,000,000+</strong>
+                    for existing businesses in the home country. When an application is submitted, a
+                    <strong>public discussion group chat</strong> is created for community members to deliberate
+                    on the project. A <strong>two-vote process</strong> ensures rigorous due diligence: first a
+                    community vote to approve investigation, then independent consultants verify viability before
+                    a final <strong>67% supermajority vote</strong> (1,000-member quorum, 100-day window) to
+                    disburse funds.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="sprout"></i></div>
+                    <h3>Food & Agriculture</h3>
+                    <p>Large-scale agricultural expansion projects — farming operations, food processing, and
+                        agribusiness ventures that strengthen food security and create employment in the home country.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="heart-pulse"></i></div>
+                    <h3>Healthcare & Medical</h3>
+                    <p>Expand medical facilities, clinics, pharmaceutical supply chains, and health-tech ventures.
+                        Invest in the well-being of home country communities at scale.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="graduation-cap"></i></div>
+                    <h3>Education & Training</h3>
+                    <p>Expand schools, vocational training centers, and ed-tech platforms. Invest in the next
+                        generation through scalable education infrastructure in the home country.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="building-2"></i></div>
+                    <h3>Real Estate & Natural Resources</h3>
+                    <p>Property development, housing projects, and sustainable natural resource ventures. Large-scale
+                        investments that create lasting economic infrastructure in the home country.</p>
+                </div>
+            </div>
+
+            <!-- DDI Safeguards -->
+            <div class="economy-highlight fade-in" style="margin-top: 24px; border-color: var(--orange);">
+                <h3 style="margin-bottom:8px;">
+                    <i data-lucide="shield-check"
+                        style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px;color:var(--orange)"></i>
+                    Built-in Safeguards
+                </h3>
+                <p style="color:var(--fg-muted); max-width:660px; margin:0 auto; font-size:13px;">
+                    <strong>PoCT 91+ Gate</strong> — Business owners must have a Proof of Community Trust score of 91+
+                    before voting opens. Community members vouch up or down using the trust slider.<br><br>
+                    <strong>Consultant Staking</strong> — Paid consultants must stake their fee on the project's
+                    success.
+                    If a project fails, they forfeit their staked fee — eliminating fraud incentive.<br><br>
+                    <strong>Continental Solidarity</strong> — Funder and recipient must be on the same continent.
+                    Multiple countries can pool funds for a single project, with returns split pro-rata by contribution.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ ZERO-FEE VALUE TRANSFER ═══ -->
+    <section class="section" id="value-transfer">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="repeat" style="width:14px;height:14px"></i>
+                    Zero-Fee Value Transfer</div>
+                <h2>Send Value Anywhere, Pay Nothing</h2>
+                <p>
+                    No Western Union, no middlemen, no hidden charges. Transfer value in
+                    <strong>DSP</strong>, <strong>$DIASPORA</strong>, or <strong>Fiat</strong>
+                    — within your country or across borders. Peer-to-peer, business-to-consumer, or
+                    business-to-business. The treasury absorbs provider fees so you pay <strong>zero</strong>.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="send"></i></div>
+                    <h3>P2P Remittance</h3>
+                    <p>Person-to-person value transfer. Send DSP or $DIASPORA to family and friends anywhere in
+                        the world — instantly, with zero fees. Fiat off-ramp available via corridor-specific
+                        payment rails.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="store"></i></div>
+                    <h3>B2C / C2B Payment</h3>
+                    <p>Bilateral business-to-consumer and consumer-to-business payments. Pay for goods and
+                        services, receive payroll, refunds, or make purchases — in either direction. One party
+                        must have a verified <strong>Organization profile</strong>.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="building-2"></i></div>
+                    <h3>B2B Settlement</h3>
+                    <p>Domestic and cross-border business-to-business settlement. Both parties must have verified
+                        Organization
+                        profiles. Higher transfer limits for verified businesses. Includes optional
+                        invoice references for accounting.</p>
+                </div>
+            </div>
+
+            <!-- Transfer Media -->
+            <div class="economy-highlight fade-in" style="margin-top: 24px;">
+                <h3 style="margin-bottom:8px;">
+                    <i data-lucide="coins"
+                        style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                    Supported Transfer Media
+                </h3>
+                <p style="color:var(--fg-muted); max-width:600px; margin:0 auto; font-size:13px;">
+                    <strong>DSP</strong> (pre-TGE points) — ✅ Live &nbsp;|&nbsp;
+                    <strong>$DIASPORA</strong> (post-TGE token) — ✅ Live &nbsp;|&nbsp;
+                    <strong>Fiat</strong> (corridor-specific rails) — 🔜 Coming Soon<br><br>
+                    DSP and $DIASPORA transfers are accessible directly from the chat interface.
+                    Fiat rails will be selected per bilateral corridor — Flutterwave, M-Pesa, Wise, Stripe,
+                    or SEPA depending on sender/receiver region. Provider fees are absorbed by the treasury.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ COMMUNITY EMERGENCY FUND ═══ -->
+    <section class="section" id="emergency-fund">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="shield-alert" style="width:14px;height:14px"></i>
+                    Community Emergency Fund</div>
+                <h2>Collective Protection for Our Diaspora Community</h2>
+                <p>
+                    Built on the African principle of Ubuntu — "I am because we are." A member-funded collective
+                    safety net ensuring no diaspora member ever faces a crisis alone, no matter where they are in the
+                    world.
+                </p>
+            </div>
+
+            <!-- How it works summary -->
+            <div class="economy-highlight fade-in" style="margin-bottom: 24px;">
+                <h3 style="margin-bottom:8px;">
+                    <i data-lucide="info"
+                        style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                    How It Works
+                </h3>
+                <p style="color:var(--fg-muted); max-width:600px; margin:0 auto;">
+                    Members stake 1,000 DSP as a promissory to join, then contribute $100 annually. Your DSP is
+                    refunded once your contribution is confirmed. The fund opens for membership when 10,000 members
+                    stake their commitment. Disbursements are reviewed by elected community leadership — not a
+                    corporate entity.
+                </p>
+            </div>
+
+            <h3 style="margin-bottom:16px; color: var(--sage);" class="fade-in">Support Areas</h3>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="stethoscope"></i></div>
+                    <h3>Medical Emergency</h3>
+                    <p>Critical medical situations requiring urgent financial support — surgeries, hospitalization, or
+                        unforeseen health crises abroad. Rapid-response funding when you need it most.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="gavel"></i></div>
+                    <h3>Legal Aid</h3>
+                    <p>Urgent legal matters including wrongful detention, immigration emergencies, or situations
+                        requiring immediate legal representation in a foreign country.</p>
+                </div>
+                <div class="card" id="bereavement">
+                    <div class="card-icon sage"><i data-lucide="heart-handshake"></i></div>
+                    <h3>Bereavement Support</h3>
+                    <p>Financial and logistical assistance during the loss of a loved one — funeral arrangements,
+                        emergency travel, and family support during the hardest moments.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="plane"></i></div>
+                    <h3>Repatriation</h3>
+                    <p>Emergency travel assistance for members or their remains to their home country when the
+                        unexpected happens. The community ensures no one is stranded.</p>
+                </div>
+            </div>
+
+            <!-- Principles -->
+            <h3 style="margin-top:32px; margin-bottom:16px; color: var(--sage);" class="fade-in">Our
+                Principles</h3>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="users"></i></div>
+                    <h3>Community Governed</h3>
+                    <p>Decisions are made collectively by elected community leaders — not by a corporate entity. Your
+                        voice matters in how the fund operates.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="eye"></i></div>
+                    <h3>Full Transparency</h3>
+                    <p>All contributions, disbursements, and decisions are visible to community members.
+                        Every dollar is traceable and accountable.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="heart"></i></div>
+                    <h3>Solidarity, Not Profit</h3>
+                    <p>Every dollar contributed goes directly to helping members. There are no premiums, no
+                        shareholders, no profit motive — pure mutual aid.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="globe"></i></div>
+                    <h3>Global Reach</h3>
+                    <p>Wherever a diaspora member is in the world, the community stands behind them. Distance doesn't
+                        diminish belonging.</p>
+                </div>
+            </div>
+
+            <!-- Important distinction -->
+            <div class="economy-highlight fade-in" style="margin-top: 24px; border-color: var(--orange);">
+                <h3 style="margin-bottom:8px;">
+                    <i data-lucide="alert-triangle"
+                        style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px;color:var(--orange)"></i>
+                    Important Distinction
+                </h3>
+                <p style="color:var(--fg-muted); max-width:600px; margin:0 auto; font-size:13px;">
+                    This is not an insurance product. It is a voluntary community mutual aid fund. Disbursements are
+                    based on community review and available resources — not contractual guarantees.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ ECOSYSTEM ═══ -->
+    <section class="section" id="ecosystem">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="layers" style="width:14px;height:14px"></i> Diaspora
+                    Ecosystem</div>
+                <h2>More than a Token — A Utility Engine</h2>
+                <p>
+                    $DIASPORA isn't for "diamond hands" — it's for <strong>active hands</strong>. A complete economy for
+                    global trade, travel, real estate, and community services.
+                </p>
+            </div>
+            <div class="utility-grid fade-in">
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="plane" style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Flights & Hotels</h3>
+                    <p>Book flights and hotels worldwide via Amadeus. Every booking earns DSP and contributes to
+                        your community's GDP.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="home" style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Peer Stays</h3>
+                    <p>Stay with diaspora hosts worldwide. Travel within the trust network — community-vetted
+                        accommodation with no middlemen or platform fees.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="car" style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Car Rentals</h3>
+                    <p>Rent cars from community members wherever you travel. Peer-to-peer vehicle sharing within the
+                        diaspora trust network — no rental agencies.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="shopping-cart"
+                            style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Marketplace</h3>
+                    <p>Buy, sell, and hire within the diaspora economy. Products, services, and jobs — all zero-fee. No
+                        listing costs, no commissions.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="building" style="width:36px;height:36px;color:var(--orange)"></i>
+                    </div>
+                    <h3>Real Estate</h3>
+                    <p>GPS-precision land surveys, property listings, and diaspora direct investment (DDI) projects back
+                        home. Build wealth across borders.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="landmark" style="width:36px;height:36px;color:var(--orange)"></i>
+                    </div>
+                    <h3>Organizations</h3>
+                    <p>Register and manage diaspora businesses and community organizations. Build the infrastructure for
+                        collective economic power.</p>
+                </div>
+
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="wallet" style="width:36px;height:36px;color:var(--orange)"></i>
+                    </div>
+                    <h3>Smart Wallet</h3>
+                    <p>Non-custodial Smart Wallet, auto-created from your phone number. Gasless transactions
+                        powered by Account Abstraction on Base. No seed phrases, no MetaMask — just tap and send.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ TRUST & IDENTITY ═══ -->
+    <section class="section" id="trust">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="shield" style="width:14px;height:14px"></i> Trust &
+                    Identity</div>
+                <h2>Your Reputation is Your Multiplier</h2>
+                <p>
+                    Proof of Community Trust (PoCT) — a multi-dimensional identity system where real humans validate
+                    each other through 6 genesis milestones, transparency signals, and community participation.
+                    Your PoCT score determines your TGE conversion efficiency.
+                </p>
+            </div>
+
+            <!-- Genesis Milestones -->
+            <h3 style="margin-bottom:16px; color: var(--sage);" class="fade-in">
+                <i data-lucide="award"
+                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                6 Genesis Milestones — 60 PoCT Max
+            </h3>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="heart-handshake"></i></div>
+                    <h3>Family Connections</h3>
+                    <p>10 unique family connections earn +10 PoCT. Family ties are finite and identity-bound —
+                        impossible to game at scale.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="users"></i></div>
+                    <h3>Friend Connections</h3>
+                    <p>10 unique friend connections earn +10 PoCT. Building genuine peer relationships across the
+                        diaspora network.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="scan-line"></i></div>
+                    <h3>QR Identity Exchanges</h3>
+                    <p>10 unique in-person QR scans earn +10 PoCT. Cryptographic proof of physical presence —
+                        the gold standard of trust.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="shield-check"></i></div>
+                    <h3>Verified by Peers</h3>
+                    <p>10 unique peer verifications earn +10 PoCT. Others confirm different facets of your identity —
+                        one field per verifier, bots can't fake diversity.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="badge-check"></i></div>
+                    <h3>Vouched by Peers</h3>
+                    <p>10 unique peer vouches earn +10 PoCT. Each voucher stakes 1,000 DSP on your trustworthiness —
+                        skin in the game prevents hollow endorsements.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="user-check"></i></div>
+                    <h3>Profile Completion</h3>
+                    <p>Fill every profile field to earn +10 PoCT. The foundation of your digital identity and trust
+                        score. Dynamic — adapts as new fields are added.</p>
+                </div>
+            </div>
+
+            <!-- Additional PoCT Sources -->
+            <h3 style="margin-top:40px; margin-bottom:16px; color: var(--sage);" class="fade-in">
+                <i data-lucide="plus-circle"
+                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                Beyond Genesis — Transparency, Participation & Ongoing Trust
+            </h3>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="map-pin"></i></div>
+                    <h3>City Visibility</h3>
+                    <p>Enable public display of your current city to earn +10 PoCT. Shows you have nothing to hide —
+                        a transparency signal that builds community confidence.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="calendar-check"></i></div>
+                    <h3>Event Attendance</h3>
+                    <p>10 verified QR check-ins at physical community events earn +10 PoCT. Proof you show up
+                        and engage with your community in the real world.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="shield-alert"></i></div>
+                    <h3>Emergency Fund Contributor</h3>
+                    <p>Complete your annual contribution to the community emergency fund for +10 PoCT.
+                        You invest in collective protection — the community invests back in your trust.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="trending-up"></i></div>
+                    <h3>Ongoing Earners</h3>
+                    <p>+1 PoCT per 10 full-trust slider ratings, +1 PoCT per 100 days active, +1 PoCT per
+                        10 completed economic transactions. Trust grows organically with real activity.</p>
+                </div>
+            </div>
+
+            <!-- Trust Slider -->
+            <div class="economy-highlight fade-in" style="margin-top:32px;">
+                <h3 style="margin-bottom:12px;">
+                    <i data-lucide="sliders"
+                        style="width:18px;height:18px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                    The Trust Slider
+                </h3>
+                <p style="color:var(--fg-muted); max-width:600px; margin:0 auto 16px;">
+                    Long-press any message to rate the sender's trust on a 0-100 slider. In DM chats, the slider
+                    appears once — a one-time trust signal. In community, event, group, and organization chats,
+                    ratings are continuous — your latest rating overwrites previous ones as trust evolves.
+                    Full-trust ratings (&gt;90) require staking 1,000 DSP as skin in the game.
+                </p>
+            </div>
+
+            <!-- TGE Efficiency Gates -->
+            <div class="tge-gates-card fade-in" style="margin-top:16px;">
+                <div class="tge-gates-header">
+                    <i data-lucide="shield-check" style="width:18px;height:18px;color:var(--orange)"></i>
+                    <h3>TGE Efficiency Gates</h3>
+                </div>
+                <p class="tge-gates-desc">Your PoCT (Proof of Community Trust) score determines how efficiently your DSP
+                    converts to $DIASPORA at the Token Generation Event.</p>
+                <table class="tge-table">
+                    <thead>
+                        <tr>
+                            <th>PoCT Score</th>
+                            <th>Efficiency</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>91 - 100</td>
+                            <td class="eff-green">100%</td>
+                            <td class="status-max">Maximum Yield</td>
+                        </tr>
+                        <tr>
+                            <td>81 - 90</td>
+                            <td class="eff-green">90%</td>
+                            <td class="status-vhigh">Very High Yield</td>
+                        </tr>
+                        <tr>
+                            <td>71 - 80</td>
+                            <td class="eff-green">80%</td>
+                            <td class="status-high">High Yield</td>
+                        </tr>
+                        <tr>
+                            <td>61 - 70</td>
+                            <td class="eff-green">70%</td>
+                            <td class="status-good">Good Yield</td>
+                        </tr>
+                        <tr>
+                            <td>51 - 60</td>
+                            <td class="eff-yellow">60%</td>
+                            <td class="status-std">Standard Yield</td>
+                        </tr>
+                        <tr>
+                            <td>41 - 50</td>
+                            <td class="eff-yellow">50%</td>
+                            <td class="status-basic">Basic Yield</td>
+                        </tr>
+                        <tr>
+                            <td>31 - 40</td>
+                            <td class="eff-orange">40%</td>
+                            <td class="status-low">Low Yield</td>
+                        </tr>
+                        <tr>
+                            <td>21 - 30</td>
+                            <td class="eff-orange">30%</td>
+                            <td class="status-vlow">Very Low Yield</td>
+                        </tr>
+                        <tr>
+                            <td>11 - 20</td>
+                            <td class="eff-red">20%</td>
+                            <td class="status-min">Minimal Yield</td>
+                        </tr>
+                        <tr>
+                            <td>1 - 10</td>
+                            <td class="eff-red">10%</td>
+                            <td class="status-entry">Entry Yield</td>
+                        </tr>
+                        <tr>
+                            <td>0</td>
+                            <td class="eff-dim">0%</td>
+                            <td class="status-none">No Yield</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ GOVERNANCE ═══ -->
+    <section class="section" id="governance">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="gavel" style="width:14px;height:14px"></i>
+                    Self-Governance</div>
+                <h2>Your Community, Your Rules</h2>
+                <p>
+                    Diaspora Nearby gives every community true democratic power. No central authority dictates how
+                    treasury funds are used — the community decides through transparent voting.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="landmark"></i></div>
+                    <h3>Elected Leadership Council</h3>
+                    <p>Each community elects 4 leadership roles: President, Treasurer, Secretary, and Council Member.
+                        Qualified candidates self-nominate, and the community votes them into office.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="vote"></i></div>
+                    <h3>Yay / Nay / Abstain Voting</h3>
+                    <p>Every vote is a clear Yay, Nay, or Abstain. Candidates need over 50% favorable rate to win.
+                        If a leader drops below 50%, they are automatically voted out — real accountability.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="eye"></i></div>
+                    <h3>Transparent Elections</h3>
+                    <p>All vote counts, candidacies, and election results are visible to community members in real
+                        time. System messages announce candidacies in community chat.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="shield-check"></i></div>
+                    <h3>Merit-Based Eligibility</h3>
+                    <p>Only members who meet all three criteria can run for leadership: <strong>100+ days</strong>
+                        active on the platform, <strong>admin of a 100+ member group chat</strong>, and a
+                        <strong>PoCT score of 90+</strong>. Qualified candidates are auto-populated.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ═══ TRANSPARENCY ═══ -->
+    <section class="section" id="transparency">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="eye" style="width:14px;height:14px"></i> Transparency
+                </div>
+                <h2>Built in the Open</h2>
+                <p>
+                    $DIASPORA's value isn't speculative — it's anchored to real economic activity. The floor price is
+                    determined by actual Fiat GDP processed through the platform.
+                </p>
+            </div>
+            <div class="investor-grid fade-in">
+                <div class="investor-card">
+                    <div class="metric">Base</div>
+                    <div class="metric-label">Blockchain (Coinbase L2)</div>
+                </div>
+                <div class="investor-card">
+                    <div class="metric">$0</div>
+                    <div class="metric-label">Transaction Fees</div>
+                </div>
+                <div class="investor-card">
+                    <div class="metric">10x</div>
+                    <div class="metric-label">Epoch Growth Model</div>
+                </div>
+                <div class="investor-card">
+                    <div class="metric">10%</div>
+                    <div class="metric-label">Fixed Burn Rate (of match)</div>
+                </div>
+            </div>
+            <div class="economy-highlight fade-in" style="margin-top:24px;">
+                <div class="economy-formula">
+                    Floor Price = Total Fiat GDP ÷ Circulating Supply
+                </div>
+                <p style="font-size:14px; color:var(--fg-muted);">
+                    Every flight booked, product sold, and service hired adds real fiat value to the GDP floor.
+                    More activity = higher floor price. The community controls the value.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ TEAM ═══ -->
+    <section class="section" id="team">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="user-circle" style="width:14px;height:14px"></i> Team
+                </div>
+                <h2>Who's Building This?</h2>
+                <p>Diaspora Nearby is built by diaspora members, for diaspora members.</p>
+            </div>
+            <div class="team-grid fade-in">
+                <div class="team-card">
+                    <img src="images/peter-swai.jpg" alt="Peter Swai" class="team-avatar-img">
+                    <div class="team-info">
+                        <h3>Peter Swai</h3>
+                        <span class="role">Founder & Lead Developer</span>
+                        <p class="bio">Full-stack & blockchain developer. Building tools for the global diaspora.</p>
+                        <a href="https://www.linkedin.com/in/peter-swai" target="_blank" rel="noopener">
+                            <i data-lucide="linkedin" style="width:12px;height:12px"></i> LinkedIn
+                        </a>
+                        <a href="https://github.com/peterkilaba-developer" target="_blank" rel="noopener"
+                            style="margin-left: 12px;">
+                            <i data-lucide="github" style="width:12px;height:12px"></i> GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ GET EARLY ACCESS ═══ -->
+    <section class="section" id="get-app">
+        <div class="container">
+            <div class="install-section fade-in">
+                <div class="get-app-icon">
+                    <i data-lucide="smartphone" style="width:40px;height:40px;color:var(--sage)"></i>
+                </div>
+                <h2>Get Early Access</h2>
+                <p>We’re launching native apps for Android & iOS. Enter your email to get access — Android users will
+                    be redirected to install from Google Play.</p>
+
+                <div class="platform-detect-card" id="install-platform-card">
+                    <div class="platform-icon-row">
+                        <div class="platform-option" id="install-android-opt">
+                            <i data-lucide="smartphone" style="width:24px;height:24px"></i>
+                            <span>Android</span>
+                            <span class="platform-tag">Google Play</span>
+                        </div>
+                        <div class="platform-divider"></div>
+                        <div class="platform-option" id="install-ios-opt">
+                            <i data-lucide="tablet" style="width:24px;height:24px"></i>
+                            <span>iOS</span>
+                            <span class="platform-tag coming-soon">TestFlight</span>
+                        </div>
+                    </div>
+                    <div class="detected-platform-label" id="install-detected-label">
+                        <i data-lucide="check-circle" style="width:14px;height:14px"></i>
+                        <span id="install-detected-text">Detecting your device…</span>
+                    </div>
+                </div>
+
+                <div class="signup-form" style="margin-top: 24px;">
+                    <div class="form-row" style="flex-direction: column;">
+                        <input type="email" id="install-email" placeholder="your@email.com" autocomplete="email"
+                            style="width: 100%;">
+                        <button class="btn btn-sage" id="install-signup-btn" onclick="submitEarlyAccess('install')"
+                            style="width: 100%; justify-content: center;">
+                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                            <span id="install-btn-text">Sign Up & Get the App</span>
+                        </button>
+                    </div>
+                    <div class="form-message" id="install-signup-message"></div>
+                </div>
+
+                <!-- Direct Play Store button for Android users -->
+                <div id="play-store-direct" class="play-store-direct" style="display:none;">
+                    <p style="color:var(--fg-muted); font-size:14px; margin-bottom:12px;">
+                        Already a tester? Install directly from Google Play:
+                    </p>
+                    <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby" target="_blank" rel="noopener" class="btn btn-play-store" style="text-decoration:none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        <span>Install from Google Play</span>
+                    </a>
+                </div>
+
+                <!-- APK fallback for users who can’t use Play Store -->
+                <div id="apk-fallback" class="apk-fallback" style="display:none;">
+                    <details>
+                        <summary style="color:var(--fg-muted); font-size:13px; cursor:pointer; text-align:center;">
+                            <i data-lucide="download" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
+                            Can’t install from Google Play? Download APK directly
+                        </summary>
+                        <div style="margin-top:12px; padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid var(--border);">
+                            <p style="color:var(--fg-muted); font-size:13px; margin-bottom:12px;">
+                                <i data-lucide="alert-triangle" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;color:var(--orange)"></i>
+                                <strong>Note:</strong> APK installs require enabling "Install from unknown sources" in your phone settings.
+                                We recommend installing from Google Play for the smoothest experience.
+                            </p>
+                            <button class="btn btn-outline-small" onclick="triggerAPKDownload()" style="width:100%;justify-content:center;">
+                                <i data-lucide="download" style="width:14px;height:14px"></i>
+                                Download APK (advanced)
+                            </button>
+                        </div>
+                    </details>
+                </div>
+
+                <a href="https://app.diasporanearby.com" class="web-app-fallback">
+                    <i data-lucide="globe" style="width:14px;height:14px"></i>
+                    Or continue with the Web App →
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ FINAL CTA ═══ -->
+    <section class="section">
+        <div class="container">
+            <div class="fade-in" style="text-align:center;">
+                <h2 style="font-size:clamp(1.5rem,4vw,2.5rem); font-weight:800; margin-bottom:16px;">
+                    The Great Reset Waits for No One.
+                </h2>
+                <p style="color:var(--fg-muted); max-width:500px; margin:0 auto 32px; font-size:16px;">
+                    Reach 10,000 DSP to qualify for TGE. Those who build before the reset own the largest share at
+                    the lowest difficulty.
+                </p>
+                <a href="#get-app" class="btn btn-sage" style="font-size:18px; padding:16px 40px;">
+                    Get Early Access <i data-lucide="arrow-right" style="width:18px;height:18px"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-inner">
+                <div class="footer-brand">
+                    <div class="logo">
+                        <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="28" height="28">
+                        Diaspora Nearby
+                    </div>
+                    <p>The world's first Reputation-to-Asset Engine. Connecting diaspora communities globally with an
+                        earn-to-own social economy.</p>
+                </div>
+                <div class="footer-links">
+                    <h4>Platform</h4>
+                    <ul>
+                        <li><a href="https://app.diasporanearby.com">Web App</a></li>
+                        <li><a href="#social">Community</a></li>
+                        <li><a href="#economy">Economy</a></li>
+                        <li><a href="#treasuries">Treasuries</a></li>
+                        <li><a href="#governance">Governance</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Token</h4>
+                    <ul>
+                        <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
+                        <li><a href="#decoupling">DSP vs $DIASPORA</a></li>
+                        <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
+                        <li><a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                                target="_blank" rel="noopener">Basescan <i data-lucide="external-link"
+                                    style="width:10px;height:10px;display:inline;vertical-align:middle"></i></a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="/privacy-policy">Privacy Policy</a></li>
+                        <li><a href="/terms-of-service">Terms of Service</a></li>
+                        <li><a href="mailto:support@diasporanearby.com">Support</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Diaspora Nearby. All rights reserved.</p>
+                <p class="disclaimer">
+                    $DIASPORA is a utility token used within the Diaspora Nearby platform.
+                    The primary method of token distribution is community participation. The Liquidity Treasury (5% of total epoch supply) provides DEX liquidity for the $DIASPORA ecosystem.
+                    There is no public sale, ICO, or IEO.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Firebase JS SDK (for tester signup) -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+        import { getFirestore, collection, addDoc, doc, onSnapshot, serverTimestamp }
+            from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+        import { getFunctions, httpsCallable }
+            from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
+
+        // Firebase client config is intentionally public — security is enforced
+        // via Firestore/Auth security rules, not API key secrecy.
+        const firebaseConfig = {
+            apiKey: "AIzaSyBPUiYKBDFpHvPj8KJH-VKs5QqHBnPiJtI",
+            authDomain: "diaspora-nearby-a3dac.firebaseapp.com",
+            projectId: "diaspora-nearby-a3dac",
+            storageBucket: "diaspora-nearby-a3dac.firebasestorage.app",
+            messagingSenderId: "512074182214",
+            appId: "1:512074182214:web:351bd07f62180977b92447"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Cloud Functions
+        const funcs = getFunctions(app);
+
+        // Expose to global scope for onclick handlers
+        window._firestoreDb = db;
+        window._addDoc = addDoc;
+        window._collection = collection;
+        window._serverTimestamp = serverTimestamp;
+        window._addPlayStoreTester = httpsCallable(funcs, 'addPlayStoreTester');
+
+        // ── Real-time Epoch Progress ──
+        const GENESIS_MILESTONE = 1000000;
+        const fmt = (n) => n.toLocaleString('en-US');
+
+        // Listen to DSP supply
+        onSnapshot(doc(db, 'system_stats', 'dsp_supply'), (snap) => {
+            const data = snap.data() || {};
+            const totalMinted = data.totalMinted || 0;
+            const el = document.getElementById('epoch-dsp-earned');
+            if (el) el.textContent = fmt(totalMinted) + ' DSP';
+            // Update progress bar
+            const pct = Math.min((totalMinted / GENESIS_MILESTONE) * 100, 100);
+            const bar = document.getElementById('epoch-bar-fill');
+            if (bar) bar.style.width = Math.max(pct, 0.5) + '%';
+            const pctEl = document.getElementById('epoch-pct');
+            if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
+        });
+
+        // Listen to member count
+        onSnapshot(doc(db, 'communities', 'global_community'), (snap) => {
+            const data = snap.data() || {};
+            const count = data.memberCount || 0;
+            const el = document.getElementById('epoch-members');
+            if (el) el.textContent = fmt(count);
+        });
+    </script>
+
+    <script src="script.js?v=20260314a"></script>
+</body>
+
+</html>

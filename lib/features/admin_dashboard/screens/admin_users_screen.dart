@@ -44,7 +44,10 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                       hintText: 'Search users by name, email, or phone...',
                       prefixIcon: const Icon(LucideIcons.search, size: 20),
                       filled: true,
-                      fillColor: AppTheme.elevationColor(context, 2), // Level 2 input
+                      fillColor: AppTheme.elevationColor(
+                        context,
+                        2,
+                      ), // Level 2 input
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,

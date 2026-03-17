@@ -12,8 +12,9 @@ ElectionResult _$ElectionResultFromJson(Map<String, dynamic> json) =>
       unitId: json['unitId'] as String,
       unitName: json['unitName'] as String,
       timestamp: (json['timestamp'] as num).toInt(),
-      winners:
-          (json['winners'] as List<dynamic>).map((e) => e as String).toList(),
+      winners: (json['winners'] as List<dynamic>)
+          .map((e) => e as String)
+          .toList(),
       tally: Map<String, int>.from(json['tally'] as Map),
       totalVotes: (json['totalVotes'] as num).toInt(),
     );

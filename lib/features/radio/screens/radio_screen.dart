@@ -67,7 +67,7 @@ class _RadioScreenState extends ConsumerState<RadioScreen>
               showExplorationRewardToast(
                 context,
                 message: 'Tuned into Radio',
-                points: 10,
+                points: 100,
               );
             }
           });
@@ -538,7 +538,7 @@ class RadioStationCard extends ConsumerWidget {
                       .trackExplorationReward(
                         user.uid,
                         'action_radio_favorite',
-                        points: 10,
+                        points: 100,
                       );
                   await ref
                       .read(radioRepositoryProvider)

@@ -70,7 +70,10 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(
+              16, 16, 16,
+              16 + MediaQuery.of(context).padding.bottom,
+            ),
             itemCount: history.length,
             itemBuilder: (context, index) {
               final result = history[index];
@@ -90,7 +93,7 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
           Icon(
             LucideIcons.history,
             size: 64,
-            color: Colors.grey.withOpacity(0.5),
+            color: Colors.grey.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -172,9 +175,9 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppTheme.accent.withOpacity(0.05),
+        color: AppTheme.accent.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.accent.withOpacity(0.1)),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

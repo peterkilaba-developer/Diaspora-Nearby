@@ -83,7 +83,7 @@ class _RealEstateDetailScreenState
   /// Record a view for this listing, keyed by viewer's host country.
   Future<void> _recordView() async {
     try {
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      final profile = ref.read(userProfileProvider).value;
       final country = profile?.hostCountry ?? 'Unknown';
       final countryCode = profile?.hostCountryCode ?? 'XX';
       final viewerUid = ref.read(authRepositoryProvider).currentUser?.uid;
@@ -136,10 +136,12 @@ class _RealEstateDetailScreenState
       if (mounted) setState(() => _isSaved = !_isSaved);
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_isSaved ? 'Listing saved!' : 'Removed from saved'),
-        duration: const Duration(seconds: 1),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isSaved ? 'Listing saved!' : 'Removed from saved'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
     }
   }
 
@@ -155,8 +157,7 @@ class _RealEstateDetailScreenState
 
       final byCountry = <String, int>{};
       for (final doc in snap.docs) {
-        final country =
-            (doc.data()['country'] as String?) ?? 'Unknown';
+        final country = (doc.data()['country'] as String?) ?? 'Unknown';
         byCountry[country] = (byCountry[country] ?? 0) + 1;
       }
 
@@ -176,7 +177,7 @@ class _RealEstateDetailScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final profile = ref.watch(userProfileProvider).value;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -184,8 +185,10 @@ class _RealEstateDetailScreenState
         slivers: [
           _buildSliverAppBar(context, theme, isDark),
           SliverPadding(
-            padding: EdgeInsets.symmetric(
-                horizontal: AppTheme.pageHorizontalPadding, vertical: 16),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.pageHorizontalPadding,
+              vertical: 16,
+            ),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // Owner inline-edit banner
@@ -199,22 +202,26 @@ class _RealEstateDetailScreenState
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: _categoryColor.withOpacity(0.1),
+                        color: _categoryColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_categoryIcon,
-                              size: 12, color: _categoryColor),
+                          Icon(_categoryIcon, size: 12, color: _categoryColor),
                           const SizedBox(width: 4),
-                          Text(listing.categoryLabel,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: _categoryColor)),
+                          Text(
+                            listing.categoryLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _categoryColor,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -222,9 +229,11 @@ class _RealEstateDetailScreenState
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppTheme.accent.withOpacity(0.1),
+                          color: AppTheme.accent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -241,22 +250,30 @@ class _RealEstateDetailScreenState
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 3),
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
+                          color: Colors.green.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.shieldCheck,
-                                size: 10, color: Colors.green.shade600),
+                            Icon(
+                              LucideIcons.shieldCheck,
+                              size: 10,
+                              color: Colors.green.shade600,
+                            ),
                             const SizedBox(width: 3),
-                            Text('GPS Verified',
-                                style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green.shade600)),
+                            Text(
+                              'GPS Verified',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green.shade600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -266,30 +283,41 @@ class _RealEstateDetailScreenState
                 const SizedBox(height: 8),
 
                 // Title
-                Text(listing.title,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    )),
+                Text(
+                  listing.title,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
                 const SizedBox(height: 6),
 
                 // Location row
                 if (listing.locationLabel.isNotEmpty)
-                  Row(children: [
-                    Icon(LucideIcons.mapPin,
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.mapPin,
                         size: 14,
-                        color: theme.colorScheme.onSurface.withOpacity(0.4)),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(listing.locationLabel,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.4,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          listing.locationLabel,
                           style: TextStyle(
                             fontSize: 13,
-                            color:
-                                theme.colorScheme.onSurface.withOpacity(0.5),
-                          )),
-                    ),
-                  ]),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 const SizedBox(height: 16),
 
                 // Price + size card
@@ -317,19 +345,36 @@ class _RealEstateDetailScreenState
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(listing.sizeLabel,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.7),
-                                )),
+                            Text(
+                              '${listing.size!.toStringAsFixed(0)} m\u00B2',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${(listing.size! * 10.7639).toStringAsFixed(0)} ft\u00B2'
+                              '${listing.size! >= 4047 ? '  \u00B7  ${(listing.size! / 4046.86).toStringAsFixed(1)} acres' : ''}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
                             if (listing.hasTitle == true)
-                              Text('Title Deed \u2713',
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Title Deed \u2713',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.green.shade600,
-                                  )),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                     ],
@@ -341,21 +386,23 @@ class _RealEstateDetailScreenState
                 if (listing.description.isNotEmpty) ...[
                   _sectionTitle(theme, 'Description'),
                   const SizedBox(height: 6),
-                  Text(listing.description,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.6,
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.65),
-                      )),
+                  Text(
+                    listing.description,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.6,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.65,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                 ],
 
                 // Category-specific details
                 if (listing.category == 'plot') _plotDetails(theme, isDark),
                 if (listing.category == 'farm') _farmDetails(theme, isDark),
-                if (listing.category == 'house')
-                  _houseDetails(theme, isDark),
+                if (listing.category == 'house') _houseDetails(theme, isDark),
 
                 const SizedBox(height: 16),
 
@@ -378,27 +425,30 @@ class _RealEstateDetailScreenState
   }
 
   // ─── Owner Action Bar ──────────────────────────────────────────────────
-  Widget _ownerActionBar(
-      BuildContext context, ThemeData theme, bool isDark) {
+  Widget _ownerActionBar(BuildContext context, ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppTheme.accent.withOpacity(isDark ? 0.12 : 0.06),
+        color: AppTheme.accent.withValues(alpha: isDark ? 0.12 : 0.06),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: AppTheme.accent.withOpacity(0.2), width: 1),
+          color: AppTheme.accent.withValues(alpha: 0.2),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
-          Icon(LucideIcons.info, size: 14, color: AppTheme.accent),
+          const Icon(LucideIcons.info, size: 14, color: AppTheme.accent),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text('This is your listing',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.accent,
-                )),
+          const Expanded(
+            child: Text(
+              'This is your listing',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.accent,
+              ),
+            ),
           ),
           GestureDetector(
             onTap: () async {
@@ -411,28 +461,29 @@ class _RealEstateDetailScreenState
                   ),
                 ),
               );
-              if (result == true && mounted) {
+              if (result == true && context.mounted) {
                 Navigator.pop(context, true);
               }
             },
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: AppTheme.accent,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(LucideIcons.pencil, size: 12, color: Colors.white),
                   SizedBox(width: 4),
-                  Text('Edit',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      )),
+                  Text(
+                    'Edit',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -460,80 +511,98 @@ class _RealEstateDetailScreenState
             children: [
               Row(
                 children: [
-                  Icon(LucideIcons.eye,
-                      size: 16,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                  Icon(
+                    LucideIcons.eye,
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                   const SizedBox(width: 6),
-                  Text('$_totalViews total view${_totalViews == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface.withOpacity(0.7),
-                      )),
+                  Text(
+                    '$_totalViews total view${_totalViews == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
                 ],
               ),
               if (!_statsLoaded) ...[
                 const SizedBox(height: 10),
-                Center(
+                const Center(
                   child: SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.accent),
+                      strokeWidth: 2,
+                      color: AppTheme.accent,
+                    ),
                   ),
                 ),
               ],
               if (_statsLoaded && _viewsByCountry.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Text('VIEWS BY COUNTRY',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                      color: theme.colorScheme.onSurface.withOpacity(0.35),
-                    )),
+                Text(
+                  'VIEWS BY COUNTRY',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                  ),
+                ),
                 const SizedBox(height: 6),
                 ...(_viewsByCountry.entries.toList()
                       ..sort((a, b) => b.value.compareTo(a.value)))
                     .take(10)
-                    .map((entry) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Row(
-                            children: [
-                              Text(entry.key,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.65),
-                                  )),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.accent.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
+                    .map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Text(
+                              entry.key,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.65,
                                 ),
-                                child: Text('${entry.value}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.accent,
-                                    )),
                               ),
-                            ],
-                          ),
-                        )),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${entry.value}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.accent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
               ],
               if (_statsLoaded && _viewsByCountry.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('No views yet',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.4),
-                      )),
+                  child: Text(
+                    'No views yet',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -542,28 +611,13 @@ class _RealEstateDetailScreenState
     );
   }
 
-  /// Collect all viewable images for the fullscreen viewer.
-  List<String> get _allImages {
-    final images = <String>[];
-    images.addAll(listing.photos);
-    // For plot/farm, add satellite image if no photos
-    if (images.isEmpty &&
-        listing.category != 'house' &&
-        listing.satelliteImageUrl != null) {
-      images.add(listing.satelliteImageUrl!);
-    }
-    return images;
-  }
-
   void _openFullScreenViewer(List<String> images, int index) {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
-        pageBuilder: (_, __, ___) => _FullScreenImageViewer(
-          images: images,
-          initialIndex: index,
-        ),
-        transitionsBuilder: (_, anim, __, child) {
+        pageBuilder: (_, _, _) =>
+            _FullScreenImageViewer(images: images, initialIndex: index),
+        transitionsBuilder: (_, anim, _, child) {
           return FadeTransition(opacity: anim, child: child);
         },
       ),
@@ -571,81 +625,140 @@ class _RealEstateDetailScreenState
   }
 
   Widget _buildSliverAppBar(
-      BuildContext context, ThemeData theme, bool isDark) {
-    final images = _allImages;
-    final hasImages = images.isNotEmpty;
+    BuildContext context,
+    ThemeData theme,
+    bool isDark,
+  ) {
+    // Build ordered image list based on category:
+    //   Plot/Farm: aerial (satellite) → map → user photos
+    //   House: profile photo → aerial → map → remaining house photos
+    final allImages = <_CarouselImage>[];
 
-    // For house: show photo gallery carousel with page indicator
-    // For plot/farm: show satellite image
+    if (listing.category == 'house') {
+      // 1. First photo is the profile/hero photo
+      if (listing.photos.isNotEmpty) {
+        allImages.add(_CarouselImage(listing.photos.first, 'photo'));
+      }
+      // 2. Aerial satellite view
+      if (listing.satelliteImageUrl != null) {
+        allImages.add(_CarouselImage(listing.satelliteImageUrl!, 'aerial'));
+      }
+      // 3. Road map view
+      if (listing.mapImageUrl != null) {
+        allImages.add(_CarouselImage(listing.mapImageUrl!, 'map'));
+      }
+      // 4. Remaining house photos
+      if (listing.photos.length > 1) {
+        for (int i = 1; i < listing.photos.length; i++) {
+          allImages.add(_CarouselImage(listing.photos[i], 'photo'));
+        }
+      }
+    } else {
+      // Plot / Farm: aerial and map first
+      if (listing.satelliteImageUrl != null) {
+        allImages.add(_CarouselImage(listing.satelliteImageUrl!, 'aerial'));
+      }
+      if (listing.mapImageUrl != null) {
+        allImages.add(_CarouselImage(listing.mapImageUrl!, 'map'));
+      }
+      // Then user photos
+      for (final url in listing.photos) {
+        allImages.add(_CarouselImage(url, 'photo'));
+      }
+    }
+
     Widget heroImage;
-    if (listing.photos.isNotEmpty && listing.category == 'house') {
-      // House: photo gallery with page indicator
+    if (allImages.isNotEmpty) {
       final pageController = PageController();
+      final imageUrls = allImages.map((e) => e.url).toList();
       heroImage = Stack(
         children: [
           PageView.builder(
             controller: pageController,
-            itemCount: listing.photos.length,
-            itemBuilder: (_, i) => GestureDetector(
-              onTap: () => _openFullScreenViewer(listing.photos, i),
-              child: CachedNetworkImage(
-                imageUrl: listing.photos[i],
-                fit: BoxFit.cover,
-                placeholder: (_, __) => _placeholder(isDark),
-                errorWidget: (_, __, ___) => _placeholder(isDark),
-              ),
-            ),
+            itemCount: allImages.length,
+            itemBuilder: (_, i) {
+              final img = allImages[i];
+              return GestureDetector(
+                onTap: () => _openFullScreenViewer(imageUrls, i),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CachedNetworkImage(
+                      imageUrl: img.url,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) => _placeholder(isDark),
+                      errorWidget: (_, _, _) => _placeholder(isDark),
+                    ),
+                    // Label overlay for aerial/map images
+                    if (img.type == 'aerial' || img.type == 'map')
+                      Positioned(
+                        left: 12,
+                        top: MediaQuery.of(context).padding.top + 48,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                img.type == 'aerial'
+                                    ? LucideIcons.satellite
+                                    : LucideIcons.map,
+                                size: 12,
+                                color: Colors.white70,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                img.type == 'aerial'
+                                    ? 'Aerial View'
+                                    : 'Location Map',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
-          if (listing.photos.length > 1)
+          if (allImages.length > 1)
             Positioned(
               bottom: 12,
               left: 0,
               right: 0,
               child: _PageIndicator(
                 controller: pageController,
-                count: listing.photos.length,
+                count: allImages.length,
               ),
             ),
           Positioned(
             bottom: 12,
             right: 12,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '${listing.photos.length} photos',
-                style: const TextStyle(
-                    fontSize: 10, color: Colors.white70),
+                '${allImages.length} ${allImages.length == 1 ? 'image' : 'images'}',
+                style: const TextStyle(fontSize: 10, color: Colors.white70),
               ),
             ),
           ),
         ],
-      );
-    } else if (listing.photos.isNotEmpty) {
-      heroImage = GestureDetector(
-        onTap: () => _openFullScreenViewer(listing.photos, 0),
-        child: CachedNetworkImage(
-          imageUrl: listing.photos.first,
-          fit: BoxFit.cover,
-          placeholder: (_, __) => _placeholder(isDark),
-          errorWidget: (_, __, ___) => _placeholder(isDark),
-        ),
-      );
-    } else if (listing.category != 'house' &&
-        listing.satelliteImageUrl != null) {
-      heroImage = GestureDetector(
-        onTap: () =>
-            _openFullScreenViewer([listing.satelliteImageUrl!], 0),
-        child: CachedNetworkImage(
-          imageUrl: listing.satelliteImageUrl!,
-          fit: BoxFit.cover,
-          placeholder: (_, __) => _placeholder(isDark),
-          errorWidget: (_, __, ___) => _placeholder(isDark),
-        ),
       );
     } else {
       heroImage = _placeholder(isDark);
@@ -659,7 +772,7 @@ class _RealEstateDetailScreenState
         Container(
           margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             shape: BoxShape.circle,
           ),
           child: IconButton(
@@ -680,11 +793,14 @@ class _RealEstateDetailScreenState
   Widget _placeholder(bool isDark) {
     return Container(
       color: isDark
-          ? _categoryColor.withOpacity(0.08)
-          : _categoryColor.withOpacity(0.05),
+          ? _categoryColor.withValues(alpha: 0.08)
+          : _categoryColor.withValues(alpha: 0.05),
       child: Center(
-        child: Icon(_categoryIcon,
-            size: 60, color: _categoryColor.withOpacity(0.3)),
+        child: Icon(
+          _categoryIcon,
+          size: 60,
+          color: _categoryColor.withValues(alpha: 0.3),
+        ),
       ),
     );
   }
@@ -696,7 +812,7 @@ class _RealEstateDetailScreenState
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1,
-        color: theme.colorScheme.onSurface.withOpacity(0.4),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
       ),
     );
   }
@@ -705,24 +821,25 @@ class _RealEstateDetailScreenState
   Widget _plotDetails(ThemeData theme, bool isDark) {
     final items = <_DetailItem>[];
     if (listing.zoning != null) {
-      items.add(
-          _DetailItem(LucideIcons.building2, 'Zoning', listing.zoning!));
+      items.add(_DetailItem(LucideIcons.building2, 'Zoning', listing.zoning!));
     }
     if (listing.terrainType != null) {
-      items.add(_DetailItem(
-          LucideIcons.mountain, 'Terrain', listing.terrainType!));
+      items.add(
+        _DetailItem(LucideIcons.mountain, 'Terrain', listing.terrainType!),
+      );
     }
-    if (listing.isFenced == true)
+    if (listing.isFenced == true) {
       items.add(_DetailItem(LucideIcons.lock, 'Fenced', 'Yes'));
-    if (listing.hasWater == true)
-      items.add(
-          _DetailItem(LucideIcons.droplets, 'Water', 'Available'));
-    if (listing.hasElectricity == true)
-      items.add(
-          _DetailItem(LucideIcons.zap, 'Electricity', 'Available'));
-    if (listing.hasRoad == true)
-      items.add(
-          _DetailItem(LucideIcons.navigation, 'Road Access', 'Yes'));
+    }
+    if (listing.hasWater == true) {
+      items.add(_DetailItem(LucideIcons.droplets, 'Water', 'Available'));
+    }
+    if (listing.hasElectricity == true) {
+      items.add(_DetailItem(LucideIcons.zap, 'Electricity', 'Available'));
+    }
+    if (listing.hasRoad == true) {
+      items.add(_DetailItem(LucideIcons.navigation, 'Road Access', 'Yes'));
+    }
 
     if (items.isEmpty) return const SizedBox.shrink();
     return _detailGrid(theme, isDark, 'Plot Features', items);
@@ -733,22 +850,27 @@ class _RealEstateDetailScreenState
     final items = <_DetailItem>[];
     if (listing.farmableArea != null) {
       final sqft = listing.farmableArea! * 10.7639;
-      items.add(_DetailItem(LucideIcons.sprout, 'Farmable Area',
-          '${listing.farmableArea!.toStringAsFixed(0)} m\u00B2 / ${sqft.toStringAsFixed(0)} ft\u00B2'));
+      items.add(
+        _DetailItem(
+          LucideIcons.sprout,
+          'Farmable Area',
+          '${listing.farmableArea!.toStringAsFixed(0)} m\u00B2 / ${sqft.toStringAsFixed(0)} ft\u00B2',
+        ),
+      );
     }
     if (listing.soilType != null) {
-      items.add(
-          _DetailItem(LucideIcons.leaf, 'Soil', listing.soilType!));
+      items.add(_DetailItem(LucideIcons.leaf, 'Soil', listing.soilType!));
     }
-    if (listing.hasIrrigation == true)
-      items.add(_DetailItem(
-          LucideIcons.droplets, 'Irrigation', 'Available'));
-    if (listing.hasStorage == true)
-      items.add(_DetailItem(
-          LucideIcons.warehouse, 'Storage', 'Available'));
+    if (listing.hasIrrigation == true) {
+      items.add(_DetailItem(LucideIcons.droplets, 'Irrigation', 'Available'));
+    }
+    if (listing.hasStorage == true) {
+      items.add(_DetailItem(LucideIcons.warehouse, 'Storage', 'Available'));
+    }
     if (listing.workers != null) {
-      items.add(_DetailItem(
-          LucideIcons.users, 'Workers', '${listing.workers}'));
+      items.add(
+        _DetailItem(LucideIcons.users, 'Workers', '${listing.workers}'),
+      );
     }
 
     return Column(
@@ -763,8 +885,9 @@ class _RealEstateDetailScreenState
           Wrap(
             spacing: 6,
             runSpacing: 6,
-            children:
-                listing.crops!.map((c) => _chip(theme, isDark, c)).toList(),
+            children: listing.crops!
+                .map((c) => _chip(theme, isDark, c))
+                .toList(),
           ),
         ],
       ],
@@ -775,42 +898,55 @@ class _RealEstateDetailScreenState
   Widget _houseDetails(ThemeData theme, bool isDark) {
     final items = <_DetailItem>[];
     if (listing.bedrooms != null) {
-      items.add(_DetailItem(
-          LucideIcons.bedDouble, 'Bedrooms', '${listing.bedrooms}'));
+      items.add(
+        _DetailItem(LucideIcons.bedDouble, 'Bedrooms', '${listing.bedrooms}'),
+      );
     }
     if (listing.bathrooms != null) {
-      items.add(_DetailItem(
-          LucideIcons.bath, 'Bathrooms', '${listing.bathrooms}'));
+      items.add(
+        _DetailItem(LucideIcons.bath, 'Bathrooms', '${listing.bathrooms}'),
+      );
     }
     if (listing.floors != null) {
-      items.add(_DetailItem(
-          LucideIcons.layers, 'Floors', '${listing.floors}'));
+      items.add(_DetailItem(LucideIcons.layers, 'Floors', '${listing.floors}'));
     }
     if (listing.livingArea != null) {
       final sqft = listing.livingArea! * 10.7639;
-      items.add(_DetailItem(LucideIcons.square, 'Living Area',
-          '${listing.livingArea!.toStringAsFixed(0)} m\u00B2 / ${sqft.toStringAsFixed(0)} ft\u00B2'));
+      items.add(
+        _DetailItem(
+          LucideIcons.square,
+          'Living Area',
+          '${listing.livingArea!.toStringAsFixed(0)} m\u00B2 / ${sqft.toStringAsFixed(0)} ft\u00B2',
+        ),
+      );
     }
     if (listing.yearBuilt != null) {
-      items.add(_DetailItem(
-          LucideIcons.calendar, 'Year Built', '${listing.yearBuilt}'));
+      items.add(
+        _DetailItem(LucideIcons.calendar, 'Year Built', '${listing.yearBuilt}'),
+      );
     }
     if (listing.propertyCondition != null) {
-      items.add(_DetailItem(
-          LucideIcons.wrench, 'Condition', listing.propertyCondition!));
+      items.add(
+        _DetailItem(
+          LucideIcons.wrench,
+          'Condition',
+          listing.propertyCondition!,
+        ),
+      );
     }
-    if (listing.hasGarage == true)
+    if (listing.hasGarage == true) {
       items.add(_DetailItem(LucideIcons.car, 'Garage', 'Yes'));
-    if (listing.hasGarden == true)
+    }
+    if (listing.hasGarden == true) {
       items.add(_DetailItem(LucideIcons.flower2, 'Garden', 'Yes'));
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (items.isNotEmpty)
           _detailGrid(theme, isDark, 'House Details', items),
-        if (listing.amenities != null &&
-            listing.amenities!.isNotEmpty) ...[
+        if (listing.amenities != null && listing.amenities!.isNotEmpty) ...[
           const SizedBox(height: 12),
           _sectionTitle(theme, 'Amenities'),
           const SizedBox(height: 6),
@@ -826,8 +962,12 @@ class _RealEstateDetailScreenState
     );
   }
 
-  Widget _detailGrid(ThemeData theme, bool isDark, String title,
-      List<_DetailItem> items) {
+  Widget _detailGrid(
+    ThemeData theme,
+    bool isDark,
+    String title,
+    List<_DetailItem> items,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -837,45 +977,58 @@ class _RealEstateDetailScreenState
           spacing: 8,
           runSpacing: 8,
           children: items
-              .map((item) => Container(
-                    constraints: const BoxConstraints(minWidth: 90),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppTheme.elevationDark1
-                          : AppTheme.elevationLight1,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(item.icon,
-                            size: 14,
-                            color: theme.colorScheme.onSurface
-                                .withOpacity(0.4)),
-                        const SizedBox(width: 6),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.label,
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.4),
-                                )),
-                            Text(item.value,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.75),
-                                )),
-                          ],
+              .map(
+                (item) => Container(
+                  constraints: const BoxConstraints(minWidth: 90),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppTheme.elevationDark1
+                        : AppTheme.elevationLight1,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        item.icon,
+                        size: 14,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.4,
                         ),
-                      ],
-                    ),
-                  ))
+                      ),
+                      const SizedBox(width: 6),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.label,
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.4,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            item.value,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.75,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              )
               .toList(),
         ),
       ],
@@ -886,15 +1039,17 @@ class _RealEstateDetailScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppTheme.accent.withOpacity(isDark ? 0.15 : 0.08),
+        color: AppTheme.accent.withValues(alpha: isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: AppTheme.accent,
-          )),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: AppTheme.accent,
+        ),
+      ),
     );
   }
 
@@ -912,10 +1067,9 @@ class _RealEstateDetailScreenState
             backgroundImage: listing.ownerPhoto.isNotEmpty
                 ? NetworkImage(listing.ownerPhoto)
                 : null,
-            backgroundColor: AppTheme.accent.withOpacity(0.1),
+            backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
             child: listing.ownerPhoto.isEmpty
-                ? const Icon(LucideIcons.user,
-                    size: 18, color: AppTheme.accent)
+                ? const Icon(LucideIcons.user, size: 18, color: AppTheme.accent)
                 : null,
           ),
           const SizedBox(width: 12),
@@ -923,41 +1077,44 @@ class _RealEstateDetailScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(listing.ownerName,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface,
-                    )),
+                Text(
+                  listing.ownerName,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
                 if (listing.country != null)
-                  Text(listing.country!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.5),
-                      )),
+                  Text(
+                    listing.country!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
               ],
             ),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: AppTheme.accent,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(LucideIcons.messageCircle,
-                    size: 14, color: Colors.white),
+              children: [
+                Icon(LucideIcons.messageCircle, size: 14, color: Colors.white),
                 SizedBox(width: 6),
-                Text('Contact',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    )),
+                Text(
+                  'Contact',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ],
             ),
           ),
@@ -972,6 +1129,16 @@ class _DetailItem {
   final String label;
   final String value;
   _DetailItem(this.icon, this.label, this.value);
+}
+
+/// Helper for the hero carousel — tracks image URL and its type
+/// so we can display labelled overlays for aerial / map images.
+class _CarouselImage {
+  final String url;
+
+  /// 'photo', 'aerial', or 'map'
+  final String type;
+  const _CarouselImage(this.url, this.type);
 }
 
 // ─── Page Indicator ─────────────────────────────────────────────────────
@@ -1038,8 +1205,7 @@ class _FullScreenImageViewer extends StatefulWidget {
   });
 
   @override
-  State<_FullScreenImageViewer> createState() =>
-      _FullScreenImageViewerState();
+  State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
 }
 
 class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
@@ -1078,11 +1244,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   imageUrl: widget.images[i],
                   fit: BoxFit.contain,
                   width: double.infinity,
-                  placeholder: (_, __) => const Center(
+                  placeholder: (_, _) => const Center(
                     child: CircularProgressIndicator(
-                        color: AppTheme.accent, strokeWidth: 2),
+                      color: AppTheme.accent,
+                      strokeWidth: 2,
+                    ),
                   ),
-                  errorWidget: (_, __, ___) => const Icon(
+                  errorWidget: (_, _, _) => const Icon(
                     Icons.broken_image,
                     color: Colors.white38,
                     size: 48,
@@ -1104,8 +1272,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   color: Colors.black54,
                   shape: BoxShape.circle,
                 ),
-                child:
-                    const Icon(Icons.close, color: Colors.white, size: 22),
+                child: const Icon(Icons.close, color: Colors.white, size: 22),
               ),
             ),
           ),
@@ -1133,8 +1300,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                       widget.images.length,
                       (i) => AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        margin:
-                            const EdgeInsets.symmetric(horizontal: 3),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
                         width: _currentIndex == i ? 20 : 6,
                         height: 6,
                         decoration: BoxDecoration(

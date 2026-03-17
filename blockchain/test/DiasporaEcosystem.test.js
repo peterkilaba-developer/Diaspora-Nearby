@@ -1,127 +1,287 @@
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
-describe("Diaspora Ecosystem Integration", function () {
-    let token, registry, tgeController, allocationHub, engine;
-    let owner, admin, upgrader, oracle, user, founder, investor;
+describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
+    let token, tgeController;
+    let admin, upgrader, oracle, user1, user2, founder, investor;
+
+    const DECIMALS = 18;
+    const EPOCH_1_SUPPLY = ethers.parseUnits("1000000", DECIMALS); // 1M
 
     beforeEach(async function () {
-        [owner, admin, upgrader, oracle, user, founder, investor] = await ethers.getSigners();
+        [admin, upgrader, oracle, user1, user2, founder, investor] = await ethers.getSigners();
 
-        // 1. Deploy Token
+        // Deploy DiasporaToken via UUPS proxy
         const DiasporaToken = await ethers.getContractFactory("DiasporaToken");
-        token = await upgrades.deployProxy(DiasporaToken, [admin.address, owner.address, upgrader.address], { kind: "uups" });
+        token = await upgrades.deployProxy(
+            DiasporaToken,
+            [admin.address, admin.address, upgrader.address],
+            { kind: "uups" }
+        );
         await token.waitForDeployment();
         const tokenAddress = await token.getAddress();
 
-        // 2. Deploy Registry
-        const DiasporaRegistry = await ethers.getContractFactory("DiasporaRegistry");
-        registry = await upgrades.deployProxy(DiasporaRegistry, [admin.address, upgrader.address], { kind: "uups" });
-        await registry.waitForDeployment();
-        const registryAddress = await registry.getAddress();
-
-        // 3. Deploy TGE Controller
+        // Deploy TGEController via UUPS proxy
         const DiasporaTGEController = await ethers.getContractFactory("DiasporaTGEController");
-        tgeController = await upgrades.deployProxy(DiasporaTGEController, [admin.address, upgrader.address, tokenAddress], { kind: "uups" });
+        tgeController = await upgrades.deployProxy(
+            DiasporaTGEController,
+            [admin.address, upgrader.address, tokenAddress],
+            { kind: "uups" }
+        );
         await tgeController.waitForDeployment();
         const tgeAddress = await tgeController.getAddress();
 
-        // 4. Deploy Allocation Hub
-        const DiasporaAllocationHub = await ethers.getContractFactory("DiasporaAllocationHub");
-        allocationHub = await upgrades.deployProxy(DiasporaAllocationHub, [
-            admin.address,
-            upgrader.address,
-            tokenAddress,
-            registryAddress,
-            tgeAddress,
-            founder.address,
-            investor.address
-        ], { kind: "uups" });
-        await allocationHub.waitForDeployment();
-        const hubAddress = await allocationHub.getAddress();
-
-        // 5. Deploy Expansion Engine
-        const DiasporaExpansionEngine = await ethers.getContractFactory("DiasporaExpansionEngine");
-        engine = await upgrades.deployProxy(DiasporaExpansionEngine, [
-            admin.address,
-            upgrader.address,
-            tgeAddress,
-            hubAddress
-        ], { kind: "uups" });
-        await engine.waitForDeployment();
-        const engineAddress = await engine.getAddress();
-
-        // --- Wiring ---
+        // Grant MINTER_ROLE to TGEController (so it can pre-mint)
         const MINTER_ROLE = await token.MINTER_ROLE();
-        const ENGINE_ROLE = await tgeController.ENGINE_ROLE();
-        const TGE_ORACLE_ROLE = await tgeController.TGE_ORACLE_ROLE();
-        const DISTRIBUTOR_ROLE = await allocationHub.DISTRIBUTOR_ROLE();
-        const REPORTER_ROLE = await engine.REPORTER_ROLE();
-        const DEFAULT_ADMIN_ROLE = await token.DEFAULT_ADMIN_ROLE();
-
-        console.log("Admin address:", admin.address);
-        console.log("Token Admin Role check:", await token.hasRole(DEFAULT_ADMIN_ROLE, admin.address));
-
         await token.connect(admin).grantRole(MINTER_ROLE, tgeAddress);
-        await token.connect(admin).grantRole(MINTER_ROLE, hubAddress);
-        await tgeController.connect(admin).grantRole(ENGINE_ROLE, hubAddress);
-        await tgeController.connect(admin).grantRole(ENGINE_ROLE, engineAddress);
-        await tgeController.connect(admin).grantRole(TGE_ORACLE_ROLE, oracle.address);
-        await allocationHub.connect(admin).grantRole(DISTRIBUTOR_ROLE, engineAddress);
-        await engine.connect(admin).grantRole(REPORTER_ROLE, oracle.address);
 
-        console.log("Wiring complete.");
+        // Grant TGE_ORACLE_ROLE to oracle signer
+        const TGE_ORACLE_ROLE = await tgeController.TGE_ORACLE_ROLE();
+        await tgeController.connect(admin).grantRole(TGE_ORACLE_ROLE, oracle.address);
     });
 
-    describe("1:1 Expansion Rule", function () {
-        it("Should stage rewards correctly for user and treasuries", async function () {
-            const rewardAmount = ethers.parseEther("100"); // 100 DSP
-            const initialSupply = await token.totalSupply();
+    describe("Initial State", function () {
+        it("Should start at Epoch 1, TGE Event 0, zero supply", async function () {
+            const stats = await tgeController.getStats();
+            expect(stats[0]).to.equal(1); // epoch
+            expect(stats[1]).to.equal(0); // tgeEvent
+            expect(stats[2]).to.equal(0); // totalMinted
+            expect(stats[3]).to.equal(0); // totalDistributed
+            expect(stats[4]).to.equal(0); // totalBurned
 
-            // Record activity via Oracle
-            await engine.connect(oracle).recordActivity(user.address, rewardAmount);
-
-            // Verify User Staging
-            expect(await tgeController.stagedUserRewards(user.address)).to.equal(rewardAmount);
-
-            // Verify System Staging (Founders/Investors get 10% each of the match)
-            expect(await tgeController.stagedSystemRewards(founder.address)).to.equal(ethers.parseEther("10"));
-            expect(await tgeController.stagedSystemRewards(investor.address)).to.equal(ethers.parseEther("10"));
-
-            // Verify Total Supply Increase (User 100 + Match 100 = 200)
-            expect(await token.totalSupply()).to.equal(initialSupply + ethers.parseEther("200"));
-
-            // Verify TGE Controller Balance (Staged User 100 + Founder 10 + Investor 10 = 120)
-            // (The other 80 are burned: 70 unassigned community slots + 10 fixed burn slot)
-            expect(await token.balanceOf(await tgeController.getAddress())).to.equal(ethers.parseEther("120"));
+            expect(await token.totalSupply()).to.equal(0);
         });
     });
 
-    describe("TGE Filtering (PoCT)", function () {
-        it("Should release liquid tokens based on PoCT and burn the rest", async function () {
-            const rewardAmount = ethers.parseEther("100");
-            await engine.connect(oracle).recordActivity(user.address, rewardAmount);
+    describe("mintEpochSupply()", function () {
+        it("Should mint tokens to the TGEController", async function () {
+            await tgeController.connect(oracle).mintEpochSupply(EPOCH_1_SUPPLY);
 
-            // Execute TGE with 70% PoCT for user
-            // Efficiency 70 means 70% liquid, 30% burned
-            const recipients = [user.address, founder.address, investor.address];
-            const efficiencies = [70, 100, 100]; // System always 100
+            const controllerAddr = await tgeController.getAddress();
+            const balance = await token.balanceOf(controllerAddr);
+            expect(balance).to.equal(EPOCH_1_SUPPLY);
+            expect(await token.totalSupply()).to.equal(EPOCH_1_SUPPLY);
+        });
 
-            const initialUserBalance = await token.balanceOf(user.address);
+        it("Should track epochLockedSupply", async function () {
+            await tgeController.connect(oracle).mintEpochSupply(EPOCH_1_SUPPLY);
+            expect(await tgeController.epochLockedSupply()).to.equal(EPOCH_1_SUPPLY);
+            expect(await tgeController.totalMinted()).to.equal(EPOCH_1_SUPPLY);
+        });
 
-            await tgeController.connect(oracle).executeTGE(recipients, efficiencies);
+        it("Should update getLockedBalance()", async function () {
+            await tgeController.connect(oracle).mintEpochSupply(EPOCH_1_SUPPLY);
+            expect(await tgeController.getLockedBalance()).to.equal(EPOCH_1_SUPPLY);
+        });
 
-            // Verify User got 70 DSP
-            expect(await token.balanceOf(user.address)).to.equal(initialUserBalance + ethers.parseEther("70"));
+        it("Should allow incremental minting", async function () {
+            const half = EPOCH_1_SUPPLY / 2n;
+            await tgeController.connect(oracle).mintEpochSupply(half);
+            await tgeController.connect(oracle).mintEpochSupply(half);
 
-            // Verify Founder got 10 DSP (100% of 10 staged)
-            expect(await token.balanceOf(founder.address)).to.equal(ethers.parseEther("10"));
+            expect(await tgeController.epochLockedSupply()).to.equal(EPOCH_1_SUPPLY);
+            expect(await tgeController.getLockedBalance()).to.equal(EPOCH_1_SUPPLY);
+        });
 
-            // Verify Staged Balances are cleared
-            expect(await tgeController.stagedUserRewards(user.address)).to.equal(0);
+        it("Should revert on zero amount", async function () {
+            await expect(
+                tgeController.connect(oracle).mintEpochSupply(0)
+            ).to.be.revertedWith("TGE: zero amount");
+        });
 
-            // Verify Burn (30 DSP from user + 0 from system)
-            // Note: The rest of the 50/50 match (80 DSP) is still staged for communities if they aren't in recipients list.
+        it("Should revert for non-oracle callers", async function () {
+            await expect(
+                tgeController.connect(user1).mintEpochSupply(EPOCH_1_SUPPLY)
+            ).to.be.reverted;
+        });
+    });
+
+    describe("executeTGE() — Distribute from Pre-Minted Supply", function () {
+        beforeEach(async function () {
+            // Pre-mint Epoch 1 supply
+            await tgeController.connect(oracle).mintEpochSupply(EPOCH_1_SUPPLY);
+        });
+
+        it("Should distribute by efficiency (100%)", async function () {
+            const amount = ethers.parseUnits("1000", DECIMALS);
+            await tgeController.connect(oracle).executeTGE(
+                [user1.address],
+                [amount],
+                [100]
+            );
+
+            expect(await token.balanceOf(user1.address)).to.equal(amount);
+        });
+
+        it("Should distribute by efficiency (70%) — burn 30%", async function () {
+            const amount = ethers.parseUnits("1000", DECIMALS);
+            await tgeController.connect(oracle).executeTGE(
+                [user1.address],
+                [amount],
+                [70]
+            );
+
+            const liquid = ethers.parseUnits("700", DECIMALS);
+            const burned = ethers.parseUnits("300", DECIMALS);
+
+            expect(await token.balanceOf(user1.address)).to.equal(liquid);
+
+            const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+            expect(await token.balanceOf(BURN_ADDRESS)).to.equal(burned);
+        });
+
+        it("Should handle multi-recipient batch", async function () {
+            const amounts = [
+                ethers.parseUnits("500", DECIMALS),
+                ethers.parseUnits("300", DECIMALS),
+                ethers.parseUnits("200", DECIMALS),
+            ];
+            const efficiencies = [90, 100, 50];
+
+            await tgeController.connect(oracle).executeTGE(
+                [user1.address, founder.address, user2.address],
+                amounts,
+                efficiencies
+            );
+
+            // user1: 500 * 90% = 450
+            expect(await token.balanceOf(user1.address)).to.equal(ethers.parseUnits("450", DECIMALS));
+            // founder: 300 * 100% = 300
+            expect(await token.balanceOf(founder.address)).to.equal(ethers.parseUnits("300", DECIMALS));
+            // user2: 200 * 50% = 100
+            expect(await token.balanceOf(user2.address)).to.equal(ethers.parseUnits("100", DECIMALS));
+
+            // Burns: 50 + 0 + 100 = 150
+            const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+            expect(await token.balanceOf(BURN_ADDRESS)).to.equal(ethers.parseUnits("150", DECIMALS));
+        });
+
+        it("Should update stats correctly after TGE", async function () {
+            const amount = ethers.parseUnits("10000", DECIMALS);
+            await tgeController.connect(oracle).executeTGE(
+                [user1.address],
+                [amount],
+                [80]
+            );
+
+            const stats = await tgeController.getStats();
+            expect(stats[0]).to.equal(1);     // still epoch 1
+            expect(stats[1]).to.equal(1);     // advanced to TGE event 1
+            expect(stats[3]).to.equal(ethers.parseUnits("8000", DECIMALS));  // distributed
+            expect(stats[4]).to.equal(ethers.parseUnits("2000", DECIMALS));  // burned
+            expect(stats[5]).to.equal(1);     // tgeCount
+        });
+
+        it("Should reduce controller balance after distribution", async function () {
+            const amount = ethers.parseUnits("100000", DECIMALS);
+            await tgeController.connect(oracle).executeTGE(
+                [user1.address],
+                [amount],
+                [100]
+            );
+
+            const remaining = EPOCH_1_SUPPLY - amount;
+            expect(await tgeController.getLockedBalance()).to.equal(remaining);
+        });
+
+        it("Should REVERT when controller has insufficient supply", async function () {
+            // Try to distribute more than the locked supply
+            const tooMuch = EPOCH_1_SUPPLY + 1n;
+            await expect(
+                tgeController.connect(oracle).executeTGE(
+                    [user1.address],
+                    [tooMuch],
+                    [100]
+                )
+            ).to.be.revertedWith("TGE: insufficient locked supply");
+        });
+
+        it("Should revert on empty batch", async function () {
+            await expect(
+                tgeController.connect(oracle).executeTGE([], [], [])
+            ).to.be.revertedWith("TGE: empty batch");
+        });
+
+        it("Should revert on array length mismatch", async function () {
+            await expect(
+                tgeController.connect(oracle).executeTGE(
+                    [user1.address, user2.address],
+                    [ethers.parseUnits("100", DECIMALS)],
+                    [100]
+                )
+            ).to.be.revertedWith("TGE: array length mismatch");
+        });
+
+        it("Should revert for non-oracle callers", async function () {
+            await expect(
+                tgeController.connect(user1).executeTGE(
+                    [user1.address],
+                    [ethers.parseUnits("100", DECIMALS)],
+                    [100]
+                )
+            ).to.be.reverted;
+        });
+    });
+
+    describe("Epoch Advancement", function () {
+        beforeEach(async function () {
+            await tgeController.connect(oracle).mintEpochSupply(EPOCH_1_SUPPLY);
+        });
+
+        it("Should advance epoch after 10 TGE events", async function () {
+            const perTGE = ethers.parseUnits("100000", DECIMALS); // 100K per TGE (1M / 10)
+
+            // Execute 10 TGE events (10% of epoch each)
+            for (let i = 0; i < 10; i++) {
+                await tgeController.connect(oracle).executeTGE(
+                    [user1.address],
+                    [perTGE],
+                    [100]
+                );
+            }
+
+            const stats = await tgeController.getStats();
+            expect(stats[0]).to.equal(2);     // Epoch advanced to 2
+            expect(stats[1]).to.equal(0);     // TGE event reset to 0
+            expect(stats[5]).to.equal(10);    // 10 TGE events executed
+
+            // Epoch tracking should be reset
+            expect(await tgeController.epochLockedSupply()).to.equal(0);
+            expect(await tgeController.epochDistributed()).to.equal(0);
+
+            // Controller should have 0 balance (all 1M distributed at 100%)
+            expect(await tgeController.getLockedBalance()).to.equal(0);
+        });
+
+        it("Should handle mixed efficiencies across epoch", async function () {
+            const perTGE = ethers.parseUnits("100000", DECIMALS);
+
+            // 5 events at 100% efficiency, 5 at 80%
+            for (let i = 0; i < 5; i++) {
+                await tgeController.connect(oracle).executeTGE(
+                    [user1.address],
+                    [perTGE],
+                    [100]
+                );
+            }
+            for (let i = 0; i < 5; i++) {
+                await tgeController.connect(oracle).executeTGE(
+                    [user2.address],
+                    [perTGE],
+                    [80]
+                );
+            }
+
+            const stats = await tgeController.getStats();
+            expect(stats[0]).to.equal(2); // Epoch advanced
+
+            // user1: 5 * 100K = 500K
+            expect(await token.balanceOf(user1.address)).to.equal(ethers.parseUnits("500000", DECIMALS));
+            // user2: 5 * 80K = 400K
+            expect(await token.balanceOf(user2.address)).to.equal(ethers.parseUnits("400000", DECIMALS));
+            // Burned: 5 * 20K = 100K
+            const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+            expect(await token.balanceOf(BURN_ADDRESS)).to.equal(ethers.parseUnits("100000", DECIMALS));
         });
     });
 });

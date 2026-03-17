@@ -34,7 +34,9 @@ class CommunityHotelCard extends StatelessWidget {
         ? listing.locationLabel
         : listing.city ?? '';
     final priceText = CurrencyHelper.formatLocalPrice(
-        listing.pricePerUnit, listing.countryCode);
+      listing.pricePerUnit,
+      listing.countryCode,
+    );
 
     return InkWell(
       onTap: onTap,
@@ -60,10 +62,8 @@ class CommunityHotelCard extends StatelessWidget {
                     CachedNetworkImage(
                       imageUrl: listing.photos.first,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) =>
-                          _photoPlaceholder(isDark),
-                      errorWidget: (_, __, ___) =>
-                          _photoPlaceholder(isDark),
+                      placeholder: (_, _) => _photoPlaceholder(isDark),
+                      errorWidget: (_, _, _) => _photoPlaceholder(isDark),
                     )
                   else
                     _photoPlaceholder(isDark),
@@ -81,7 +81,7 @@ class CommunityHotelCard extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.70),
+                            Colors.black.withValues(alpha: 0.70),
                           ],
                         ),
                       ),
@@ -94,13 +94,15 @@ class CommunityHotelCard extends StatelessWidget {
                     left: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 3),
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accent,
                         borderRadius: BorderRadius.circular(7),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
+                            color: Colors.black.withValues(alpha: 0.25),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -109,8 +111,11 @@ class CommunityHotelCard extends StatelessWidget {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(LucideIcons.users,
-                              size: 10, color: Colors.white),
+                          Icon(
+                            LucideIcons.users,
+                            size: 10,
+                            color: Colors.white,
+                          ),
                           SizedBox(width: 3),
                           Text(
                             'COMMUNITY',
@@ -132,13 +137,15 @@ class CommunityHotelCard extends StatelessWidget {
                     right: 10,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accent,
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
+                            color: Colors.black.withValues(alpha: 0.25),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -160,7 +167,7 @@ class CommunityHotelCard extends StatelessWidget {
                             '/night',
                             style: TextStyle(
                               fontSize: 9,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                             ),
                           ),
                         ],
@@ -186,8 +193,7 @@ class CommunityHotelCard extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             shadows: [
-                              Shadow(
-                                  blurRadius: 4, color: Colors.black54)
+                              Shadow(blurRadius: 4, color: Colors.black54),
                             ],
                           ),
                         ),
@@ -197,11 +203,9 @@ class CommunityHotelCard extends StatelessWidget {
                             listing.hotelCategory!,
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withValues(alpha: 0.8),
                               shadows: const [
-                                Shadow(
-                                    blurRadius: 4,
-                                    color: Colors.black54)
+                                Shadow(blurRadius: 4, color: Colors.black54),
                               ],
                             ),
                           ),
@@ -214,8 +218,7 @@ class CommunityHotelCard extends StatelessWidget {
 
             // ── Info area ──
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -226,24 +229,35 @@ class CommunityHotelCard extends StatelessWidget {
                           listing.starRating! > 0) ...[
                         ...List.generate(
                           listing.starRating!,
-                          (_) => const Icon(LucideIcons.star,
-                              size: 12, color: Colors.amber),
+                          (_) => const Icon(
+                            LucideIcons.star,
+                            size: 12,
+                            color: Colors.amber,
+                          ),
                         ),
                         const SizedBox(width: 12),
                       ],
                       if (listing.beds != null)
-                        _infoChip(theme, LucideIcons.bedDouble,
-                            '${listing.beds} room${listing.beds! > 1 ? 's' : ''}'),
-                      if (listing.beds != null &&
-                          listing.maxGuests != null)
+                        _infoChip(
+                          theme,
+                          LucideIcons.bedDouble,
+                          '${listing.beds} room${listing.beds! > 1 ? 's' : ''}',
+                        ),
+                      if (listing.beds != null && listing.maxGuests != null)
                         const SizedBox(width: 12),
                       if (listing.maxGuests != null)
-                        _infoChip(theme, LucideIcons.users,
-                            '${listing.maxGuests} guest${listing.maxGuests! > 1 ? 's' : ''}'),
+                        _infoChip(
+                          theme,
+                          LucideIcons.users,
+                          '${listing.maxGuests} guest${listing.maxGuests! > 1 ? 's' : ''}',
+                        ),
                       const Spacer(),
                       if (listing.checkInTime != null)
-                        _infoChip(theme, LucideIcons.clock,
-                            listing.checkInTime!),
+                        _infoChip(
+                          theme,
+                          LucideIcons.clock,
+                          listing.checkInTime!,
+                        ),
                     ],
                   ),
 
@@ -252,21 +266,27 @@ class CommunityHotelCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(LucideIcons.mapPin,
-                            size: 12,
-                            color: theme.colorScheme.onSurface
-                                .withOpacity(0.4)),
+                        Icon(
+                          LucideIcons.mapPin,
+                          size: 12,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            [location, if (listing.country != null) listing.country!]
-                                .join(', '),
+                            [
+                              location,
+                              if (listing.country != null) listing.country!,
+                            ].join(', '),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              color: theme.colorScheme.onSurface
-                                  .withOpacity(0.5),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
                             ),
                           ),
                         ),
@@ -285,7 +305,9 @@ class CommunityHotelCard extends StatelessWidget {
                         ...listing.amenities!.take(3).map((a) {
                           return Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.elevationColor(context, 2),
                               borderRadius: BorderRadius.circular(6),
@@ -293,16 +315,18 @@ class CommunityHotelCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(_amenityIcon(a),
-                                    size: 10,
-                                    color: AppTheme.accent.withOpacity(0.6)),
+                                Icon(
+                                  _amenityIcon(a),
+                                  size: 10,
+                                  color: AppTheme.accent.withValues(alpha: 0.6),
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   a,
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: theme.colorScheme.onSurface
-                                        .withOpacity(0.55),
+                                        .withValues(alpha: 0.55),
                                   ),
                                 ),
                               ],
@@ -312,7 +336,9 @@ class CommunityHotelCard extends StatelessWidget {
                         if (listing.amenities!.length > 3)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: AppTheme.elevationColor(context, 2),
                               borderRadius: BorderRadius.circular(6),
@@ -322,7 +348,7 @@ class CommunityHotelCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
-                                color: AppTheme.accent.withOpacity(0.7),
+                                color: AppTheme.accent.withValues(alpha: 0.7),
                               ),
                             ),
                           ),
@@ -340,8 +366,9 @@ class CommunityHotelCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.4,
-                        color: theme.colorScheme.onSurface
-                            .withOpacity(0.55),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
                       ),
                     ),
                   ],
@@ -351,8 +378,7 @@ class CommunityHotelCard extends StatelessWidget {
 
             // ── Bottom bar: owner + location ──
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: AppTheme.elevationColor(context, 2),
                 borderRadius: const BorderRadius.only(
@@ -368,10 +394,13 @@ class CommunityHotelCard extends StatelessWidget {
                     backgroundImage: listing.ownerPhoto.isNotEmpty
                         ? NetworkImage(listing.ownerPhoto)
                         : null,
-                    backgroundColor: AppTheme.accent.withOpacity(0.1),
+                    backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
                     child: listing.ownerPhoto.isEmpty
-                        ? const Icon(LucideIcons.user,
-                            size: 9, color: AppTheme.accent)
+                        ? const Icon(
+                            LucideIcons.user,
+                            size: 9,
+                            color: AppTheme.accent,
+                          )
                         : null,
                   ),
                   const SizedBox(width: 5),
@@ -380,35 +409,37 @@ class CommunityHotelCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface
-                          .withOpacity(0.6),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                   const Spacer(),
                   // Check-in / Check-out times
                   if (listing.checkInTime != null &&
                       listing.checkOutTime != null) ...[
-                    Icon(LucideIcons.logIn,
-                        size: 10,
-                        color: theme.hintColor.withOpacity(0.5)),
+                    Icon(
+                      LucideIcons.logIn,
+                      size: 10,
+                      color: theme.hintColor.withValues(alpha: 0.5),
+                    ),
                     const SizedBox(width: 3),
                     Text(
                       '${listing.checkInTime!} - ${listing.checkOutTime!}',
-                      style: TextStyle(
-                          fontSize: 10, color: theme.hintColor),
+                      style: TextStyle(fontSize: 10, color: theme.hintColor),
                     ),
                   ] else ...[
-                    Icon(LucideIcons.mapPin,
-                        size: 10,
-                        color: theme.hintColor.withOpacity(0.5)),
+                    Icon(
+                      LucideIcons.mapPin,
+                      size: 10,
+                      color: theme.hintColor.withValues(alpha: 0.5),
+                    ),
                     const SizedBox(width: 3),
                     Flexible(
                       child: Text(
-                        listing.country ?? (location.isNotEmpty ? location : ''),
+                        listing.country ??
+                            (location.isNotEmpty ? location : ''),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 10, color: theme.hintColor),
+                        style: TextStyle(fontSize: 10, color: theme.hintColor),
                       ),
                     ),
                   ],
@@ -424,11 +455,14 @@ class CommunityHotelCard extends StatelessWidget {
   Widget _photoPlaceholder(bool isDark) {
     return Container(
       color: isDark
-          ? AppTheme.accent.withOpacity(0.08)
-          : AppTheme.accent.withOpacity(0.05),
+          ? AppTheme.accent.withValues(alpha: 0.08)
+          : AppTheme.accent.withValues(alpha: 0.05),
       child: Center(
-        child: Icon(LucideIcons.hotel,
-            size: 40, color: AppTheme.accent.withOpacity(0.3)),
+        child: Icon(
+          LucideIcons.hotel,
+          size: 40,
+          color: AppTheme.accent.withValues(alpha: 0.3),
+        ),
       ),
     );
   }
@@ -437,15 +471,17 @@ class CommunityHotelCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon,
-            size: 14,
-            color: theme.colorScheme.onSurface.withOpacity(0.45)),
+        Icon(
+          icon,
+          size: 14,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+        ),
         const SizedBox(width: 4),
         Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            color: theme.colorScheme.onSurface.withOpacity(0.65),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
           ),
         ),
       ],
