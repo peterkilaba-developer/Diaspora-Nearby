@@ -41,7 +41,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-
   bool _walletCreationTriggered = false;
 
   Future<void> _trackExploration(String actionId) async {
@@ -94,14 +93,18 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       if (!doc.exists) return;
       final currentType = doc.data()?['walletType'] as String?;
       if (currentType != null && currentType != 'smart') {
-        debugPrint('[CryptoScreen] Migrating walletType "$currentType" → "smart"');
+        debugPrint(
+          '[CryptoScreen] Migrating walletType "$currentType" → "smart"',
+        );
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .update({'walletType': 'smart'});
       }
     } catch (e) {
-      debugPrint('[CryptoScreen] walletType migration error (non-blocking): $e');
+      debugPrint(
+        '[CryptoScreen] walletType migration error (non-blocking): $e',
+      );
     }
   }
 
@@ -122,8 +125,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     _corridorTimer?.cancel();
     super.dispose();
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -262,8 +263,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     );
   }
 
-
-
   // ─── ECONOMY DASHBOARD ───────────────────────────────────────────────
   Widget _buildEconomyDashboard(String country) {
     final gdpAsync = ref.watch(fiatGdpProvider);
@@ -375,7 +374,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-
                     ],
                   );
                 },
@@ -462,8 +460,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       ),
     );
   }
-
-
 
   Widget _buildTreasuriesTab(BuildContext context, ProfileData? profile) {
     final country = profile?.homeCountry ?? 'Home Country';
@@ -818,7 +814,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Reach 10,000 DSP to qualify for TGE.', 
+                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Reach 10,000 DSP to qualify for TGE.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -855,7 +851,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               c.id != 'global_community',
         )
         .toList();
-
 
     // Sort by type (Continent > Country > State > City)
     int getTypeWeight(String? type) {
@@ -1003,7 +998,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                               const SizedBox(width: 6),
                               // Use actual on-chain totalDistributed from batch provider
                               (() {
-                                final batchAsync = ref.watch(batchTokenBalancesProvider);
+                                final batchAsync = ref.watch(
+                                  batchTokenBalancesProvider,
+                                );
                                 final total = batchAsync.when(
                                   data: (b) => b.totalDistributed,
                                   loading: () => '...',
@@ -1061,7 +1058,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
         ),
 
-
         // 3. Home Communities Pool
         if (homePool.isNotEmpty) ...[
           const Text(
@@ -1083,11 +1079,14 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             final bool hasHomeState = homePool.any((c) => c.type == 'state');
             String tributeLabel;
             if (community.type == 'country' && hasHomeState) {
-              tributeLabel = 'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
+              tributeLabel =
+                  'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
             } else if (community.type == 'state') {
-              tributeLabel = 'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
+              tributeLabel =
+                  'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
             } else {
-              tributeLabel = 'Foreign Diaspora Direct Investments — 10% Tribute';
+              tributeLabel =
+                  'Foreign Diaspora Direct Investments — 10% Tribute';
             }
 
             return Padding(
@@ -1102,8 +1101,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     : (community.type == 'country'
                           ? LucideIcons.flag
                           : community.type == 'state'
-                              ? LucideIcons.landmark
-                              : LucideIcons.home),
+                          ? LucideIcons.landmark
+                          : LucideIcons.home),
                 governanceType: 'Leader Multi-sig',
               ),
             );
@@ -1132,9 +1131,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             final bool hasHostState = hostPool.any((c) => c.type == 'state');
             String tributeLabel;
             if (community.type == 'country' && hasHostState) {
-              tributeLabel = 'Diaspora Direct Investments Loans — 5% Tribute (Split)';
+              tributeLabel =
+                  'Diaspora Direct Investments Loans — 5% Tribute (Split)';
             } else if (community.type == 'state') {
-              tributeLabel = 'Diaspora Direct Investments Loans — 5% Tribute (Split)';
+              tributeLabel =
+                  'Diaspora Direct Investments Loans — 5% Tribute (Split)';
             } else {
               tributeLabel = 'Diaspora Direct Investments Loans — 10% Tribute';
             }
@@ -1207,7 +1208,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
         const SizedBox(height: 16),
         _buildRaceTo1Billion(context),
         const SizedBox(height: 24),
-
       ],
     );
   }
@@ -1237,7 +1237,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 
   Widget _buildMyWalletSection(BuildContext context) {
     final walletAsync = ref.watch(userWalletProvider);
-    
+
     return walletAsync.when(
       loading: () => Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -1253,7 +1253,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       error: (_, __) => _buildSmartWalletContent(null),
       data: (walletData) {
         // Auto-trigger wallet creation if user doesn't have one yet
-        if ((walletData == null || !walletData.hasWallet) && !_walletCreationTriggered) {
+        if ((walletData == null || !walletData.hasWallet) &&
+            !_walletCreationTriggered) {
           _walletCreationTriggered = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             debugPrint('[CryptoScreen] Triggering smart wallet creation...');
@@ -1380,7 +1381,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () {
-                          Clipboard.setData(ClipboardData(text: displayAddress));
+                          Clipboard.setData(
+                            ClipboardData(text: displayAddress),
+                          );
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Wallet address copied!'),
@@ -1587,12 +1590,15 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('BLOCKCHAIN ACTIVITIES', 'On-chain transactions & distributions'),
+        _buildSectionHeader(
+          'BLOCKCHAIN ACTIVITIES',
+          'On-chain transactions & distributions',
+        ),
         onChainAsync.when(
           data: (onChainTransfers) {
             final List<_BlockchainEvent> activities = [];
 
-            // 1. Add real on-chain ERC-20 transfer events from Base blockchain
+            // 1. Add real on-chain ERC-20 transfer events from Coinbase L2 Base Blockchain
             for (final tx in onChainTransfers) {
               final title = tx.isIncoming
                   ? 'Received from ${tx.shortFrom}'
@@ -1605,7 +1611,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   amount: tx.amount,
                   isPositive: tx.isIncoming,
                   txHash: tx.txHash,
-                  category: tx.isIncoming ? _TxCategory.token : _TxCategory.transfer,
+                  category: tx.isIncoming
+                      ? _TxCategory.token
+                      : _TxCategory.transfer,
                 ),
               );
             }
@@ -1636,16 +1644,20 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 
             // 3. Also include Firestore token transfer records (assetType == 'token')
             //    to catch any on-chain txns that might be outside the RPC log window
-            final firestoreTxAsync = ref.watch(userTransactionsProvider(userId));
+            final firestoreTxAsync = ref.watch(
+              userTransactionsProvider(userId),
+            );
             firestoreTxAsync.whenData((transactions) {
               for (final tx in transactions) {
-                final isTokenAsset = tx.metadata?['assetType'] == 'token' ||
+                final isTokenAsset =
+                    tx.metadata?['assetType'] == 'token' ||
                     tx.action.toLowerCase().contains('token_transfer');
                 if (!isTokenAsset) continue;
 
                 final txHash = tx.metadata?['txHash'] as String?;
                 // Skip duplicates already from on-chain logs
-                if (txHash != null && activities.any((a) => a.txHash == txHash)) {
+                if (txHash != null &&
+                    activities.any((a) => a.txHash == txHash)) {
                   continue;
                 }
 
@@ -1668,7 +1680,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             if (activities.isEmpty) {
               return Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 32,
+                  horizontal: 16,
+                ),
                 decoration: AppTheme.cardDecoration(context),
                 child: Column(
                   children: [
@@ -1683,7 +1698,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1692,7 +1709,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.4),
                       ),
                     ),
                   ],
@@ -1761,7 +1780,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             decoration: AppTheme.cardDecoration(context),
             child: Row(
               children: [
-                Icon(LucideIcons.alertTriangle, size: 16, color: Colors.orange.shade400),
+                Icon(
+                  LucideIcons.alertTriangle,
+                  size: 16,
+                  color: Colors.orange.shade400,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -1777,7 +1800,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     );
   }
 
-  Widget _buildActivityTile(BuildContext context, _BlockchainEvent act, {bool showDivider = true}) {
+  Widget _buildActivityTile(
+    BuildContext context,
+    _BlockchainEvent act, {
+    bool showDivider = true,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final sign = act.isPositive ? '+' : '-';
 
@@ -1834,12 +1861,17 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                           act.subtitle ?? _formatRelativeTime(act.timestamp),
                           style: TextStyle(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.5),
                           ),
                         ),
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(3),
@@ -1893,7 +1925,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   child: Icon(
                     LucideIcons.externalLink,
                     size: 14,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.3),
                   ),
                 ),
               ],
@@ -1903,13 +1937,18 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
         if (showDivider)
           Divider(
             height: 1,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.06),
           ),
       ],
     );
   }
 
-  void _showAllActivities(BuildContext context, List<_BlockchainEvent> activities) {
+  void _showAllActivities(
+    BuildContext context,
+    List<_BlockchainEvent> activities,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1933,16 +1972,25 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(LucideIcons.hexagon, size: 18, color: Colors.orange),
+                      const Icon(
+                        LucideIcons.hexagon,
+                        size: 18,
+                        color: Colors.orange,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'All On-Chain Transactions (${activities.length})',
@@ -1988,7 +2036,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     return DateFormat.MMMd().format(timestamp);
   }
 
-
   /// Builds a compact card showing the DSP estimated value and factor breakdown.
   Widget _buildDspEstimatedValueCard(BuildContext context) {
     final valuation = ref.watch(dspValuationProvider);
@@ -2003,7 +2050,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
         children: [
           Row(
             children: [
-              const Icon(LucideIcons.trendingUp, size: 16, color: AppTheme.accent),
+              const Icon(
+                LucideIcons.trendingUp,
+                size: 16,
+                color: AppTheme.accent,
+              ),
               const SizedBox(width: 8),
               Text(
                 'DSP ESTIMATED VALUE',
@@ -2016,8 +2067,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
@@ -2041,8 +2091,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   mode: LaunchMode.externalApplication,
                 ),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
@@ -2050,7 +2102,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(LucideIcons.externalLink, size: 10, color: Colors.blue),
+                      Icon(
+                        LucideIcons.externalLink,
+                        size: 10,
+                        color: Colors.blue,
+                      ),
                       SizedBox(width: 4),
                       Text(
                         'TOKEN',
@@ -2170,19 +2226,18 @@ class _GovernanceUnitCard extends ConsumerWidget {
         final onChain = batch.balances[unitId];
         if (onChain != null && onChain != '0') return onChain;
         // Fallback to Firestore DSP balance
-        return firestoreBalance > 0
-            ? firestoreBalance.toInt().toString()
-            : '0';
+        return firestoreBalance > 0 ? firestoreBalance.toInt().toString() : '0';
       },
       loading: () => '...',
-      error: (_, __) => firestoreBalance > 0
-          ? firestoreBalance.toInt().toString()
-          : '0',
+      error: (_, __) =>
+          firestoreBalance > 0 ? firestoreBalance.toInt().toString() : '0',
     );
     // Show DSP label when using Firestore fallback (no on-chain balance available)
-    final bool hasOnChain = batchAsync.value?.balances[unitId] != null &&
+    final bool hasOnChain =
+        batchAsync.value?.balances[unitId] != null &&
         batchAsync.value!.balances[unitId] != '0';
-    final bool showingDsp = !hasOnChain && walletAddr.isEmpty && firestoreBalance > 0;
+    final bool showingDsp =
+        !hasOnChain && walletAddr.isEmpty && firestoreBalance > 0;
     final bool isSystemReserve =
         unitId == 'founders' || unitId == 'investors' || unitId == 'burn';
 
@@ -2371,4 +2426,3 @@ class _BlockchainEvent {
     this.category = _TxCategory.token,
   });
 }
-

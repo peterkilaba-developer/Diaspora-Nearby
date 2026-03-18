@@ -18,6 +18,16 @@
 - [ ] **Upload $DIASPORA token logo to Basescan**  
   Go to basescan.org → Token → Update Token Info
 
+- [ ] **Submit Basescan Public Name Tags for treasury addresses**  
+  Go to [basescan.org/contactus](https://basescan.org/contactus) → "Update Name Tag"  
+  Provide address, label, and proof of ownership (signed message) for each treasury:  
+  - DiasporaToken Proxy → `Diaspora: $DIASPORA Token`  
+  - TGEController Proxy → `Diaspora: TGE Controller`  
+  - Founders Treasury → `Diaspora: Founders & Core Team Treasury`  
+  - Investors Treasury → `Diaspora: Liquidity Treasury`  
+  - Community treasuries → `Diaspora: {Community Name} Treasury`  
+  - Deployer Wallet → `Diaspora: Deployer`
+
 - [ ] **Redeploy Cloud Functions** after updating `.env` for mainnet
 
 ## Phase 2 — Post WalletFactory Mainnet Deploy

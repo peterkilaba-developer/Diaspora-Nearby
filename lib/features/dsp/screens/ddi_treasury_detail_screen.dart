@@ -41,7 +41,9 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          20, 8, 20,
+          20,
+          8,
+          20,
           8 + MediaQuery.of(context).padding.bottom,
         ),
         child: Column(
@@ -288,7 +290,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
     );
   }
 
-
   // ── System Reserve Info ─────────────────────────────────────────────────
   Widget _buildSystemReserveInfo(BuildContext context, bool isDark) {
     return Container(
@@ -408,7 +409,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'BASE CHAIN',
+                  'COINBASE L2 BASE',
                   style: TextStyle(
                     fontSize: 8,
                     fontWeight: FontWeight.bold,
@@ -437,16 +438,20 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'All $balance \$DIASPORA token transfers for this treasury\n'
-                    'are recorded on Base and can be verified below.',
+                    'are recorded on the Coinbase L2 Base Blockchain and can be verified below.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+                      color: isDark
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade500,
                       height: 1.4,
                     ),
                     textAlign: TextAlign.center,
@@ -469,7 +474,9 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -478,7 +485,9 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                     'when this governance unit is activated.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+                      color: isDark
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade500,
                       height: 1.4,
                     ),
                     textAlign: TextAlign.center,
@@ -551,7 +560,8 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
           icon: LucideIcons.search,
           label: 'Blockscout',
           subtitle: 'base.blockscout.com',
-          url: 'https://base.blockscout.com/address/$walletAddress?tab=token_transfers',
+          url:
+              'https://base.blockscout.com/address/$walletAddress?tab=token_transfers',
         ),
       ],
     );

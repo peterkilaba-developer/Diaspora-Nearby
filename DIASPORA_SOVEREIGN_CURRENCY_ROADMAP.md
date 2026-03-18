@@ -10,8 +10,8 @@ DSP and $DIASPORA are **NOT the same thing**. They represent fundamentally diffe
 
 | | **DSP** (Pre-Token Points) | **$DIASPORA** (On-Chain Token) |
 |:--|:--------------------------|:-------------------------------|
-| **What** | Off-chain social points | ERC-20 token on Base blockchain |
-| **Where** | Firebase only | Base blockchain only |
+| **What** | Off-chain social points | ERC-20 token on Coinbase L2 Base Blockchain |
+| **Where** | Firebase only | Coinbase L2 Base Blockchain only |
 | **Exists on chain?** | ❌ No | ✅ Yes |
 | **Tradeable?** | ❌ No | ✅ Yes |
 | **Has real value?** | ❌ Not yet — it's a claim ticket | ✅ Yes — backed by Fiat GDP |

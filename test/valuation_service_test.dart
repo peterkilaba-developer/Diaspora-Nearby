@@ -1,6 +1,7 @@
 /// Unit tests for the DSP dynamic valuation formula.
 ///
 /// Run with: dart test test/valuation_service_test.dart
+library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:diaspora_nearby/features/dsp/services/valuation_service.dart';
 

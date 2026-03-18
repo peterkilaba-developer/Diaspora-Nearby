@@ -93,6 +93,7 @@ dependencies:
   flutter_cache_manager: any
   flutter_stripe: ^12.3.0
   google_mlkit_text_recognition: ^0.15.1
+  web: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -126,7 +127,6 @@ dev_dependencies:
   path: any
   sqflite_common: any
   stream_transform: any
-  web: any
   flutter_web_plugins:
     sdk: flutter
   syncfusion_pdfviewer_platform_interface: any

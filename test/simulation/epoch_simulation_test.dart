@@ -64,7 +64,7 @@ void main() {
   //   Swap  = DSP balance × efficiency
   // ──────────────────────────────────────────────────────────────────────────
 
-  ProfileData _testProfile(String userId) => ProfileData(
+  ProfileData testProfile(String userId) => ProfileData(
     uid: userId,
     firstName: 'Test',
     lastName: 'User',
@@ -87,7 +87,7 @@ void main() {
   group('TGE Eligibility (DSP-Only Gate, 10k minimum)', () {
     test('User with >= 10k DSP is eligible regardless of PoCT', () async {
       final userId = 'user_dsp_pass';
-      await profileRepository.saveUserProfile(userId, _testProfile(userId));
+      await profileRepository.saveUserProfile(userId, testProfile(userId));
 
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Grant');
@@ -105,7 +105,7 @@ void main() {
 
     test('User with < 10k DSP is NOT eligible even with max PoCT', () async {
       final userId = 'user_dsp_fail';
-      await profileRepository.saveUserProfile(userId, _testProfile(userId));
+      await profileRepository.saveUserProfile(userId, testProfile(userId));
 
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 1000, 'Small Grant');
@@ -122,7 +122,7 @@ void main() {
 
     test('Epoch parameter has no effect (flat gate across all epochs)', () async {
       final userId = 'user_flat_gate';
-      await profileRepository.saveUserProfile(userId, _testProfile(userId));
+      await profileRepository.saveUserProfile(userId, testProfile(userId));
 
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Grant');

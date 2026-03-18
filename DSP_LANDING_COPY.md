@@ -27,7 +27,7 @@ We are currently in **Epoch 1: The Accumulation Phase**.
 
 The Diaspora system is tracking every point earned globally. When the community reaches the **1 Million $DIASPORA Benchmark** with **100 Verified Humans**, we trigger **The Great Reset**. 
 
-*   **1:1 Conversion**: Your off-chain points are snapshotted and converted 1:1 into liquid $DIASPORA tokens on the Base blockchain.
+*   **1:1 Conversion**: Your off-chain points are snapshotted and converted 1:1 into liquid $DIASPORA tokens on the Coinbase L2 Base Blockchain.
 *   **10x Scaling**: Each subsequent Epoch requires 10x more supply and 10x more users, making early participation the most valuable.
 *   **Your Advantage**: Those who build their balance *before* the reset own the largest share of the network at the lowest "difficulty."
 

@@ -3,6 +3,8 @@
 /// Mirrors the exact algorithm from _distributeTreasuryPoints in points_repository.dart.
 ///
 /// Run with: dart test test/dsp_distribution_test.dart
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 
 /// Simulates the exact distribution logic from _distributeTreasuryPoints.

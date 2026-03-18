@@ -65,7 +65,7 @@ Your final Trust Score dictates your **Swap Rate** at the Token Generation Event
 ## 4. The 10,000 $DIASPORA Gate (TGE)
 The final milestone is the **10,000 $DIASPORA Gate**. 
 - **Proof of Commitment**: Once you reach 10,000 $DIASPORA and maintain a high Trust Score, you become eligible for the **Token Generation Event (TGE)**.
-- **The Reset**: At the TGE, your activity is "crystallized." Your points will be swapped 1:1 for liquid tokens on the Base blockchain, turning your social capital into real-world assets.
+- **The Reset**: At the TGE, your activity is "crystallized." Your points will be swapped 1:1 for liquid tokens on the Coinbase L2 Base Blockchain, turning your social capital into real-world assets.
 
 ## 5. Frictionless Economy
 All economic activities in Diaspora Nearby are **completely free of DSP fees**. You can:
