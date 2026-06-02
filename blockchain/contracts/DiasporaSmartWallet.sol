@@ -23,8 +23,21 @@ contract DiasporaSmartWallet {
     address public factory;
     bool private _initialized;
 
-    event Executed(address indexed target, uint256 value, bytes data);
+    event Executed(address indexed target, uint256 value, bytes data, bool success);
+    event ExecutionFailed(address indexed target, uint256 value, bytes data, bytes reason);
     event OwnerChanged(address indexed oldOwner, address indexed newOwner);
+
+    /**
+     * @dev Disable initialize() on the implementation contract.
+     * Clones (deployed via Clones.cloneDeterministic in the factory) do not
+     * inherit the implementation's storage, so they are unaffected and can
+     * still be initialized by the factory exactly once. This only prevents
+     * an attacker from calling initialize() on the implementation contract
+     * itself to claim ownership of an empty stub.
+     */
+    constructor() {
+        _initialized = true;
+    }
 
     modifier onlyOwnerOrFactory() {
         require(msg.sender == owner || msg.sender == factory, "DSW: unauthorized");
@@ -56,8 +69,17 @@ contract DiasporaSmartWallet {
         bytes calldata data
     ) external onlyOwnerOrFactory returns (bytes memory) {
         (bool success, bytes memory result) = target.call{value: value}(data);
-        require(success, "DSW: execution failed");
-        emit Executed(target, value, data);
+        if (!success) {
+            emit ExecutionFailed(target, value, data, result);
+            // Bubble up the revert reason if any
+            if (result.length > 0) {
+                assembly {
+                    revert(add(result, 32), mload(result))
+                }
+            }
+            revert("DSW: execution failed");
+        }
+        emit Executed(target, value, data, true);
         return result;
     }
 
