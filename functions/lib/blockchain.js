@@ -32,11 +32,15 @@ exports.getTokenTransfers = functions
 
             if (!walletAddress) return { transfers: [] };
 
-            const tokenContractAddress = process.env.DIASPORA_TOKEN_ADDRESS || process.env.TOKEN_ADDRESS;
-            if (!tokenContractAddress) {
-                console.log('[getTokenTransfers] No TOKEN_ADDRESS configured');
-                return { transfers: [], walletAddress };
-            }
+            // Fail loud on missing config. Previously this returned
+            // `{ transfers: [] }`, which is indistinguishable from "user has
+            // never transacted" — would mask a misconfigured deploy and make
+            // users think they have no transaction history.
+            const { assertOnChainConfig } = require('./on_chain_config');
+            const { tokenAddress: tokenContractAddress } = assertOnChainConfig(
+                'getTokenTransfers',
+                ['tokenAddress']
+            );
 
             console.log(`[getTokenTransfers] Fetching transfers for ${walletAddress}`);
 

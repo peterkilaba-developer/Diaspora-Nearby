@@ -6,9 +6,12 @@ const { functions, admin, db } = require("./shared");
 const { ethers } = require("ethers");
 
 // ── Configuration (from environment) ──
-const BACKEND_SIGNER_KEY = process.env.BACKEND_SIGNER_PRIVATE_KEY || null;
-const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || null;
-const TGE_CONTROLLER_ADDRESS = process.env.TGE_CONTROLLER_ADDRESS || null;
+// NOTE: do NOT cache these at module-load time. With Firebase Functions v1
+// secrets, process.env.BACKEND_SIGNER_PRIVATE_KEY is populated by the runtime
+// before the function handler runs, but caching at module level made one
+// silent-skip bug already (2026-06-02). Always re-read via assertOnChainConfig
+// inside the handler so the failure mode is loud if the binding is missing.
+const { assertOnChainConfig } = require("./on_chain_config");
 
 const TGE_CONTROLLER_ABI = [
   "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
@@ -91,10 +94,12 @@ function getEpochState(cumulativeEarnings) {
  * Creates snapshot of all DSP balances + PoCT, calls on-chain contract.
  */
 async function performTGE(triggerSource) {
-  if (!TOKEN_ADDRESS || !TGE_CONTROLLER_ADDRESS || !BACKEND_SIGNER_KEY) {
-    console.error("[TGE Oracle] Missing contract addresses or signer key in .env");
-    return null;
-  }
+  // Fail loud if any required env is missing. Previously this returned null
+  // silently which could be confused with "no users to TGE" by callers.
+  const { backendSignerKey, tokenAddress, tgeControllerAddress } = assertOnChainConfig(
+    "performTGE",
+    ["backendSignerKey", "tokenAddress", "tgeControllerAddress"]
+  );
 
   console.log(`[TGE Oracle] Starting TGE snapshot (triggered by: ${triggerSource})...`);
 
@@ -202,9 +207,9 @@ async function performTGE(triggerSource) {
   console.log(`[TGE Oracle] Snapshot: ${usersIncluded} users, ${treasuriesIncluded} treasuries, ${totalDsp} DSP`);
 
   // ── Step 3: Call on-chain executeTGE ───────────────────────────────
-  const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
-  const signer = new ethers.Wallet(BACKEND_SIGNER_KEY, provider);
-  const tgeController = new ethers.Contract(TGE_CONTROLLER_ADDRESS, TGE_CONTROLLER_ABI, signer);
+  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+  const signer = new ethers.Wallet(backendSignerKey, provider);
+  const tgeController = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
 
   const statsBefore = await tgeController.getStats();
   const epochBefore = Number(statsBefore[0]);
@@ -222,7 +227,12 @@ async function performTGE(triggerSource) {
   console.log(`[TGE Oracle] ✅ TX: ${receipt.hash}`);
   console.log(`[TGE Oracle] Epoch ${epochBefore}→${epochAfter}, Event ${eventBefore}→${eventAfter}`);
 
-  // ── Step 4: Record in Firestore ────────────────────────────────────
+  // ── Step 4: Record TGE event in Firestore (deterministic doc ID by epoch/event) ──
+  // Using a deterministic ID prevents a re-trigger of this function from
+  // recording the same TGE event twice. If we ever get here for an event that
+  // already exists in tge_events, it means a previous execution succeeded
+  // on-chain but failed mid-Firestore-write — DO NOT re-call on-chain.
+  const tgeEventDocId = `epoch${epochBefore}_event${eventBefore}`;
   const tgeRecord = {
     epoch: epochBefore,
     tgeEvent: eventBefore,
@@ -234,23 +244,24 @@ async function performTGE(triggerSource) {
     triggerSource,
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     snapshot: snapshotDetails,
+    status: "tx_complete_dsp_pending", // updated to "complete" after step 5
   };
+  await db.collection("tge_events").doc(tgeEventDocId).set(tgeRecord);
 
-  await db.collection("tge_events").add(tgeRecord);
-
-  // ── Step 5: Reset Distributed Points ───────────────────────────────
-  // We must deduct the exact amount we snapshotted and sent to the smart contract.
+  // ── Step 5: Deduct DSP from snapshotted participants ───────────────
+  // CRITICAL: If this step fails after the on-chain TX succeeded, users
+  // would have DIASPORA AND still hold their DSP — double-paid. We mark
+  // the tge_events doc as `dspDeductionPending: true` so the healing
+  // function `retryPendingTGEDeductions` can complete it.
   const batch = db.batch();
   for (const snap of snapshotDetails) {
     if (snap.userId) {
-      // It's a user - reset availablePoints
       const userRef = db.collection("user_points").doc(snap.userId);
       batch.set(userRef, {
         availablePoints: admin.firestore.FieldValue.increment(-snap.dsp),
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     } else if (snap.unitId) {
-      // It's a treasury - reset treasuryBalance
       const govRef = db.collection("governance").doc(snap.unitId);
       batch.set(govRef, {
         treasuryBalance: admin.firestore.FieldValue.increment(-snap.dsp),
@@ -258,12 +269,23 @@ async function performTGE(triggerSource) {
       }, { merge: true });
     }
   }
-  // Commit the reset
+
+  let dspDeductionStatus = "complete";
+  let dspDeductionError = null;
   try {
     await batch.commit();
+    await db.collection("tge_events").doc(tgeEventDocId).update({ status: "complete" });
     console.log(`[TGE Oracle] Successfully reset DSP points for ${snapshotDetails.length} participants.`);
   } catch (resetErr) {
-    console.error(`[TGE Oracle] ❌ CRITICAL: Failed to reset DSP points after TGE:`, resetErr);
+    dspDeductionStatus = "tx_complete_dsp_pending";
+    dspDeductionError = (resetErr.message || "unknown").slice(0, 500);
+    console.error(`[TGE Oracle] ❌ DSP deduction failed AFTER on-chain TX. Recording pending state for healing.`, resetErr);
+    // Update the tge_events doc with the failure reason — leaves status as
+    // "tx_complete_dsp_pending" for retryPendingTGEDeductions to pick up.
+    await db.collection("tge_events").doc(tgeEventDocId).update({
+      dspDeductionError,
+      dspDeductionErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
   }
 
   return {
@@ -275,6 +297,9 @@ async function performTGE(triggerSource) {
     newTgeEvent: eventAfter,
     totalDsp,
     totalRecipients: recipients.length,
+    dspDeductionStatus,
+    dspDeductionError,
+    tgeEventDocId,
   };
 }
 
@@ -720,7 +745,9 @@ exports.deductPoints = functions.https.onCall(async (data, context) => {
  * initializeUserPoints — Sets up a new user's points doc with welcome bonus.
  * Called once during signup. Handles both fresh users and partial docs.
  */
-exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
+exports.initializeUserPoints = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -942,7 +969,15 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
       // ── Token Welcome Bonus: Instant DSP→$DIASPORA conversion ──
       // Mirrors the DSP distribution above but converts to on-chain tokens
       // at 100% efficiency immediately, rather than waiting for TGE milestone.
-      if (BACKEND_SIGNER_KEY && TGE_CONTROLLER_ADDRESS && TOKEN_ADDRESS) {
+      //
+      // Fail-loud contract: every error path below sets `tokenWelcomeBonusPending`
+      // on the user doc so the healing function `retryPendingWelcomeBonuses`
+      // can pick it up. NO path silently succeeds without distributing.
+      {
+        // Fail loud at the top — if config is missing, the function throws and
+        // the outer initializeUserPoints catch will surface it to the caller.
+        const { backendSignerKey, tokenAddress, tgeControllerAddress, walletFactoryAddress } =
+          assertOnChainConfig("initializeUserPoints/welcomeBonus");
         try {
           // Idempotency: skip if already sent (prevents double-distribution on retry)
           const preCheck = await db.collection("users").doc(userId).get();
@@ -961,11 +996,20 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
               }
             }
 
-            if (userWalletAddress) {
+            if (!userWalletAddress) {
+              // Wallet creation hasn't caught up. Mark pending so the healing
+              // function can retry. NO silent skip — this used to fall through.
+              console.warn(`[Token Welcome Bonus] User ${userId} has no wallet address after 3 retries. Marking pending.`);
+              batch.set(db.collection("users").doc(userId), {
+                tokenWelcomeBonusPending: true,
+                tokenWelcomeBonusError: "wallet_not_ready_after_retries",
+                tokenWelcomeBonusErrorAt: now,
+              }, { merge: true });
+            } else {
               const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
               const provider = new ethers.JsonRpcProvider(RPC_URL);
-              const signer = new ethers.Wallet(BACKEND_SIGNER_KEY, provider);
-              const tge = new ethers.Contract(TGE_CONTROLLER_ADDRESS, TGE_CONTROLLER_ABI, signer);
+              const signer = new ethers.Wallet(backendSignerKey, provider);
+              const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
 
               const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
               const DEPLOYER_FALLBACK = signer.address; // Fallback if treasury wallet not created yet
@@ -1088,8 +1132,8 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
                     // Create a fresh signer each attempt so ethers fetches the
                     // current nonce from the network (no stale cache).
                     const retryProvider = new ethers.JsonRpcProvider(RPC_URL);
-                    const retrySigner = new ethers.Wallet(BACKEND_SIGNER_KEY, retryProvider);
-                    const retryTge = new ethers.Contract(TGE_CONTROLLER_ADDRESS, TGE_CONTROLLER_ABI, retrySigner);
+                    const retrySigner = new ethers.Wallet(backendSignerKey, retryProvider);
+                    const retryTge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, retrySigner);
 
                     const tx = await retryTge.distributeWelcomeBonus(
                       userRecipient,
@@ -1159,15 +1203,26 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
 
                 console.log(`[Token Welcome Bonus] User ${userId} DSP deducted, token bonus recorded.`);
               } else {
-                console.warn(`[Token Welcome Bonus] Insufficient epoch supply. Locked: ${ethers.formatUnits(lockedBalance, 18)}, Needed: ${ethers.formatUnits(totalTokens, 18)}`);
+                // Insufficient locked supply — mark pending for healing
+                const msg = `insufficient_locked_supply: locked=${ethers.formatUnits(lockedBalance, 18)} needed=${ethers.formatUnits(totalTokens, 18)}`;
+                console.error(`[Token Welcome Bonus] ${msg}`);
+                batch.set(db.collection("users").doc(userId), {
+                  tokenWelcomeBonusPending: true,
+                  tokenWelcomeBonusError: msg,
+                  tokenWelcomeBonusErrorAt: now,
+                }, { merge: true });
               }
-            } else {
-              console.warn(`[Token Welcome Bonus] User ${userId} has no wallet address yet. Token bonus deferred.`);
-            }
+            } // end else (wallet address present)
           } // end else (idempotency check)
         } catch (tokenBonusErr) {
-          // Don't fail user initialization if token bonus fails
-          console.error(`[Token Welcome Bonus] Error for ${userId}:`, tokenBonusErr.message);
+          // Failure path — mark pending so healing function retries.
+          // Previously this silently swallowed the error and returned success.
+          console.error(`[Token Welcome Bonus] Error for ${userId}:`, tokenBonusErr.message, tokenBonusErr.stack);
+          batch.set(db.collection("users").doc(userId), {
+            tokenWelcomeBonusPending: true,
+            tokenWelcomeBonusError: `exception: ${(tokenBonusErr.message || "unknown").slice(0, 500)}`,
+            tokenWelcomeBonusErrorAt: now,
+          }, { merge: true });
         }
       }
     } // end if (shouldAwardBonus)
@@ -1934,4 +1989,278 @@ exports.syncTreasuryBalances = functions
       throw new functions.https.HttpsError("internal", `Failed: ${error.message}`);
     }
   });
+
+/**
+ * retryPendingWelcomeBonuses — heals users whose on-chain welcome bonus
+ * failed during initializeUserPoints.
+ *
+ * The fail-loud refactor of the welcome bonus block (2026-06-02) sets these
+ * fields on the user doc whenever the on-chain step doesn't complete:
+ *   - tokenWelcomeBonusPending: true
+ *   - tokenWelcomeBonusError: <reason>
+ *   - tokenWelcomeBonusErrorAt: <timestamp>
+ *
+ * This function scans for those users and retries each one through the full
+ * welcome-bonus distribution path. It's safe to call repeatedly — the V2
+ * contract's per-user dedupe will reject double-pay attempts on-chain, and
+ * we double-check `tokenWelcomeBonusSent` before invoking.
+ *
+ * Can be invoked manually for incident response, or scheduled via the
+ * client to run periodically (e.g. every 10 minutes). For now it's an
+ * admin-only callable so the operator decides when to run it.
+ */
+exports.retryPendingWelcomeBonuses = functions
+  .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
+    }
+    // Admin-only — relies on Firebase Auth custom claims
+    if (!context.auth.token || context.auth.token.admin !== true) {
+      throw new functions.https.HttpsError("permission-denied", "Admin only.");
+    }
+
+    // Fail-loud config check BEFORE doing any work
+    const { backendSignerKey, tgeControllerAddress, walletFactoryAddress } = assertOnChainConfig(
+      "retryPendingWelcomeBonuses",
+      ["backendSignerKey", "tgeControllerAddress", "walletFactoryAddress"]
+    );
+
+    const dryRun = data && data.dryRun === true;
+    const limit = Math.min(Math.max(Number(data && data.limit) || 25, 1), 100);
+
+    // Find pending users
+    const pendingSnap = await db.collection("users")
+      .where("tokenWelcomeBonusPending", "==", true)
+      .limit(limit)
+      .get();
+
+    if (pendingSnap.empty) {
+      return { ok: true, found: 0, retried: 0, skipped: 0, succeeded: 0, failed: 0, dryRun };
+    }
+
+    const results = { ok: true, found: pendingSnap.size, retried: 0, skipped: 0, succeeded: 0, failed: 0, dryRun, items: [] };
+
+    if (dryRun) {
+      for (const d of pendingSnap.docs) {
+        results.items.push({ uid: d.id, walletAddress: d.data().walletAddress || null, error: d.data().tokenWelcomeBonusError || null });
+      }
+      return results;
+    }
+
+    const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const signer = new ethers.Wallet(backendSignerKey, provider);
+    const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
+    const factory = new ethers.Contract(
+      walletFactoryAddress,
+      ["function computeAddress(bytes32 phoneHash) view returns (address)"],
+      provider
+    );
+
+    for (const doc of pendingSnap.docs) {
+      const userId = doc.id;
+      const u = doc.data();
+      try {
+        // Double-check we're not about to double-pay
+        if (u.tokenWelcomeBonusSent === true) {
+          await db.collection("users").doc(userId).set({
+            tokenWelcomeBonusPending: false,
+            tokenWelcomeBonusError: admin.firestore.FieldValue.delete(),
+          }, { merge: true });
+          results.skipped++;
+          results.items.push({ uid: userId, status: "already_sent" });
+          continue;
+        }
+        if (!u.walletAddress) {
+          results.skipped++;
+          results.items.push({ uid: userId, status: "no_wallet_address" });
+          continue;
+        }
+
+        // Build the distribution exactly like initializeUserPoints does
+        const userAmount = ethers.parseUnits("1000", 18);
+        const BURN = "0x000000000000000000000000000000000000dEaD";
+        const DEPLOYER_FALLBACK = signer.address;
+
+        // Compute treasury wallets deterministically from the factory
+        const sysSalts = {
+          founders: ethers.keccak256(ethers.toUtf8Bytes("system:founders_treasury")),
+          liquidity: ethers.keccak256(ethers.toUtf8Bytes("system:investors_treasury")),
+        };
+        const foundersWallet = await factory.computeAddress(sysSalts.founders).catch(() => DEPLOYER_FALLBACK);
+        const liquidityWallet = await factory.computeAddress(sysSalts.liquidity).catch(() => DEPLOYER_FALLBACK);
+
+        const treasuryRecipients = [BURN, foundersWallet, liquidityWallet];
+        const treasuryAmounts = [
+          ethers.parseUnits("100", 18),
+          ethers.parseUnits("100", 18),
+          ethers.parseUnits("100", 18),
+        ];
+
+        // Community slots — same fraction math as the original path
+        const memberships = u.communityMemberships || [];
+        const find = (prefix) => memberships.find((id) => id.startsWith(prefix)) || "";
+        const hcont = find("home_continent_");
+        const hcountry = find("home_country_");
+        const hstate = find("home_state_");
+        const hcity = find("home_city_");
+        const xcont = find("host_continent_");
+        const xcountry = find("host_country_");
+        const xstate = find("host_state_");
+        const xcity = find("host_city_");
+
+        const slots = {};
+        const addSlot = (id, frac) => { if (id) slots[id] = (slots[id] || 0) + frac; };
+        addSlot("global_community", 1);
+        addSlot(hcont, 1);
+        if (hstate) { addSlot(hcountry, 0.5); addSlot(hstate, 0.5); } else { addSlot(hcountry, 1); }
+        addSlot(hcity, 1);
+        addSlot(xcont, 1);
+        if (xstate) { addSlot(xcountry, 0.5); addSlot(xstate, 0.5); } else { addSlot(xcountry, 1); }
+        addSlot(xcity, 1);
+
+        for (const [commId, frac] of Object.entries(slots)) {
+          const slotAmount = Math.round(100 * frac);
+          if (slotAmount <= 0) continue;
+          const salt = ethers.keccak256(ethers.toUtf8Bytes("community:" + commId));
+          const wallet = await factory.computeAddress(salt).catch(() => DEPLOYER_FALLBACK);
+          treasuryRecipients.push(wallet);
+          treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
+        }
+
+        const merkleRoot = ethers.solidityPackedKeccak256(
+          ["address", "uint256", "address[]", "uint256[]"],
+          [u.walletAddress, userAmount, treasuryRecipients, treasuryAmounts]
+        );
+
+        const tx = await tge.distributeWelcomeBonus(
+          u.walletAddress,
+          userAmount,
+          treasuryRecipients,
+          treasuryAmounts,
+          merkleRoot
+        );
+        const receipt = await tx.wait();
+
+        await db.collection("users").doc(userId).set({
+          tokenWelcomeBonusSent: true,
+          tokenWelcomeBonusTx: receipt.hash,
+          tokenWelcomeBonusPending: false,
+          tokenWelcomeBonusError: admin.firestore.FieldValue.delete(),
+          tokenWelcomeBonusErrorAt: admin.firestore.FieldValue.delete(),
+        }, { merge: true });
+
+        results.retried++;
+        results.succeeded++;
+        results.items.push({ uid: userId, status: "success", txHash: receipt.hash });
+      } catch (e) {
+        results.retried++;
+        results.failed++;
+        const msg = (e.message || "unknown").slice(0, 500);
+        results.items.push({ uid: userId, status: "failed", error: msg });
+        await db.collection("users").doc(userId).set({
+          tokenWelcomeBonusError: `retry_failed: ${msg}`,
+          tokenWelcomeBonusErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+    }
+
+    return results;
+  });
+
+/**
+ * retryPendingTGEDeductions — heals TGE events whose on-chain TX succeeded
+ * but whose Firestore DSP deduction failed.
+ *
+ * Why this matters: `performTGE` calls the on-chain `executeTGE` BEFORE
+ * deducting DSP balances in Firestore. If Firestore is briefly unavailable
+ * during step 5, the on-chain TX is already mined — users have new $DIASPORA.
+ * But the off-chain DSP balance was never deducted, so users would also still
+ * see the same DSP points in the app (and could be paid again at the next TGE).
+ *
+ * This function scans tge_events docs with `status: "tx_complete_dsp_pending"`
+ * and replays the deduction batch using the stored `snapshot` array. Idempotent:
+ * after the deduction lands, status flips to "complete" and the doc is excluded
+ * from future scans.
+ *
+ * Admin-only callable.
+ */
+exports.retryPendingTGEDeductions = functions
+  .runWith({ timeoutSeconds: 540, memory: "512MB" })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
+    }
+    if (!context.auth.token || context.auth.token.admin !== true) {
+      throw new functions.https.HttpsError("permission-denied", "Admin only.");
+    }
+
+    const dryRun = data && data.dryRun === true;
+    const limit = Math.min(Math.max(Number(data && data.limit) || 10, 1), 50);
+
+    const snap = await db.collection("tge_events")
+      .where("status", "==", "tx_complete_dsp_pending")
+      .limit(limit)
+      .get();
+
+    const results = { ok: true, dryRun, found: snap.size, succeeded: 0, failed: 0, items: [] };
+    if (snap.empty) return results;
+
+    for (const doc of snap.docs) {
+      const id = doc.id;
+      const ev = doc.data();
+      try {
+        if (!Array.isArray(ev.snapshot) || ev.snapshot.length === 0) {
+          results.failed++;
+          results.items.push({ id, status: "failed", error: "no_snapshot_array" });
+          continue;
+        }
+
+        if (dryRun) {
+          results.items.push({
+            id,
+            status: "dry_run",
+            epoch: ev.epoch,
+            tgeEvent: ev.tgeEvent,
+            snapshotSize: ev.snapshot.length,
+            txHash: ev.txHash,
+          });
+          continue;
+        }
+
+        const batch = db.batch();
+        for (const s of ev.snapshot) {
+          if (s.userId) {
+            batch.set(db.collection("user_points").doc(s.userId), {
+              availablePoints: admin.firestore.FieldValue.increment(-s.dsp),
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          } else if (s.unitId) {
+            batch.set(db.collection("governance").doc(s.unitId), {
+              treasuryBalance: admin.firestore.FieldValue.increment(-s.dsp),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+        }
+        await batch.commit();
+        await db.collection("tge_events").doc(id).update({
+          status: "complete",
+          dspDeductionRetriedAt: admin.firestore.FieldValue.serverTimestamp(),
+          dspDeductionError: admin.firestore.FieldValue.delete(),
+        });
+
+        results.succeeded++;
+        results.items.push({ id, status: "deducted", epoch: ev.epoch, tgeEvent: ev.tgeEvent, txHash: ev.txHash });
+      } catch (e) {
+        results.failed++;
+        const msg = (e.message || "unknown").slice(0, 500);
+        results.items.push({ id, status: "failed", error: msg });
+      }
+    }
+
+    return results;
+  });
+
+
 

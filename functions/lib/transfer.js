@@ -207,16 +207,23 @@ exports.transferDiaspora = functions
       const rpcUrl = process.env.RPC_URL;
       const tokenContractAddress = process.env.DIASPORA_TOKEN_ADDRESS || process.env.TOKEN_ADDRESS;
 
-      if (rpcUrl && tokenContractAddress) {
+      // Fail-loud: previously, if rpcUrl OR tokenContractAddress was missing,
+      // this silently dropped into a "simulating" else-branch and recorded the
+      // transfer as success=true with no on-chain effect. That risked Firestore
+      // showing successful transfers that never moved real tokens.
+      const { assertOnChainConfig } = require('./on_chain_config');
+      const cfg = assertOnChainConfig('transferDiaspora', [
+        'backendSignerKey',
+        'walletFactoryAddress',
+        'tokenAddress',
+        'rpcUrl',
+      ]);
+      {
         try {
           // ── SMART WALLET TRANSFER ──
           // Use the backend signer to call transferToken on the smart wallet
-          const BACKEND_SIGNER_KEY = process.env.BACKEND_SIGNER_PRIVATE_KEY;
-          const WALLET_FACTORY_ADDRESS = process.env.WALLET_FACTORY_ADDRESS;
-
-          if (!BACKEND_SIGNER_KEY || !WALLET_FACTORY_ADDRESS) {
-            throw new Error('Smart wallet infrastructure not configured');
-          }
+          const BACKEND_SIGNER_KEY = cfg.backendSignerKey;
+          const WALLET_FACTORY_ADDRESS = cfg.walletFactoryAddress;
 
           const provider = new ethers.JsonRpcProvider(rpcUrl);
           const signer = new ethers.Wallet(BACKEND_SIGNER_KEY, provider);
@@ -238,8 +245,6 @@ exports.transferDiaspora = functions
           console.error('[Token Transfer] Blockchain Error:', txError);
           throw new functions.https.HttpsError('aborted', 'On-chain transaction failed.', txError.message);
         }
-      } else {
-        console.log(`[Test Transfer] Simulating ${amount} $DIASPORA from ${fromUserId} to ${toAddress} (No RPC_URL or TOKEN_ADDRESS)`);
       }
 
       // 4. Log Transactions (one for sender, one for receiver — matches DSP pattern)
@@ -349,14 +354,14 @@ exports.getTokenBalance = functions
       return { balance: '0', formatted: '0' };
     }
 
-    // Read on-chain balance
-    const rpcUrl = process.env.RPC_URL;
-    const tokenContractAddress = process.env.DIASPORA_TOKEN_ADDRESS || process.env.TOKEN_ADDRESS;
-
-    if (!rpcUrl || !tokenContractAddress) {
-      console.log('[getTokenBalance] No RPC_URL or TOKEN_ADDRESS configured');
-      return { balance: '0', formatted: '0', walletAddress };
-    }
+    // Read on-chain balance. Fail loud if config missing -- previously this
+    // returned `{ balance: '0' }` which would mislead a user into thinking
+    // they had zero tokens when the function was misconfigured.
+    const { assertOnChainConfig } = require('./on_chain_config');
+    const { rpcUrl, tokenAddress: tokenContractAddress } = assertOnChainConfig(
+      'getTokenBalance',
+      ['rpcUrl', 'tokenAddress']
+    );
 
     const { ethers } = require('ethers');
     const provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -397,13 +402,14 @@ exports.getBatchTokenBalances = functions
   }
 
   try {
-    const rpcUrl = process.env.RPC_URL;
-    const tokenContractAddress = process.env.DIASPORA_TOKEN_ADDRESS || process.env.TOKEN_ADDRESS;
-
-    if (!rpcUrl || !tokenContractAddress) {
-      console.log('[getBatchTokenBalances] No RPC_URL or TOKEN_ADDRESS configured');
-      return { balances: {}, totalDistributed: '0' };
-    }
+    // Fail loud on missing config — previously returned `{ balances: {} }`
+    // which is indistinguishable from "every treasury has zero balance" and
+    // would mask a misconfigured deploy. Treasury balance UI would show all-zero.
+    const { assertOnChainConfig } = require('./on_chain_config');
+    const { rpcUrl, tokenAddress: tokenContractAddress } = assertOnChainConfig(
+      'getBatchTokenBalances',
+      ['rpcUrl', 'tokenAddress']
+    );
 
     // 1. Read all governance docs to get wallet addresses
     const govSnap = await db.collection('governance').get();
