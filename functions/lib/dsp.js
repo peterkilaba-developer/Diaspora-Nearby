@@ -11,7 +11,7 @@ const { ethers } = require("ethers");
 // before the function handler runs, but caching at module level made one
 // silent-skip bug already (2026-06-02). Always re-read via assertOnChainConfig
 // inside the handler so the failure mode is loud if the binding is missing.
-const { assertOnChainConfig } = require("./on_chain_config");
+const { assertOnChainConfig, readOptionalConfig } = require("./on_chain_config");
 
 const TGE_CONTROLLER_ABI = [
   "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
@@ -100,6 +100,10 @@ async function performTGE(triggerSource) {
     "performTGE",
     ["backendSignerKey", "tokenAddress", "tgeControllerAddress"]
   );
+  // Optional env overrides — if unset, performTGE reads the wallet for each
+  // system slot directly from its governance/* doc. Useful only when you
+  // want to repoint the slot without editing Firestore.
+  const { foundersTreasuryAddress, liquidityTreasuryAddress } = readOptionalConfig();
 
   console.log(`[TGE Oracle] Starting TGE snapshot (triggered by: ${triggerSource})...`);
 
@@ -163,24 +167,60 @@ async function performTGE(triggerSource) {
     });
   }
 
-  // ── Step 2: Snapshot community treasury balances ──────────────────
+  // ── Step 2: Snapshot community + system treasury balances ─────────
+  //
+  // FAIL-LOUD (post-TGE-1 hardening, 2026-06):
+  //   Before this change, governance docs with missing walletAddress or
+  //   missing averagePoCT were silently dropped/zeroed. In TGE 1 (block
+  //   44,914,723) that resulted in 17 of 24 "recipients" receiving 0 DSP
+  //   because their averagePoCT field was unset → eff=0 → 100% burned, and
+  //   the Founders / Liquidity treasuries received NOTHING (they weren't
+  //   even in the recipients list — their governance docs lacked
+  //   walletAddress, so the silent-skip below dropped them).
+  //
+  //   We now collect missing fields and refuse to fire the TGE if ANY
+  //   eligible community treasury (treasuryBalance > 0) is missing a
+  //   required field. The healing path is to populate the field in
+  //   Firestore and re-run.
   const govSnap = await db.collection("governance")
     .where("treasuryBalance", ">", 0)
     .get();
 
   let treasuriesIncluded = 0;
+  const treasuryConfigErrors = [];
 
   for (const doc of govSnap.docs) {
     const d = doc.data();
     const walletAddress = d.walletAddress;
     const treasuryDsp = d.treasuryBalance || 0;
 
-    if (!walletAddress || walletAddress.length < 10 || treasuryDsp <= 0) {
+    if (treasuryDsp <= 0) continue; // legitimate: no funds to release
+
+    if (!walletAddress || walletAddress.length < 10) {
+      treasuryConfigErrors.push(
+        `governance/${doc.id} (treasuryBalance=${treasuryDsp}) is missing walletAddress`
+      );
       continue;
     }
 
-    // APoCT: Average PoCT of community members → decile efficiency
-    const avgPoCT = d.averagePoCT || 0;
+    // APoCT: Average PoCT of community members → decile efficiency.
+    // Hard-fail on missing field — silent default to 0 burns the entire tribute.
+    // System treasuries (founders / investors / liquidity / burn) are exempt:
+    // they're handled separately below with efficiency=100 per whitepaper.
+    // Note: both `investors` (legacy) and `liquidity` doc IDs exist in
+    // production from different setup eras — both are treated as system.
+    const SYSTEM_DOC_IDS = new Set(["founders", "investors", "liquidity", "burn"]);
+    if (SYSTEM_DOC_IDS.has(doc.id)) continue;
+
+    if (d.averagePoCT === undefined || d.averagePoCT === null) {
+      treasuryConfigErrors.push(
+        `governance/${doc.id} (treasuryBalance=${treasuryDsp}, wallet=${walletAddress}) ` +
+        `is missing averagePoCT — would silently burn 100% of tribute`
+      );
+      continue;
+    }
+
+    const avgPoCT = d.averagePoCT;
     const treasuryEfficiency = Math.min(Math.ceil(avgPoCT / 10) * 10, 100);
 
     recipients.push(walletAddress);
@@ -199,12 +239,92 @@ async function performTGE(triggerSource) {
     });
   }
 
+  if (treasuryConfigErrors.length > 0) {
+    const msg =
+      "[TGE Oracle] FAIL-LOUD: refusing to fire TGE with misconfigured community treasuries.\n" +
+      treasuryConfigErrors.map((e) => "  - " + e).join("\n") +
+      "\nFix the governance/* docs in Firestore and re-trigger.";
+    console.error(msg);
+    throw new Error(
+      `performTGE aborted: ${treasuryConfigErrors.length} community treasury config error(s). See logs.`
+    );
+  }
+
+  // ── Step 2b: Append system treasuries (Founders + Liquidity + Burn) ──
+  //
+  // Whitepaper guarantees 10% per slot per TGE for the system treasuries
+  // (Founders, Liquidity, Burn). The V1 executeTGE signature has no built-in
+  // concept of these slots, so we must append them explicitly with
+  // efficiency=100 (no PoCT burn — these are administered, not earned).
+  //
+  // Wallet resolution priority:
+  //   1. env override (FOUNDERS_TREASURY_ADDRESS / LIQUIDITY_TREASURY_ADDRESS)
+  //   2. governance/<id>.walletAddress
+  //
+  // Amount source: governance/<id>.treasuryBalance, accumulated by
+  // awardPoints() (10% per signup).
+  //
+  // Two documented anomalies in production Firestore (as of 2026-06):
+  //   - governance/investors exists with balance but no walletAddress
+  //     (legacy doc; superseded by governance/liquidity)
+  //   - governance/liquidity is the doc the production pipeline actually uses
+  // We handle both by iterating known slot IDs; an orphan doc with balance
+  // but no resolvable wallet emits a WARN and is skipped (not a hard fail —
+  // failing here would block every TGE on a known-bad legacy doc).
+  const systemSlotSpecs = [
+    { id: "founders",  envWallet: foundersTreasuryAddress,  label: "Founders & Core Team" },
+    { id: "liquidity", envWallet: liquidityTreasuryAddress, label: "Liquidity Treasury" },
+    { id: "investors", envWallet: null,                     label: "Investors Treasury (legacy)" },
+    { id: "burn",      envWallet: null,                     label: "Deflationary Burn" },
+  ];
+
+  let systemSlotsIncluded = 0;
+  for (const slot of systemSlotSpecs) {
+    const govDoc = await db.collection("governance").doc(slot.id).get();
+    if (!govDoc.exists) {
+      console.warn(`[TGE Oracle] system slot governance/${slot.id} does not exist — skipping.`);
+      continue;
+    }
+    const data = govDoc.data();
+    const bal = data.treasuryBalance || 0;
+    if (bal <= 0) {
+      continue; // legitimate: nothing accrued for this slot since last TGE
+    }
+    const wallet = slot.envWallet || data.walletAddress;
+    if (!wallet || wallet.length < 10) {
+      console.warn(
+        `[TGE Oracle] system slot governance/${slot.id} has treasuryBalance=${bal} ` +
+        `but no resolvable wallet (env override unset, govDoc.walletAddress missing). ` +
+        `Skipping — fix Firestore or set env override to include this slot in future TGEs.`
+      );
+      continue;
+    }
+
+    recipients.push(wallet);
+    amounts.push(ethers.parseUnits(Math.floor(bal).toString(), 18));
+    efficiencies.push(100); // system slot — no PoCT burn
+    totalDsp += Math.floor(bal);
+    systemSlotsIncluded++;
+
+    snapshotDetails.push({
+      unitId: slot.id,
+      unitName: slot.label,
+      wallet,
+      dsp: Math.floor(bal),
+      efficiency: 100,
+      systemSlot: true,
+    });
+  }
+
   if (recipients.length === 0) {
     console.log("[TGE Oracle] No eligible recipients. Aborting.");
     return null;
   }
 
-  console.log(`[TGE Oracle] Snapshot: ${usersIncluded} users, ${treasuriesIncluded} treasuries, ${totalDsp} DSP`);
+  console.log(
+    `[TGE Oracle] Snapshot: ${usersIncluded} users, ${treasuriesIncluded} community treasuries, ` +
+    `${systemSlotsIncluded} system slots, ${totalDsp} DSP`
+  );
 
   // ── Step 3: Call on-chain executeTGE ───────────────────────────────
   const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
@@ -241,6 +361,7 @@ async function performTGE(triggerSource) {
     totalRecipients: recipients.length,
     usersIncluded,
     treasuriesIncluded,
+    systemSlotsIncluded,
     triggerSource,
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     snapshot: snapshotDetails,

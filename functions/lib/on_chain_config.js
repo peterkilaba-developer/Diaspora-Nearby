@@ -29,6 +29,24 @@ const REQUIRED_FIELDS = {
   rpcUrl: "RPC_URL",
 };
 
+// Optional overrides — only consulted by performTGE() if you want to repoint
+// the founders / liquidity slot wallets without editing Firestore governance
+// docs. If unset, performTGE reads each slot's walletAddress directly from
+// the governance/* doc. Treated as advisory, not required.
+const OPTIONAL_FIELDS = {
+  foundersTreasuryAddress: "FOUNDERS_TREASURY_ADDRESS",
+  liquidityTreasuryAddress: "LIQUIDITY_TREASURY_ADDRESS",
+};
+
+function readOptionalConfig() {
+  const out = {};
+  for (const [key, envName] of Object.entries(OPTIONAL_FIELDS)) {
+    const v = process.env[envName];
+    out[key] = v && v.trim() !== "" ? v.trim() : null;
+  }
+  return out;
+}
+
 /**
  * @param {string} scope - human-readable label for error messages
  *   (e.g. "initializeUserPoints/welcomeBonus", "transferDiaspora", "performTGE")
@@ -62,4 +80,4 @@ function assertOnChainConfig(scope, required = Object.keys(REQUIRED_FIELDS)) {
   return cfg;
 }
 
-module.exports = { assertOnChainConfig, REQUIRED_FIELDS };
+module.exports = { assertOnChainConfig, readOptionalConfig, REQUIRED_FIELDS, OPTIONAL_FIELDS };
