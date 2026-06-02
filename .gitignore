@@ -86,9 +86,12 @@ test_output.txt
 test_results.txt
 test_output_*.txt
 
-# Environment variables
+# Environment variables — match ALL .env files anywhere in the repo
+# (catches functions/.env.production, blockchain/.env, etc.)
 .env
-.env.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Temporary analysis/test artifacts
 analyze_*.txt
