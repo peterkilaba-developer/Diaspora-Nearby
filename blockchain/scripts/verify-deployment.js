@@ -1,8 +1,8 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-    const TOKEN = "0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c";
-    const TGE = "0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED";
+    const TOKEN = "0x55d7e7d006938A15082752225ED44Fd130B87735";
+    const TGE = "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45";
 
     const token = await ethers.getContractAt("DiasporaToken", TOKEN);
     const tge = await ethers.getContractAt("DiasporaTGEController", TGE);
