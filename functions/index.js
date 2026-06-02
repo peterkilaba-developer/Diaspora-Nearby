@@ -84,6 +84,9 @@ exports.awardExplorationPoints = dsp.awardExplorationPoints;
 exports.awardSharePoints = dsp.awardSharePoints;
 exports.recordFiatGdp = dsp.recordFiatGdp;
 exports.syncTreasuryBalances = dsp.syncTreasuryBalances;
+exports.retryPendingWelcomeBonuses = dsp.retryPendingWelcomeBonuses;
+exports.retryPendingWalletDeployments = wallet.retryPendingWalletDeployments;
+exports.retryPendingTGEDeductions = dsp.retryPendingTGEDeductions;
 
 // Blockchain (1)
 exports.getTokenTransfers = blockchain.getTokenTransfers;

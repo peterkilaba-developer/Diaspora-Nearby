@@ -28,12 +28,12 @@ const SMART_WALLET_ABI = [
   "function owner() view returns (address)",
 ];
 
-// ── Configuration (set via Firebase Functions config or .env) ──
-const WALLET_FACTORY_ADDRESS = process.env.WALLET_FACTORY_ADDRESS || null;
-const BACKEND_SIGNER_KEY = process.env.BACKEND_SIGNER_PRIVATE_KEY || null;
-const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
-const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || null;
-const TGE_CONTROLLER_ADDRESS = process.env.TGE_CONTROLLER_ADDRESS || null;
+// ── Configuration ──
+// Do NOT cache process.env at module-load time. With Firebase Functions v1
+// secrets, the secret is mounted before handlers run, but caching at module
+// scope made one silent-skip bug already (2026-06-02). Use assertOnChainConfig
+// from inside each handler so missing config is a loud, named error.
+const { assertOnChainConfig } = require("./on_chain_config");
 
 const TGE_CONTROLLER_ABI = [
   "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
@@ -51,18 +51,19 @@ const TGE_CONTROLLER_ABI = [
 
 /**
  * Get the configured provider and signer for smart wallet operations.
- * Throws if the factory is not configured — no EOA fallback.
+ * Throws (NOT returns null) if config missing — callers must rely on this
+ * for fail-loud behavior. Previously returned null on missing config, which
+ * forced every caller to handle the null case and risked inconsistent behavior.
  */
 function getSmartWalletInfra() {
-  if (!WALLET_FACTORY_ADDRESS || !BACKEND_SIGNER_KEY) {
-    console.error("[SmartWallet] CRITICAL: Factory or signer not configured.");
-    return null;
-  }
-
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const signer = new ethers.Wallet(BACKEND_SIGNER_KEY, provider);
-  const factory = new ethers.Contract(WALLET_FACTORY_ADDRESS, WALLET_FACTORY_ABI, signer);
-
+  const cfg = assertOnChainConfig("getSmartWalletInfra", [
+    "walletFactoryAddress",
+    "backendSignerKey",
+    "rpcUrl",
+  ]);
+  const provider = new ethers.JsonRpcProvider(cfg.rpcUrl);
+  const signer = new ethers.Wallet(cfg.backendSignerKey, provider);
+  const factory = new ethers.Contract(cfg.walletFactoryAddress, WALLET_FACTORY_ABI, signer);
   return { provider, signer, factory };
 }
 
@@ -85,11 +86,7 @@ function computePhoneHash(phoneNumber) {
  * No EOA fallback — throws if factory is unavailable.
  */
 async function createSmartWalletForPhone(phoneNumber) {
-  const infra = getSmartWalletInfra();
-
-  if (!infra) {
-    throw new Error("[SmartWallet] WalletFactory not configured. Cannot create wallet.");
-  }
+  const infra = getSmartWalletInfra(); // throws if config missing
 
   const phoneHash = computePhoneHash(phoneNumber);
 
@@ -97,11 +94,7 @@ async function createSmartWalletForPhone(phoneNumber) {
   const existingWallet = await infra.factory.getWallet(phoneHash);
   if (existingWallet !== ethers.ZeroAddress) {
     console.log(`[SmartWallet] Wallet already exists for phone hash: ${existingWallet}`);
-    return {
-      address: existingWallet,
-      isSmartWallet: true,
-      phoneHash: phoneHash,
-    };
+    return { address: existingWallet, isSmartWallet: true, phoneHash, deploymentPending: false };
   }
 
   // Compute the deterministic address (pre-deployment)
@@ -109,26 +102,32 @@ async function createSmartWalletForPhone(phoneNumber) {
   console.log(`[SmartWallet] Predicted address for phone: ${predictedAddress}`);
 
   try {
-    // Deploy the smart wallet on-chain
     const tx = await infra.factory.createWallet(phoneHash);
     const receipt = await tx.wait();
     console.log(`[SmartWallet] Created smart wallet: ${predictedAddress} (tx: ${receipt.hash})`);
-
     return {
       address: predictedAddress,
       isSmartWallet: true,
-      phoneHash: phoneHash,
+      phoneHash,
       txHash: receipt.hash,
+      deploymentPending: false,
     };
   } catch (error) {
-    console.error(`[SmartWallet] On-chain deployment failed: ${error.message}`);
-    // Fallback: store the predicted address even without deployment
-    // The wallet can be deployed later (CREATE2 addresses are deterministic)
+    // CREATE2 addresses are deterministic, so the address is still valid even
+    // if deployment failed. The wallet can be deployed later by the healing
+    // function `retryPendingWalletDeployments` (the contract code at this
+    // address won't exist until then, but ERC-20 transfers to it still work
+    // and accumulate balance that the deployed wallet can later move).
+    //
+    // We return `deploymentPending: true` so the caller can store this flag.
+    // Previously the flag was dropped on the floor; now callers MUST handle it.
+    console.error(`[SmartWallet] On-chain deployment failed for ${predictedAddress}: ${error.message}`);
     return {
       address: predictedAddress,
       isSmartWallet: true,
-      phoneHash: phoneHash,
+      phoneHash,
       deploymentPending: true,
+      deploymentError: (error.message || "unknown").slice(0, 500),
     };
   }
 }
@@ -138,18 +137,13 @@ async function createSmartWalletForPhone(phoneNumber) {
  * No EOA fallback — throws if factory is unavailable.
  */
 async function createSmartWalletForCommunity(communityId) {
-  const infra = getSmartWalletInfra();
+  const infra = getSmartWalletInfra(); // throws on missing config
 
-  if (!infra) {
-    throw new Error("[SmartWallet] WalletFactory not configured. Cannot create community wallet.");
-  }
-
-  // Use community ID as deterministic salt
   const salt = ethers.keccak256(ethers.toUtf8Bytes(`community:${communityId}`));
 
   const existingWallet = await infra.factory.getWallet(salt);
   if (existingWallet !== ethers.ZeroAddress) {
-    return { address: existingWallet, isSmartWallet: true };
+    return { address: existingWallet, isSmartWallet: true, deploymentPending: false };
   }
 
   const predictedAddress = await infra.factory.computeAddress(salt);
@@ -158,10 +152,15 @@ async function createSmartWalletForCommunity(communityId) {
     const tx = await infra.factory.createWallet(salt);
     await tx.wait();
     console.log(`[SmartWallet] Created community wallet: ${predictedAddress}`);
-    return { address: predictedAddress, isSmartWallet: true };
+    return { address: predictedAddress, isSmartWallet: true, deploymentPending: false };
   } catch (error) {
-    console.error(`[SmartWallet] Community wallet deployment failed: ${error.message}`);
-    return { address: predictedAddress, isSmartWallet: true, deploymentPending: true };
+    console.error(`[SmartWallet] Community wallet deployment failed for ${communityId} (${predictedAddress}): ${error.message}`);
+    return {
+      address: predictedAddress,
+      isSmartWallet: true,
+      deploymentPending: true,
+      deploymentError: (error.message || "unknown").slice(0, 500),
+    };
   }
 }
 
@@ -183,11 +182,25 @@ exports.onCommunityWrite = functions
     try {
       const walletResult = await createSmartWalletForCommunity(communityId);
 
-      await change.after.ref.update({
+      // Always store the predicted address. If deploymentPending is true, the
+      // contract isn't deployed at that CREATE2 address yet — that's recorded
+      // so the healing function `retryPendingWalletDeployments` can complete
+      // the deploy later. ERC-20 transfers TO this address still work (tokens
+      // accumulate at the address) but execute()/transferToken() calls from
+      // it require the contract to be deployed first.
+      const update = {
         walletAddress: walletResult.address,
         walletGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
         walletType: "smart",
-      });
+      };
+      if (walletResult.deploymentPending) {
+        update.walletDeploymentPending = true;
+        update.walletDeploymentError = walletResult.deploymentError || "unknown";
+        update.walletDeploymentErrorAt = admin.firestore.FieldValue.serverTimestamp();
+      } else {
+        update.walletDeploymentPending = false;
+      }
+      await change.after.ref.update(update);
 
       // Also update the governance doc so TGE can snapshot this treasury
       const govId = communityId === "global_community"
@@ -202,9 +215,17 @@ exports.onCommunityWrite = functions
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      console.log(`[Wallet] Assigned ${walletResult.address} to Community ${communityId} (smart)`);
+      console.log(`[Wallet] Assigned ${walletResult.address} to Community ${communityId} (smart, pending=${!!walletResult.deploymentPending})`);
     } catch (e) {
-      console.error(`[Wallet] Failed to create community wallet: ${e.message}`);
+      // Catastrophic failure (e.g., config missing). Record observable state
+      // so the healing function can retry. Previously this was a console.error
+      // and silent skip — the community had no wallet, no error trail.
+      console.error(`[Wallet] Failed to create community wallet for ${communityId}: ${e.message}`);
+      await change.after.ref.update({
+        walletDeploymentPending: true,
+        walletDeploymentError: (e.message || "unknown").slice(0, 500),
+        walletDeploymentErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
   });
 
@@ -241,16 +262,32 @@ exports.onUserWrite = functions
       try {
         const walletResult = await createSmartWalletForPhone(phoneNumber);
 
-        await change.after.ref.update({
+        const update = {
           walletAddress: walletResult.address,
           walletGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
           walletType: "smart",
           walletPhoneHash: walletResult.phoneHash || null,
-        });
+        };
+        if (walletResult.deploymentPending) {
+          update.walletDeploymentPending = true;
+          update.walletDeploymentError = walletResult.deploymentError || "unknown";
+          update.walletDeploymentErrorAt = admin.firestore.FieldValue.serverTimestamp();
+        } else {
+          update.walletDeploymentPending = false;
+        }
+        await change.after.ref.update(update);
 
-        console.log(`[SmartWallet] Assigned ${walletResult.address} to User ${userId} (smart)`);
+        console.log(`[SmartWallet] Assigned ${walletResult.address} to User ${userId} (smart, pending=${!!walletResult.deploymentPending})`);
       } catch (e) {
-        console.error(`[SmartWallet] Failed to create user wallet: ${e.message}`);
+        // Catastrophic failure (e.g., config missing or transient). Record
+        // observable state so the healing function can retry. Previously this
+        // was a silent console.error.
+        console.error(`[SmartWallet] Failed to create user wallet for ${userId}: ${e.message}`);
+        await change.after.ref.update({
+          walletDeploymentPending: true,
+          walletDeploymentError: (e.message || "unknown").slice(0, 500),
+          walletDeploymentErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
       }
     } else {
       // No phone number available yet — wallet will be created when phone is verified
@@ -329,13 +366,21 @@ exports.getOrCreateSmartWallet = functions
   // 3. Create smart wallet (or retrieve existing one for this phone)
   const walletResult = await createSmartWalletForPhone(phoneNumber);
 
-  // 4. Save wallet data
-  await db.collection("users").doc(userId).update({
+  // 4. Save wallet data + observable deployment state
+  const userUpdate = {
     walletAddress: walletResult.address,
     walletGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
     walletType: "smart",
     walletPhoneHash: walletResult.phoneHash || null,
-  });
+  };
+  if (walletResult.deploymentPending) {
+    userUpdate.walletDeploymentPending = true;
+    userUpdate.walletDeploymentError = walletResult.deploymentError || "unknown";
+    userUpdate.walletDeploymentErrorAt = admin.firestore.FieldValue.serverTimestamp();
+  } else {
+    userUpdate.walletDeploymentPending = false;
+  }
+  await db.collection("users").doc(userId).update(userUpdate);
 
   // 5. Also update user_points collection
   await db.collection("user_points").doc(userId).set(
@@ -401,13 +446,9 @@ exports.ensureSystemWallets = functions
       throw new functions.https.HttpsError("permission-denied", "Admin access required.");
     }
 
+    // getSmartWalletInfra() throws via assertOnChainConfig if any required
+    // env var is missing — surfaces a clear named error to the caller.
     const infra = getSmartWalletInfra();
-    if (!infra) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "WalletFactory not configured. Cannot create system wallets."
-      );
-    }
 
     console.log(`[Wallet] ensureSystemWallets triggered by ${callerId}`);
 
@@ -529,13 +570,9 @@ exports.ensureCommunityTreasuryWallets = functions
       throw new functions.https.HttpsError("permission-denied", "Admin access required.");
     }
 
+    // getSmartWalletInfra() throws via assertOnChainConfig if any required
+    // env var is missing — surfaces a clear named error to the caller.
     const infra = getSmartWalletInfra();
-    if (!infra) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "WalletFactory not configured."
-      );
-    }
 
     console.log(`[Wallet] ensureCommunityTreasuryWallets triggered by ${callerId}`);
 
@@ -605,6 +642,148 @@ exports.ensureCommunityTreasuryWallets = functions
   });
 
 
+
+/**
+ * retryPendingWalletDeployments — heals users and community treasuries whose
+ * smart-wallet on-chain deployment failed.
+ *
+ * The fail-loud refactor of onUserWrite / onCommunityWrite / createSmartWalletFor*
+ * (2026-06-02) sets these fields whenever the factory.createWallet() call
+ * fails (e.g., RPC error, insufficient gas, network blip):
+ *   - walletDeploymentPending: true
+ *   - walletDeploymentError: <reason>
+ *   - walletDeploymentErrorAt: <timestamp>
+ *
+ * This function scans both `users` and `communities` for pending docs,
+ * retries `factory.createWallet(salt)` for each, and clears the pending
+ * fields on success.
+ *
+ * Safe to re-run — the factory's getWallet() check ensures we don't
+ * double-deploy. If a wallet is already on-chain, the doc gets cleared
+ * without any tx.
+ *
+ * Admin-only callable. Usage from client:
+ *   const fn = firebase.functions().httpsCallable('retryPendingWalletDeployments');
+ *   await fn({ scope: 'users', limit: 25 });
+ *   await fn({ scope: 'communities', limit: 25 });
+ *   await fn({ scope: 'both', limit: 50 });  // default
+ *   await fn({ dryRun: true });              // just count
+ */
+exports.retryPendingWalletDeployments = functions
+  .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
+    }
+    if (!context.auth.token || context.auth.token.admin !== true) {
+      throw new functions.https.HttpsError("permission-denied", "Admin only.");
+    }
+
+    const infra = getSmartWalletInfra(); // throws on missing config
+    const dryRun = data && data.dryRun === true;
+    const limit = Math.min(Math.max(Number(data && data.limit) || 50, 1), 200);
+    const scope = (data && data.scope) || "both";
+
+    const results = {
+      ok: true,
+      scope,
+      dryRun,
+      users: { found: 0, succeeded: 0, skipped: 0, failed: 0, items: [] },
+      communities: { found: 0, succeeded: 0, skipped: 0, failed: 0, items: [] },
+    };
+
+    async function attemptDeploy(salt, label) {
+      // Idempotent: skip if already deployed on-chain
+      const existing = await infra.factory.getWallet(salt);
+      if (existing !== ethers.ZeroAddress) {
+        return { alreadyDeployed: true, address: existing };
+      }
+      const predicted = await infra.factory.computeAddress(salt);
+      if (dryRun) return { dryRun: true, address: predicted };
+      const tx = await infra.factory.createWallet(salt);
+      const receipt = await tx.wait();
+      return { deployed: true, address: predicted, txHash: receipt.hash };
+    }
+
+    // ── Users ───────────────────────────────────────────────────────
+    if (scope === "users" || scope === "both") {
+      const snap = await db.collection("users")
+        .where("walletDeploymentPending", "==", true)
+        .limit(limit)
+        .get();
+      results.users.found = snap.size;
+      for (const doc of snap.docs) {
+        const uid = doc.id;
+        const u = doc.data();
+        try {
+          if (!u.walletPhoneHash) {
+            results.users.skipped++;
+            results.users.items.push({ uid, status: "no_phone_hash" });
+            continue;
+          }
+          const out = await attemptDeploy(u.walletPhoneHash, `user:${uid}`);
+          if (!dryRun) {
+            await db.collection("users").doc(uid).set({
+              walletDeploymentPending: false,
+              walletDeploymentError: admin.firestore.FieldValue.delete(),
+              walletDeploymentErrorAt: admin.firestore.FieldValue.delete(),
+              walletDeploymentRetriedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+          results.users.succeeded++;
+          results.users.items.push({ uid, status: out.alreadyDeployed ? "already_deployed" : (out.dryRun ? "dry_run" : "deployed"), address: out.address, txHash: out.txHash });
+        } catch (e) {
+          results.users.failed++;
+          const msg = (e.message || "unknown").slice(0, 500);
+          results.users.items.push({ uid, status: "failed", error: msg });
+          if (!dryRun) {
+            await db.collection("users").doc(uid).set({
+              walletDeploymentError: `retry_failed: ${msg}`,
+              walletDeploymentErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+        }
+      }
+    }
+
+    // ── Communities ─────────────────────────────────────────────────
+    if (scope === "communities" || scope === "both") {
+      const snap = await db.collection("communities")
+        .where("walletDeploymentPending", "==", true)
+        .limit(limit)
+        .get();
+      results.communities.found = snap.size;
+      for (const doc of snap.docs) {
+        const cid = doc.id;
+        try {
+          const salt = ethers.keccak256(ethers.toUtf8Bytes(`community:${cid}`));
+          const out = await attemptDeploy(salt, `community:${cid}`);
+          if (!dryRun) {
+            await db.collection("communities").doc(cid).set({
+              walletDeploymentPending: false,
+              walletDeploymentError: admin.firestore.FieldValue.delete(),
+              walletDeploymentErrorAt: admin.firestore.FieldValue.delete(),
+              walletDeploymentRetriedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+          results.communities.succeeded++;
+          results.communities.items.push({ cid, status: out.alreadyDeployed ? "already_deployed" : (out.dryRun ? "dry_run" : "deployed"), address: out.address, txHash: out.txHash });
+        } catch (e) {
+          results.communities.failed++;
+          const msg = (e.message || "unknown").slice(0, 500);
+          results.communities.items.push({ cid, status: "failed", error: msg });
+          if (!dryRun) {
+            await db.collection("communities").doc(cid).set({
+              walletDeploymentError: `retry_failed: ${msg}`,
+              walletDeploymentErrorAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+        }
+      }
+    }
+
+    return results;
+  });
 
 // Export infrastructure for use by transfer.js
 module.exports.getSmartWalletInfra = getSmartWalletInfra;
