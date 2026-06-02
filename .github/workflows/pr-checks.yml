@@ -4,11 +4,15 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
+permissions:
+  pull-requests: read
+  contents: read
+
 jobs:
   validate-pr:
     name: Validate Pull Request
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Check PR title
         uses: amannn/action-semantic-pull-request@v5
