@@ -1,6 +1,6 @@
 /**
  * DSP Transfer module.
- * Handles peer-to-peer DSP transfers with burn mechanics and corridors.
+ * Handles peer-to-peer DSP transfers and corridors.
  * All token transfers use Smart Wallets — no EOA/private key access.
  */
 const { functions, admin, db } = require("./shared");
@@ -9,7 +9,9 @@ const { functions, admin, db } = require("./shared");
  * Transfers Diaspora (DSP) points between users.
  * Currently updates Firestore ledger. Future: On-chain transfer.
  */
-exports.transferDiaspora = functions.https.onCall(async (data, context) => {
+exports.transferDiaspora = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
   }
@@ -34,7 +36,6 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
         }
         const fromData = fromSnap.data();
         const currentBalance = fromData.availablePoints || 0;
-        const fromPoct = fromData.currentPoCT || 0;
 
         if (currentBalance < amount) {
           throw new functions.https.HttpsError('failed-precondition', 'Insufficient DSP funds.');
@@ -53,11 +54,9 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
         const receiverCountry = toUserDoc.data()?.homeCountryCode || 'XX';
         const corridorId = `${senderCountry}_${receiverCountry}`;
 
-        // 4. Calculate Burn (Trust-Based Sink)
-        // 1% burn unless user has 100 PoCT
-        const burnRate = fromPoct >= 100 ? 0 : 0.01;
-        const burnAmount = Math.floor(amount * burnRate);
-        const netAmount = amount - burnAmount;
+        // 4. Landing-page contract: DSP transfers carry no user fee or burn.
+        const burnAmount = 0;
+        const netAmount = amount;
 
         // 5. Update Balances
         // Deduct full amount from sender (availablePoints only, totalPoints tracks lifetime earned)
@@ -202,7 +201,9 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('failed-precondition', 'Recipient does not have a wallet address.');
       }
 
-      let txHash = '0x_SIMULATED_HASH_' + Date.now();
+      let txHash = null;
+      let settlementMode = 'simulated_test';
+      let testReference = `test_transfer_${Date.now()}`;
       const rpcUrl = process.env.RPC_URL;
       const tokenContractAddress = process.env.DIASPORA_TOKEN_ADDRESS || process.env.TOKEN_ADDRESS;
 
@@ -230,13 +231,15 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
           const tx = await smartWallet.transferToken(tokenContractAddress, toAddress, tokenAmount);
           const receipt = await tx.wait();
           txHash = receipt.hash;
+          settlementMode = 'on_chain';
+          testReference = null;
           console.log(`[SmartWallet Transfer] Token transfer via smart wallet: ${txHash}`);
         } catch (txError) {
           console.error('[Token Transfer] Blockchain Error:', txError);
           throw new functions.https.HttpsError('aborted', 'On-chain transaction failed.', txError.message);
         }
       } else {
-        console.log(`[Mock Transfer] Sending ${amount} $DIASPORA from ${fromUserId} to ${toAddress} (No RPC_URL or TOKEN_ADDRESS)`);
+        console.log(`[Test Transfer] Simulating ${amount} $DIASPORA from ${fromUserId} to ${toAddress} (No RPC_URL or TOKEN_ADDRESS)`);
       }
 
       // 4. Log Transactions (one for sender, one for receiver — matches DSP pattern)
@@ -256,12 +259,16 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
         toAddress,
         amount,
         txHash,
+        settlementMode,
+        testReference,
         walletType: 'smart',
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: 'success',
         metadata: {
           description: `Sent ${amount} $DIASPORA`,
           toUserId,
+          settlementMode,
+          testReference,
         },
       });
 
@@ -279,18 +286,30 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
         toAddress,
         amount,
         txHash,
+        settlementMode,
+        testReference,
         walletType: 'smart',
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: 'success',
         metadata: {
           description: `Received ${amount} $DIASPORA`,
           fromUserId,
+          settlementMode,
+          testReference,
         },
       });
 
       await batch.commit();
 
-      return { success: true, message: `Successfully transferred ${amount} $DIASPORA.`, txHash };
+      return {
+        success: true,
+        message: settlementMode === 'on_chain'
+          ? `Successfully transferred ${amount} $DIASPORA.`
+          : `Recorded simulated test transfer of ${amount} $DIASPORA.`,
+        txHash,
+        settlementMode,
+        testReference,
+      };
     } else {
       throw new functions.https.HttpsError('invalid-argument', 'Invalid asset type. Must be "points" or "token".');
     }
@@ -306,7 +325,9 @@ exports.transferDiaspora = functions.https.onCall(async (data, context) => {
  * When called with data.walletAddress, reads that address directly (for treasuries).
  * When called without, reads the authenticated user's smart wallet address from Firestore.
  */
-exports.getTokenBalance = functions.https.onCall(async (data, context) => {
+exports.getTokenBalance = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
   }
@@ -368,7 +389,9 @@ exports.getTokenBalance = functions.https.onCall(async (data, context) => {
  * EVM chains including Base. It batches all balanceOf reads into ONE RPC request,
  * completely avoiding rate-limit issues.
  */
-exports.getBatchTokenBalances = functions.https.onCall(async (data, context) => {
+exports.getBatchTokenBalances = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
   }
