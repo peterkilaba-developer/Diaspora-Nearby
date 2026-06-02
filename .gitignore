@@ -99,6 +99,34 @@ analyzer_output.txt
 users.json
 blockchain/cache/
 
+# Hardhat / Solidity build output (regenerated on every compile; never commit)
+blockchain/artifacts/
+blockchain/typechain/
+blockchain/typechain-types/
+
+# Firebase deploy caches (regenerated on every deploy)
+.firebase/
+
+# Stray logs / diff dumps that accumulate at repo root
+*.log
+*_log.txt
+flutter_*.txt
+device_flutter_log.txt
+logcat.txt
+dump.txt
+dump_*.txt
+ferr.txt
+final_analyze.txt
+final_fast_analyze.txt
+output.txt
+output2.txt
+diff*.txt
+fix_*.dart
+restore_*.dart
+rewrite_*.dart
+replace_*.dart
+replace_*.py
+
 # Agent/AI tool directories
 .agent/
 .agents/
