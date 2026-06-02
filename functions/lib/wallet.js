@@ -166,8 +166,9 @@ async function createSmartWalletForCommunity(communityId) {
 }
 
 // ── 1. Auto-create Smart Wallet for Communities ──
-exports.onCommunityWrite = functions.firestore
-  .document("communities/{communityId}")
+exports.onCommunityWrite = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .firestore.document("communities/{communityId}")
   .onWrite(async (change, context) => {
     if (!change.after.exists) return null;
 
@@ -208,7 +209,9 @@ exports.onCommunityWrite = functions.firestore
   });
 
 // ── 2. Auto-create Smart Wallet for Users (Phone-based) ──
-exports.onUserWrite = functions.firestore
+exports.onUserWrite = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .firestore
   .document("users/{userId}")
   .onWrite(async (change, context) => {
     if (!change.after.exists) return null;
@@ -257,7 +260,9 @@ exports.onUserWrite = functions.firestore
 
 // ── 3. Callable: Get or Create Smart Wallet ──
 // Called explicitly from the Flutter app after phone authentication.
-exports.getOrCreateSmartWallet = functions.https.onCall(async (data, context) => {
+exports.getOrCreateSmartWallet = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -295,6 +300,29 @@ exports.getOrCreateSmartWallet = functions.https.onCall(async (data, context) =>
     throw new functions.https.HttpsError(
       "failed-precondition",
       "No phone number found. Complete phone verification first."
+    );
+  }
+
+  // 2b. Dedupe: refuse if a DIFFERENT user already owns the wallet derived
+  // from this phone. Wallet addresses are deterministic on phoneHash, so
+  // letting two Firebase users bind to the same on-chain wallet would mean
+  // both can spend the same balance.
+  const phoneHash = computePhoneHash(phoneNumber);
+  const collisionSnap = await db
+    .collection("users")
+    .where("walletPhoneHash", "==", phoneHash)
+    .limit(2)
+    .get();
+  const collidingUid = collisionSnap.docs
+    .map((d) => d.id)
+    .find((uid) => uid !== userId);
+  if (collidingUid) {
+    console.warn(
+      `[SmartWallet] Phone hash collision: ${userId} tried to bind a phone already linked to ${collidingUid}`
+    );
+    throw new functions.https.HttpsError(
+      "already-exists",
+      "This phone number is already linked to another account. Sign in with SMS verification using that phone, or use a different phone number."
     );
   }
 
@@ -363,7 +391,7 @@ async function createSystemTreasuryWallet(infra, label) {
  * so TGE performTGE() can snapshot their balances.
  */
 exports.ensureSystemWallets = functions
-  .runWith({ timeoutSeconds: 120, memory: "256MB" })
+  .runWith({ timeoutSeconds: 120, memory: "256MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
 
@@ -491,7 +519,7 @@ exports.ensureSystemWallets = functions
  * by the onCommunityWrite trigger.
  */
 exports.ensureCommunityTreasuryWallets = functions
-  .runWith({ timeoutSeconds: 540, memory: "512MB" })
+  .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
 

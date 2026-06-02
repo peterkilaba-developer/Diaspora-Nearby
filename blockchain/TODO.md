@@ -11,8 +11,8 @@
 
 - [ ] **Verify contracts on Basescan**  
   ```bash
-  npx hardhat verify --network base-mainnet 0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c
-  npx hardhat verify --network base-mainnet 0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED
+  npx hardhat verify --network base-mainnet 0x55d7e7d006938A15082752225ED44Fd130B87735
+  npx hardhat verify --network base-mainnet 0xb6C049D47A2FaE5413c331760C22E715D0bF4d45
   ```
 
 - [ ] **Upload $DIASPORA token logo to Basescan**  
@@ -60,16 +60,26 @@
 ### Base Mainnet (Production) — Current
 | Contract | Address |
 |----------|---------|
-| DiasporaToken ($DIASPORA) | `0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c` |
-| TGEController | `0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED` |
-| DiasporaToken Implementation | `0xAB10Ed33d980B0DaA93eb9aE9786754492E38c5a` |
-| TGEController Implementation | `0xadA512Ac521E4D2bd3D123D4Ba6fb3e875E3490a` |
+| DiasporaToken ($DIASPORA) — proxy | `0x55d7e7d006938A15082752225ED44Fd130B87735` |
+| DiasporaToken Implementation | `0x0578bBdc97087365bA4D974bb82bB98AddAac0EA` |
+| TGEController — proxy | `0xb6C049D47A2FaE5413c331760C22E715D0bF4d45` |
+| WalletFactory | `0x9cF797cf332595c00410fc4ee9FdEe5C59501945` |
+| Deployer wallet | `0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6` |
 
-### ~~Base Mainnet (Deprecated Test)~~
+### ~~Base Mainnet (Deprecated / Abandoned)~~
 | Contract | Address | Status |
 |----------|---------|--------|
-| ~~DiasporaToken (test, 1,890 tokens)~~ | `0x22e37662801ba7bE67Df7A593a5ad616C1DBb30B` | ❌ Deprecated |
-| ~~TGEController (test)~~ | `0xA8c06C62050D3C29acC43a0B4588a8a170049475` | ❌ Deprecated |
+| ~~DiasporaToken (original launch, ~26 test holders)~~ | `0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c` | ❌ Abandoned — admin key lost |
+| ~~DiasporaToken (interim test, 1,890 tokens)~~ | `0x22e37662801ba7bE67Df7A593a5ad616C1DBb30B` | ❌ Deprecated |
+| ~~TGEController for `0x453f81...`~~ | `0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED` | ❌ Orphaned — 989,880 DIASPORA permanently locked |
+| ~~TGEController for `0x22e37662...`~~ | `0xA8c06C62050D3C29acC43a0B4588a8a170049475` | ❌ Deprecated |
+| ~~Original deployer (key lost)~~ | `0xc479368a5c888f91db6ebc85a3f51c8dbc404c73` | ❌ Inaccessible |
+
+> The original `0x453f81...` token was deployed by `0xc479...4c73` (deployer key lost).
+> Its TGE controller has 989,880 DIASPORA pre-minted and locked — irrecoverable.
+> ~10,120 DIASPORA was distributed to ~26 test users on that chain and is unrecoverable
+> from their wallets. None of these tokens are the canonical $DIASPORA.
+> See `DEPLOYMENTS.md` for the full timeline.
 
 ### Base Sepolia (Testing)
 | Contract | Address |

@@ -62,7 +62,7 @@ async function getAmadeusToken() {
 }
 
 exports.amadeusProxy = functions
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ timeoutSeconds: 60, memory: '256MB', secrets: ["AMADEUS_API_KEY", "AMADEUS_API_SECRET"] })
   .https.onCall(async (data, context) => {
     // Require authentication
     if (!context.auth) {
@@ -175,6 +175,16 @@ exports.amadeusProxy = functions
       if (!response.ok) {
         const errDetail = JSON.stringify(responseData).substring(0, 500);
         console.error(`[Amadeus] ${action} failed:`, response.status, errDetail);
+
+        // [FIX] Amadeus Test API throws hard 500 errors when it has no mock data for specific routes or dates.
+        // Instead of crashing the frontend with an Internal HttpsError, gracefully return empty results for searches.
+        if (response.status === 500 && AMADEUS_BASE.includes('test.api')) {
+           if (action === 'searchFlights' || action === 'getHotelOffers') {
+              console.log(`[Amadeus] Gracefully suppressing Sandbox 500 Error for ${action}. Returning empty data array.`);
+              return { data: [] };
+           }
+        }
+
         // Extract a useful error message from Amadeus response
         let userMsg = `Amadeus ${action} failed: ${response.status}`;
         const errors = responseData?.errors;

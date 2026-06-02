@@ -10,11 +10,22 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title DiasporaToken
- * @dev Implementation of the Diaspora Token ($DSP).
+ * @dev Implementation of the Diaspora Token ($DIASPORA), the on-chain ERC-20 token.
+ *
+ * Naming note:
+ *   - "$DIASPORA" = this on-chain ERC-20 token (the thing this contract issues)
+ *   - "DSP"       = the off-chain reward points unit accumulated by users in
+ *                   the app (Firestore-backed). DSP is converted to $DIASPORA
+ *                   at TGE via DiasporaTGEController.executeTGE(), or at
+ *                   signup via DiasporaTGEController.distributeWelcomeBonus().
+ *   They are NOT the same unit. Code, comments, and docs should use "$DIASPORA"
+ *   when referring to this token and "DSP" only for off-chain points.
+ *
  * Upgradable via UUPS Proxy.
  * Features:
- * - Fixed Hard Cap: 1 Quadrillion tokens.
- * - Role-Based Access Control: Compatible with Gnosis Safe Multi-sig.
+ * - Fixed Hard Cap: 1 Quadrillion tokens (will be lowered in a future upgrade).
+ * - Role-Based Access Control: Should be held by a Gnosis Safe in production
+ *   (see blockchain/IMPROVEMENTS.md for the migration plan).
  * - Just-in-Time Minting: Tokens are minted as community milestones are reached.
  * - Permittable: Supports gasless approvals (EIP-2612).
  */

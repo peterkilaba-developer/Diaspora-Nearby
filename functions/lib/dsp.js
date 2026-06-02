@@ -12,7 +12,9 @@ const TGE_CONTROLLER_ADDRESS = process.env.TGE_CONTROLLER_ADDRESS || null;
 
 const TGE_CONTROLLER_ABI = [
   "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
-  "function distributeWelcomeBonus(address[] recipients, uint256[] amounts) external",
+  // V2 signature: explicit user vs treasury split with Merkle root commitment.
+  // (Pre-V2 deployment: the old signature was `(address[] recipients, uint256[] amounts)`.)
+  "function distributeWelcomeBonus(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
   "function currentEpoch() view returns (uint256)",
   "function currentTgeEvent() view returns (uint256)",
   "function tgeCount() view returns (uint256)",
@@ -124,6 +126,21 @@ async function performTGE(triggerSource) {
       usersSkipped++;
       continue;
     }
+    
+    // TGE Anti-Sybil Gate: Must have performed at least one Identity QR Exchange
+    // We check both user_points (legacy counter) and trust_data (current UI flag)
+    let hasQr = (d.qrConnectionCount || 0) > 0;
+    if (!hasQr) {
+      const trustDoc = await db.collection("trust_data").doc(doc.id).get();
+      if (trustDoc.exists && trustDoc.data().identityQRExchange === true) {
+        hasQr = true;
+      }
+    }
+
+    if (!hasQr) {
+      usersSkipped++;
+      continue;
+    }
 
     const efficiency = calculateEfficiency(trustScore);
     recipients.push(walletAddress);
@@ -221,6 +238,34 @@ async function performTGE(triggerSource) {
 
   await db.collection("tge_events").add(tgeRecord);
 
+  // ── Step 5: Reset Distributed Points ───────────────────────────────
+  // We must deduct the exact amount we snapshotted and sent to the smart contract.
+  const batch = db.batch();
+  for (const snap of snapshotDetails) {
+    if (snap.userId) {
+      // It's a user - reset availablePoints
+      const userRef = db.collection("user_points").doc(snap.userId);
+      batch.set(userRef, {
+        availablePoints: admin.firestore.FieldValue.increment(-snap.dsp),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } else if (snap.unitId) {
+      // It's a treasury - reset treasuryBalance
+      const govRef = db.collection("governance").doc(snap.unitId);
+      batch.set(govRef, {
+        treasuryBalance: admin.firestore.FieldValue.increment(-snap.dsp),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+  // Commit the reset
+  try {
+    await batch.commit();
+    console.log(`[TGE Oracle] Successfully reset DSP points for ${snapshotDetails.length} participants.`);
+  } catch (resetErr) {
+    console.error(`[TGE Oracle] ❌ CRITICAL: Failed to reset DSP points after TGE:`, resetErr);
+  }
+
   return {
     success: true,
     txHash: receipt.hash,
@@ -239,7 +284,7 @@ async function performTGE(triggerSource) {
  * When totalMinted crosses the next 10% epoch milestone, fires TGE automatically.
  */
 exports.onGlobalDspMilestone = functions
-  .runWith({ timeoutSeconds: 300, memory: "512MB" })
+  .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .firestore.document("system_stats/dsp_supply")
   .onWrite(async (change) => {
     if (!change.after.exists) return null;
@@ -312,7 +357,7 @@ exports.onGlobalDspMilestone = functions
  * Useful for testing or emergency scenarios.
  */
 exports.executeTGE = functions
-  .runWith({ timeoutSeconds: 300, memory: "512MB" })
+  .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
@@ -352,7 +397,9 @@ exports.executeTGE = functions
  * @param {object} metadata — Optional metadata
  * @param {boolean} skipTreasury — If true, skip treasury distribution
  */
-exports.awardPoints = functions.https.onCall(async (data, context) => {
+exports.awardPoints = functions
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
@@ -931,32 +978,33 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
               const foundersWallet = foundersGov.exists ? foundersGov.data().walletAddress : null;
               const investorsWallet = investorsGov.exists ? investorsGov.data().walletAddress : null;
 
-              // Build the exact same community fractions as DSP distribution
-              const recipientList = [];
-              const amountList = [];
-              let totalTokens = 0n;
+              // V2 contract signature splits the user recipient (capped + deduped)
+              // from treasury recipients (uncapped). Build them separately.
+              const userAmountWei = ethers.parseUnits("1000", 18);
+              const userRecipient = userWalletAddress;
 
-              // 1. User: 1,000 $DIASPORA
-              recipientList.push(userWalletAddress);
-              amountList.push(ethers.parseUnits("1000", 18));
-              totalTokens += ethers.parseUnits("1000", 18);
+              const treasuryRecipients = [];
+              const treasuryAmounts = [];
+              let totalTokens = userAmountWei;
 
-              // 2. Burn: 100 $DIASPORA (10% of tribute)
-              recipientList.push(BURN_ADDRESS);
-              amountList.push(ethers.parseUnits("100", 18));
+              // 1. Burn: 100 $DIASPORA (10% of tribute)
+              treasuryRecipients.push(BURN_ADDRESS);
+              treasuryAmounts.push(ethers.parseUnits("100", 18));
               totalTokens += ethers.parseUnits("100", 18);
 
-              // 3. Founders: 100 $DIASPORA (10% of tribute)
-              recipientList.push(foundersWallet || DEPLOYER_FALLBACK);
-              amountList.push(ethers.parseUnits("100", 18));
+              // 2. Founders: 100 $DIASPORA (10% of tribute)
+              treasuryRecipients.push(foundersWallet || DEPLOYER_FALLBACK);
+              treasuryAmounts.push(ethers.parseUnits("100", 18));
               totalTokens += ethers.parseUnits("100", 18);
               if (!foundersWallet) console.warn("[Token Welcome Bonus] Founders wallet not found, using deployer fallback");
 
-              // 4. Investors: 100 $DIASPORA (10% of tribute)
-              recipientList.push(investorsWallet || DEPLOYER_FALLBACK);
-              amountList.push(ethers.parseUnits("100", 18));
+              // 3. Liquidity (Treasury): 100 $DIASPORA (10% of tribute)
+              //    Source of truth is the landing page tokenomics — see whitepaper.html § Liquidity Treasury.
+              //    Code still reads governance/investors during the rename; that doc holds the live wallet address.
+              treasuryRecipients.push(investorsWallet || DEPLOYER_FALLBACK);
+              treasuryAmounts.push(ethers.parseUnits("100", 18));
               totalTokens += ethers.parseUnits("100", 18);
-              if (!investorsWallet) console.warn("[Token Welcome Bonus] Investors wallet not found, using deployer fallback");
+              if (!investorsWallet) console.warn("[Token Welcome Bonus] Liquidity wallet not found, using deployer fallback");
 
               // 5. Community treasuries: 700 $DIASPORA (70% of tribute)
               //    Mirror exact same fractions as DSP distribution (unit=100 per slot)
@@ -1000,24 +1048,33 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
                 const commWallet = commDoc.exists ? commDoc.data().walletAddress : null;
 
                 if (commWallet) {
-                  recipientList.push(commWallet);
-                  amountList.push(ethers.parseUnits(slotAmount.toString(), 18));
+                  treasuryRecipients.push(commWallet);
+                  treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
                   communityTokensDistributed += ethers.parseUnits(slotAmount.toString(), 18);
                   totalTokens += ethers.parseUnits(slotAmount.toString(), 18);
                 } else {
                   // Community wallet not yet created — send to deployer as fallback
                   console.warn(`[Token Welcome Bonus] Community ${commId} has no wallet, using system treasury`);
-                  recipientList.push(DEPLOYER_FALLBACK);
-                  amountList.push(ethers.parseUnits(slotAmount.toString(), 18));
+                  treasuryRecipients.push(DEPLOYER_FALLBACK);
+                  treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
                   totalTokens += ethers.parseUnits(slotAmount.toString(), 18);
                 }
               }
+
+              // Commitment hash over the full distribution (user + treasuries).
+              // Stored on-chain by the V2 contract so auditors can verify any user's
+              // allocation against the published off-chain log. Backend can later
+              // upgrade this to a true Merkle root if proof-checking is added on-chain.
+              const distributionCommitment = ethers.solidityPackedKeccak256(
+                ["address", "uint256", "address[]", "uint256[]"],
+                [userRecipient, userAmountWei, treasuryRecipients, treasuryAmounts]
+              );
 
               // Check TGEController has enough supply
               const lockedBalance = await tge.getLockedBalance();
 
               if (lockedBalance >= totalTokens) {
-                console.log(`[Token Welcome Bonus] Distributing ${ethers.formatUnits(totalTokens, 18)} $DIASPORA for user ${userId} (${recipientList.length} recipients)...`);
+                console.log(`[Token Welcome Bonus] Distributing ${ethers.formatUnits(totalTokens, 18)} $DIASPORA for user ${userId} (1 user + ${treasuryRecipients.length} treasuries)...`);
 
                 // Retry loop for nonce collisions — the same backend signer is
                 // used by both onCommunityWrite (wallet creation) and this bonus
@@ -1034,7 +1091,13 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
                     const retrySigner = new ethers.Wallet(BACKEND_SIGNER_KEY, retryProvider);
                     const retryTge = new ethers.Contract(TGE_CONTROLLER_ADDRESS, TGE_CONTROLLER_ABI, retrySigner);
 
-                    const tx = await retryTge.distributeWelcomeBonus(recipientList, amountList);
+                    const tx = await retryTge.distributeWelcomeBonus(
+                      userRecipient,
+                      userAmountWei,
+                      treasuryRecipients,
+                      treasuryAmounts,
+                      distributionCommitment
+                    );
                     const receipt = await tx.wait();
                     txHash = receipt.hash;
                     console.log(`[Token Welcome Bonus] ✅ Distributed on attempt ${attempt}! TX: ${txHash}`);
@@ -1078,7 +1141,7 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
                     foundersAmount: 100,
                     investorsAmount: 100,
                     communityAmount: Number(ethers.formatUnits(communityTokensDistributed, 18)),
-                    recipientCount: recipientList.length,
+                    recipientCount: 1 + treasuryRecipients.length, // user + treasuries
                   },
                 });
 
@@ -1651,7 +1714,7 @@ exports.recordFiatGdp = functions.https.onCall(async (data, context) => {
  * Recalculates all treasury balances from source of truth (user_points).
  */
 exports.syncTreasuryBalances = functions
-  .runWith({ timeoutSeconds: 300, memory: "512MB" })
+  .runWith({ timeoutSeconds: 300, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");

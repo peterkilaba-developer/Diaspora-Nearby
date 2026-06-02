@@ -30,6 +30,14 @@
       "address": "0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED",
       "txHash": "0x7eb9268aaa0b244eb22421427e328a38d03fb602a4ac3469ceae5858c89c1dfa",
       "kind": "uups"
+    },
+    {
+      "address": "0x55d7e7d006938A15082752225ED44Fd130B87735",
+      "kind": "uups"
+    },
+    {
+      "address": "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45",
+      "kind": "uups"
     }
   ],
   "impls": {
@@ -323,7 +331,11 @@
             }
           ]
         }
-      }
+      },
+      "allAddresses": [
+        "0xAB10Ed33d980B0DaA93eb9aE9786754492E38c5a",
+        "0x0578bBdc97087365ba4D974BB82BB98ADDAaC0EA"
+      ]
     },
     "cf9cf2cc6ea6ba0d9733b39bac4e30ef05f29dcadb050e3e5c24beabab3a3fcb": {
       "address": "0x1C4f850ddb15D31cA1F89afE252aE728e160C405",
@@ -705,7 +717,7 @@
             "label": "token",
             "offset": 0,
             "slot": "0",
-            "type": "t_contract(DiasporaToken)9515",
+            "type": "t_contract(DiasporaToken)11750",
             "contract": "DiasporaTGEController",
             "src": "contracts\\DiasporaTGEController.sol:34"
           },
@@ -855,9 +867,246 @@
             "label": "uint64",
             "numberOfBytes": "8"
           },
-          "t_contract(DiasporaToken)9515": {
+          "t_contract(DiasporaToken)11750": {
             "label": "contract DiasporaToken",
             "numberOfBytes": "20"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.AccessControl": [
+            {
+              "contract": "AccessControlUpgradeable",
+              "label": "_roles",
+              "type": "t_mapping(t_bytes32,t_struct(RoleData)26_storage)",
+              "src": "@openzeppelin\\contracts-upgradeable\\access\\AccessControlUpgradeable.sol:62",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      },
+      "allAddresses": [
+        "0x94B426940211d3184eb2ff90197f71D84Baac808",
+        "0xFF0Fd5E1981E1fD328f4e43B0705Bcb01d251944"
+      ]
+    },
+    "94c9001ace539b311765e6dd788945a14c8397b16bf94c0de9762f364b410d1b": {
+      "address": "0xbF97A76983EC824c591874275A175Ae3514557a2",
+      "txHash": "0x6ad127da662ae5462325ef1b8e5d1422da4d429f906101f31cf371981c6203fb",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "token",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(DiasporaToken)9782",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:36"
+          },
+          {
+            "label": "currentEpoch",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:38"
+          },
+          {
+            "label": "currentTgeEvent",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:39"
+          },
+          {
+            "label": "totalMinted",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:40"
+          },
+          {
+            "label": "totalDistributed",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:41"
+          },
+          {
+            "label": "totalBurned",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:43"
+          },
+          {
+            "label": "tgeCount",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:44"
+          },
+          {
+            "label": "epochLockedSupply",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:44"
+          },
+          {
+            "label": "epochDistributed",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:46"
+          },
+          {
+            "label": "totalWelcomeBonuses",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:47"
+          },
+          {
+            "label": "maxWelcomeBonusPerRecipient",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_uint256",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:57"
+          },
+          {
+            "label": "welcomeBonusReceived",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:59"
+          },
+          {
+            "label": "batchRoots",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_mapping(t_bytes32,t_bytes32)",
+            "contract": "DiasporaTGEControllerV2",
+            "src": "contracts\\DiasporaTGEControllerV2.sol:64"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(RoleData)26_storage)": {
+            "label": "mapping(bytes32 => struct AccessControlUpgradeable.RoleData)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(AccessControlStorage)36_storage": {
+            "label": "struct AccessControlUpgradeable.AccessControlStorage",
+            "members": [
+              {
+                "label": "_roles",
+                "type": "t_mapping(t_bytes32,t_struct(RoleData)26_storage)",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(InitializableStorage)147_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(RoleData)26_storage": {
+            "label": "struct AccessControlUpgradeable.RoleData",
+            "members": [
+              {
+                "label": "hasRole",
+                "type": "t_mapping(t_address,t_bool)",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "adminRole",
+                "type": "t_bytes32",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_contract(DiasporaToken)9782": {
+            "label": "contract DiasporaToken",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_bytes32)": {
+            "label": "mapping(bytes32 => bytes32)",
+            "numberOfBytes": "32"
           },
           "t_uint256": {
             "label": "uint256",
