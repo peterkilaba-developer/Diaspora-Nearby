@@ -43,8 +43,8 @@ final _dmExclusionProvider = FutureProvider<Set<String>>((ref) async {
 // re-fetched when the view mode changes or the user explicitly refreshes.
 final nearbyUsersProvider =
     AsyncNotifierProvider<NearbyUsersNotifier, List<ProfileData>>(
-  NearbyUsersNotifier.new,
-);
+      NearbyUsersNotifier.new,
+    );
 
 class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
   // [PERF] In-memory cache with TTL to avoid hammering Firestore
@@ -63,7 +63,9 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
     if (_cachedUsers != null &&
         _cachedViewMode == viewMode &&
         now.difference(_lastFetch) < _cacheTtl) {
-      debugPrint('[PERF] nearbyUsersProvider CACHE HIT (${_cachedUsers!.length} users, ${now.difference(_lastFetch).inSeconds}s old)');
+      debugPrint(
+        '[PERF] nearbyUsersProvider CACHE HIT (${_cachedUsers!.length} users, ${now.difference(_lastFetch).inSeconds}s old)',
+      );
       return _cachedUsers!;
     }
 
@@ -403,9 +405,7 @@ class HomeRepository {
             }
           })
           .whereType<ProfileData>()
-          .where(
-            (profile) => (profile.distance ?? 999999) <= 999,
-          )
+          .where((profile) => (profile.distance ?? 999999) <= 999)
           .toList();
 
       return users;

@@ -849,7 +849,7 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<String?>);
 
   @override
-  _i3.Future<void> transferAsset({
+  _i3.Future<Map<String, dynamic>> transferAsset({
     required String? fromUserId,
     required String? toUserId,
     required int? amount,
@@ -862,10 +862,12 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
               #amount: amount,
               #assetType: assetType,
             }),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
+            returnValue: _i3.Future<Map<String, dynamic>>.value({}),
+            returnValueForMissingStub: _i3.Future<Map<String, dynamic>>.value(
+              {},
+            ),
           )
-          as _i3.Future<void>);
+          as _i3.Future<Map<String, dynamic>>);
 
   @override
   _i3.Future<void> syncTreasuryBalances() =>
@@ -1541,12 +1543,13 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
     int? points,
     String? action, {
     Map<String, dynamic>? metadata,
+    bool? skipTreasury = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #addPoints,
               [userId, points, action],
-              {#metadata: metadata},
+              {#metadata: metadata, #skipTreasury: skipTreasury},
             ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
@@ -1663,7 +1666,7 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
           as _i3.Future<String>);
 
   @override
-  _i3.Future<void> transferAsset({
+  _i3.Future<Map<String, dynamic>> transferAsset({
     required String? fromUserId,
     required String? toUserId,
     required int? amount,
@@ -1676,10 +1679,12 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
               #amount: amount,
               #assetType: assetType,
             }),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
+            returnValue: _i3.Future<Map<String, dynamic>>.value({}),
+            returnValueForMissingStub: _i3.Future<Map<String, dynamic>>.value(
+              {},
+            ),
           )
-          as _i3.Future<void>);
+          as _i3.Future<Map<String, dynamic>>);
 
   @override
   _i3.Future<String?> getReferralCode(String? userId) =>

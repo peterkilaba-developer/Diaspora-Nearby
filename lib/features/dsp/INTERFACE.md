@@ -29,8 +29,8 @@ Future<void> deductPoints({
   required String reason,
 })
 
-// Transfer $DIASPORA between users
-Future<void> transferAsset({
+// Transfer DSP or $DIASPORA; token result identifies on-chain vs test settlement.
+Future<Map<String, dynamic>> transferAsset({
   required String fromUserId,
   required String toUserId,
   required int amount,
@@ -199,6 +199,6 @@ class TreasuryData {
 - Treasury distribution follows the 1:1 Expansion + 10-Slot Rule
 - Epochs trigger when BOTH $DIASPORA supply and population targets are met
 - TGE milestones follow 10x exponential growth pattern
-- User TGE gate: 10,000 $DIASPORA minimum
+- User TGE gate: QR Identity Exchange requirement
 - Community TGE gate: 1,000,000 $DIASPORA minimum
 - **All economic activities are fee-free** — only penalties and protocol burns remove $DIASPORA from circulation

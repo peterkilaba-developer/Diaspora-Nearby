@@ -14,6 +14,8 @@ import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
+import 'package:diaspora_nearby/features/chat/screens/chats_list_screen.dart'
+    show userChatsStreamProvider;
 
 class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
@@ -121,6 +123,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           homeCountryCode: repoCountryCode,
           currentUserId: user.uid,
           userCommunityMemberships: userProfile?.communityMemberships ?? [],
+          userChatGroupIds:
+              ref
+                  .watch(userChatsStreamProvider)
+                  .value
+                  ?.map((c) => c.id)
+                  .toList() ??
+              const [],
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -132,13 +141,28 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
           final allEvents = snapshot.data ?? [];
 
+          final userChatIds =
+              ref
+                  .watch(userChatsStreamProvider)
+                  .value
+                  ?.map((c) => c.id)
+                  .toSet() ??
+              const <String>{};
+
           // Filter Logic
           final filteredEvents = allEvents.where((event) {
+            // Always show the user's own events and events targeted at chat
+            // groups they belong to, even if the home-country doesn't match.
+            final isCreator = event.creatorId == user.uid;
+            final isChatGroupEvent =
+                event.attendingPermission != null &&
+                userChatIds.contains(event.attendingPermission);
+
             // 1. View Mode Strict Filtering
             if (isGlobalViewMode) {
               // Global View: Show all events (unfiltered)
               // Previously we excluded local events, but user wants unfiltered.
-            } else {
+            } else if (!isCreator && !isChatGroupEvent) {
               // Home View: is already filtered by Repo to only match homeCountryCode.
               // Double check just in case repo returns stray data?
               if (userHomeCountryCode != null &&
@@ -146,7 +170,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 return false;
               }
             }
-
             // 2. Search Filter
             final query = searchQuery.toLowerCase();
             if (query.isEmpty) return true;

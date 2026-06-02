@@ -83,9 +83,7 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
   /// Handles common OCR misreads (O→0, I→1, Q→0, etc.)
   String? _extractVin(String text) {
     // Remove spaces, dashes, tabs, newlines
-    final cleaned = text
-        .replaceAll(RegExp(r'[\s\-\t\n\r]'), '')
-        .toUpperCase();
+    final cleaned = text.replaceAll(RegExp(r'[\s\-\t\n\r]'), '').toUpperCase();
 
     // First try: exact match
     final exact = _vinRegex.firstMatch(cleaned);
@@ -96,12 +94,12 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
     //   0 as O, 1 as I/l, 5 as S, 8 as B
     // We fix common OCR errors and re-match
     final ocrFixed = cleaned
-        .replaceAll('O', '0')  // O → 0 (VINs don't use O)
-        .replaceAll('I', '1')  // I → 1 (VINs don't use I)
-        .replaceAll('Q', '0')  // Q → 0 (VINs don't use Q)
+        .replaceAll('O', '0') // O → 0 (VINs don't use O)
+        .replaceAll('I', '1') // I → 1 (VINs don't use I)
+        .replaceAll('Q', '0') // Q → 0 (VINs don't use Q)
         .replaceAll('o', '0')
         .replaceAll('i', '1')
-        .replaceAll('l', '1')  // lowercase L → 1
+        .replaceAll('l', '1') // lowercase L → 1
         .replaceAll('q', '0');
 
     final fixedMatch = _vinRegex.firstMatch(ocrFixed);
@@ -139,7 +137,9 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
       final raw = barcode.rawValue ?? barcode.displayValue;
       if (raw == null || raw.isEmpty) continue;
 
-      debugPrint('[VIN Scanner] Barcode detected: $raw (format: ${barcode.format})');
+      debugPrint(
+        '[VIN Scanner] Barcode detected: $raw (format: ${barcode.format})',
+      );
 
       final vin = _extractVin(raw);
       if (vin != null) {
@@ -149,8 +149,6 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
       }
     }
   }
-
-
 
   /// Pick from gallery (useful for previously taken photos / scanned docs)
   Future<void> _pickFromGallery() async {
@@ -228,7 +226,8 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
           // ── Handle ──
           const SizedBox(height: 8),
           Container(
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
               color: theme.hintColor.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
@@ -240,7 +239,8 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
           Text(
             'Scan VIN Number',
             style: TextStyle(
-              fontSize: 17, fontWeight: FontWeight.bold,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
               color: theme.colorScheme.onSurface,
             ),
           ),
@@ -289,14 +289,19 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(LucideIcons.cameraOff,
-                                    size: 48, color: Colors.red),
+                                const Icon(
+                                  LucideIcons.cameraOff,
+                                  size: 48,
+                                  color: Colors.red,
+                                ),
                                 const SizedBox(height: 12),
                                 Text(
                                   'Camera error: ${error.errorDetails?.message ?? error.errorCode.name}',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      color: Colors.red, fontSize: 13),
+                                    color: Colors.red,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ],
                             ),
@@ -311,8 +316,10 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                           width: 280,
                           height: _mode == 0 ? 80 : 50,
                           decoration: BoxDecoration(
-                            border:
-                                Border.all(color: AppTheme.accent, width: 2),
+                            border: Border.all(
+                              color: AppTheme.accent,
+                              width: 2,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
@@ -326,7 +333,9 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                         child: Center(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 6),
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black54,
                               borderRadius: BorderRadius.circular(16),
@@ -336,7 +345,9 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                                   ? 'Align VIN barcode within the frame'
                                   : 'Position VIN text, then tap Capture',
                               style: const TextStyle(
-                                  color: Colors.white, fontSize: 11),
+                                color: Colors.white,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                         ),
@@ -350,12 +361,15 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const CircularProgressIndicator(
-                                  color: AppTheme.accent),
+                                color: AppTheme.accent,
+                              ),
                               const SizedBox(height: 12),
                               Text(
                                 _statusText ?? 'Processing...',
                                 style: const TextStyle(
-                                    color: Colors.white, fontSize: 13),
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),
@@ -376,17 +390,23 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _pickFromGallery,
-                      icon: const Icon(LucideIcons.image,
-                          size: 16, color: AppTheme.accent),
-                      label: const Text('Gallery',
-                          style: TextStyle(
-                              color: AppTheme.accent, fontSize: 13)),
+                      icon: const Icon(
+                        LucideIcons.image,
+                        size: 16,
+                        color: AppTheme.accent,
+                      ),
+                      label: const Text(
+                        'Gallery',
+                        style: TextStyle(color: AppTheme.accent, fontSize: 13),
+                      ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
-                            color: AppTheme.accent.withValues(alpha: 0.4)),
+                          color: AppTheme.accent.withValues(alpha: 0.4),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -396,14 +416,17 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                     child: ElevatedButton.icon(
                       onPressed: _captureForOcr,
                       icon: const Icon(LucideIcons.focus, size: 18),
-                      label: const Text('Capture VIN',
-                          style: TextStyle(fontSize: 13)),
+                      label: const Text(
+                        'Capture VIN',
+                        style: TextStyle(fontSize: 13),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.accent,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         elevation: 0,
                       ),
                     ),
@@ -452,14 +475,22 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16,
-                  color: selected ? AppTheme.accent : Theme.of(context).hintColor),
-              const SizedBox(width: 6),
-              Text(label, style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              Icon(
+                icon,
+                size: 16,
                 color: selected ? AppTheme.accent : Theme.of(context).hintColor,
-              )),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  color: selected
+                      ? AppTheme.accent
+                      : Theme.of(context).hintColor,
+                ),
+              ),
             ],
           ),
         ),

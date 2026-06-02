@@ -19,6 +19,7 @@ import 'package:diaspora_nearby/features/chat/widgets/message_input.dart';
 import 'package:diaspora_nearby/features/chat/widgets/message_action_sheet.dart';
 
 import 'package:diaspora_nearby/features/chat/widgets/chat_header_title.dart';
+import 'package:diaspora_nearby/features/chat/widgets/bilateral_flag_avatar.dart';
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/theme/app_theme.dart'; // [FIXED]
 
@@ -140,7 +141,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // LOGGING TO DEBUG "NOTHING HAPPENS"
     final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
-    debugPrint('📩 ChatScreen INIT:');
+    debugPrint('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â© ChatScreen INIT:');
     debugPrint('   - chatId: ${widget.chatId}');
     debugPrint('   - pendingUserId: ${widget.pendingUserId}');
     debugPrint('   - pendingUserName: ${widget.pendingUserName}');
@@ -258,7 +259,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         if (mounted) setState(() => _highlightedMessageId = null);
       });
     } else {
-      debugPrint('⚠️ Target message $messageId not found in rendered list');
+      debugPrint(
+        'ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Target message $messageId not found in rendered list',
+      );
       // In a production app, we would fetch more messages or use search
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -284,7 +287,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     String text, {
     Map<String, dynamic>? metadata,
   }) async {
-    debugPrint('📩 _sendMessage called with content: "$text"');
+    debugPrint('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â© _sendMessage called with content: "$text"');
     if (text.trim().isEmpty) return;
 
     final chatRepo = ref.read(chatRepositoryProvider);
@@ -295,7 +298,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // If this is a pending DM, create the chat first
     if (_isPendingDM && _activeChatId == null) {
-      debugPrint('📍 Creating DM chat on first message...');
+      debugPrint('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â Creating DM chat on first message...');
       final chat = await chatRepo.createDirectChatWithMessage(
         widget.pendingUserId!,
         text,
@@ -314,10 +317,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         setState(() {
           _activeChatId = chat.id;
         });
-        debugPrint('✅ Chat created: ${chat.id}');
+        debugPrint('ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Chat created: ${chat.id}');
       } else {
         debugPrint(
-          'â Failed to create chat with user ${widget.pendingUserId}',
+          'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ…â€™ Failed to create chat with user ${widget.pendingUserId}',
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -369,14 +372,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             .read(pendingMessagesProvider.notifier)
             .addMessage(_activeChatId!, optimisticMessage);
 
-        // Now fetch participants (non-blocking for UI)
-        List<String>? participants;
-        try {
-          final chat = await chatRepo.getChat(_activeChatId!);
-          participants = chat?.participants;
-        } catch (e) {
-          debugPrint('Error fetching chat for participants: $e');
-        }
+        final participants = chatRepo
+            .getCachedChat(_activeChatId!)
+            ?.participants;
 
         try {
           await chatRepo.sendTextMessage(
@@ -394,7 +392,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             replyToSenderId: _replyingTo?.senderId,
           );
         } catch (e) {
-          debugPrint('❌ Error sending message: $e');
+          debugPrint('ÃƒÂ¢Ã‚ÂÃ…â€™ Error sending message: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -451,7 +449,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (_activeChatId != null) return _activeChatId;
     if (!_isPendingDM) return null;
 
-    debugPrint('📍 Creating DM chat for media/file...');
+    debugPrint('ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã‚Â Creating DM chat for media/file...');
     final chatRepo = ref.read(chatRepositoryProvider);
 
     // Show loading?
@@ -467,10 +465,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       setState(() {
         _activeChatId = chat.id;
       });
-      debugPrint('✅ Chat created: ${chat.id}');
+      debugPrint('ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ Chat created: ${chat.id}');
       return chat.id;
     } else {
-      debugPrint('â Failed to create chat with user ${widget.pendingUserId}');
+      debugPrint(
+        'ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ…â€™ Failed to create chat with user ${widget.pendingUserId}',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -745,7 +745,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendLocationMessage(MessageLocation location, String? caption) async {
+  Future<void> _sendLocationMessage(
+    MessageLocation location,
+    String? caption,
+  ) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -1062,7 +1065,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _retryMessage(Message failedMessage) async {
     if (_activeChatId == null) return;
 
-    debugPrint('ð Retrying failed message: ${failedMessage.id}');
+    debugPrint(
+      'ÃƒÆ’Ã‚Â°Ãƒâ€šÃ…Â¸Ãƒâ€šÃ¢â‚¬ÂÃƒâ€šÃ¢â‚¬Å¾ Retrying failed message: ${failedMessage.id}',
+    );
     final chatRepo = ref.read(chatRepositoryProvider);
 
     // For text messages, resend with the same content
@@ -1289,6 +1294,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 // Family group chat avatar
                 final isFamilyGroup = chat?.metadata?['isFamilyGroup'] == true;
                 Widget? headerAvatar = communityAvatar;
+                if (chat?.isChamber == true) {
+                  headerAvatar = BilateralFlagAvatar(
+                    homeCountryCode: chat?.homeCountryCode,
+                    hostCountryCode: chat?.hostCountryCode,
+                    size: 36,
+                  );
+                }
                 if (isFamilyGroup && headerAvatar == null) {
                   headerAvatar = Container(
                     width: 36,
@@ -1797,7 +1809,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _visibleUnreadMessageIds
         .clear(); // Clear immediately to prevent double processing
 
-    debugPrint('👀 Marking ${ids.length} messages as read');
+    debugPrint('ÃƒÂ°Ã…Â¸Ã¢â‚¬ËœÃ¢â€šÂ¬ Marking ${ids.length} messages as read');
     try {
       await ref
           .read(chatRepositoryProvider)
@@ -1880,7 +1892,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Check profile completeness for Verify/Vouch gate
     // Show "Verify & Vouch" if the user has ANY profile field filled
-    // (not all 12 — that was too strict and hid the menu item)
+    // (not all 12 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â that was too strict and hid the menu item)
     bool hasAnyProfileField = false;
     bool hasVerifiedTarget = false;
     if (isDirect && currentUserId.isNotEmpty) {
@@ -2244,7 +2256,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
 
       // Execute Transfer
-      await ref
+      final transferResult = await ref
           .read(pointsServiceProvider)
           .transferAsset(
             fromUserId: currentUserId,
@@ -2279,6 +2291,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               'amount': amount,
               'currency': assetType == 'token' ? 'DIASPORA' : 'DSP',
               'assetType': assetType,
+              if (transferResult['settlementMode'] != null)
+                'settlementMode': transferResult['settlementMode'],
+              if (transferResult['txHash'] != null)
+                'txHash': transferResult['txHash'],
             },
             participants: participants,
             // We should also set push notification payload if needed here via metadata or server function?
@@ -2594,7 +2610,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           .getUserProfile(otherUserId);
       if (profile == null) return;
 
-      // 1. Check existing relationship — only block family (Conflict of Interest)
+      // 1. Check existing relationship ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â only block family (Conflict of Interest)
       final relRepo = ref.read(relationshipRepositoryProvider);
       final rel = await relRepo.getRelationship(
         userId: currentUserId,

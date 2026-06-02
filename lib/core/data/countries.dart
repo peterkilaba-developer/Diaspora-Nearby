@@ -30,6 +30,9 @@ class Country {
     required this.hasStateLevel,
     this.stateTerminology,
   });
+
+  bool get retainsLeadingZero =>
+      ['IT', 'SM', 'VA'].contains(code.toUpperCase());
 }
 
 const Map<Continent, String> continentDisplayNames = {

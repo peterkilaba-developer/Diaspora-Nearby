@@ -97,6 +97,20 @@ void main() {
         );
         expect(transaction.displayAction, 'Exploration Reward: Welcome Tour');
       });
+
+      test('should label simulated token settlement as test activity', () {
+        final transaction = PointsTransaction.fromMap({
+          'userId': 'user_1',
+          'type': 'transfer',
+          'action': 'token_transfer_sent',
+          'points': -25,
+          'timestamp': now.toIso8601String(),
+          'settlementMode': 'simulated_test',
+        }, id);
+
+        expect(transaction.displayAction, r'$DIASPORA Sent (Test)');
+        expect(transaction.metadata?['settlementMode'], 'simulated_test');
+      });
     });
   });
 }

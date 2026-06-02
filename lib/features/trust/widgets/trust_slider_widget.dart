@@ -244,10 +244,9 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                     width: 80,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.08),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -403,16 +402,15 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                     child: FilledButton(
                       onPressed: canSubmit
                           ? () => _submitRating(
-                                isStakeConfirm: isFullTrust && !_wasFullTrust,
-                              )
+                              isStakeConfirm: isFullTrust && !_wasFullTrust,
+                            )
                           : null,
                       style: FilledButton.styleFrom(
                         backgroundColor: canSubmit
                             ? color
-                            : Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.12),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.12),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -425,10 +423,9 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                           fontSize: canSubmit ? 14 : 12,
                           color: canSubmit
                               ? null
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.38),
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.38),
                         ),
                       ),
                     ),

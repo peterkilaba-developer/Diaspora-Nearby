@@ -1467,7 +1467,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           ),
           const SizedBox(height: 16),
 
-
           _buildContinueButton(
             onPressed: _isProcessing ? null : _goToReview,
             label: _isProcessing ? 'Confirming Price...' : 'Continue to Review',

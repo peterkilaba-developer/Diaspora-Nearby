@@ -22,15 +22,15 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW] Share reward toast
+import 'package:diaspora_nearby/features/chat/services/chamber_service.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
-import '../widgets/profile_setup_home_step.dart';
-import '../widgets/profile_setup_host_step.dart';
+import '../widgets/profile_setup_location_step.dart';
 import '../widgets/profile_setup_details_step.dart';
 
 /// Setup step enum matching React's SetupStep type
-enum SetupStep { home, host, profile }
+enum SetupStep { location, profile }
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -46,7 +46,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _referralCodeController = TextEditingController(); // [NEW]
 
   // Current step in the flow
-  SetupStep _currentStep = SetupStep.home;
+  SetupStep _currentStep = SetupStep.location;
 
   // Locations
   loc_model.UserLocation? _homeLocation;
@@ -61,13 +61,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   bool _showCurrentLocationName = true;
 
   // Places Search
-  List<AutocompletePrediction> _predictions = [];
+  List<AutocompletePrediction> _homePredictions = [];
   final _homeSearchController = TextEditingController();
-  final _hostSearchController = TextEditingController();
 
   // Focus tracking for hiding decorations
   final _homeFocusNode = FocusNode();
-  final _hostFocusNode = FocusNode();
 
   // Address Components (for accurate parsing)
   List<AddressComponent>? _homeComponents;
@@ -105,9 +103,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _firstNameController.removeListener(_onNameChanged);
     _lastNameController.removeListener(_onNameChanged);
     _homeFocusNode.dispose();
-    _hostFocusNode.dispose();
     _homeSearchController.dispose();
-    _hostSearchController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
     _referralCodeController.dispose(); // [NEW]
@@ -115,70 +111,140 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     super.dispose();
   }
 
-  /// Request location permission for distance calculations
-  Future<void> _requestLocationPermission() async {
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+  void _useFallbackLocation() {
+    final fallbackLoc = loc_model.UserLocation(
+      formattedAddress: 'Unknown Location (GPS Failed)',
+      placeId: 'fallback',
+      city: 'Unknown City',
+      country: 'Global',
+      countryCode: 'XX',
+      geometry: loc_model.UserLocationGeometry(
+        location: loc_model.UserLocationCoordinates(lat: 0.0, lng: 0.0),
+      ),
+    );
 
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        // Enforce Permission: Show dialog and retry
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Text('Location Required'),
-              content: const Text(
-                'We need your location to connect you with nearby diaspora members. This is required to complete signup.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Geolocator.openAppSettings(); // Guide user to settings if denied forever, or just retry
-                    _requestLocationPermission(); // Recursive retry
-                  },
-                  child: const Text('Open Settings'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _requestLocationPermission(); // Retry
-                  },
-                  child: const Text('Grant Permission'),
-                ),
-              ],
-            ),
-          );
+    setState(() {
+      _currentLocation = CurrentLocation(
+        formattedAddress: '0.0, 0.0',
+        placeId: '',
+        geometry: loc_model.UserLocationGeometry(
+          location: loc_model.UserLocationCoordinates(lat: 0.0, lng: 0.0),
+        ),
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      _hostLocation = fallbackLoc;
+    });
+  }
+
+  /// Request location permission for distance calculations
+  Future<void> _requestLocationPermission({bool isRetry = false}) async {
+    try {
+      LocationPermission permission;
+
+      if (kIsWeb) {
+        // [FIX] Safari WebKit doesn't reliably support permissions.query for geolocation.
+        // Calling checkPermission() throws an exception, instantly failing the flow.
+        // By skipping checkPermission on web, we effectively allow getCurrentPosition to natively prompt.
+        permission = LocationPermission.always;
+      } else {
+        permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
         }
-        return; // Don't proceed without permission
+
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          // Enforce Permission: Show dialog and retry
+          if (mounted) {
+            await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text('Location Required'),
+                content: const Text(
+                  'We need your location to connect you with nearby diaspora members. This is required to complete signup. If you cannot provide GPS access, you will be assigned a default location that you can change later.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // Use a fallback location so they can proceed!
+                      _useFallbackLocation();
+                    },
+                    child: const Text('Skip & Use Default'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Geolocator.openAppSettings();
+                    },
+                    child: const Text('Open Settings'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _requestLocationPermission(isRetry: true); // Retry
+                    },
+                    child: const Text('Try Again'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return; // Don't proceed without permission
+        }
       }
 
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
-        // Get current position
-        final position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.medium,
-          ),
-        );
+        // Get current position with timeout to prevent infinite hang
+        final position =
+            await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.medium,
+              ),
+            ).timeout(
+              const Duration(seconds: 15),
+              onTimeout: () {
+                throw Exception(
+                  'Location request timed out. Please ensure you have GPS signal.',
+                );
+              },
+            );
 
         debugPrint(
-          'Ã°ÂŸÂ“Â GPS position: ${position.latitude}, ${position.longitude}',
+          'Ã°ÂŸÂ“Â  GPS position: ${position.latitude}, ${position.longitude}',
         );
 
         // Ã°ÂŸÂ”Â¥ CRITICAL: Reverse geocode to get city, state, countryCode
         final places = ref.read(googlePlacesServiceProvider);
-        final locationData = await places.reverseGeocode(
-          position.latitude,
-          position.longitude,
-        );
+        final locationData = await places
+            .reverseGeocode(position.latitude, position.longitude)
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw Exception('Reverse geocoding timed out.');
+              },
+            );
 
         if (locationData != null) {
+          final loc = loc_model.UserLocation(
+            formattedAddress:
+                locationData['formattedAddress'] ??
+                '${position.latitude}, ${position.longitude}',
+            placeId: locationData['placeId'] ?? '',
+            city: locationData['city'],
+            state: locationData['state'],
+            country: locationData['country'],
+            countryCode: locationData['countryCode'],
+            geometry: loc_model.UserLocationGeometry(
+              location: loc_model.UserLocationCoordinates(
+                lat: position.latitude,
+                lng: position.longitude,
+              ),
+            ),
+          );
+
           setState(() {
             _currentLocation = CurrentLocation(
               formattedAddress:
@@ -196,9 +262,26 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               countryCode: locationData['countryCode'],
               timestamp: DateTime.now().millisecondsSinceEpoch,
             );
+            _hostLocation = loc;
+            _hostComponents = (locationData['addressComponents'] as List?)
+                ?.cast<AddressComponent>();
           });
         } else {
           // Fallback
+          final fallbackLoc = loc_model.UserLocation(
+            formattedAddress: '${position.latitude}, ${position.longitude}',
+            placeId: '',
+            city: 'Unknown City',
+            country: 'Global',
+            countryCode: 'XX',
+            geometry: loc_model.UserLocationGeometry(
+              location: loc_model.UserLocationCoordinates(
+                lat: position.latitude,
+                lng: position.longitude,
+              ),
+            ),
+          );
+
           setState(() {
             _currentLocation = CurrentLocation(
               formattedAddress: '${position.latitude}, ${position.longitude}',
@@ -211,19 +294,34 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               ),
               timestamp: DateTime.now().millisecondsSinceEpoch,
             );
+            _hostLocation = fallbackLoc; // CRITICAL: Was missing previously!
           });
         }
       }
     } catch (e) {
       debugPrint('Location error: $e');
+      if (mounted) {
+        // Automatically fallback so they aren't blocked from signing up
+        _useFallbackLocation();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Using default location (GPS failed). Update it in profile later.',
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       // cleanup complete
     }
   }
 
-  void _onSearchChanged(String input, bool isHome) async {
+  void _onHomeSearchChanged(String input) async {
     if (input.isEmpty) {
-      setState(() => _predictions = []);
+      setState(() => _homePredictions = []);
       return;
     }
 
@@ -231,18 +329,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     final results = await places.autocomplete(input);
     if (mounted) {
       setState(() {
-        _predictions = results;
+        _homePredictions = results;
       });
     }
   }
 
-  Future<void> _selectPlace(String placeId, bool isHome) async {
+  Future<void> _selectHomePlace(String placeId) async {
     final places = ref.read(googlePlacesServiceProvider);
     final response = await places.getPlaceDetails(placeId);
     final place = response?.place;
 
     if (place != null && mounted) {
-      // Use shared utility for consistent parsing (UK constituent countries, etc.)
       final components = place.addressComponents ?? [];
       final parsedLoc = parseLocationComponents(
         place.address ?? '',
@@ -268,123 +365,27 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         );
 
         setState(() {
-          _predictions = [];
-
-          if (isHome) {
-            _homeLocation = loc;
-            _homeComponents = components;
-            _homeSearchController.text = loc.formattedAddress;
-          } else {
-            // For Host Location, Verify against GPS
-            _verifySelectedHostLocation(loc, components);
-          }
+          _homePredictions = [];
+          _homeLocation = loc;
+          _homeComponents = components;
+          _homeSearchController.text = loc.formattedAddress;
         });
       }
-    }
-  }
-
-  Future<void> _verifySelectedHostLocation(
-    loc_model.UserLocation selected,
-    List<AddressComponent> components,
-  ) async {
-    try {
-      // 1. Permission (Should be granted by now, but check)
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _showErrorDialog(
-          'Location Required',
-          'We need your GPS location to verify you are currently in this city.',
-        );
-        return;
-      }
-
-      // 2. Get Current Position (Use cached if available and fresh, otherwise fetch)
-      double? currentLat;
-      double? currentLng;
-
-      if (_currentLocation != null) {
-        currentLat = _currentLocation!.geometry.location.lat;
-        currentLng = _currentLocation!.geometry.location.lng;
-        debugPrint('Using cached location for verification');
-      } else {
-        final position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.medium,
-          ),
-        );
-        currentLat = position.latitude;
-        currentLng = position.longitude;
-        debugPrint('Fetched fresh location for verification');
-      }
-
-      // 3. Calculate Distance
-      // Selected Lat/Lng
-      double? targetLat = selected.geometry?.location.lat;
-      double? targetLng = selected.geometry?.location.lng;
-
-      if (targetLat == null || targetLng == null) {
-        // If autocomplete didn't give geometry, we must trust (or block).
-        // Usually it does. Let's warn.
-        _showErrorDialog(
-          'Verification Failed',
-          'Could not determine coordinates of selected city.',
-        );
-        return;
-      }
-
-      final distanceKm = calculateDistance(
-        currentLat,
-        currentLng,
-        targetLat,
-        targetLng,
-      );
-
-      const double maxDistanceKm = 50.0; // 50km radius leeway
-
-      if (distanceKm > maxDistanceKm) {
-        _showErrorDialog(
-          'Location Mismatch',
-          'You are ${distanceKm.round()}km away from ${selected.city}. You must be physically located in your host city to select it.',
-        );
-
-        // [NEW] Clear input so user can search again immediately
-        setState(() {
-          _predictions = [];
-          _hostSearchController.clear();
-        });
-        return;
-      }
-
-      // Verification Success
-      setState(() {
-        _hostLocation = selected;
-        _hostComponents = components;
-        _hostSearchController.text = selected.formattedAddress;
-      });
-    } catch (e) {
-      debugPrint('Verification error: $e');
-      _showErrorDialog('Error', 'Could not verify location: $e');
     }
   }
 
   void _goToNextStep() {
     setState(() {
-      // [NOTE] We do NOT auto-fill host location anymore based on pivot.
-      // We might show the detected location as a hint in the UI, but we let user search.
-      _currentStep = SetupStep.host;
+      _currentStep = SetupStep.profile;
     });
   }
 
   void _goBack() {
-    if (_currentStep == SetupStep.host) {
-      setState(() => _currentStep = SetupStep.home);
-    } else if (_currentStep == SetupStep.profile) {
-      setState(() => _currentStep = SetupStep.host);
+    if (_currentStep == SetupStep.profile) {
+      setState(() => _currentStep = SetupStep.location);
     }
   }
 
-  /// Pick profile image from camera or gallery
   Future<void> _pickImage() async {
     final picker = ImagePicker();
 
@@ -579,6 +580,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       try {
         createdCommunityIds = await CommunityService()
             .createCommunitiesAndChats(profile, onFirstMember: onFirstMember);
+        await ref.read(chamberServiceProvider).ensureSignupChamber();
       } catch (e) {
         // If this fails, we must NOT proceed.
         // We report error and let user retry (submit button will re-enable).
@@ -745,7 +747,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                             final user = ref
                                 .read(authRepositoryProvider)
                                 .currentUser;
-                            String shareUrl = 'https://diasporanearby.com/invite';
+                            String shareUrl =
+                                'https://diasporanearby.com/invite';
 
                             if (user != null) {
                               try {
@@ -785,7 +788,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                                 if (ctx.mounted) {
                                   showExplorationRewardToast(
                                     ctx,
-                                    message: 'Share sent! 🎉 You\'ll earn 1,000 DSP when they sign up.',
+                                    message:
+                                        'Share sent! 🎉 You\'ll earn 1,000 DSP when they sign up.',
                                     points: 1000,
                                   );
                                 }
@@ -798,7 +802,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                             if (ctx.mounted) Navigator.pop(ctx);
                           },
                           icon: const Icon(LucideIcons.share2),
-                          label: const Text('Invite Friends  •  Earn 1,000 DSP'),
+                          label: const Text(
+                            'Invite Friends  •  Earn 1,000 DSP',
+                          ),
                         ),
                       ),
                       TextButton(
@@ -837,7 +843,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: _currentStep != SetupStep.home
+        leading: _currentStep != SetupStep.location
             ? IconButton(
                 icon: const Icon(LucideIcons.arrowLeft),
                 onPressed: _goBack,
@@ -874,10 +880,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   String _getStepTitle() {
     switch (_currentStep) {
-      case SetupStep.home:
-        return 'Original Hometown';
-      case SetupStep.host:
-        return 'Current Location';
+      case SetupStep.location:
+        return 'Set Locations';
       case SetupStep.profile:
         return 'Complete your profile';
     }
@@ -885,10 +889,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   double _getProgress() {
     switch (_currentStep) {
-      case SetupStep.home:
-        return 0.33;
-      case SetupStep.host:
-        return 0.66;
+      case SetupStep.location:
+        return 0.5;
       case SetupStep.profile:
         return 1.0;
     }
@@ -896,30 +898,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   Widget _buildCurrentStep(ThemeData theme) {
     switch (_currentStep) {
-      case SetupStep.home:
-        return ProfileSetupHomeStep(
-          searchController: _homeSearchController,
-          focusNode: _homeFocusNode,
-          predictions: _predictions,
-          selectedLocation: _homeLocation,
-          onSearchChanged: (v) => _onSearchChanged(v, true),
-          onSelectPlace: (id) => _selectPlace(id, true),
+      case SetupStep.location:
+        return ProfileSetupLocationStep(
+          homeSearchController: _homeSearchController,
+          homeFocusNode: _homeFocusNode,
+          homePredictions: _homePredictions,
+          homeLocation: _homeLocation,
+          hostLocation: _hostLocation,
+          onHomeSearchChanged: _onHomeSearchChanged,
+          onHomeSelectPlace: _selectHomePlace,
           onNext: _goToNextStep,
-        );
-      case SetupStep.host:
-        return ProfileSetupHostStep(
-          searchController: _hostSearchController,
-          focusNode: _hostFocusNode,
-          predictions: _predictions,
-          selectedLocation: _hostLocation,
-          onSearchChanged: (v) => _onSearchChanged(v, false),
-          onSelectPlace: (id) => _selectPlace(id, false),
-          onNext: () {
-            if (_hostLocation != null) {
-              setState(() => _currentStep = SetupStep.profile);
-            }
-          },
-          onBack: _goBack,
+          onRetryHostLocation: () => _requestLocationPermission(isRetry: true),
         );
       case SetupStep.profile:
         return ProfileSetupDetailsStep(

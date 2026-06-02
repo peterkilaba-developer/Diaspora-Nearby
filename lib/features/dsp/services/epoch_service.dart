@@ -44,30 +44,23 @@ class EpochService {
     );
   }
 
-  /// Returns true if the user meets the minimum DSP requirement for TGE.
+  /// Returns true if the user meets the anti-Sybil requirement for TGE (QR Exchange).
   /// Trust score is NOT a gate — it only affects swap efficiency via the
   /// decile scale (see [calculateEfficiency]).
-  bool isEligibleForTGE({
-    required int epochNumber,
-    required double userTotalDsp,
-  }) {
-    final epoch = getEpoch(epochNumber);
-    return userTotalDsp >= epoch.minDspRequired;
+  bool isEligibleForTGE({required bool hasIdentityQr}) {
+    return hasIdentityQr;
   }
 
   /// Calculates the TGE distribution for a user
   /// If eligible: Returns their full DSP balance * Efficiency
-  /// If ineligible (low DSP): Returns 0
+  /// If ineligible (No QR exchange): Returns 0
   double calculateTGESwap({
-    required int epochNumber,
+    required bool hasIdentityQr,
     required double currentDspBalance,
     required int trustScore,
   }) {
-    // 1. Check Gated Eligibility (Min DSP only)
-    if (!isEligibleForTGE(
-      epochNumber: epochNumber,
-      userTotalDsp: currentDspBalance,
-    )) {
+    // 1. Check Gated Eligibility (QR Identity Exchange)
+    if (!isEligibleForTGE(hasIdentityQr: hasIdentityQr)) {
       return 0.0;
     }
 
@@ -216,8 +209,8 @@ class EpochService {
     final int dspRange = (epoch.dspTarget - prevDspTarget).clamp(1, 1 << 31);
     final int dspStep = (dspRange / 10).round();
 
-    int completedSteps =
-        ((cumulativeEarnings - prevDspTarget) / dspStep).floor();
+    int completedSteps = ((cumulativeEarnings - prevDspTarget) / dspStep)
+        .floor();
 
     if (completedSteps > 10) completedSteps = 10;
     if (completedSteps < 0) completedSteps = 0;

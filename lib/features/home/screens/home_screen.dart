@@ -174,8 +174,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 '/profile/${users[index].uid}',
                 extra: {'distance': users[index].distance},
               ),
-              onChatTap: () =>
-                  context.push('/chat/direct/${users[index].uid}'),
+              onChatTap: () => context.push('/chat/direct/${users[index].uid}'),
             );
           },
         );

@@ -1,0 +1,17 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls",
+            "delegate_permission/common.get_login_creds"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.diasporanearby.diasporanearby",
+            "sha256_cert_fingerprints": [
+                "1A:DE:19:94:27:EA:6A:61:96:A3:19:5E:6E:00:2D:74:83:7A:71:B7:F3:01:43:91:6F:41:64:B3:57:96:F2:A5",
+                "22:C5:A5:D6:C9:4C:58:8F:F1:A1:2E:EB:AD:99:8C:55:BC:7D:9B:95:25:21:65:95:0E:18:3B:01:C1:FB:F8:43",
+                "28:66:1E:F4:82:1C:26:65:6D:99:45:E1:2B:50:08:2A:77:58:D8:40:F2:4D:F5:81:19:1C:8C:A5:8E:DB:82:BC"
+            ]
+        }
+    }
+]

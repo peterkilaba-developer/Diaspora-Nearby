@@ -353,7 +353,7 @@ class PointsRepository {
         });
   }
 
-  // Initialize points for new user — [SECURITY] Routes through Cloud Function
+  // Initialize points for new user â€” [SECURITY] Routes through Cloud Function
   Future<void> initializeUserPoints(String userId) async {
     try {
       final callable = _functions.httpsCallable('initializeUserPoints');
@@ -364,7 +364,7 @@ class PointsRepository {
     }
   }
 
-  // Add points to user — [SECURITY] Routes through Cloud Function
+  // Add points to user â€” [SECURITY] Routes through Cloud Function
   // All financial balance writes are now server-side only.
   Future<void> addPoints(
     String userId,
@@ -388,7 +388,7 @@ class PointsRepository {
     }
   }
 
-  // Add staged (locked) points — [SECURITY] Routes through Cloud Function
+  // Add staged (locked) points â€” [SECURITY] Routes through Cloud Function
   Future<void> addStagedPoints(
     String userId,
     int points,
@@ -410,7 +410,7 @@ class PointsRepository {
     }
   }
 
-  // Deduct points from user (Penalty or Sink) — [SECURITY] Routes through Cloud Function
+  // Deduct points from user (Penalty or Sink) â€” [SECURITY] Routes through Cloud Function
   Future<void> deductPoints(
     String userId,
     int points,
@@ -526,7 +526,7 @@ class PointsRepository {
   }
 
   // Transfer asset (Points or Tokens) via Cloud Function
-  Future<void> transferAsset({
+  Future<Map<String, dynamic>> transferAsset({
     required String fromUserId,
     required String toUserId,
     required int amount,
@@ -534,12 +534,12 @@ class PointsRepository {
   }) async {
     try {
       final callable = _functions.httpsCallable('transferDiaspora');
-      await callable.call({
+      final result = await callable.call({
         'toUserId': toUserId, // [FIX] param name match with Cloud Function
         'amount': amount,
         'assetType': assetType,
       });
-      // The function handles the logic. We just await success.
+      return Map<String, dynamic>.from(result.data as Map);
     } catch (e) {
       debugPrint('Error transferring $assetType: $e');
       rethrow;
@@ -679,7 +679,7 @@ class PointsRepository {
         });
   }
 
-  // Award points for sending a message — [SECURITY] Routes through Cloud Function
+  // Award points for sending a message â€” [SECURITY] Routes through Cloud Function
   Future<void> awardMessagePoint(
     String userId,
     int points, {
@@ -687,17 +687,14 @@ class PointsRepository {
   }) async {
     try {
       final callable = _functions.httpsCallable('awardMessagePoints');
-      await callable.call({
-        'points': points,
-        'multiplier': multiplier,
-      });
+      await callable.call({'points': points, 'multiplier': multiplier});
     } catch (e) {
       debugPrint('[awardMessagePoint] Cloud Function error: $e');
       rethrow;
     }
   }
 
-  // Award exploration points unique per action — [SECURITY] Routes through Cloud Function
+  // Award exploration points unique per action â€” [SECURITY] Routes through Cloud Function
   Future<void> awardExplorationPoints({
     required String userId,
     required String actionId,
@@ -717,7 +714,7 @@ class PointsRepository {
     }
   }
 
-  // Award points for sharing content — [SECURITY] Routes through Cloud Function
+  // Award points for sharing content â€” [SECURITY] Routes through Cloud Function
   Future<bool> awardSharePoints(
     String userId,
     int points,
@@ -745,6 +742,10 @@ class PointsRepository {
   }
 
   /// Calculates and updates the average PoCT score of ALL users in a country.
+  /// TODO(perf/reliability): Move to a Cloud Function. This client-side
+  /// two-phase read-then-write is non-atomic â€” concurrent user-points writes
+  /// during the loop will produce a stale average. Cloud Function with a
+  /// transaction (or scheduled aggregation) is the right home for this.
   Future<void> updateCommunityOverallAveragePoCT(String countryCode) async {
     final countryId = 'home_country_${countryCode.toLowerCase()}';
     final snapshot = await _firestore
@@ -766,6 +767,8 @@ class PointsRepository {
   }
 
   /// Calculates and updates the average PoCT score of ALL users in a continent.
+  /// TODO(perf/reliability): Same caveat as updateCommunityOverallAveragePoCT
+  /// â€” move to Cloud Function for atomic aggregation.
   Future<void> updateContinentOverallAveragePoCT(String continentCode) async {
     final continentName = getContinentName(continentCode);
     final continentId = generateCommunityId(

@@ -26,8 +26,9 @@ void main() {
     const userId = TestData.userId1;
 
     test('initializeUserPoints should call repository', () async {
-      when(mockRepository.initializeUserPoints(any))
-          .thenAnswer((_) async => {});
+      when(
+        mockRepository.initializeUserPoints(any),
+      ).thenAnswer((_) async => {});
 
       await pointsService.initializeUserPoints(userId);
 
@@ -47,52 +48,66 @@ void main() {
         signupDate: DateTime.now(),
       );
 
-      when(mockRepository.getUserPoints(userId))
-          .thenAnswer((_) async => userPoints);
+      when(
+        mockRepository.getUserPoints(userId),
+      ).thenAnswer((_) async => userPoints);
 
-      when(mockRepository.addPoints(
-        userId,
-        points,
-        action,
-        metadata: anyNamed('metadata'),
-      )).thenAnswer((_) async => {});
+      when(
+        mockRepository.addPoints(
+          userId,
+          points,
+          action,
+          metadata: anyNamed('metadata'),
+        ),
+      ).thenAnswer((_) async => {});
 
-      await pointsService.awardManualPoints(
-        userId,
-        points,
-        action,
-      );
+      await pointsService.awardManualPoints(userId, points, action);
 
-      verify(mockRepository.addPoints(
-        userId,
-        points,
-        action,
-        metadata: anyNamed('metadata'),
-      )).called(1);
+      verify(
+        mockRepository.addPoints(
+          userId,
+          points,
+          action,
+          metadata: anyNamed('metadata'),
+        ),
+      ).called(1);
     });
 
-    test('trackExplorationReward should initialize user points if null', () async {
-      const actionId = 'test_action';
-      when(mockRepository.getUserPoints(userId)).thenAnswer((_) async => null);
-      when(mockRepository.initializeUserPoints(userId))
-          .thenAnswer((_) async => {});
-      when(mockRepository.awardExplorationPoints(
-        userId: userId,
-        actionId: actionId,
-        points: anyNamed('points'),
-        metadata: anyNamed('metadata'),
-      )).thenAnswer((_) async => {});
+    test(
+      'trackExplorationReward should initialize user points if null',
+      () async {
+        const actionId = 'test_action';
+        when(
+          mockRepository.getUserPoints(userId),
+        ).thenAnswer((_) async => null);
+        when(
+          mockRepository.initializeUserPoints(userId),
+        ).thenAnswer((_) async => {});
+        when(
+          mockRepository.awardExplorationPoints(
+            userId: userId,
+            actionId: actionId,
+            points: anyNamed('points'),
+            metadata: anyNamed('metadata'),
+          ),
+        ).thenAnswer((_) async => {});
 
-      final rewarded = await pointsService.trackExplorationReward(userId, actionId);
+        final rewarded = await pointsService.trackExplorationReward(
+          userId,
+          actionId,
+        );
 
-      expect(rewarded, isTrue);
-      verify(mockRepository.initializeUserPoints(userId)).called(1);
-      verify(mockRepository.awardExplorationPoints(
-        userId: userId,
-        actionId: actionId,
-        points: anyNamed('points'),
-        metadata: anyNamed('metadata'),
-      )).called(1);
-    });
+        expect(rewarded, isTrue);
+        verify(mockRepository.initializeUserPoints(userId)).called(1);
+        verify(
+          mockRepository.awardExplorationPoints(
+            userId: userId,
+            actionId: actionId,
+            points: anyNamed('points'),
+            metadata: anyNamed('metadata'),
+          ),
+        ).called(1);
+      },
+    );
   });
 }

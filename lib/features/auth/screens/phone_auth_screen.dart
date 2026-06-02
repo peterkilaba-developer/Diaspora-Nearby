@@ -6,6 +6,7 @@ import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
 import 'package:sms_autofill/sms_autofill.dart';
 import 'auth_controller.dart';
+import 'package:diaspora_nearby/features/auth/services/pending_phone_service.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
@@ -69,11 +70,9 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             '✅ Auto-filled phone: ${bestMatch.dialCode} $remainingNumber',
           );
 
-          // Auto-submit for "One Tap" experience
-          // Use a small delay to ensure state and UI are ready
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) _submit();
-          });
+          // Do not auto-submit. Firebase counts each verifyPhoneNumber call
+          // against per-device abuse heuristics; auto-firing on autofill used
+          // to burn the user's first attempt before they could review the number.
         } else {
           // Fallback: Just set the text if we can't parse country
           // But usually 'hint' returns E.164 format
@@ -138,18 +137,46 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   }
 
   void _submit() {
-    final phoneNumber =
-        '${_selectedCountry.dialCode}${_phoneController.text.trim().replaceAll(RegExp(r'\D'), '')}';
-    if (_phoneController.text.isNotEmpty) {
-      ref
-          .read(authControllerProvider.notifier)
-          .signInWithPhone(context, phoneNumber);
+    String cleanNumber = _phoneController.text.trim().replaceAll(
+      RegExp(r'\D'),
+      '',
+    );
+
+    // Strip leading zero for countries that do not use one in E.164.
+    if (cleanNumber.startsWith('0') && !_selectedCountry.retainsLeadingZero) {
+      cleanNumber = cleanNumber.substring(1);
     }
+
+    final phoneNumber = '${_selectedCountry.dialCode}$cleanNumber';
+
+    // E.164: total length (digits after '+') must be 8–15. Most national
+    // numbers are 7–12 digits; rejecting obvious garbage here keeps invalid
+    // submissions from incrementing Firebase's per-device abuse counter.
+    final totalDigits = phoneNumber.replaceAll(RegExp(r'\D'), '').length;
+    if (cleanNumber.length < 6 || totalDigits < 8 || totalDigits > 15) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter a valid phone number for the selected country.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Persist the E.164 phone locally so we can attach it to a Google account
+    // if SMS verification fails (the Google fallback flow reads this).
+    ref.read(pendingPhoneServiceProvider).save(phoneNumber);
+
+    ref
+        .read(authControllerProvider.notifier)
+        .signInWithPhone(context, phoneNumber);
   }
 
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authControllerProvider);
+    final showGoogleFallback = ref.watch(googleFallbackVisibleProvider);
     final theme = Theme.of(context);
 
     return PopScope(
@@ -165,26 +192,26 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: !kIsWeb,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight:
-                  MediaQuery.of(context).size.height -
-                  MediaQuery.of(context).padding.top -
-                  MediaQuery.of(context).padding.bottom -
-                  48,
-            ),
-            child: IntrinsicHeight(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 40),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom -
+                    48,
+              ),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 40),
 
-                  // Logo - Using the actual app logo with sage green tint
-                  Center(
-                    child: Image.asset(
+                    // Logo - Using the actual app logo with sage green tint
+                    Center(
+                      child: Image.asset(
                         'assets/icons/logo-transparent-128.png',
                         width: 120,
                         height: 120,
@@ -205,248 +232,285 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // Title
-                  Text(
-                    'Welcome to Diaspora Nearby',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24,
+                    // Title
+                    Text(
+                      'Welcome to Diaspora Nearby',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  // Subtitle
-                  Text(
-                    'Discover and Connect with people from your home country nearby or across the world',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontSize: 16,
+                    // Subtitle
+                    Text(
+                      'Discover and Connect with people from your home country nearby or across the world',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // Phone input container
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: theme.colorScheme.outline),
-                      borderRadius: BorderRadius.circular(12),
-                      color: theme.cardColor,
-                    ),
-                    child: Row(
-                      children: [
-                        // Country Code Picker
-                        InkWell(
-                          onTap: _showCountryPicker,
-                          borderRadius: const BorderRadius.horizontal(
-                            left: Radius.circular(12),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
+                    // Phone input container
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline),
+                        borderRadius: BorderRadius.circular(12),
+                        color: theme.cardColor,
+                      ),
+                      child: Row(
+                        children: [
+                          // Country Code Picker
+                          InkWell(
+                            onTap: _showCountryPicker,
+                            borderRadius: const BorderRadius.horizontal(
+                              left: Radius.circular(12),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _selectedCountry.flag,
-                                  style: const TextStyle(fontSize: 24),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _selectedCountry.dialCode,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_drop_down),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 24,
-                          color: theme.colorScheme.outline,
-                        ),
-                        const SizedBox(width: 12),
-                        // Phone Number Input
-                        Expanded(
-                          child: TextField(
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'[\d\s\-\(\)]'),
-                              ),
-                              LengthLimitingTextInputFormatter(20),
-                            ],
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              hintText: 'Phone number',
-                              hintStyle: TextStyle(
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.6),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
                                 vertical: 16,
                               ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _selectedCountry.flag,
+                                    style: const TextStyle(fontSize: 24),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _selectedCountry.dialCode,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down),
+                                ],
+                              ),
                             ),
-                            style: const TextStyle(fontSize: 16),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                    ),
-                  ),
-
-                  // Status message - show detected country
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        LucideIcons.mapPin,
-                        size: 14,
-                        color: theme.colorScheme.primary,
+                          Container(
+                            width: 1,
+                            height: 24,
+                            color: theme.colorScheme.outline,
+                          ),
+                          const SizedBox(width: 12),
+                          // Phone Number Input
+                          Expanded(
+                            child: TextField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'[\d\s\-\(\)]'),
+                                ),
+                                LengthLimitingTextInputFormatter(20),
+                              ],
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                hintText: 'Phone number',
+                                hintStyle: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.6),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Country: ${_selectedCountry.name}',
-                        style: TextStyle(
-                          fontSize: 12,
+                    ),
+
+                    // Status message - show detected country
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.mapPin,
+                          size: 14,
                           color: theme.colorScheme.primary,
                         ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: _showCountryPicker,
-                        child: Text(
-                          'Change',
+                        const SizedBox(width: 8),
+                        Text(
+                          'Country: ${_selectedCountry.name}',
                           style: TextStyle(
                             fontSize: 12,
                             color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: _showCountryPicker,
+                          child: Text(
+                            'Change',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const Spacer(),
+
+                    // D-C-B Circles
+                    _buildDiscoverConnectBelong(),
+                    const SizedBox(height: 24),
+
+                    // Button
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: isLoading ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                          disabledBackgroundColor: theme.colorScheme.primary
+                              .withValues(alpha: 0.5),
+                        ),
+                        child: isLoading
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Send Verification Code',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    if (showGoogleFallback) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        "Didn't get the SMS? Sign in with Google and we'll link your number to your account.",
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: isLoading
+                              ? null
+                              : () => ref
+                                    .read(authControllerProvider.notifier)
+                                    .signInWithGoogleFallback(context),
+                          icon: const Icon(LucideIcons.chrome),
+                          label: const Text(
+                            'Sign in with Google',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 16),
 
-                  const Spacer(),
-
-                  // D-C-B Circles
-                  _buildDiscoverConnectBelong(),
-                  const SizedBox(height: 24),
-
-                  // Button
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: isLoading ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    // Terms of Service & Privacy Policy
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.7,
+                          ),
+                          height: 1.5,
                         ),
-                        elevation: 0,
-                        disabledBackgroundColor: theme.colorScheme.primary
-                            .withValues(alpha: 0.5),
-                      ),
-                      child: isLoading
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
+                        children: [
+                          const TextSpan(
+                            text: 'By continuing, you agree to our ',
+                          ),
+                          WidgetSpan(
+                            child: GestureDetector(
+                              onTap: () => launchUrl(
+                                Uri.parse(
+                                  'https://diasporanearby.com/terms-of-service',
+                                ),
+                                mode: LaunchMode.externalApplication,
                               ),
-                            )
-                          : const Text(
-                              'Send Verification Code',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Terms of Service & Privacy Policy
-                  RichText(
-                    textAlign: TextAlign.center,
-                    text: TextSpan(
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurfaceVariant
-                            .withValues(alpha: 0.7),
-                        height: 1.5,
-                      ),
-                      children: [
-                        const TextSpan(
-                          text: 'By continuing, you agree to our ',
-                        ),
-                        WidgetSpan(
-                          child: GestureDetector(
-                            onTap: () => launchUrl(
-                              Uri.parse(
-                                  'https://diasporanearby.com/terms-of-service'),
-                              mode: LaunchMode.externalApplication,
-                            ),
-                            child: Text(
-                              'Terms of Service',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                                decoration: TextDecoration.underline,
-                                decorationColor: theme.colorScheme.primary,
+                              child: Text(
+                                'Terms of Service',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: theme.colorScheme.primary,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const TextSpan(text: ' and '),
-                        WidgetSpan(
-                          child: GestureDetector(
-                            onTap: () => launchUrl(
-                              Uri.parse(
-                                  'https://diasporanearby.com/privacy-policy'),
-                              mode: LaunchMode.externalApplication,
-                            ),
-                            child: Text(
-                              'Privacy Policy',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                                decoration: TextDecoration.underline,
-                                decorationColor: theme.colorScheme.primary,
+                          const TextSpan(text: ' and '),
+                          WidgetSpan(
+                            child: GestureDetector(
+                              onTap: () => launchUrl(
+                                Uri.parse(
+                                  'https://diasporanearby.com/privacy-policy',
+                                ),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              child: Text(
+                                'Privacy Policy',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: theme.colorScheme.primary,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );

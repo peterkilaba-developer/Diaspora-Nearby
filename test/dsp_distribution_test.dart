@@ -18,10 +18,7 @@ Map<String, int> simulateDistribution({
   // Helper to find membership by prefix
   String findMembership(String prefix) {
     return memberships
-        .firstWhere(
-          (id) => id.startsWith(prefix),
-          orElse: () => '',
-        )
+        .firstWhere((id) => id.startsWith(prefix), orElse: () => '')
         .toString();
   }
 
@@ -111,11 +108,19 @@ void main() {
       expect(result['home_continent_na'], 100, reason: 'Home Continent: full');
       expect(result['home_country_us'], 50, reason: 'Home Country: SPLIT');
       expect(result['home_state_us_texas'], 50, reason: 'Home State: SPLIT');
-      expect(result['home_city_us_texas_houston'], 100, reason: 'Home City: full');
+      expect(
+        result['home_city_us_texas_houston'],
+        100,
+        reason: 'Home City: full',
+      );
       expect(result['host_continent_na'], 100, reason: 'Host Continent: full');
       expect(result['host_country_ca'], 50, reason: 'Host Country: SPLIT');
       expect(result['host_state_ca_ontario'], 50, reason: 'Host State: SPLIT');
-      expect(result['host_city_ca_ontario_toronto_ng'], 100, reason: 'Host City: full');
+      expect(
+        result['host_city_ca_ontario_toronto_ng'],
+        100,
+        reason: 'Host City: full',
+      );
 
       // System treasuries
       expect(result['founders'], 100);
@@ -126,7 +131,8 @@ void main() {
       final communityTotal = result.entries
           .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal =
+          result['founders']! + result['investors']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -163,11 +169,27 @@ void main() {
       // Community treasuries
       expect(result['global_community'], 100, reason: 'Global: full unit');
       expect(result['home_continent_af'], 100, reason: 'Home Continent: full');
-      expect(result['home_country_ng'], 100, reason: 'Home Country: FULL (no state)');
-      expect(result['home_city_ng_no-state_lagos'], 100, reason: 'Home City: full');
+      expect(
+        result['home_country_ng'],
+        100,
+        reason: 'Home Country: FULL (no state)',
+      );
+      expect(
+        result['home_city_ng_no-state_lagos'],
+        100,
+        reason: 'Home City: full',
+      );
       expect(result['host_continent_af'], 100, reason: 'Host Continent: full');
-      expect(result['host_country_gh'], 100, reason: 'Host Country: FULL (no state)');
-      expect(result['host_city_gh_no-state_accra_ng'], 100, reason: 'Host City: full');
+      expect(
+        result['host_country_gh'],
+        100,
+        reason: 'Host Country: FULL (no state)',
+      );
+      expect(
+        result['host_city_gh_no-state_accra_ng'],
+        100,
+        reason: 'Host City: full',
+      );
 
       // System treasuries
       expect(result['founders'], 100);
@@ -178,7 +200,8 @@ void main() {
       final communityTotal = result.entries
           .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal =
+          result['founders']! + result['investors']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -215,12 +238,32 @@ void main() {
       // Community treasuries
       expect(result['global_community'], 100, reason: 'Global: full unit');
       expect(result['home_continent_af'], 100, reason: 'Home Continent: full');
-      expect(result['home_country_ke'], 100, reason: 'Home Country: FULL (no home state)');
-      expect(result['home_city_ke_no-state_nairobi'], 100, reason: 'Home City: full');
+      expect(
+        result['home_country_ke'],
+        100,
+        reason: 'Home Country: FULL (no home state)',
+      );
+      expect(
+        result['home_city_ke_no-state_nairobi'],
+        100,
+        reason: 'Home City: full',
+      );
       expect(result['host_continent_na'], 100, reason: 'Host Continent: full');
-      expect(result['host_country_us'], 50, reason: 'Host Country: SPLIT (host state exists)');
-      expect(result['host_state_us_california'], 50, reason: 'Host State: SPLIT');
-      expect(result['host_city_us_california_los-angeles_ke'], 100, reason: 'Host City: full');
+      expect(
+        result['host_country_us'],
+        50,
+        reason: 'Host Country: SPLIT (host state exists)',
+      );
+      expect(
+        result['host_state_us_california'],
+        50,
+        reason: 'Host State: SPLIT',
+      );
+      expect(
+        result['host_city_us_california_los-angeles_ke'],
+        100,
+        reason: 'Host City: full',
+      );
 
       // System treasuries
       expect(result['founders'], 100);
@@ -231,7 +274,8 @@ void main() {
       final communityTotal = result.entries
           .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal =
+          result['founders']! + result['investors']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -268,12 +312,28 @@ void main() {
       // Community treasuries
       expect(result['global_community'], 100, reason: 'Global: full unit');
       expect(result['home_continent_na'], 100, reason: 'Home Continent: full');
-      expect(result['home_country_us'], 50, reason: 'Home Country: SPLIT (home state exists)');
+      expect(
+        result['home_country_us'],
+        50,
+        reason: 'Home Country: SPLIT (home state exists)',
+      );
       expect(result['home_state_us_florida'], 50, reason: 'Home State: SPLIT');
-      expect(result['home_city_us_florida_miami'], 100, reason: 'Home City: full');
+      expect(
+        result['home_city_us_florida_miami'],
+        100,
+        reason: 'Home City: full',
+      );
       expect(result['host_continent_eu'], 100, reason: 'Host Continent: full');
-      expect(result['host_country_gb-eng'], 100, reason: 'Host Country: FULL (no host state)');
-      expect(result['host_city_gb-eng_no-state_london_us'], 100, reason: 'Host City: full');
+      expect(
+        result['host_country_gb-eng'],
+        100,
+        reason: 'Host Country: FULL (no host state)',
+      );
+      expect(
+        result['host_city_gb-eng_no-state_london_us'],
+        100,
+        reason: 'Host City: full',
+      );
 
       // System treasuries
       expect(result['founders'], 100);
@@ -284,7 +344,8 @@ void main() {
       final communityTotal = result.entries
           .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal =
+          result['founders']! + result['investors']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -320,10 +381,16 @@ void main() {
 
       // home_continent_na and host_continent_na are DIFFERENT keys (different prefix)
       // so they each get their own full 100 DSP — no merging happens
-      expect(result['home_continent_na'], 100,
-          reason: 'Home continent gets its own full unit');
-      expect(result['host_continent_na'], 100,
-          reason: 'Host continent gets its own full unit');
+      expect(
+        result['home_continent_na'],
+        100,
+        reason: 'Home continent gets its own full unit',
+      );
+      expect(
+        result['host_continent_na'],
+        100,
+        reason: 'Host continent gets its own full unit',
+      );
 
       // Countries and states still split correctly
       expect(result['home_country_us'], 50);
@@ -362,8 +429,11 @@ void main() {
 
       // Missing host city → falls back to global_community
       // Global gets: 1.0 (own) + 1.0 (missing host city) = 2.0 × 100 = 200
-      expect(result['global_community'], 200,
-          reason: 'Global absorbs missing host city slot');
+      expect(
+        result['global_community'],
+        200,
+        reason: 'Global absorbs missing host city slot',
+      );
 
       final communityTotal = result.entries
           .where((e) => !['founders', 'investors', 'burn'].contains(e.key))

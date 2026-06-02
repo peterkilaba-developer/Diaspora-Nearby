@@ -263,7 +263,7 @@ class _ProfileVerificationModalState
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                 Text(
+                                Text(
                                   'Trustworthiness Rating: ${_trustScore.toInt()}/100',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -274,7 +274,11 @@ class _ProfileVerificationModalState
                                     padding: const EdgeInsets.only(top: 4),
                                     child: Row(
                                       children: [
-                                        Icon(LucideIcons.coins, size: 14, color: Colors.amber.shade700),
+                                        Icon(
+                                          LucideIcons.coins,
+                                          size: 14,
+                                          color: Colors.amber.shade700,
+                                        ),
                                         const SizedBox(width: 4),
                                         Text(
                                           'Full Trust requires staking 1,000 DSP',
@@ -300,10 +304,10 @@ class _ProfileVerificationModalState
                                           _trustScore,
                                         ),
                                         onChanged: (val) {
-                                            setState(() {
-                                              _trustScore = val;
-                                              _hasMovedSlider = true;
-                                            });
+                                          setState(() {
+                                            _trustScore = val;
+                                            _hasMovedSlider = true;
+                                          });
                                         },
                                       ),
                                     ),
@@ -328,18 +332,27 @@ class _ProfileVerificationModalState
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.amber.shade700.withValues(alpha: 0.08),
+                                      color: Colors.amber.shade700.withValues(
+                                        alpha: 0.08,
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: Colors.amber.shade700.withValues(alpha: 0.3),
+                                        color: Colors.amber.shade700.withValues(
+                                          alpha: 0.3,
+                                        ),
                                       ),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           children: [
-                                            Icon(LucideIcons.shieldCheck, size: 18, color: Colors.amber.shade700),
+                                            Icon(
+                                              LucideIcons.shieldCheck,
+                                              size: 18,
+                                              color: Colors.amber.shade700,
+                                            ),
                                             const SizedBox(width: 8),
                                             Text(
                                               'Full Trust Stake',
@@ -356,14 +369,19 @@ class _ProfileVerificationModalState
                                           '1,000 DSP will be locked as your guarantee of this person\'s trustworthiness. If they act dishonestly, your staked DSP may be slashed.',
                                           style: TextStyle(
                                             fontSize: 12,
-                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.7),
                                             height: 1.4,
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         Row(
                                           children: [
-                                            Icon(LucideIcons.coins, size: 14, color: Colors.amber.shade700),
+                                            Icon(
+                                              LucideIcons.coins,
+                                              size: 14,
+                                              color: Colors.amber.shade700,
+                                            ),
                                             const SizedBox(width: 6),
                                             Text(
                                               'Stake: 1,000 DSP',
@@ -389,7 +407,9 @@ class _ProfileVerificationModalState
                     const SizedBox(height: 16),
                     Builder(
                       builder: (context) {
-                        final hasFields = _fieldVerifications.values.any((v) => v != null);
+                        final hasFields = _fieldVerifications.values.any(
+                          (v) => v != null,
+                        );
                         final isReady = hasFields && _hasMovedSlider;
                         final isFullTrust = _trustScore > 90;
                         final String buttonLabel;
@@ -411,16 +431,22 @@ class _ProfileVerificationModalState
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               backgroundColor: isReady
-                                  ? (isFullTrust ? Colors.amber.shade700 : AppTheme.accent)
+                                  ? (isFullTrust
+                                        ? Colors.amber.shade700
+                                        : AppTheme.accent)
                                   : null,
-                              disabledBackgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.12),
-                              disabledForegroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.38),
+                              disabledBackgroundColor: theme
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.12),
+                              disabledForegroundColor: theme
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.38),
                             ),
                             child: Text(
                               buttonLabel,
-                              style: TextStyle(
-                                fontSize: isReady ? 14 : 12,
-                              ),
+                              style: TextStyle(fontSize: isReady ? 14 : 12),
                             ),
                           ),
                         );
@@ -658,8 +684,7 @@ class _ProfileVerificationModalState
         context,
         type: VerificationAlertType.error,
         title: 'Field Verification Required',
-        message:
-            'Please verify at least one profile field before submitting.',
+        message: 'Please verify at least one profile field before submitting.',
       );
       return;
     }
@@ -723,7 +748,9 @@ class _ProfileVerificationModalState
       VerificationAlertModal.show(
         context,
         type: VerificationAlertType.success,
-        title: isStaked ? 'Verification & Stake Complete' : 'Verification Success',
+        title: isStaked
+            ? 'Verification & Stake Complete'
+            : 'Verification Success',
         message: isStaked
             ? 'Thank you! You have earned 1,000 DSP and staked 1,000 DSP as full trust guarantee.'
             : 'Thank you for contributing to the community trust! You have earned 1,000 DSP.',

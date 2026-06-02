@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +24,8 @@ class DdiLoansScreen extends ConsumerStatefulWidget {
 
 class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   bool _showApplicationForm = false;
+  bool _isSubmitting = false;
+  final Set<String> _pendingApplicationActions = {};
 
   // Form controllers
   final _formKey = GlobalKey<FormState>();
@@ -31,6 +37,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   final _repaymentPlanController = TextEditingController();
   String _loanType = 'Business Investment';
   String _repaymentPeriod = '6 months';
+  bool _confirmsHostBusiness = false;
 
   @override
   void initState() {
@@ -116,6 +123,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               else
                 _buildApplicationForm(theme, isDark),
 
+              const SizedBox(height: 28),
+              _buildApplicationsSection(theme),
+
               const SizedBox(height: 40),
             ],
           ),
@@ -174,7 +184,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: const Text(
-              'Available after Token Generation Event (TGE)',
+              'Funding available after Token Generation Event (TGE)',
               style: TextStyle(
                 fontSize: 11,
                 color: Colors.orange,
@@ -223,7 +233,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               _buildTermBadge(theme, '0%', 'Interest'),
               _buildTermBadge(theme, '\$DIASPORA', 'Collateral'),
               _buildTermBadge(theme, '3–24 mo', 'Repayment'),
-              _buildTermBadge(theme, 'PoCT', 'Qualification'),
+              _buildTermBadge(theme, 'PoCT 91+', 'Required'),
             ],
           ),
         ],
@@ -284,7 +294,8 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Loan applications will be processed after the Token Generation Event (TGE)',
+          'Qualified applications open public discussion and a 10-day vote. '
+          'Funding remains pending TGE.',
           style: TextStyle(
             fontSize: 11,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
@@ -297,6 +308,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
 
   // ── Application Form ─────────────────────────────────────────────────────
   Widget _buildApplicationForm(ThemeData theme, bool isDark) {
+    final communityName = widget.community?.name ?? 'this host community';
     return Form(
       key: _formKey,
       child: Container(
@@ -308,7 +320,11 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           children: [
             Row(
               children: [
-                const Icon(LucideIcons.fileText, size: 16, color: AppTheme.accent),
+                const Icon(
+                  LucideIcons.fileText,
+                  size: 16,
+                  color: AppTheme.accent,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'LOAN APPLICATION',
@@ -351,23 +367,29 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               decoration: _inputDecoration(theme, ''),
               items: const [
                 DropdownMenuItem(
-                    value: 'Business Investment',
-                    child: Text('Business Investment')),
+                  value: 'Business Investment',
+                  child: Text('Business Investment'),
+                ),
                 DropdownMenuItem(
-                    value: 'Real Estate & Property',
-                    child: Text('Real Estate & Property')),
+                  value: 'Real Estate Business',
+                  child: Text('Real Estate Business'),
+                ),
                 DropdownMenuItem(
-                    value: 'Education & Skills',
-                    child: Text('Education & Skills')),
+                  value: 'Education & Skills Business',
+                  child: Text('Education & Skills Business'),
+                ),
                 DropdownMenuItem(
-                    value: 'Agriculture & Farming',
-                    child: Text('Agriculture & Farming')),
+                  value: 'Agriculture & Farming Business',
+                  child: Text('Agriculture & Farming Business'),
+                ),
                 DropdownMenuItem(
-                    value: 'Healthcare Initiative',
-                    child: Text('Healthcare Initiative')),
+                  value: 'Healthcare Business',
+                  child: Text('Healthcare Business'),
+                ),
                 DropdownMenuItem(
-                    value: 'Community Project',
-                    child: Text('Community Project')),
+                  value: 'Other Local Business',
+                  child: Text('Other Local Business'),
+                ),
               ],
               onChanged: (v) => setState(() => _loanType = v ?? _loanType),
             ),
@@ -395,7 +417,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             TextFormField(
               controller: _purposeController,
               decoration: _inputDecoration(
-                  theme, 'Describe how you plan to use the funds'),
+                theme,
+                'Describe how you plan to use the funds',
+              ),
               maxLines: 3,
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Purpose is required'
@@ -404,25 +428,26 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             const SizedBox(height: 16),
 
             // Business Name
-            _buildLabel(theme, 'Business / Project Name'),
+            _buildLabel(theme, 'Business Name'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _businessNameController,
-              decoration:
-                  _inputDecoration(theme, 'Name of your business or project'),
+              decoration: _inputDecoration(theme, 'Name of your business'),
               validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Business/project name is required'
+                  ? 'Business name is required'
                   : null,
             ),
             const SizedBox(height: 16),
 
             // Business Description
-            _buildLabel(theme, 'Business / Project Description'),
+            _buildLabel(theme, 'Business Description'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _businessDescriptionController,
               decoration: _inputDecoration(
-                  theme, 'Brief description of your business or project'),
+                theme,
+                'Brief description of your business',
+              ),
               maxLines: 3,
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Description is required'
@@ -454,7 +479,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             TextFormField(
               controller: _repaymentPlanController,
               decoration: _inputDecoration(
-                  theme, 'How do you plan to repay the loan?'),
+                theme,
+                'How do you plan to repay the loan?',
+              ),
               maxLines: 3,
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'Repayment plan is required'
@@ -462,15 +489,57 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 24),
 
+            CheckboxListTile(
+              value: _confirmsHostBusiness,
+              onChanged: _isSubmitting
+                  ? null
+                  : (value) =>
+                        setState(() => _confirmsHostBusiness = value ?? false),
+              contentPadding: EdgeInsets.zero,
+              activeColor: AppTheme.accent,
+              title: Text(
+                'This business is based in $communityName',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                'Host-community DDI loans require PoCT 91+ and are only '
+                'for businesses operating in this community.',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 12),
+
             // Submit Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _submitApplication,
-                icon: const Icon(LucideIcons.send, size: 16),
-                label: const Text(
-                  'Submit Application',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                onPressed: _isSubmitting ? null : _submitApplication,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(LucideIcons.send, size: 16),
+                label: Text(
+                  _isSubmitting
+                      ? 'Saving Application...'
+                      : 'Submit Application',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accent,
@@ -485,8 +554,8 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Your application will be queued for review after TGE. '
-              'No funds will be disbursed until the token is live.',
+              'A qualifying submission opens public discussion and a 10-day '
+              'community vote. Token funding capacity is evaluated after TGE.',
               style: TextStyle(
                 fontSize: 10,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
@@ -541,10 +610,382 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     );
   }
 
-  void _submitApplication() {
-    if (!_formKey.currentState!.validate()) return;
+  Widget _buildApplicationsSection(ThemeData theme) {
+    final communityId = widget.communityId ?? widget.community?.id;
+    if (communityId == null || communityId.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-    // Pre-TGE: Show confirmation dialog
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'COMMUNITY APPLICATIONS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+            color: AppTheme.accent,
+          ),
+        ),
+        const SizedBox(height: 12),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('ddi_loan_applications')
+              .where('communityId', isEqualTo: communityId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Text(
+                'Applications are available to host-community members.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              );
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final docs = [...snapshot.data!.docs]
+              ..sort((a, b) {
+                final aTime = (a.data()['createdAt'] as num?)?.toInt() ?? 0;
+                final bTime = (b.data()['createdAt'] as num?)?.toInt() ?? 0;
+                return bTime.compareTo(aTime);
+              });
+            if (docs.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: AppTheme.innerDecoration(context),
+                child: const Text(
+                  'No DDI loan applications have been submitted here yet.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              );
+            }
+            return Column(
+              children: docs
+                  .map((doc) => _buildApplicationCard(theme, doc))
+                  .toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApplicationCard(
+    ThemeData theme,
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final voting = Map<String, dynamic>.from(
+      data['voting'] as Map? ?? const {},
+    );
+    final status = data['status'] as String? ?? 'voting_open';
+    final votingOpen = voting['status'] == 'open';
+    final closesAt = (voting['closesAt'] as num?)?.toInt() ?? 0;
+    final expired =
+        votingOpen &&
+        closesAt > 0 &&
+        DateTime.now().millisecondsSinceEpoch > closesAt;
+    final yay = (voting['yayCount'] as num?)?.toInt() ?? 0;
+    final nay = (voting['nayCount'] as num?)?.toInt() ?? 0;
+    final abstain = (voting['abstainCount'] as num?)?.toInt() ?? 0;
+    final total = (voting['totalVotes'] as num?)?.toInt() ?? 0;
+    final quorum = (voting['minimumQuorum'] as num?)?.toInt() ?? 10;
+    final amount = (data['requestedAmount'] as num?)?.toInt() ?? 0;
+    final busy = _pendingApplicationActions.contains(document.id);
+    final discussionChatId = data['discussionChatId'] as String?;
+    final closesDate = closesAt == 0
+        ? ''
+        : DateTime.fromMillisecondsSinceEpoch(
+            closesAt,
+          ).toLocal().toString().split(' ').first;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: AppTheme.cardDecoration(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  data['businessName'] as String? ?? 'Business application',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              _buildStatusPill(status),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${data['loanType'] ?? 'Business Investment'} - '
+            '$amount \$DIASPORA requested',
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            data['purpose'] as String? ?? '',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            votingOpen
+                ? 'Vote closes $closesDate - $total of $quorum quorum votes cast'
+                : 'Final vote: Yay $yay / Nay $nay / Abstain $abstain',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (votingOpen) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Yay $yay   Nay $nay   Abstain $abstain',
+              style: TextStyle(
+                fontSize: 11,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          if (discussionChatId != null)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => context.push('/chats/$discussionChatId'),
+                icon: const Icon(LucideIcons.messagesSquare, size: 16),
+                label: const Text('Open Public Discussion'),
+              ),
+            ),
+          if (votingOpen && !expired) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildVoteButton(
+                    document.id,
+                    'yay',
+                    'Yay',
+                    AppTheme.accent,
+                    busy,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildVoteButton(
+                    document.id,
+                    'nay',
+                    'Nay',
+                    theme.colorScheme.error,
+                    busy,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildVoteButton(
+                    document.id,
+                    'abstain',
+                    'Abstain',
+                    theme.colorScheme.onSurfaceVariant,
+                    busy,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (expired) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: busy ? null : () => _resolveVote(document.id),
+                child: const Text('Finalize Vote Result'),
+              ),
+            ),
+          ],
+          if (status == 'approved_pending_tge_collateral')
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Text(
+                'Community approved. Funding remains pending TGE and token '
+                'collateral capacity verification.',
+                style: TextStyle(fontSize: 11, color: AppTheme.accent),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPill(String status) {
+    final (label, color) = switch (status) {
+      'approved_pending_tge_collateral' => ('Approved', AppTheme.accent),
+      'rejected_by_community_vote' => ('Rejected', AppTheme.error),
+      _ => ('Voting Open', Colors.orange),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVoteButton(
+    String applicationId,
+    String verdict,
+    String label,
+    Color color,
+    bool busy,
+  ) {
+    return OutlinedButton(
+      onPressed: busy ? null : () => _castVote(applicationId, verdict),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(color: color.withValues(alpha: 0.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      ),
+      child: Text(label),
+    );
+  }
+
+  Future<void> _castVote(String applicationId, String verdict) async {
+    setState(() => _pendingApplicationActions.add(applicationId));
+    try {
+      await FirebaseFunctions.instance.httpsCallable('castDdiLoanVote').call({
+        'applicationId': applicationId,
+        'verdict': verdict,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Your ${verdict.toUpperCase()} vote was recorded.'),
+          ),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Could not record your vote.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _pendingApplicationActions.remove(applicationId));
+      }
+    }
+  }
+
+  Future<void> _resolveVote(String applicationId) async {
+    setState(() => _pendingApplicationActions.add(applicationId));
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('resolveDdiLoanVoting')
+          .call({'applicationId': applicationId});
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Could not finalize this vote.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _pendingApplicationActions.remove(applicationId));
+      }
+    }
+  }
+
+  Future<void> _submitApplication() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_confirmsHostBusiness) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Confirm that this business operates in your host community.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please sign in to submit an application.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    String? discussionChatId;
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('submitDdiLoanApplication')
+          .call({
+            'communityId': widget.communityId ?? widget.community?.id,
+            'fullLegalName': _fullNameController.text.trim(),
+            'loanType': _loanType,
+            'requestedAmount': int.parse(_amountController.text.trim()),
+            'purpose': _purposeController.text.trim(),
+            'businessName': _businessNameController.text.trim(),
+            'businessDescription': _businessDescriptionController.text.trim(),
+            'repaymentPeriod': _repaymentPeriod,
+            'repaymentPlan': _repaymentPlanController.text.trim(),
+            'confirmsHostBusiness': _confirmsHostBusiness,
+          });
+      final resultData = Map<String, dynamic>.from(result.data as Map);
+      discussionChatId = resultData['discussionChatId'] as String?;
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Could not submit this application.'),
+        ),
+      );
+      return;
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save application: $e')));
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    // Funding remains pending TGE, but discussion and community voting begin.
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -562,13 +1003,22 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           ],
         ),
         content: const Text(
-          'Your loan application has been saved and will be queued for '
-          'review once the Token Generation Event (TGE) goes live.\n\n'
-          'In the meantime, continue building your Proof of Community Trust '
-          '(PoCT) score to maximize your loan eligibility.',
+          'Your PoCT and host-community eligibility gates passed. Your loan '
+          'application has been saved, its public discussion group is live, '
+          'and the 10-day community vote is open.\n\n'
+          'Any community approval remains pending the Token Generation Event '
+          '(TGE) and \$DIASPORA collateral capacity verification.',
           style: TextStyle(fontSize: 13, height: 1.5),
         ),
         actions: [
+          if (discussionChatId != null)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                context.push('/chats/$discussionChatId');
+              },
+              child: const Text('Open Discussion'),
+            ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
@@ -580,6 +1030,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               _businessNameController.clear();
               _businessDescriptionController.clear();
               _repaymentPlanController.clear();
+              _confirmsHostBusiness = false;
             },
             child: const Text(
               'Done',

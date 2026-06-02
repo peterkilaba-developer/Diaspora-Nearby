@@ -26,11 +26,10 @@ class AppBootstrap {
     debugPrint('▶ AppBootstrap: [2/4] Firebase initialized ✓');
 
     // 3. [PERF] Audio & Storage are independent — run in parallel
-    debugPrint('▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...');
-    await Future.wait([
-      _initAudio(),
-      _initStorage(),
-    ]);
+    debugPrint(
+      '▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...',
+    );
+    await Future.wait([_initAudio(), _initStorage()]);
     debugPrint('▶ AppBootstrap: [3/4] Audio + Storage initialized ✓');
 
     // 4. Feature Services (may depend on storage)
@@ -73,8 +72,14 @@ class AppBootstrap {
       try {
         debugPrint('  → AppCheck.activate starting...');
         await FirebaseAppCheck.instance.activate(
+          // TODO(appcheck): replace with a real reCAPTCHA v3 site key from
+          // https://www.google.com/recaptcha/admin (40 chars, no embedded dashes).
+          // Register the key for diasporanearby.com + localhost.
           providerWeb: ReCaptchaV3Provider(
-            '6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G',
+            const String.fromEnvironment(
+              'RECAPTCHA_V3_SITE_KEY',
+              defaultValue: '6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G',
+            ),
           ),
           providerAndroid: kReleaseMode
               ? const AndroidPlayIntegrityProvider()

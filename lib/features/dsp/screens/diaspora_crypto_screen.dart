@@ -596,7 +596,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           GestureDetector(
             onTap: () => launchUrl(
               Uri.parse(
-                'https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c',
+                'https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735',
               ),
               mode: LaunchMode.externalApplication,
             ),
@@ -784,7 +784,14 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
         final globalSupplyAsync = ref.watch(globalSupplyProvider);
         return globalSupplyAsync.when(
           data: (totalMinted) {
-            const double target = 1000000;
+            final epochService = ref.read(epochServiceProvider);
+            final currentEpoch = epochService.getCurrentCommunityEpoch(
+              totalMinted.toInt(),
+              0,
+            );
+            final target = currentEpoch.dspTarget.toDouble();
+            final epochLevel = currentEpoch.level;
+
             final double progress = (totalMinted / target).clamp(0.0, 1.0);
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
@@ -792,10 +799,13 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               decoration: AppTheme.cardDecoration(context),
               child: Column(
                 children: [
-                  _buildSectionHeader('THE GREAT RESET', 'Race to Epoch 1'),
+                  _buildSectionHeader(
+                    'THE GREAT RESET',
+                    'Race to Epoch $epochLevel',
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    '${NumberFormat('#,###').format(totalMinted)} / 1,000,000 DSP',
+                    '${NumberFormat('#,###').format(totalMinted)} / ${NumberFormat('#,###').format(target)} DSP',
                     style: const TextStyle(
                       fontSize: 16,
                       color: AppTheme.accent,
@@ -813,10 +823,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Reach 10,000 DSP to qualify for TGE.',
+                  Text(
+                    'Upon reaching ${NumberFormat.compact().format(target)} DSP, Epoch $epochLevel completes. Perform at least one QR Identity Exchange to prove your humanity and qualify for TGE.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
                       color: Colors.grey,
                       fontStyle: FontStyle.italic,
@@ -1591,8 +1601,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
-          'BLOCKCHAIN ACTIVITIES',
-          'On-chain transactions & distributions',
+          'TOKEN ACTIVITIES',
+          'On-chain and test settlement activity',
         ),
         onChainAsync.when(
           data: (onChainTransfers) {
@@ -1655,6 +1665,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 if (!isTokenAsset) continue;
 
                 final txHash = tx.metadata?['txHash'] as String?;
+                final isSimulated =
+                    tx.metadata?['settlementMode'] == 'simulated_test';
                 // Skip duplicates already from on-chain logs
                 if (txHash != null &&
                     activities.any((a) => a.txHash == txHash)) {
@@ -1667,8 +1679,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     timestamp: tx.timestamp,
                     amount: tx.points.toDouble(),
                     isPositive: tx.points >= 0,
-                    txHash: txHash,
+                    subtitle: isSimulated ? 'Simulated test settlement' : null,
+                    txHash: isSimulated ? null : txHash,
                     category: _TxCategory.token,
+                    isSimulated: isSimulated,
                   ),
                 );
               }
@@ -1876,9 +1890,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                             color: Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(3),
                           ),
-                          child: const Text(
-                            'ON-CHAIN',
-                            style: TextStyle(
+                          child: Text(
+                            act.isSimulated ? 'TEST' : 'ON-CHAIN',
+                            style: const TextStyle(
                               fontSize: 8,
                               fontWeight: FontWeight.bold,
                               color: Colors.orange,
@@ -1915,7 +1929,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ],
               ),
               // Basescan link (always present for on-chain tx)
-              if (act.txHash != null && act.txHash!.isNotEmpty) ...[
+              if (!act.isSimulated &&
+                  act.txHash != null &&
+                  act.txHash!.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 GestureDetector(
                   onTap: () => launchUrl(
@@ -2086,7 +2102,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               GestureDetector(
                 onTap: () => launchUrl(
                   Uri.parse(
-                    'https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c',
+                    'https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735',
                   ),
                   mode: LaunchMode.externalApplication,
                 ),
@@ -2415,6 +2431,7 @@ class _BlockchainEvent {
   final bool isPositive;
   final String? txHash;
   final _TxCategory category;
+  final bool isSimulated;
 
   _BlockchainEvent({
     required this.title,
@@ -2424,5 +2441,6 @@ class _BlockchainEvent {
     required this.isPositive,
     this.txHash,
     this.category = _TxCategory.token,
+    this.isSimulated = false,
   });
 }

@@ -11,8 +11,8 @@ final governanceRepositoryProvider = Provider((ref) => GovernanceRepository());
 /// ref.watch(treasuryTokenBalanceProvider) can chain properly.
 final governanceUnitStreamProvider =
     StreamProvider.family<GovernanceUnit?, String>((ref, id) {
-  return ref.watch(governanceRepositoryProvider).watchGovernanceUnit(id);
-});
+      return ref.watch(governanceRepositoryProvider).watchGovernanceUnit(id);
+    });
 
 class GovernanceRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

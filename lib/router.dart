@@ -81,12 +81,6 @@ import 'features/real_estate/screens/create_real_estate_listing_screen.dart';
 PermissionStatus? _cachedPermissionStatus;
 DateTime _lastPermissionCheck = DateTime(2000);
 
-// [PERF FIX] Re-entrancy guard to prevent redirect loop.
-// When ref.invalidate(userProfileProvider) fires, RouterNotifier.notifyListeners()
-// causes GoRouter to re-evaluate redirect() while the previous one is still running.
-bool _isRedirecting = false;
-
-/// Call this to force the router to re-check permissions on the next navigation.
 /// Used by the permissions screen after the user grants all permissions.
 void invalidatePermissionCache() {
   _cachedPermissionStatus = null;
@@ -122,16 +116,6 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     initialLocation: '/auth/phone',
     redirect: (context, state) async {
-      // [PERF FIX] Re-entrancy guard — prevent infinite redirect loop.
-      // Without this, ref.invalidate(userProfileProvider) → RouterNotifier.notifyListeners()
-      // → GoRouter.redirect() fires again while the previous one is still running.
-      if (_isRedirecting) {
-        debugPrint('Router: ═══ REDIRECT SKIPPED (re-entrant) ═══');
-        return null;
-      }
-      _isRedirecting = true;
-
-      try {
       debugPrint(
         'Router: ═══ REDIRECT START ═══ route: ${state.matchedLocation}, URI: ${state.uri}',
       );
@@ -173,7 +157,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // [FIX] Wait for profile to load before making redirect decisions.
       // Previously only waited on 'bootstrapping' routes, but profile loading
       // also races when navigating directly to /chats after OTP verification.
-      final shouldWaitForProfile = isBootstrapping ||
+      final shouldWaitForProfile =
+          isBootstrapping ||
           state.matchedLocation == '/chats' ||
           state.matchedLocation == '/permissions';
 
@@ -199,11 +184,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (!kIsWeb && state.matchedLocation != '/permissions') {
           final now = DateTime.now();
           if (_cachedPermissionStatus == null ||
-              now.difference(_lastPermissionCheck) > const Duration(seconds: 30)) {
+              now.difference(_lastPermissionCheck) >
+                  const Duration(seconds: 30)) {
             _cachedPermissionStatus = await Permission.location.status;
             _lastPermissionCheck = now;
           }
-          if (!_cachedPermissionStatus!.isGranted && !_cachedPermissionStatus!.isLimited) {
+          if (!_cachedPermissionStatus!.isGranted &&
+              !_cachedPermissionStatus!.isLimited) {
             return '/permissions';
           }
         }
@@ -235,9 +222,13 @@ final routerProvider = Provider<GoRouter>((ref) {
 
             // [PERF] Tier 1: Check local session cache (SharedPreferences)
             if (!uidExists) {
-              uidExists = ref.read(sessionServiceProvider).isUserCached(user.uid);
+              uidExists = ref
+                  .read(sessionServiceProvider)
+                  .isUserCached(user.uid);
               if (uidExists) {
-                debugPrint('Router: uidExists=true via session cache for ${user.uid}');
+                debugPrint(
+                  'Router: uidExists=true via session cache for ${user.uid}',
+                );
               }
             }
 
@@ -246,7 +237,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               uidExists = await ref
                   .read(profileRepositoryProvider)
                   .profileExists(user.uid);
-              debugPrint('Router: uidExists=$uidExists via Firestore for ${user.uid}');
+              debugPrint(
+                'Router: uidExists=$uidExists via Firestore for ${user.uid}',
+              );
               if (uidExists) {
                 await ref.read(sessionServiceProvider).setUserCached(user.uid);
               }
@@ -280,15 +273,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           // check Firestore directly to see if the real profile exists.
           // This prevents keeping an existing user stuck on profile-setup.
           if (setupProfile.firstName.isEmpty) {
-            final isKnownLocally =
-                ref.read(sessionServiceProvider).isUserCached(user.uid);
+            final isKnownLocally = ref
+                .read(sessionServiceProvider)
+                .isUserCached(user.uid);
             if (isKnownLocally) {
               debugPrint(
                 'Router: ══► On /profile-setup but user cached locally (bare FCM doc loaded) → letting through to /chats',
               );
-              ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-              // [PERF FIX] Defer invalidation to break redirect loop
-              Future.microtask(() => ref.invalidate(userProfileProvider));
+              ref
+                  .read(profileRepositoryProvider)
+                  .invalidateProfileCache(user.uid);
               return '/chats';
             }
             try {
@@ -300,13 +294,15 @@ final routerProvider = Provider<GoRouter>((ref) {
                   'Router: ══► On /profile-setup but profile exists in Firestore (bare FCM doc loaded) → /chats',
                 );
                 await ref.read(sessionServiceProvider).setUserCached(user.uid);
-                ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-                // [PERF FIX] Defer invalidation to break redirect loop
-                Future.microtask(() => ref.invalidate(userProfileProvider));
+                ref
+                    .read(profileRepositoryProvider)
+                    .invalidateProfileCache(user.uid);
                 return '/chats';
               }
             } catch (e) {
-              debugPrint('Router: ══► Firestore check on /profile-setup failed: $e');
+              debugPrint(
+                'Router: ══► Firestore check on /profile-setup failed: $e',
+              );
             }
             // Truly new user with bare doc → stay on profile-setup
             return null;
@@ -340,23 +336,25 @@ final routerProvider = Provider<GoRouter>((ref) {
           // verify directly in Firestore before redirecting to profile-setup.
           // This prevents users with valid profiles from being locked out
           // due to a ProfileData.fromJson parse failure.
-          bool hasMemberships = profile?.communityMemberships != null &&
+          bool hasMemberships =
+              profile?.communityMemberships != null &&
               profile!.communityMemberships!.isNotEmpty;
 
           if (!hasMemberships) {
             // [FIX] Fast path: check local session cache first to avoid
             // unnecessary Firestore network call on every router evaluation
-            final isKnownLocally =
-                ref.read(sessionServiceProvider).isUserCached(user.uid);
+            final isKnownLocally = ref
+                .read(sessionServiceProvider)
+                .isUserCached(user.uid);
             if (isKnownLocally) {
               hasMemberships = true;
               debugPrint(
                 'Router: ══► Data Integrity Guard: memberships empty in provider but user cached locally → allowing through',
               );
-              // Invalidate stale profile so provider re-fetches
-              ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-              // [PERF FIX] Defer invalidation to break redirect loop
-              Future.microtask(() => ref.invalidate(userProfileProvider));
+              // Invalidate stale profile so provider re-fetches internally next time
+              ref
+                  .read(profileRepositoryProvider)
+                  .invalidateProfileCache(user.uid);
             } else {
               // Fallback: Check Firestore directly for communityMemberships
               // [PERF] Use cache-first to avoid network roundtrip on every router evaluation
@@ -372,7 +370,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                   userDoc = await FirebaseFirestore.instance
                       .collection('users')
                       .doc(user.uid)
-                      .get();
+                      .get(const GetOptions(source: Source.server))
+                      .timeout(const Duration(seconds: 5));
                 }
                 if (userDoc.exists) {
                   final data = userDoc.data();
@@ -383,11 +382,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                       'Router: ══► Profile parse may have failed but Firestore has ${memberships.length} memberships → allowing through',
                     );
                     // Cache locally for fast future checks
-                    await ref.read(sessionServiceProvider).setUserCached(user.uid);
-                    // Invalidate stale profile so provider re-fetches
-                    ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-                    // [PERF FIX] Defer invalidation to break redirect loop
-                    Future.microtask(() => ref.invalidate(userProfileProvider));
+                    await ref
+                        .read(sessionServiceProvider)
+                        .setUserCached(user.uid);
+                    ref
+                        .read(profileRepositoryProvider)
+                        .invalidateProfileCache(user.uid);
                   }
                 }
               } catch (e) {
@@ -424,7 +424,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         // that parses as ProfileData with firstName='' via defensive defaults.
         // Now BOTH paths (profile==null AND isProfileIncomplete) use the same
         // two-tier fallback before redirecting.
-        final isProfileIncomplete = profile != null &&
+        final isProfileIncomplete =
+            profile != null &&
             profile.firstName.isEmpty &&
             (profile.communityMemberships == null ||
                 profile.communityMemberships!.isEmpty);
@@ -440,8 +441,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
 
           // Tier 1: Fast local check (survives app restarts but not cache clear)
-          final isKnownUser =
-              ref.read(sessionServiceProvider).isUserCached(user.uid);
+          final isKnownUser = ref
+              .read(sessionServiceProvider)
+              .isUserCached(user.uid);
           if (isKnownUser) {
             debugPrint(
               'Router: ══► Global guard: profile ${isProfileIncomplete ? "incomplete" : "null"} but user cached locally → allowing through',
@@ -450,9 +452,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             // profile cache so the provider re-fetches from server on next read.
             // This ensures the real profile data replaces the stale bare doc.
             if (isProfileIncomplete) {
-              ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-              // [PERF FIX] Defer invalidation to break redirect loop
-              Future.microtask(() => ref.invalidate(userProfileProvider));
+              ref
+                  .read(profileRepositoryProvider)
+                  .invalidateProfileCache(user.uid);
             }
           } else {
             // Tier 2: Firestore check (survives cache clear)
@@ -465,13 +467,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   'Router: ══► Global guard: profile ${isProfileIncomplete ? "incomplete" : "null"} but exists in Firestore → allowing through',
                 );
                 // Re-cache locally so future checks are fast
-                await ref
-                    .read(sessionServiceProvider)
-                    .setUserCached(user.uid);
-                // [FIX] Invalidate stale profile cache to force fresh read
-                ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
-                // [PERF FIX] Defer invalidation to break redirect loop
-                Future.microtask(() => ref.invalidate(userProfileProvider));
+                await ref.read(sessionServiceProvider).setUserCached(user.uid);
+                ref
+                    .read(profileRepositoryProvider)
+                    .invalidateProfileCache(user.uid);
               } else {
                 debugPrint(
                   'Router: ══► Global guard: profile ${isProfileIncomplete ? "incomplete" : "null"} + not in Firestore → /profile-setup',
@@ -494,9 +493,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         'Router: ══► FALLTHROUGH → null (stay on ${state.matchedLocation})',
       );
       return null;
-      } finally {
-        _isRedirecting = false;
-      }
     },
     routes: [
       GoRoute(

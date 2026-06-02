@@ -26,7 +26,7 @@ The economy is powered by three interlinking validation protocols.
 
 ### 2.1 Mechanism 1: Proof of Identity (PoI)
 **Status**: The Gatekeeper.
-Before a user can extract value (TGE), they must prove their humanity and reach the **Genesis Gate of 10,000 $DIASPORA**.
+Before a user can extract value (TGE), they must prove their humanity via a **QR Identity Exchange**.
 
 - **Level 1: Profile Completeness**: Filling out the core profile fields.
 - **Level 2: Social Entropy (Multi-User Verification)**: 
@@ -71,7 +71,7 @@ A user's **Trust Score (0-100)** is a mathematical representation of their commu
     - **Trust Slider Staking (The Only Ongoing PoCT Earner)**: Users rate others via a 0-100 trust slider. Rating anyone earns **1,000 $DIASPORA** (vouch reward). Giving **full trust (>90)** locks that same 1,000 $DIASPORA as a stake — no additional cost. Every **10 unique full-trust voters** awards **+1 PoCT** to the trusted user. **Staker Economics**: For each subsequent rater who also gives full trust, the staker earns +10 $DIASPORA. For each rater who gives ≤90, 10 $DIASPORA is burned from the stake. If the stake reaches 0, the full-trust vouch is auto-removed. The staker can exit anytime by sliding below 91 to reclaim remaining balance. Rating ≤90 earns the 1,000 $DIASPORA free and clear.
     - **HTS Penalties**: Penalties deduct **-1 PoCT per 10 occurrences** (e.g., blocked by 10 users = -1 PoCT). Referrals, events, and verified solutions earn $DIASPORA only, **not PoCT**.
 - **The Genesis Gate**:
-    - Every user must accrue a minimum of **10,000 $DIASPORA** to qualify for their first TGE conversion.
+    - Every user must perform at least one **QR Identity Exchange** to prove their humanity and qualify for their first TGE conversion.
 - **The Decile Efficiency Gate**:
     - Your score determines your **Swap Rate** at the Token Generation Event.
     - *Formula*: `Efficiency = (Score / 10).ceil() / 10.0`
@@ -214,8 +214,30 @@ This design decision reflects the principle that **spending money to spend more 
 ### 7.3 Protocol Burns
 - **10% Fixed Expansion Burn**: 10% of every 1:1 system match is permanently destroyed.
 - **Unassigned Slot Burn**: Community slots without members are burned.
-- **Unclaimed TGE Burn**: Tokens below gates (user < 10,000 or community < 1,000,000) are burned on-chain.
+- **Unclaimed TGE Burn**: Tokens of users without a QR Identity Exchange, or communities below their targets, are burned on-chain.
 - **PoCT Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
+
+---
+
+## 🤝 8. BILATERAL CHAMBERS OF COMMERCE
+To foster trusted cross-border trade and diaspora business integrations, the protocol establishes official bilateral **Chambers of Commerce** for each corridor.
+
+### 8.1 Dual-Chamber Integration
+* **Connecting Network**: The Chamber of Commerce of a host country (e.g., US Chamber of Commerce) is integrated directly with the Home Country's Diaspora Chamber of Commerce (e.g., Tanzania Diaspora Chamber of Commerce).
+
+### 8.2 Lived-Experience Representation
+* **Dedicated Representatives**: The Home Country Diaspora Chamber houses dedicated representatives responsible for each host country where its diaspora resides.
+* **Lived-In Requirement**: Every representative **must have lived in the specific host country** they represent (e.g., a rep for the TZ-US corridor must have lived in the United States).
+* **Understanding Business Cultures**: This strict criteria guarantees that representatives possess firsthand, deep understanding of both countries' business cultures, trade regulations, market dynamics, and operational landscapes, facilitating frictionless bilateral trade and joint ventures.
+
+### 8.3 Host-Country Native Access (B2B Bridge)
+* **Open Access Policy**: Native individuals and businesses established in the host country (who are not part of the diaspora themselves) are fully permitted to register, create verified business profiles, and access any bilateral chamber corridor they wish to do business with.
+* **Corridor Discovery**: Once authenticated, host-country native businesses can search the global chamber registry and join corridors (e.g., a native US logistics firm or manufacturer joining the TZ-US Chamber) to pitch services, seek trade partners, source raw materials, or propose joint ventures directly using the smart contract escrow pipeline.
+
+### 8.4 Unified Governance & DDI Integration (Efficiency Lock)
+* **Unified Leadership**: To eliminate coordination friction and administrative gridlock, the elected regional Community Leaders (President, Treasurer, and Secretary) automatically serve as the ex-officio Executive Board of the Bilateral Chamber of Commerce.
+* **Appointed Portfolios**: The Executive Board appoints the specialized Corridor Representatives (meeting the PoCT 91+ and lived-in requirements) to act as the operational, due-diligence, and dispute-resolution arm of the chamber.
+* **Seamless DDI/FDDI Integration**: The Chamber of Commerce acts as the primary "Deal Sourcing and Vetting" engine. Sourced investments and loans are audited by the appointed reps, approved by the ex-officio board, and then passed to the general community for the final democratic vote (51% DDI or 67% FDDI), ensuring absolute institutional alignment.
 
 ---
 

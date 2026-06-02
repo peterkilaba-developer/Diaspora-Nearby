@@ -99,7 +99,9 @@ class PwaInstallSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.3,
+                          ),
                           blurRadius: 24,
                           offset: const Offset(0, 8),
                         ),
@@ -190,11 +192,14 @@ class PwaInstallSheet extends StatelessWidget {
                           height: 52,
                           child: FilledButton.icon(
                             onPressed: () async {
-                              final notifier = ref.read(pwaInstallServiceProvider.notifier);
+                              final notifier = ref.read(
+                                pwaInstallServiceProvider.notifier,
+                              );
                               final accepted = await notifier.promptInstall();
 
                               if (context.mounted) {
-                                final prefs = await SharedPreferences.getInstance();
+                                final prefs =
+                                    await SharedPreferences.getInstance();
                                 await prefs.setBool(_prefKey, true);
                                 Navigator.of(context).pop();
 
@@ -208,11 +213,18 @@ class PwaInstallSheet extends StatelessWidget {
                                       ),
                                       content: const Row(
                                         children: [
-                                          Icon(LucideIcons.checkCircle, size: 18, color: Color(0xFF9CAF88)),
+                                          Icon(
+                                            LucideIcons.checkCircle,
+                                            size: 18,
+                                            color: Color(0xFF9CAF88),
+                                          ),
                                           SizedBox(width: 12),
                                           Text(
                                             'App installed! Check your home screen 🎉',
-                                            style: TextStyle(color: Colors.white, fontSize: 13),
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -256,7 +268,9 @@ class PwaInstallSheet extends StatelessWidget {
                       child: Text(
                         'Maybe later',
                         style: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
                           fontSize: 14,
                         ),
                       ),
@@ -367,7 +381,11 @@ class PwaInstallSheet extends StatelessWidget {
                   color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(LucideIcons.checkCircle, size: 22, color: Color(0xFF4CAF50)),
+                child: const Icon(
+                  LucideIcons.checkCircle,
+                  size: 22,
+                  color: Color(0xFF4CAF50),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -386,7 +404,9 @@ class PwaInstallSheet extends StatelessWidget {
                       'Diaspora Nearby will appear on your home screen',
                       style: TextStyle(
                         fontSize: 12,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
                         height: 1.4,
                       ),
                     ),
@@ -509,11 +529,7 @@ class _InstructionStep extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           // Icon
-          Icon(
-            icon,
-            size: 24,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(icon, size: 24, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
           // Text
           Expanded(

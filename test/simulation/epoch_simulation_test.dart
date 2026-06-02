@@ -1,4 +1,3 @@
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -100,7 +99,11 @@ void main() {
       final trustService = container.read(trustServiceProvider);
       final isEligible = await trustService.checkUserTgeEligibility(userId, 1);
 
-      expect(isEligible, true, reason: 'DSP >= 10k → eligible (PoCT is not a gate)');
+      expect(
+        isEligible,
+        true,
+        reason: 'DSP >= 10k → eligible (PoCT is not a gate)',
+      );
     });
 
     test('User with < 10k DSP is NOT eligible even with max PoCT', () async {
@@ -120,19 +123,25 @@ void main() {
       expect(isEligible, false, reason: '1k DSP < 10k → ineligible');
     });
 
-    test('Epoch parameter has no effect (flat gate across all epochs)', () async {
-      final userId = 'user_flat_gate';
-      await profileRepository.saveUserProfile(userId, testProfile(userId));
+    test(
+      'Epoch parameter has no effect (flat gate across all epochs)',
+      () async {
+        final userId = 'user_flat_gate';
+        await profileRepository.saveUserProfile(userId, testProfile(userId));
 
-      final pointsService = container.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(userId, 10000, 'Grant');
+        final pointsService = container.read(pointsServiceProvider);
+        await pointsService.awardManualPoints(userId, 10000, 'Grant');
 
-      final trustService = container.read(trustServiceProvider);
-      for (int epoch = 1; epoch <= 10; epoch++) {
-        final isEligible = await trustService.checkUserTgeEligibility(userId, epoch);
-        expect(isEligible, true, reason: 'All epochs use same 10k gate');
-      }
-    });
+        final trustService = container.read(trustServiceProvider);
+        for (int epoch = 1; epoch <= 10; epoch++) {
+          final isEligible = await trustService.checkUserTgeEligibility(
+            userId,
+            epoch,
+          );
+          expect(isEligible, true, reason: 'All epochs use same 10k gate');
+        }
+      },
+    );
   });
 
   group('Decile PoCT Efficiency (swap rate, NOT a gate)', () {
@@ -140,16 +149,16 @@ void main() {
       final epochService = EpochService();
 
       // Decile table: ceil(score/10) / 10
-      expect(epochService.calculateEfficiency(0), 0.0);   // D0: 0%
-      expect(epochService.calculateEfficiency(1), 0.1);   // D1: 10%
-      expect(epochService.calculateEfficiency(10), 0.1);  // D1: 10%
-      expect(epochService.calculateEfficiency(11), 0.2);  // D2: 20%
-      expect(epochService.calculateEfficiency(20), 0.2);  // D2: 20%
-      expect(epochService.calculateEfficiency(50), 0.5);  // D5: 50%
-      expect(epochService.calculateEfficiency(51), 0.6);  // D6: 60%
-      expect(epochService.calculateEfficiency(80), 0.8);  // D8: 80%
-      expect(epochService.calculateEfficiency(81), 0.9);  // D9: 90%
-      expect(epochService.calculateEfficiency(91), 1.0);  // D10: 100%
+      expect(epochService.calculateEfficiency(0), 0.0); // D0: 0%
+      expect(epochService.calculateEfficiency(1), 0.1); // D1: 10%
+      expect(epochService.calculateEfficiency(10), 0.1); // D1: 10%
+      expect(epochService.calculateEfficiency(11), 0.2); // D2: 20%
+      expect(epochService.calculateEfficiency(20), 0.2); // D2: 20%
+      expect(epochService.calculateEfficiency(50), 0.5); // D5: 50%
+      expect(epochService.calculateEfficiency(51), 0.6); // D6: 60%
+      expect(epochService.calculateEfficiency(80), 0.8); // D8: 80%
+      expect(epochService.calculateEfficiency(81), 0.9); // D9: 90%
+      expect(epochService.calculateEfficiency(91), 1.0); // D10: 100%
       expect(epochService.calculateEfficiency(100), 1.0); // D10: 100%
     });
 
@@ -189,35 +198,41 @@ void main() {
   });
 
   group('Treasury Distribution', () {
-    test('syncTreasuryBalances distributes correctly for a single user', () async {
-      final userId = 'user_treasury';
+    test(
+      'syncTreasuryBalances distributes correctly for a single user',
+      () async {
+        final userId = 'user_treasury';
 
-      await fakeFirestore.collection('users').doc(userId).set({
-        'communityMemberships': [
-          'global_community',
-          'home_continent_africa',
-          'home_country_tz',
-          'home_city_dar',
-          'host_continent_namerica',
-          'host_country_us',
-          'host_city_nyc',
-        ],
-      });
+        await fakeFirestore.collection('users').doc(userId).set({
+          'communityMemberships': [
+            'global_community',
+            'home_continent_africa',
+            'home_country_tz',
+            'home_city_dar',
+            'host_continent_namerica',
+            'host_country_us',
+            'host_city_nyc',
+          ],
+        });
 
-      await pointsRepository.initializeUserPoints(userId);
-      
-      final pointsService = container.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(userId, 10000, 'Initial Grant');
+        await pointsRepository.initializeUserPoints(userId);
 
-      await pointsRepository.syncTreasuryBalances();
+        final pointsService = container.read(pointsServiceProvider);
+        await pointsService.awardManualPoints(userId, 10000, 'Initial Grant');
 
-      final treasuryStats = await fakeFirestore.collection('system_stats').doc('treasury').get();
-      final data = treasuryStats.data()!;
+        await pointsRepository.syncTreasuryBalances();
 
-      // 10% each: founders, investors, burn
-      expect(data['foundersPoints'], greaterThan(0));
-      expect(data['investorsPoints'], greaterThan(0));
-      expect(data['burnedPoints'], greaterThan(0));
-    });
+        final treasuryStats = await fakeFirestore
+            .collection('system_stats')
+            .doc('treasury')
+            .get();
+        final data = treasuryStats.data()!;
+
+        // 10% each: founders, investors, burn
+        expect(data['foundersPoints'], greaterThan(0));
+        expect(data['investorsPoints'], greaterThan(0));
+        expect(data['burnedPoints'], greaterThan(0));
+      },
+    );
   });
 }

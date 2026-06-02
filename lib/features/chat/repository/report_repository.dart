@@ -63,7 +63,10 @@ class ReportRepository {
         // [UPDATED v8] DSP deduction removed — only PoCT milestone deduction
         // -10 PoCT per 10 unique reporters
         final trustService = _ref.read(trustServiceProvider);
-        await trustService.recordActivity(senderId, HTSActivityType.flaggedMessage);
+        await trustService.recordActivity(
+          senderId,
+          HTSActivityType.flaggedMessage,
+        );
 
         // Chat ad penalty (PoCT-only, no DSP) still triggers trust recalculation
         if (reason == 'Prohibited Advertising' || reason == 'Spam or Scam') {

@@ -478,8 +478,19 @@ class MessageBubble extends ConsumerWidget {
                                     ),
                                   ),
 
-                                  // Loading Overlay
-                                  if (message.status == 'sending')
+                                  // Loading Overlay Ã¢â‚¬â€ only for media (uploads
+                                  // actually take time). Text/system messages
+                                  // commit fast enough that the optimistic
+                                  // bubble should look "sent" instantly; the
+                                  // status icon in the footer is enough.
+                                  if (message.status == 'sending' &&
+                                      const {
+                                        'image',
+                                        'video',
+                                        'audio',
+                                        'voice',
+                                        'document',
+                                      }.contains(message.type))
                                     Positioned.fill(
                                       child: IgnorePointer(
                                         ignoring: false, // Catch touches

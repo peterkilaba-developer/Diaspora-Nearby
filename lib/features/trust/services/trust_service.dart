@@ -387,9 +387,7 @@ class TrustService {
       'family=${familyIds.length}, friends=${friendIds.length}',
     );
     for (final r in relationships) {
-      debugPrint(
-        '   → rel: id=${r.id}, type=${r.type}, status=${r.status}',
-      );
+      debugPrint('   → rel: id=${r.id}, type=${r.type}, status=${r.status}');
     }
 
     // [UPDATED] QR is independent — QR connections can also be family, friend,
@@ -410,11 +408,7 @@ class TrustService {
 
     final uniqueVerificationIds = allVerifications
         .map((v) => v['fromUserId'] as String)
-        .where(
-          (id) =>
-              !familyIds.contains(id) &&
-              !uniqueVouchIds.contains(id),
-        )
+        .where((id) => !familyIds.contains(id) && !uniqueVouchIds.contains(id))
         .toSet();
 
     // Counts for Milestones
@@ -436,7 +430,7 @@ class TrustService {
       'ProfileComplete=$isProfileComplete',
     );
 
-      // --- Milestone Awards (1,000 DSP for Profile + 1,000 DSP per connection) ---
+    // --- Milestone Awards (1,000 DSP for Profile + 1,000 DSP per connection) ---
     final milestones = List<String>.from(
       trustDataOld?.awardedQualificationMilestones ?? [],
     );
@@ -461,11 +455,7 @@ class TrustService {
         //    [UPDATED v9] Changed from 1,000 to 10,000 DSP
         final totalFields = profile.totalMilestoneFields;
         if (count >= totalFields && previouslyAwardedDspCount < totalFields) {
-          pointsService.awardManualPoints(
-            userId,
-            10000,
-            'profile_completion',
-          );
+          pointsService.awardManualPoints(userId, 10000, 'profile_completion');
           previouslyAwardedDspCount = totalFields;
           ledger['${milestone}_dsp_count'] = totalFields;
 
@@ -541,7 +531,9 @@ class TrustService {
       //    Awarded once per milestone. After threshold, only DSP is earned.
       //    [UPDATED v3] 6 Genesis Milestones = 60 max PoCT
       //    Profile requires ALL fields (totalMilestoneFields), others require 10.
-      final threshold = milestone == 'Profile' ? profile.totalMilestoneFields : 10;
+      final threshold = milestone == 'Profile'
+          ? profile.totalMilestoneFields
+          : 10;
       if (count >= threshold) {
         milestonePoCT += 10;
       }
@@ -620,12 +612,13 @@ class TrustService {
 
     // --- Final Score Calculation ---
     // [UPDATED v3] Genesis (60) + Transparency (10) + Participation (20) + Ongoing
-    double finalScore = milestonePoCT
-        + cityVisibilityPoCT
-        + eventAttendancePoCT
-        + emergencyFundPoCT
-        + htsPoctDelta
-        + seniorityScore;
+    double finalScore =
+        milestonePoCT +
+        cityVisibilityPoCT +
+        eventAttendancePoCT +
+        emergencyFundPoCT +
+        htsPoctDelta +
+        seniorityScore;
 
     // Ensure 0-100 (PoCT is usually 1-100, but can exceed in theoretical systems, we clamp for UI)
     if (finalScore > 100) finalScore = 100;
@@ -687,9 +680,7 @@ class TrustService {
       genesisQrIds: uniqueQrIds.take(10).toList(),
       genesisTrustIds: uniqueTrustIds.take(10).toList(),
       isCouncilEligible:
-          daysActive >= 100 &&
-          isAdminOfLargeGroup &&
-          finalScore >= 90,
+          daysActive >= 100 && isAdminOfLargeGroup && finalScore >= 90,
       awardedQualificationMilestones: milestones,
       awardedHtsTracking: ledger,
       referralCount: trustDataOld?.referralCount ?? 0,
@@ -1274,10 +1265,10 @@ class TrustService {
       return "You must be a Verified User to perform this action.";
     }
 
-    // 3. Check DSP Balance (at least 10,000 DSP)
+    // 3. Check Anti-Sybil Gate (Must have performed QR Identity Exchange)
     final points = await pointsRepo.getUserPoints(userId);
-    if (points == null || points.totalPoints < 10000) {
-      return "You must have acquired at least 10,000 DSP to perform this action.";
+    if (points == null || points.qrConnectionCount <= 0) {
+      return "You must perform at least one QR Identity Exchange to prove humanity before performing this action.";
     }
 
     // [NEW] 4. Check Negative Signals / Restraints
@@ -1323,8 +1314,7 @@ class TrustService {
 
     final epochService = _ref.read(epochServiceProvider);
     return epochService.isEligibleForTGE(
-      epochNumber: epoch,
-      userTotalDsp: points.totalPoints.toDouble(),
+      hasIdentityQr: points.qrConnectionCount > 0,
     );
   }
 
@@ -1381,15 +1371,18 @@ class TrustService {
           .collection('users')
           .doc(userId)
           .collection('transactions')
-          .where('type', whereIn: [
-            'dsp_transfer_sent',
-            'fiat_transfer_sent',
-            'token_transfer_sent',
-            'p2p_transfer',
-            'b2b_transfer',
-            'c2b_transfer',
-            'b2c_transfer',
-          ])
+          .where(
+            'type',
+            whereIn: [
+              'dsp_transfer_sent',
+              'fiat_transfer_sent',
+              'token_transfer_sent',
+              'p2p_transfer',
+              'b2b_transfer',
+              'c2b_transfer',
+              'b2c_transfer',
+            ],
+          )
           .count()
           .get();
       return sentQuery.count ?? 0;

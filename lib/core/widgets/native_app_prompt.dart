@@ -1,18 +1,20 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-/// Detects native-only feature attempts on web and shows an email capture
-/// dialog for TestFlight / Play Store beta invites.
+/// Detects native-only feature attempts on web and shows a direct
+/// install prompt linking straight to Google Play (Android) or TestFlight (iOS).
 ///
-/// • First native-only hit (no email submitted) → full dialog with email field
-/// • Submitted email before → snackbar reminder
-/// • Dismissed without submitting → re-prompt on next native-only hit
+/// Replaces the older email-capture flow — testers self-serve via the
+/// Closed Testing opt-in URL, which auto-joins the public Google Group
+/// `diaspora-nearby-testers@googlegroups.com` before sending them to the
+/// Play Store listing.
 class NativeAppPrompt {
-  static const _prefKey = 'native_app_email_submitted';
+  /// Public Play Store listing (Closed Testing track resolves to the same id;
+  /// Play will route eligible testers to the testing build automatically).
+  static const String playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
 
   /// Call this from any native-only guard.
   /// Returns `true` if the user is on web (action was intercepted).
@@ -24,39 +26,8 @@ class NativeAppPrompt {
     required IconData icon,
   }) async {
     if (!kIsWeb) return false;
-
-    final prefs = await SharedPreferences.getInstance();
-    final alreadySubmitted = prefs.getBool(_prefKey) ?? false;
-
     if (!context.mounted) return true;
 
-    if (alreadySubmitted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF2A2A2A),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          content: Row(
-            children: [
-              const Icon(LucideIcons.smartphone, size: 18, color: Color(0xFF9CAF88)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '$feature requires the native app. Check your email to download it 📱',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return true;
-    }
-
-    // Show full dialog
     await showDialog(
       context: context,
       barrierDismissible: true,
@@ -68,12 +39,6 @@ class NativeAppPrompt {
     );
 
     return true;
-  }
-
-  /// Detect the user's mobile platform from web user agent
-  static String detectPlatform() {
-    // On web we detect in the dialog via user agent; this is a fallback
-    return 'unknown';
   }
 }
 
@@ -93,21 +58,16 @@ class _NativeAppDialog extends StatefulWidget {
 }
 
 class _NativeAppDialogState extends State<_NativeAppDialog> {
-  final _emailController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isSubmitting = false;
   String _detectedPlatform = 'unknown';
 
   @override
   void initState() {
     super.initState();
     _detectPlatform();
-    _prefillEmail();
   }
 
   void _detectPlatform() {
     if (kIsWeb) {
-      // Use defaultTargetPlatform which detects mobile browsers on web
       final tp = defaultTargetPlatform;
       if (tp == TargetPlatform.iOS || tp == TargetPlatform.macOS) {
         setState(() => _detectedPlatform = 'ios');
@@ -119,74 +79,16 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
     }
   }
 
-  void _prefillEmail() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user?.email != null && user!.email!.isNotEmpty) {
-      _emailController.text = user.email!;
-    }
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-
-      await FirebaseFirestore.instance.collection('app_requests').add({
-        'email': _emailController.text.trim(),
-        'feature': widget.feature,
-        'platform': _detectedPlatform,
-        'userId': userId,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // Mark as submitted
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(NativeAppPrompt._prefKey, true);
-
+  Future<void> _openStore(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (mounted) Navigator.of(context).pop();
+    } else {
       if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFF2A2A2A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            content: const Row(
-              children: [
-                Icon(LucideIcons.checkCircle, size: 18, color: Color(0xFF9CAF88)),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Thanks! We\'ll send you the download link soon 🎉',
-                    style: TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('NativeAppPrompt: Error saving: $e');
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not open $url')));
       }
     }
   }
@@ -217,209 +119,159 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Logo
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/icons/logo-transparent.png',
-                      width: 64,
-                      height: 64,
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Logo
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/icons/logo-transparent.png',
+                    width: 64,
+                    height: 64,
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-                  // Title
+                // Title
+                Text(
+                  'Get the Diaspora Nearby App',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Feature-specific message
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.icon,
+                        size: 22,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.feature,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.description,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.7,
+                                ),
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Install CTA — platform-aware
+                // iOS native app is not yet available; iOS users get the
+                // PWA "Add to Home Screen" path via AppInstallCard instead,
+                // so this dialog simply tells them so.
+                if (_detectedPlatform == 'ios') ...[
                   Text(
-                    'Get the Diaspora Nearby App',
+                    'The native iOS app is coming soon. For now, install '
+                    'Diaspora Nearby as a web app: tap the Share button in '
+                    'Safari and choose "Add to Home Screen".',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.75,
+                      ),
+                      height: 1.5,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 12),
-
-                  // Feature-specific message
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          widget.icon,
-                          size: 22,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.feature,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.description,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                ] else if (_detectedPlatform == 'android') ...[
+                  _buildInstallButton(
+                    theme: theme,
+                    icon: LucideIcons.smartphone,
+                    label: 'Install on Google Play',
+                    onPressed: () => _openStore(NativeAppPrompt.playStoreUrl),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Platform badge
-                  if (_detectedPlatform != 'unknown')
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _detectedPlatform == 'ios'
-                                ? LucideIcons.apple
-                                : _detectedPlatform == 'android'
-                                    ? LucideIcons.smartphone
-                                    : LucideIcons.monitor,
-                            size: 14,
-                            color: theme.hintColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _detectedPlatform == 'ios'
-                                ? 'iOS TestFlight invite'
-                                : _detectedPlatform == 'android'
-                                    ? 'Google Play beta invite'
-                                    : 'Download links coming soon',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.hintColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Email field
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Enter your email address';
-                      }
-                      if (!val.contains('@') || !val.contains('.')) {
-                        return 'Enter a valid email address';
-                      }
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'your@email.com',
-                      prefixIcon: Icon(
-                        LucideIcons.mail,
-                        size: 18,
-                        color: theme.hintColor,
-                      ),
-                      filled: true,
-                      fillColor: theme.colorScheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 2,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Opens Google Play — tap Install',
+                    style: TextStyle(fontSize: 11, color: theme.hintColor),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Submit button
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _isSubmitting ? null : _submit,
-                      icon: _isSubmitting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(LucideIcons.send, size: 16),
-                      label: Text(
-                        _isSubmitting
-                            ? 'Sending...'
-                            : _detectedPlatform == 'ios'
-                                ? 'Send me the TestFlight Link'
-                                : _detectedPlatform == 'android'
-                                    ? 'Send me the Play Store Link'
-                                    : 'Send me the Download Link',
-                      ),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: theme.colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
+                ] else ...[
+                  // Desktop / unknown — Android Play Store only
+                  _buildInstallButton(
+                    theme: theme,
+                    icon: LucideIcons.smartphone,
+                    label: 'Install on Google Play',
+                    onPressed: () => _openStore(NativeAppPrompt.playStoreUrl),
                   ),
-                  const SizedBox(height: 10),
-
-                  // Dismiss
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Not now',
-                      style: TextStyle(
-                        color: theme.hintColor,
-                        fontSize: 13,
-                      ),
-                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Open this page on your Android phone to install',
+                    style: TextStyle(fontSize: 11, color: theme.hintColor),
                   ),
                 ],
-              ),
+
+                const SizedBox(height: 14),
+
+                // Dismiss
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Not now',
+                    style: TextStyle(color: theme.hintColor, fontSize: 13),
+                  ),
+                ),
+              ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstallButton({
+    required ThemeData theme,
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),

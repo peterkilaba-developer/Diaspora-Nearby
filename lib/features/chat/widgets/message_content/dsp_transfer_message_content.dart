@@ -22,13 +22,13 @@ class DSPTransferMessageContent extends StatelessWidget {
     final assetType = metadata['assetType'] as String? ?? 'points';
     final isToken = assetType == 'token';
     final txHash = metadata['txHash'] as String?;
+    final isSimulated =
+        isToken && metadata['settlementMode'] == 'simulated_test';
 
     final colorScheme = Theme.of(context).colorScheme;
 
     // Asset-specific accent color
-    final accentColor = isToken
-        ? AppTheme.tokenColor
-        : AppTheme.dspColor;
+    final accentColor = isToken ? AppTheme.tokenColor : AppTheme.dspColor;
 
     return Container(
       width: 240,
@@ -133,7 +133,7 @@ class DSPTransferMessageContent extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'Transfer Confirmed',
+                isSimulated ? 'Simulated Test Transfer' : 'Transfer Confirmed',
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   color: isOwn
@@ -141,7 +141,7 @@ class DSPTransferMessageContent extends StatelessWidget {
                       : colorScheme.onSurfaceVariant,
                 ),
               ),
-              if (txHash != null) ...[
+              if (txHash != null && !isSimulated) ...[
                 const Spacer(),
                 GestureDetector(
                   onTap: () => launchUrl(

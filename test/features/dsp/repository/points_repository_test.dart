@@ -37,22 +37,25 @@ void main() {
   group('PointsRepository', () {
     const userId = TestData.userId1;
 
-    test('initializeUserPoints should create points doc and award welcome bonus when missing', () async {
-      // 1. First call: user_points/{userId}.get() -> exists: false
-      // 2. Second call: users/{userId}.get() -> data: {'homeCountryCode': 'TZ'}
-      
-      when(mockDocument.get()).thenAnswer((_) async => mockSnapshot);
-      when(mockSnapshot.exists).thenReturn(false);
-      when(mockSnapshot.data()).thenReturn({'homeCountryCode': 'TZ'});
+    test(
+      'initializeUserPoints should create points doc and award welcome bonus when missing',
+      () async {
+        // 1. First call: user_points/{userId}.get() -> exists: false
+        // 2. Second call: users/{userId}.get() -> data: {'homeCountryCode': 'TZ'}
 
-      await repository.initializeUserPoints(userId);
+        when(mockDocument.get()).thenAnswer((_) async => mockSnapshot);
+        when(mockSnapshot.exists).thenReturn(false);
+        when(mockSnapshot.data()).thenReturn({'homeCountryCode': 'TZ'});
 
-      // Verify batch was committed
-      verify(mockBatch.commit()).called(1);
-      
-      // Verify batch.set was called for user_points and welcome bonus
-      verify(mockBatch.set(any, any)).called(2);
-    });
+        await repository.initializeUserPoints(userId);
+
+        // Verify batch was committed
+        verify(mockBatch.commit()).called(1);
+
+        // Verify batch.set was called for user_points and welcome bonus
+        verify(mockBatch.set(any, any)).called(2);
+      },
+    );
 
     test('initializeUserPoints should skip if already initialized', () async {
       when(mockDocument.get()).thenAnswer((_) async => mockSnapshot);

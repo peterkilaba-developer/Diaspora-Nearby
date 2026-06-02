@@ -279,53 +279,103 @@ class GooglePlacesService {
   /// Returns structured location data including city, state, country, countryCode
   Future<Map<String, dynamic>?> reverseGeocode(double lat, double lng) async {
     try {
-      final placemarks = await placemarkFromCoordinates(lat, lng);
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          lat,
+          lng,
+        ).timeout(const Duration(seconds: 4));
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final countryCode = place.isoCountryCode?.toUpperCase();
 
-      if (placemarks.isEmpty) {
-        return null;
+          final city = place.locality;
+          final state = place.administrativeArea;
+          final country = place.country;
+
+          // We don't have AddressComponents from the native geocoding plugin,
+          // so we build a basic formatted address that follows our convention.
+          final parts = [
+            if (city != null && city.isNotEmpty) city,
+            if (state != null && state.isNotEmpty) state,
+            if (country != null && country.isNotEmpty) country,
+          ];
+
+          final formattedAddress = parts.toSet().join(', ');
+
+          return {
+            'formattedAddress': formattedAddress,
+            'placeId': '',
+            'city': city,
+            'state': state,
+            'country': country,
+            'countryCode': countryCode,
+            'lat': lat,
+            'lng': lng,
+            'addressComponents':
+                <AddressComponent>[], // Native plugin doesn't provide these
+          };
+        }
+      } catch (e) {
+        debugPrint('Geocoding plugin failed: $e, falling back to HTTP');
       }
 
-      final place = placemarks.first;
-      final countryCode = place.isoCountryCode?.toUpperCase();
+      // FALLBACK: Use Google Maps Geocoding API directly (Supports Web CORS natively)
+      final apiKey = Env.googleMapsApiKey;
+      if (apiKey.isNotEmpty) {
+        final url = Uri.parse(
+          'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$apiKey',
+        );
+        final response = await http.get(url);
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['status'] == 'OK' && (data['results'] as List).isNotEmpty) {
+            final bestMatch = data['results'].first;
+            final rawComponents = bestMatch['address_components'] as List;
 
-      String? country;
-      if (countryCode != null) {
-        final countryNames = {
-          'US': 'United States',
-          'TZ': 'Tanzania',
-          'GB': 'United Kingdom',
-          'CA': 'Canada',
-          'AU': 'Australia',
-          'IN': 'India',
-          'CN': 'China',
-          'JP': 'Japan',
-          'BR': 'Brazil',
-          'MX': 'Mexico',
-          'DE': 'Germany',
-          'FR': 'France',
-          'IT': 'Italy',
-        };
-        country = countryNames[countryCode] ?? place.country;
-      } else {
-        country = place.country;
+            // Map raw components to our model
+            final addressComponents = rawComponents
+                .map(
+                  (e) => AddressComponent(
+                    name: e['long_name'] ?? '',
+                    shortName: e['short_name'] ?? '',
+                    types: (e['types'] as List?)?.cast<String>() ?? [],
+                  ),
+                )
+                .toList();
+
+            // Use shared location parsing to ensure correct naming conventions (UK etc)
+            final parsed = parseLocationComponents(
+              bestMatch['formatted_address'] ?? '',
+              addressComponents,
+            );
+
+            if (parsed != null) {
+              final parts = <String>[];
+              if (parsed.city != null) parts.add(parsed.city!);
+              if (parsed.state != null) parts.add(parsed.state!);
+              parts.add(parsed.country);
+
+              final cleanAddress = parts.toSet().join(', ');
+
+              return {
+                'formattedAddress': cleanAddress,
+                'placeId': bestMatch['place_id'] ?? '',
+                'city': parsed.city,
+                'state': parsed.state,
+                'country': parsed.country,
+                'countryCode': parsed.countryCode.toUpperCase(),
+                'lat': lat,
+                'lng': lng,
+                'addressComponents': addressComponents,
+              };
+            }
+          }
+        }
       }
 
-      final city = place.locality ?? place.subAdministrativeArea;
-      final state = place.administrativeArea;
-
-      final formattedAddress = [?city, ?state, ?country].join(', ');
-
-      return {
-        'formattedAddress': formattedAddress,
-        'placeId': '',
-        'city': city,
-        'state': state,
-        'country': country,
-        'countryCode': countryCode,
-        'lat': lat,
-        'lng': lng,
-      };
+      return null;
     } catch (e) {
+      debugPrint('Reverse Geocode Error: $e');
       return null;
     }
   }

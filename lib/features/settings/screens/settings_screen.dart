@@ -8,13 +8,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/core/utils/pwa_utils.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/more/widgets/account_section.dart';
-import 'package:diaspora_nearby/features/more/screens/feedback_screen.dart';
-import 'package:diaspora_nearby/features/shared/screens/placeholder_screen.dart';
-import 'package:diaspora_nearby/features/sharing/services/sharing_service.dart';
-import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
-import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -25,8 +19,6 @@ class SettingsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final profileAsync = ref.watch(userProfileProvider);
     final profile = profileAsync.value;
-    final currentUserId =
-        ref.watch(authRepositoryProvider).currentUser?.uid ?? '';
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -86,135 +78,6 @@ class SettingsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
             ],
-
-            // Quick Actions
-            _buildSectionHeader(
-              context,
-              'QUICK ACTIONS',
-              icon: LucideIcons.zap,
-            ),
-            _buildSectionContainer(
-              context,
-              child: Column(
-                children: [
-                  _buildMenuItem(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.share2,
-                    iconColor: const Color(0xFF25D366),
-                    title: 'Invite family and friends',
-                    subtitle: 'Share the app with others',
-                    explorationAction: ExplorationAction.profileInvite,
-                    onTap: () async {
-                      if (currentUserId.isNotEmpty) {
-                        ref
-                            .read(pointsServiceProvider)
-                            .trackExternalShare(currentUserId, 'app_invite');
-
-                        // Fetch referral code and pass to shareApp
-                        try {
-                          final pointsRepo = ref.read(pointsRepositoryProvider);
-                          String? code = await pointsRepo.getReferralCode(
-                            currentUserId,
-                          );
-                          if (code == null) {
-                            final userProfile = await ref
-                                .read(profileRepositoryProvider)
-                                .getUserProfile(currentUserId);
-                            if (userProfile != null) {
-                              final countryCode =
-                                  userProfile.homeCountryCode ?? 'US';
-                              code = await pointsRepo.generateReferralCode(
-                                currentUserId,
-                                userProfile.firstName,
-                                countryCode,
-                              );
-                            }
-                          }
-                          SharingService.instance
-                              .shareApp(referralCode: code);
-                        } catch (e) {
-                          debugPrint('Error getting referral code: $e');
-                          SharingService.instance.shareApp();
-                        }
-                      } else {
-                        SharingService.instance.shareApp();
-                      }
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.messageSquare,
-                    iconColor: Colors.indigo,
-                    title: 'Send Feedback',
-                    subtitle: 'Help us improve the app',
-                    explorationAction: ExplorationAction.profileFeedback,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const FeedbackScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Support
-            _buildSectionHeader(context, 'SUPPORT', icon: LucideIcons.lifeBuoy),
-            _buildSectionContainer(
-              context,
-              child: Column(
-                children: [
-                  _buildMenuItem(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.star,
-                    iconColor: Colors.orange,
-                    title: 'Rate App',
-                    subtitle: 'Share your experience',
-                    explorationAction: ExplorationAction.profileRateApp,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const PlaceholderScreen(
-                            title: 'Rate App',
-                            icon: LucideIcons.star,
-                            message:
-                                'Enjoying the app? Please rate us on the app store!\n\n(Coming Soon)',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.helpCircle,
-                    iconColor: Colors.cyan,
-                    title: 'Help Center',
-                    subtitle: 'Get answers',
-                    explorationAction: ExplorationAction.profileHelpCenter,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const PlaceholderScreen(
-                            title: 'Help Center',
-                            icon: LucideIcons.helpCircle,
-                            message:
-                                'Find answers to common questions.\n\n(Coming Soon)',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
 
             // Account Settings
             _buildSectionHeader(
@@ -347,8 +210,6 @@ class SettingsScreen extends ConsumerWidget {
     String selectedPlatform = 'both';
     final currentUserId =
         ref.read(authRepositoryProvider).currentUser?.uid ?? '';
-    final profileAsync = ref.read(userProfileProvider);
-    final existingEmail = profileAsync.value?.phone ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -512,11 +373,13 @@ class SettingsScreen extends ConsumerWidget {
                         ctx,
                         label: 'Android',
                         icon: LucideIcons.smartphone,
-                        selected: selectedPlatform == 'android' ||
+                        selected:
+                            selectedPlatform == 'android' ||
                             selectedPlatform == 'both',
                         onTap: () => setState(() {
-                          selectedPlatform =
-                              selectedPlatform == 'android' ? 'both' : 'android';
+                          selectedPlatform = selectedPlatform == 'android'
+                              ? 'both'
+                              : 'android';
                         }),
                       ),
                       const SizedBox(width: 8),
@@ -524,11 +387,13 @@ class SettingsScreen extends ConsumerWidget {
                         ctx,
                         label: 'iOS',
                         icon: LucideIcons.tablet,
-                        selected: selectedPlatform == 'ios' ||
+                        selected:
+                            selectedPlatform == 'ios' ||
                             selectedPlatform == 'both',
                         onTap: () => setState(() {
-                          selectedPlatform =
-                              selectedPlatform == 'ios' ? 'both' : 'ios';
+                          selectedPlatform = selectedPlatform == 'ios'
+                              ? 'both'
+                              : 'ios';
                         }),
                       ),
                       const SizedBox(width: 8),
@@ -573,12 +438,12 @@ class SettingsScreen extends ConsumerWidget {
                               .collection('app_testers')
                               .doc(email)
                               .set({
-                            'email': email,
-                            'platform': selectedPlatform,
-                            'userId': currentUserId,
-                            'signedUpAt': FieldValue.serverTimestamp(),
-                            'status': 'pending',
-                          });
+                                'email': email,
+                                'platform': selectedPlatform,
+                                'userId': currentUserId,
+                                'signedUpAt': FieldValue.serverTimestamp(),
+                                'status': 'pending',
+                              });
 
                           if (ctx.mounted) {
                             Navigator.of(ctx).pop();
@@ -628,9 +493,7 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  SizedBox(
-                    height: 16 + MediaQuery.of(ctx).padding.bottom,
-                  ),
+                  SizedBox(height: 16 + MediaQuery.of(ctx).padding.bottom),
                 ],
               ),
             );

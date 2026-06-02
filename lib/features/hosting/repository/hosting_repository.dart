@@ -55,7 +55,7 @@ class HostingRepository {
   Future<HostingRequest> createRequest(HostingRequest request) async {
     final docRef = _requestsCol.doc(request.id);
     await docRef.set(request.toMap());
-    debugPrint('✅ [Hosting] Request created: ${request.id}');
+    debugPrint('Ã¢Å“â€¦ [Hosting] Request created: ${request.id}');
     return request;
   }
 
@@ -69,7 +69,7 @@ class HostingRepository {
         'id': doc.id,
       });
     } catch (e) {
-      debugPrint('❌ [Hosting] Error getting request: $e');
+      debugPrint('Ã¢ÂÅ’ [Hosting] Error getting request: $e');
       return null;
     }
   }
@@ -115,7 +115,9 @@ class HostingRepository {
   Future<void> showInterest(String requestId, String hostId) async {
     final doc = await _requestsCol.doc(requestId).get();
     if (!doc.exists) {
-      debugPrint('[Hosting] Request $requestId not found — may have expired.');
+      debugPrint(
+        '[Hosting] Request $requestId not found Ã¢â‚¬â€ may have expired.',
+      );
       throw Exception(
         'This hosting request no longer exists. It may have expired.',
       );
@@ -124,14 +126,16 @@ class HostingRepository {
       'interestedHostIds': FieldValue.arrayUnion([hostId]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('✅ [Hosting] Host $hostId showed interest in $requestId');
+    debugPrint('Ã¢Å“â€¦ [Hosting] Host $hostId showed interest in $requestId');
   }
 
   /// Host withdraws interest.
   Future<void> withdrawInterest(String requestId, String hostId) async {
     final doc = await _requestsCol.doc(requestId).get();
     if (!doc.exists) {
-      debugPrint('[Hosting] Request $requestId not found — may have expired.');
+      debugPrint(
+        '[Hosting] Request $requestId not found Ã¢â‚¬â€ may have expired.',
+      );
       return;
     }
     await _requestsCol.doc(requestId).update({
@@ -141,7 +145,7 @@ class HostingRepository {
     debugPrint('[Hosting] Host $hostId withdrew interest from $requestId');
   }
 
-  /// Traveler selects a host — updates request to 'matched' status.
+  /// Traveler selects a host Ã¢â‚¬â€ updates request to 'matched' status.
   Future<void> selectHost({
     required String requestId,
     required String hostId,
@@ -149,7 +153,9 @@ class HostingRepository {
   }) async {
     final doc = await _requestsCol.doc(requestId).get();
     if (!doc.exists) {
-      debugPrint('[Hosting] Request $requestId not found — may have expired.');
+      debugPrint(
+        '[Hosting] Request $requestId not found Ã¢â‚¬â€ may have expired.',
+      );
       throw Exception(
         'This hosting request no longer exists. It may have expired.',
       );
@@ -171,7 +177,7 @@ class HostingRepository {
       'status': HostingRequestStatus.cancelled.name,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('✅ [Hosting] Request $requestId cancelled');
+    debugPrint('Ã¢Å“â€¦ [Hosting] Request $requestId cancelled');
   }
 
   // =========================================================================
@@ -181,23 +187,19 @@ class HostingRepository {
   /// Create a hosting session after both parties agree.
   Future<HostingSession> createSession(HostingSession session) async {
     debugPrint(
-      '📝 [createSession] Writing session ${session.id} to Firestore...',
+      'Ã°Å¸â€œÂ [createSession] Writing session ${session.id} to Firestore...',
     );
-    final docRef = _sessionsCol.doc(session.id);
-    await docRef.set(session.toMap());
-    debugPrint('📝 [createSession] ✅ Session document written');
-
-    // Also update the request to 'active' status
-    debugPrint(
-      '📝 [createSession] Updating request ${session.requestId} to active...',
-    );
-    await _requestsCol.doc(session.requestId).update({
+    final batch = _firestore.batch();
+    batch.set(_sessionsCol.doc(session.id), session.toMap());
+    batch.update(_requestsCol.doc(session.requestId), {
       'status': HostingRequestStatus.active.name,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('📝 [createSession] ✅ Request updated to active');
-
-    debugPrint('✅ [Hosting] Session created: ${session.id}');
+    await batch.commit();
+    debugPrint(
+      'Ã°Å¸â€œÂ [createSession] Ã¢Å“â€¦ Session + request committed atomically',
+    );
+    debugPrint('Ã¢Å“â€¦ [Hosting] Session created: ${session.id}');
     return session;
   }
 
@@ -211,7 +213,7 @@ class HostingRepository {
         'id': doc.id,
       });
     } catch (e) {
-      debugPrint('❌ [Hosting] Error getting session: $e');
+      debugPrint('Ã¢ÂÅ’ [Hosting] Error getting session: $e');
       return null;
     }
   }
@@ -294,14 +296,14 @@ class HostingRepository {
         );
   }
 
-  /// QR Check-in — activates the session.
+  /// QR Check-in Ã¢â‚¬â€ activates the session.
   Future<void> checkIn(String sessionId) async {
     await _sessionsCol.doc(sessionId).update({
       'checkInTime': FieldValue.serverTimestamp(),
       'status': HostingSessionStatus.active.name,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    debugPrint('✅ [Hosting] Session $sessionId checked in');
+    debugPrint('Ã¢Å“â€¦ [Hosting] Session $sessionId checked in');
   }
 
   /// One party requests to end the session.
@@ -316,11 +318,11 @@ class HostingRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     debugPrint(
-      '✅ [Hosting] End requested for session $sessionId by $requestedByUserId',
+      'Ã¢Å“â€¦ [Hosting] End requested for session $sessionId by $requestedByUserId',
     );
   }
 
-  /// Both parties confirmed end — calculates final duration and marks as ended.
+  /// Both parties confirmed end Ã¢â‚¬â€ calculates final duration and marks as ended.
   Future<void> confirmEnd(String sessionId) async {
     final session = await getSession(sessionId);
     if (session == null) return;
@@ -337,28 +339,32 @@ class HostingRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    debugPrint('✅ [Hosting] Session $sessionId ended: $actualDays days');
+    debugPrint('Ã¢Å“â€¦ [Hosting] Session $sessionId ended: $actualDays days');
   }
 
   /// Mark session as settled (both parties confirmed completion).
   Future<void> markSettled(String sessionId) async {
-    await _sessionsCol.doc(sessionId).update({
+    // Read the session once up front so we can batch both writes atomically.
+    final session = await getSession(sessionId);
+    if (session == null) {
+      debugPrint('[Hosting] markSettled: session $sessionId not found');
+      return;
+    }
+
+    final batch = _firestore.batch();
+    batch.update(_sessionsCol.doc(sessionId), {
       'travelerSettled': true,
       'hostSettled': true,
       'status': HostingSessionStatus.settled.name,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    batch.update(_requestsCol.doc(session.requestId), {
+      'status': HostingRequestStatus.completed.name,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
 
-    // Also mark the original request as completed
-    final session = await getSession(sessionId);
-    if (session != null) {
-      await _requestsCol.doc(session.requestId).update({
-        'status': HostingRequestStatus.completed.name,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    debugPrint('✅ [Hosting] Session $sessionId settled');
+    debugPrint('[Hosting] Session $sessionId settled');
   }
 
   /// Cancel a session (before check-in only).
@@ -381,7 +387,7 @@ class HostingRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('✅ [Hosting] Session $sessionId cancelled');
+      debugPrint('Ã¢Å“â€¦ [Hosting] Session $sessionId cancelled');
     }
   }
 

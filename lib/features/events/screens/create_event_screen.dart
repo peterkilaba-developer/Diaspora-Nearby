@@ -19,6 +19,7 @@ import 'package:uuid/uuid.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart'
     as places;
 import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
+import 'package:diaspora_nearby/features/chat/widgets/bilateral_flag_avatar.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/events/screens/organizer_events_screen.dart';
@@ -1196,24 +1197,37 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                   LucideIcons.checkCircle2,
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
-                                leading: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child:
-                                      (_myGroups.first.photoUrl != null &&
-                                          _myGroups.first.photoUrl!.isNotEmpty)
-                                      ? Image.network(
-                                          _myGroups.first.photoUrl!,
-                                          width: 40,
-                                          height: 40,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Container(
-                                          width: 40,
-                                          height: 40,
-                                          color: Colors.grey[300],
-                                          child: const Icon(LucideIcons.users),
-                                        ),
-                                ),
+                                leading: _myGroups.first.isChamber
+                                    ? BilateralFlagAvatar(
+                                        homeCountryCode:
+                                            _myGroups.first.homeCountryCode,
+                                        hostCountryCode:
+                                            _myGroups.first.hostCountryCode,
+                                        size: 40,
+                                      )
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(20),
+                                        child:
+                                            (_myGroups.first.photoUrl != null &&
+                                                _myGroups
+                                                    .first
+                                                    .photoUrl!
+                                                    .isNotEmpty)
+                                            ? Image.network(
+                                                _myGroups.first.photoUrl!,
+                                                width: 40,
+                                                height: 40,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Container(
+                                                width: 40,
+                                                height: 40,
+                                                color: Colors.grey[300],
+                                                child: const Icon(
+                                                  LucideIcons.users,
+                                                ),
+                                              ),
+                                      ),
                               ),
                           ],
                         ),

@@ -9,6 +9,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
@@ -252,6 +253,12 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     final isDark = theme.brightness == Brightness.dark;
     final homeFlag = _getCountryFlag(widget.user.homeCountryCode);
     final hostFlag = _getCountryFlag(widget.user.hostCountryCode);
+
+    final currentUserProfile = ref.watch(userProfileProvider).value;
+    final bool currentUserHidesLocation =
+        currentUserProfile?.showCurrentLocationName == false;
+    final bool effectiveShowCurrentLocation =
+        widget.showCurrentLocation && !currentUserHidesLocation;
 
     // Bottom bar flag - priority: currentLocation country -> hostLocation country
     String bottomFlag = '';
@@ -724,7 +731,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
               ),
             ),
           ),
-          if (widget.showCurrentLocation)
+          if (effectiveShowCurrentLocation)
             GestureDetector(
               onTap: () {
                 if (widget.user.currentLocation != null) {

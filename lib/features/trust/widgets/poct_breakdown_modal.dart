@@ -247,7 +247,9 @@ class PoctBreakdownModal extends ConsumerWidget {
                         theme,
                         icon: LucideIcons.mapPin,
                         label: 'City Visibility Enabled',
-                        achieved: trustScore >= 10, // proxy: city visibility contributes
+                        achieved:
+                            trustScore >=
+                            10, // proxy: city visibility contributes
                         poct: 10,
                       ),
 
@@ -951,10 +953,7 @@ class PoctBreakdownModal extends ConsumerWidget {
               children: [
                 const Text(
                   'Completed Transactions',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 const SizedBox(height: 2),
                 Text(

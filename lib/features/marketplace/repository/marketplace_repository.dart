@@ -13,7 +13,7 @@ class MarketplaceRepository {
   CollectionReference get _listingsRef =>
       _firestore.collection('marketplace_listings');
 
-  // ─── READ ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ READ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Stream listings visible to the user's communities
   Stream<List<MarketplaceListing>> getListings({
@@ -132,7 +132,7 @@ class MarketplaceRepository {
         .toList();
   }
 
-  // ─── VEHICLE ↔ PARTS MATCHING ─────────────────────────────────────────
+  // â”€â”€â”€ VEHICLE â†” PARTS MATCHING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Find car-parts listings that fit a given vehicle (make + model)
   Future<List<MarketplaceListing>> getPartsForVehicle({
@@ -216,7 +216,7 @@ class MarketplaceRepository {
     }
   }
 
-  // ─── WRITE ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ WRITE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Create a new listing
   Future<String> createListing(MarketplaceListing listing) async {
@@ -248,7 +248,7 @@ class MarketplaceRepository {
     });
   }
 
-  // ─── INTERACTIONS ───────────────────────────────────────────────────────
+  // â”€â”€â”€ INTERACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Increment view count
   Future<void> incrementViewCount(String listingId) async {
@@ -294,7 +294,7 @@ class MarketplaceRepository {
   /// Get all saved listing IDs for a user (for showing save state in lists)
   Future<Set<String>> getSavedListingIds(String userId) async {
     // Query across all listings where this user saved
-    // This is expensive — consider a denormalized user-side collection
+    // This is expensive â€” consider a denormalized user-side collection
     // For now: use a user-side sub-collection
     final snapshot = await _firestore
         .collection('users')
@@ -338,26 +338,27 @@ class MarketplaceRepository {
           final ids = snapshot.docs.map((doc) => doc.id).toList();
           if (ids.isEmpty) return <MarketplaceListing>[];
 
-          // Fetch in batches of 10 (Firestore whereIn limit)
-          final listings = <MarketplaceListing>[];
+          // Fetch all whereIn batches (max 10 ids each) in parallel.
+          final batches = <List<String>>[];
           for (var i = 0; i < ids.length; i += 10) {
-            final batch = ids.sublist(
-              i,
-              i + 10 > ids.length ? ids.length : i + 10,
+            batches.add(
+              ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10),
             );
-            final snap = await _listingsRef
-                .where(FieldPath.documentId, whereIn: batch)
-                .get();
-            listings.addAll(
-              snap.docs.map(
+          }
+          final snaps = await Future.wait(
+            batches.map(
+              (b) => _listingsRef.where(FieldPath.documentId, whereIn: b).get(),
+            ),
+          );
+          return [
+            for (final snap in snaps)
+              ...snap.docs.map(
                 (doc) => MarketplaceListing.fromMap(
                   doc.data() as Map<String, dynamic>,
                   doc.id,
                 ),
               ),
-            );
-          }
-          return listings;
+          ];
         });
   }
 

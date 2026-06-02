@@ -33,14 +33,18 @@ const travel = require("./lib/travel");
 const payments = require("./lib/payments");
 const dsp = require("./lib/dsp");
 const blockchain = require("./lib/blockchain");
+const chambers = require("./lib/chambers");
+const governance = require("./lib/governance");
+const ddi = require("./lib/ddi");
 
 // ── Re-export all functions ──
-// Wallet (5)
+// Wallet (4) — `ensureCommunityTreasuryWallets` removed 2026-06-01 (one-shot
+// backfill superseded by scripts/backfill-wallets.js + scripts/register-treasury-wallets.js).
+// Source remains in lib/wallet.js for re-deploy if ever needed.
 exports.onCommunityWrite = wallet.onCommunityWrite;
 exports.onUserWrite = wallet.onUserWrite;
 exports.getOrCreateSmartWallet = wallet.getOrCreateSmartWallet;
 exports.ensureSystemWallets = wallet.ensureSystemWallets;
-exports.ensureCommunityTreasuryWallets = wallet.ensureCommunityTreasuryWallets;
 
 // Proximity (2)
 exports.checkProximity = proximity.checkProximity;
@@ -57,9 +61,10 @@ exports.onDirectMessageCreated = chat.onDirectMessageCreated;
 exports.onPointsTransactionCreated = notifications.onPointsTransactionCreated;
 exports.manageUserFCMTopics = notifications.manageUserFCMTopics;
 
-// Admin (2)
+// Admin (1) — `setAdminClaim` removed 2026-06-01 (admin grants are issued
+// locally via scripts/set-admin.js using the Admin SDK; no Flutter callers).
+// Source remains in lib/admin_reset.js for re-deploy if ever needed.
 exports.hardResetDatabase = adminReset.hardResetDatabase;
-exports.setAdminClaim = adminReset.setAdminClaim;
 
 // Transfer (3)
 exports.transferDiaspora = transfer.transferDiaspora;
@@ -88,6 +93,22 @@ exports.syncTreasuryBalances = dsp.syncTreasuryBalances;
 // Blockchain (1)
 exports.getTokenTransfers = blockchain.getTokenTransfers;
 
-// Play Store (1)
-const playStore = require("./lib/play_store");
-exports.addPlayStoreTester = playStore.addPlayStoreTester;
+// Play Store — `addPlayStoreTester` removed 2026-06-01.
+// Landing page no longer captures emails; testers self-serve via the public
+// Closed Testing Google Group + Play Store opt-in link.
+// Source file lib/play_store.js can be safely deleted if/when desired.
+
+// Bilateral Chambers (3)
+exports.ensureSignupChamber = chambers.ensureSignupChamber;
+exports.joinChamber = chambers.joinChamber;
+exports.manageChamber = chambers.manageChamber;
+
+// Governance (2)
+exports.nominateForGovernanceRole = governance.nominateForGovernanceRole;
+exports.evaluateGovernanceVote = governance.evaluateGovernanceVote;
+
+// DDI Loans (4)
+exports.submitDdiLoanApplication = ddi.submitDdiLoanApplication;
+exports.joinDdiDiscussion = ddi.joinDdiDiscussion;
+exports.castDdiLoanVote = ddi.castDdiLoanVote;
+exports.resolveDdiLoanVoting = ddi.resolveDdiLoanVoting;

@@ -22,8 +22,7 @@ class LocationMessageContent extends StatefulWidget {
   });
 
   @override
-  State<LocationMessageContent> createState() =>
-      _LocationMessageContentState();
+  State<LocationMessageContent> createState() => _LocationMessageContentState();
 }
 
 class _LocationMessageContentState extends State<LocationMessageContent>
@@ -81,13 +80,22 @@ class _LocationMessageContentState extends State<LocationMessageContent>
         }
       } else {
         debugPrint(
-            '[LocationMsg] Bad response: ${response.statusCode} '
-            'content-type: ${response.headers['content-type']}');
-        if (mounted) setState(() { _loading = false; _error = true; });
+          '[LocationMsg] Bad response: ${response.statusCode} '
+          'content-type: ${response.headers['content-type']}',
+        );
+        if (mounted)
+          setState(() {
+            _loading = false;
+            _error = true;
+          });
       }
     } catch (e) {
       debugPrint('[LocationMsg] Fetch error: $e');
-      if (mounted) setState(() { _loading = false; _error = true; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _error = true;
+        });
     }
   }
 
@@ -105,8 +113,7 @@ class _LocationMessageContentState extends State<LocationMessageContent>
         children: [
           // Map preview
           ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(12)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             child: SizedBox(
               width: double.infinity,
               height: 160,
@@ -133,8 +140,8 @@ class _LocationMessageContentState extends State<LocationMessageContent>
                     address.isNotEmpty
                         ? address
                         : widget.message.content.isNotEmpty
-                            ? widget.message.content
-                            : '${_lat.toStringAsFixed(4)}, ${_lng.toStringAsFixed(4)}',
+                        ? widget.message.content
+                        : '${_lat.toStringAsFixed(4)}, ${_lng.toStringAsFixed(4)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: widget.isOwn
@@ -279,8 +286,7 @@ class _LocationMessageContentState extends State<LocationMessageContent>
               top: 8,
               right: 8,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.black.withValues(alpha: 0.5)

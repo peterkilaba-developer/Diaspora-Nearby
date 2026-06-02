@@ -420,7 +420,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Invite Family & Friends',
               subtitle: 'Someone signs up using your referral code',
               amount: '1,000 DSP each',
-              earned: (lifetimeEarnings['referral_reward_referrer'] ?? 0) +
+              earned:
+                  (lifetimeEarnings['referral_reward_referrer'] ?? 0) +
                   (lifetimeEarnings['referral_reward_referee'] ?? 0),
             ),
             _buildActivityCard(
@@ -470,7 +471,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Verify a Solution',
               subtitle: 'Mark a chat answer as a verified solution',
               amount: '1,000 DSP',
-              earned: lifetimeEarnings['verified_solution_verifier_reward'] ?? 0,
+              earned:
+                  lifetimeEarnings['verified_solution_verifier_reward'] ?? 0,
             ),
             _buildActivityCard(
               context,
@@ -489,7 +491,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildActivityCard(
               context,
               title: 'Vouch for Peer',
-              subtitle: 'Vouch for someone\'s trustworthiness (+ 1,000 DSP staked)',
+              subtitle:
+                  'Vouch for someone\'s trustworthiness (+ 1,000 DSP staked)',
               amount: '1,000 DSP',
               earned: lifetimeEarnings['vouch_reward'] ?? 0,
             ),
@@ -512,7 +515,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Economy Transaction',
               subtitle: 'Buy or sell on the marketplace (\$1 USD = 1 DSP)',
               amount: '\$1 = 1 DSP',
-              earned: (lifetimeEarnings['economy_transaction_buyer'] ?? 0) +
+              earned:
+                  (lifetimeEarnings['economy_transaction_buyer'] ?? 0) +
                   (lifetimeEarnings['economy_transaction_seller'] ?? 0),
             ),
             _buildActivityCard(
@@ -520,7 +524,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Host a Traveler',
               subtitle: 'Host someone visiting your area',
               amount: '1,000 DSP',
-              earned: (lifetimeEarnings['host_traveler_host_reward'] ?? 0) +
+              earned:
+                  (lifetimeEarnings['host_traveler_host_reward'] ?? 0) +
                   (lifetimeEarnings['hosting_traveler_income'] ?? 0),
             ),
 
@@ -599,68 +604,77 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildTrustCard(
               context,
               title: 'Complete Your Profile',
-              subtitle: 'Fill 10 profile fields to fully complete your profile and earn your genesis bonus.',
+              subtitle:
+                  'Fill 10 profile fields to fully complete your profile and earn your genesis bonus.',
               amount: '+10 PoCT  •  10,000 DSP',
-              standing: '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
+              standing:
+                  '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
             ),
 
             // --- Verification ---
             _buildSubHeader('Verification'),
             const SizedBox(height: 8),
-          _buildTrustCard(
-            context,
-            title: 'Verified by Peer',
-            subtitle: '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique verifications.',
-            amount: '+10 PoCT per 10× milestone',
-            standing: '${trustData?.uniqueVerificationCount ?? 0} Received',
-          ),
-          _buildTrustCard(
-            context,
-            title: 'Verify Peer',
-            subtitle: 'You verifying someone else. Earn 1,000 DSP instantly. Does not award PoCT (action builds trust for them, not you).',
-            amount: '0 PoCT',
-            standing: '-- Given',
-          ),
+            _buildTrustCard(
+              context,
+              title: 'Verified by Peer',
+              subtitle:
+                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique verifications.',
+              amount: '+10 PoCT per 10× milestone',
+              standing: '${trustData?.uniqueVerificationCount ?? 0} Received',
+            ),
+            _buildTrustCard(
+              context,
+              title: 'Verify Peer',
+              subtitle:
+                  'You verifying someone else. Earn 1,000 DSP instantly. Does not award PoCT (action builds trust for them, not you).',
+              amount: '0 PoCT',
+              standing: '-- Given',
+            ),
 
             const SizedBox(height: 16),
 
             // --- Vouching ---
             _buildSubHeader('Vouching'),
             const SizedBox(height: 8),
-          _buildTrustCard(
-            context,
-            title: 'Vouched by Peer',
-            subtitle: '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique vouches.',
-            amount: '+10 PoCT per 10× milestone',
-            standing: '${trustData?.uniqueVouchCount ?? 0} Received',
-          ),
-          _buildTrustCard(
-            context,
-            title: 'Vouch for Peer',
-            subtitle: 'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award PoCT (action builds trust for them, not you).',
-            amount: '0 PoCT',
-            standing: '-- Given',
-          ),
+            _buildTrustCard(
+              context,
+              title: 'Vouched by Peer',
+              subtitle:
+                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique vouches.',
+              amount: '+10 PoCT per 10× milestone',
+              standing: '${trustData?.uniqueVouchCount ?? 0} Received',
+            ),
+            _buildTrustCard(
+              context,
+              title: 'Vouch for Peer',
+              subtitle:
+                  'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award PoCT (action builds trust for them, not you).',
+              amount: '0 PoCT',
+              standing: '-- Given',
+            ),
 
             // --- Connections ---
             _buildTrustCard(
               context,
               title: 'Family Connection',
-              subtitle: '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
+              subtitle:
+                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
               amount: '+10 PoCT per 10× milestone',
               standing: '${trustData?.uniqueFamilyCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'Friend Connection',
-              subtitle: '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
+              subtitle:
+                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
               amount: '+10 PoCT per 10× milestone',
               standing: '${trustData?.uniqueFriendCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'QR Connect',
-              subtitle: '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
+              subtitle:
+                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
               amount: '+10 PoCT per 10× milestone',
               standing: '${trustData?.uniqueQrCount ?? 0} Scanned',
             ),
@@ -673,8 +687,6 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               amount: '+1 PoCT every 100 days',
               standing: '$daysActive Days',
             ),
-
-
 
             // Trust Slider Vis
             Container(
@@ -691,13 +703,21 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     style: TextStyle(color: Theme.of(context).hintColor),
                   ),
                   const SizedBox(height: 12),
-                  _buildTrustIndicator(AppTheme.error, 'Red (0-20)', 'Low Trust'),
+                  _buildTrustIndicator(
+                    AppTheme.error,
+                    'Red (0-20)',
+                    'Low Trust',
+                  ),
                   _buildTrustIndicator(
                     Colors.deepOrange,
                     'Deep Orange (21-40)',
                     'Basic Trust',
                   ),
-                  _buildTrustIndicator(Colors.amber, 'Amber (41-60)', 'Medium Trust'),
+                  _buildTrustIndicator(
+                    Colors.amber,
+                    'Amber (41-60)',
+                    'Medium Trust',
+                  ),
                   _buildTrustIndicator(
                     Colors.lightGreen,
                     'Light Green (61-80)',
@@ -775,7 +795,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: earned > 0 ? AppTheme.accent : Theme.of(context).hintColor,
+                  color: earned > 0
+                      ? AppTheme.accent
+                      : Theme.of(context).hintColor,
                 ),
               ),
             ],
@@ -784,10 +806,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           // Row 2: Subtitle
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).hintColor,
-            ),
+            style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
           ),
           const SizedBox(height: 4),
           // Row 3: Amount badge
@@ -856,10 +875,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           // Row 2: Subtitle
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).hintColor,
-            ),
+            style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
           ),
           const SizedBox(height: 4),
           // Row 3: Amount/reward badge
@@ -1178,7 +1194,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   const SizedBox(height: 24),
 
                   // Main Progress Bars
-                  _buildSectionHeader('GLOBAL SCALE', 'Activity Earnings DSP Distribution'),
+                  _buildSectionHeader(
+                    'GLOBAL SCALE',
+                    'Activity Earnings DSP Distribution',
+                  ),
                   const SizedBox(height: 12),
 
                   // Supply Progress (1QD)
@@ -1794,9 +1813,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
-                                            color: EpochService.getEfficiencyColor(
-                                              trust,
-                                            ),
+                                            color:
+                                                EpochService.getEfficiencyColor(
+                                                  trust,
+                                                ),
                                           ),
                                         ),
                                       ],
@@ -2632,7 +2652,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             percentage: '10%',
             points: investorsPoints,
             efficiency: 1.0,
-            epochLabel: 'DEX Liquidity & Market Access • TGE $globalTgeEvent/10',
+            epochLabel:
+                'DEX Liquidity & Market Access • TGE $globalTgeEvent/10',
           ),
           const SizedBox(height: 12),
 
@@ -2720,14 +2741,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           padding: const EdgeInsets.symmetric(
             horizontal: AppTheme.pageHorizontalPadding,
           ),
-          child: _buildSectionHeader(
-            'CURRENCY',
-            'Country Epoch Leaderboard',
-          ),
+          child: _buildSectionHeader('CURRENCY', 'Country Epoch Leaderboard'),
         ),
         const SizedBox(height: 12), // Added 12 + 12 = 24px gap
         Container(
-         decoration: AppTheme.cardDecoration(context),
+          decoration: AppTheme.cardDecoration(context),
           child: Column(
             children: [
               ...leaderboardAsync.maybeWhen(
@@ -2944,7 +2962,6 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
       ),
     );
   }
-
 
   Widget _buildEpochStep(int epochNum, int currentEpoch) {
     final isCompleted = epochNum < currentEpoch;

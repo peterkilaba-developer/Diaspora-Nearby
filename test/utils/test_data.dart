@@ -46,10 +46,7 @@ class TestData {
   }
 
   /// Generate a test CommunityData
-  static CommunityData createCommunity({
-    String? id,
-    String? name,
-  }) {
+  static CommunityData createCommunity({String? id, String? name}) {
     return CommunityData(
       id: id ?? communityId1,
       name: name ?? 'Test Community',
@@ -74,9 +71,7 @@ class TestData {
   }
 
   /// Generate a test TrustData
-  static TrustData createTrustData({
-    String? userId,
-  }) {
+  static TrustData createTrustData({String? userId}) {
     return TrustData(
       uid: userId ?? userId1,
       trustScore: 50.0,
@@ -86,10 +81,7 @@ class TestData {
   }
 
   /// Generate a test Chat
-  static Chat createChat({
-    String? id,
-    List<String>? participants,
-  }) {
+  static Chat createChat({String? id, List<String>? participants}) {
     return Chat(
       id: id ?? 'chat_test_1',
       type: 'direct',

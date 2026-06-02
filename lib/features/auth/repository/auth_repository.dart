@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +39,22 @@ class AuthRepository {
     return await _firebaseAuth.signInWithCredential(credential);
   }
 
+  /// Signs in with Google. Returns null if the user cancels the chooser.
+  Future<UserCredential?> signInWithGoogle() async {
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return null;
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    return _firebaseAuth.signInWithCredential(credential);
+  }
+
   Future<void> signOut() async {
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
     await _firebaseAuth.signOut();
   }
 

@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diaspora Nearby — Connect, Earn, Build Community Wealth</title>
+    <title>Diaspora Nearby — The Global Diaspora Social Equity Network</title>
     <meta name="description"
-        content="The world's first Reputation-to-Asset Engine for the global diaspora. Find your community, earn $DIASPORA tokens through social activity, and build collective wealth across borders.">
+        content="Diaspora Nearby is the world's first Social Equity Engine for the global diaspora. Connect with your community, earn $DIASPORA tokens, and build collective wealth across borders through the power of the diaspora economy.">
     <link rel="canonical" href="https://diasporanearby.com/">
 
     <!-- Open Graph -->
@@ -59,13 +59,13 @@
     "name": "Diaspora Nearby",
     "url": "https://diasporanearby.com",
     "logo": "https://diasporanearby.com/icons/Icon-512.png",
-    "description": "The world's first Reputation-to-Asset Engine connecting diaspora communities globally with an earn-to-own social economy.",
-    "sameAs": [],
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "email": "support@diasporanearby.com",
-      "contactType": "Customer Support"
-    }
+    "description": "Connecting the global diaspora through a social equity economy. Diaspora Nearby turns community reputation into liquid assets.",
+    "email": "support@diasporanearby.com",
+    "foundingDate": "2026",
+    "sameAs": [
+        "https://www.linkedin.com/in/peter-swai",
+        "https://github.com/peterkilaba-developer"
+    ]
   }
   </script>
     <script type="application/ld+json">
@@ -80,8 +80,38 @@
       "price": "0",
       "priceCurrency": "USD"
     },
-    "description": "Connect with people from your home country nearby. Earn $DIASPORA tokens through Proof of Activity and Proof of Community Trust.",
-    "url": "https://app.diasporanearby.com"
+    "description": "Connect with your home community nearby. Earn $DIASPORA tokens through social activity and trust.",
+    "url": "https://app.diasporanearby.com",
+    "featureList": "Nearby Discovery, Community Hubs, Zero-Fee Remittance, Community Treasuries, Smart Wallet",
+    "screenshot": "https://diasporanearby.com/images/og-share-card.png"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [{
+      "@type": "Question",
+      "name": "What is a Diaspora?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A diaspora refers to a population that has been dispersed from its original homeland to other regions of the world, maintaining strong cultural and social ties to their heritage."
+      }
+    }, {
+      "@type": "Question",
+      "name": "How does Diaspora Nearby help the global diaspora?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Diaspora Nearby provides a social network and economic engine that allows diaspora members to connect with each other, earn tokens through community participation, and invest in their home countries through community-governed treasuries."
+      }
+    }, {
+      "@type": "Question",
+      "name": "Can I earn $DIASPORA tokens without buying them?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, $DIASPORA tokens are earned through Proof of Activity and Proof of Community Trust, meaning you build wealth by being an active and trusted member of your diaspora community."
+      }
+    }]
   }
   </script>
 </head>
@@ -120,6 +150,7 @@
                     Epoch 1 — Early Access
                 </div>
                 <h1>
+                    <span style="display:block; font-size: 0.6em; color: var(--orange); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; font-weight: 700;">Diaspora Nearby</span>
                     Turn Your <span class="accent-green">Reputation</span>
                     into <span class="accent-orange">Revenue</span>.
                 </h1>
@@ -127,19 +158,34 @@
                     Your community value is no longer invisible. In Diaspora Nearby, every connection you build and
                     every trust you earn is minting your future liquid assets on the blockchain.
                 </p>
+
+                <!-- Hero Audio Player -->
+                <div class="hero-audio-player" style="margin: 24px auto; max-width: 480px; background: rgba(0, 0, 0, 0.05); padding: 12px 24px; border-radius: 100px; border: 1px solid var(--border);">
+                    <audio controls style="width: 100%; height: 36px; outline: none;">
+                        <source src="audio/Turning_diaspora_reputation_into_liquid_wealth.mp3" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
                 <div class="hero-signup-form" id="hero-signup">
                     <div class="platform-badge" id="hero-platform-badge">
                         <i data-lucide="smartphone" style="width:14px;height:14px"></i>
-                        <span id="hero-platform-text">Detecting your platform…</span>
+                        <span id="hero-platform-text">Available on Android — iOS coming soon</span>
                     </div>
-                    <div class="form-row">
-                        <input type="email" id="hero-email" placeholder="your@email.com" autocomplete="email">
-                        <button class="btn btn-sage" id="hero-signup-btn" onclick="submitEarlyAccess('hero')">
-                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
-                            <span id="hero-btn-text">Get Early Access</span>
-                        </button>
+                    <div class="form-row" style="justify-content:center;">
+                        <a class="btn btn-sage"
+                           id="hero-signup-btn"
+                           href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
+                           target="_blank"
+                           rel="noopener"
+                           style="text-decoration:none;">
+                            <i data-lucide="smartphone" style="width:16px;height:16px"></i>
+                            <span id="hero-btn-text">Install on Google Play</span>
+                        </a>
                     </div>
-                    <div class="form-message" id="hero-signup-message"></div>
+                    <div class="form-message" id="hero-signup-message" style="font-size:13px;opacity:0.7;">
+                        On iPhone? <a href="#get-app" style="color:var(--sage);text-decoration:underline;">See web app install instructions ↓</a>
+                    </div>
                 </div>
 
                 <!-- Epoch Progress Card -->
@@ -149,7 +195,7 @@
                             <i data-lucide="layers" style="width:16px;height:16px;color:var(--sage)"></i>
                             <span>Epoch 1 Progress</span>
                         </div>
-                        <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                        <a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank"
                             rel="noopener" class="epoch-verify-link">
                             <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on-chain
                         </a>
@@ -182,16 +228,45 @@
         </div>
     </section>
 
+    <!-- ═══ UNDERSTANDING THE DIASPORA ═══ -->
+    <section class="section" id="understanding-diaspora" style="background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="info" style="width:14px;height:14px"></i> The Global Diaspora</div>
+                <h2>The Power of a Unified Diaspora</h2>
+                <p>
+                    A <strong>diaspora</strong> is more than just people living abroad. It is a living, breathing network of cultural heritage, economic potential, and collective identity. Diaspora Nearby was built to unlock that potential.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="heart"></i></div>
+                    <h3>Cultural Resonance</h3>
+                    <p>Maintaining the traditions, languages, and values of home while thriving in a new environment. Every diaspora community is a bridge between two worlds.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="trending-up"></i></div>
+                    <h3>Economic Engine</h3>
+                    <p>The global diaspora sends over $600 billion in remittances annually. We turn those transactions into investments that build community wealth.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="network"></i></div>
+                    <h3>Global Solidarity</h3>
+                    <p>When one member of the diaspora succeeds, the entire community rises. Our platform ensures that individual success fuels collective resilience.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- ═══ SOCIAL PLATFORM ═══ -->
     <section class="section" id="social">
         <div class="container">
             <div class="section-header fade-in">
-                <div class="section-label sage"><i data-lucide="users" style="width:14px;height:14px"></i> Social
-                    Platform</div>
-                <h2>Find Your People, Anywhere in the World</h2>
+                <div class="section-label sage"><i data-lucide="users" style="width:14px;height:14px"></i> Diaspora Platform</div>
+                <h2>Connect With Your Diaspora, Anywhere</h2>
                 <p>
-                    Diaspora Nearby bridges the gap between you and your home community. Whether you've just moved to a
-                    new city or have been abroad for years — find your people.
+                    Diaspora Nearby bridges the gap between you and your home country. Whether you've just moved to a
+                    new city or have been abroad for years — find your community.
                 </p>
             </div>
             <div class="card-grid fade-in">
@@ -309,12 +384,12 @@
     <section class="section" id="economy">
         <div class="container">
             <div class="section-header fade-in">
-                <div class="section-label orange"><img src="icons/token-logo-transparent.png" alt="$DIASPORA" style="width:14px;height:14px;border-radius:0;object-fit:contain;vertical-align:middle;"> $DIASPORA
+                <div class="section-label orange"><img src="icons/token-logo-transparent.png" alt="$DIASPORA Token" style="width:14px;height:14px;border-radius:0;object-fit:contain;vertical-align:middle;"> $DIASPORA
                     Economy</div>
-                <h2>The World's First Social Equity Asset</h2>
+                <h2>The World's First Diaspora Social Equity Asset</h2>
                 <p>
                     $DIASPORA isn't something you buy — it's something you <strong>earn</strong> through Proof of
-                    Activity and Proof of Community Trust. Your daily actions mint real value.
+                    Activity and Proof of Community Trust. Your daily actions mint real value in the diaspora economy.
                 </p>
             </div>
 
@@ -342,7 +417,7 @@
                         <div class="reward-icon sage"><i data-lucide="scan-line" style="width:18px;height:18px"></i>
                         </div>
                         <div class="reward-info">
-                            <div class="reward-action">QR Identity Exchange</div>
+                            <div class="reward-action">Diaspora Identity Exchange</div>
                             <div class="reward-amount">+1,000 DSP</div>
                         </div>
                     </div>
@@ -471,7 +546,7 @@
                         <div class="epoch-value">100 Members</div>
                         <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1M $DIASPORA</div>
                         <a class="epoch-link"
-                            href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                            href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank"
                             rel="noopener">
                             <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on Basescan
                         </a>
@@ -713,6 +788,66 @@
                     <strong>Continental Solidarity</strong> — Funder and recipient must be on the same continent.
                     Multiple countries can pool funds for a single project, with returns split pro-rata by contribution.
                 </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ BILATERAL CHAMBERS OF COMMERCE ═══ -->
+    <section class="section chamber-section" id="chambers">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="handshake" style="width:14px;height:14px"></i>
+                    Chambers of Commerce</div>
+                <h2>The First Contact for Trade Back Home</h2>
+                <p>
+                    Every cross-border diaspora corridor has an official public Chamber of Commerce connecting the host country's chamber with the home country's Diaspora Chamber of Commerce. The home chamber houses dedicated representatives for each host country, all of whom have lived in the countries they are responsible for. This ensures a profound, firsthand understanding of both countries' business cultures and trade dynamics.
+                </p>
+            </div>
+
+            <div class="chamber-showcase fade-in">
+                <div class="chamber-identity">
+                    <div class="chamber-avatar" role="img" aria-label="Tanzania and United States flags">
+                        <span class="flag-half home"><img src="icons/flag-tz.svg" alt=""></span>
+                        <span class="flag-half host"><img src="icons/flag-us.svg" alt=""></span>
+                    </div>
+                    <div>
+                        <div class="chamber-name">TZ - US Chamber of Commerce</div>
+                        <div class="chamber-status"><i data-lucide="badge-check"></i> Official public corridor chamber</div>
+                    </div>
+                </div>
+                <div class="chamber-corridor" aria-label="Home country connected to host country">
+                    <span>Home Country</span>
+                    <i data-lucide="arrow-left-right"></i>
+                    <span>Host Country</span>
+                </div>
+            </div>
+
+            <div class="card-grid fade-in chamber-cards">
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="flag"></i></div>
+                    <h3>One Official Corridor</h3>
+                    <p>A single chamber represents each home-and-host country pairing, giving the corridor a clear
+                        public business identity.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="briefcase"></i></div>
+                    <h3>Lived-Experience Reps</h3>
+                    <p>Each home chamber houses reps representing their respective host countries. Every representative has lived in the country they support, bridging both business cultures seamlessly.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="globe"></i></div>
+                    <h3>Native & B2B Access</h3>
+                    <p>Native individuals and businesses in host countries can easily join any bilateral chamber to access the diaspora network, find trusted suppliers, or launch cross-border B2B trade partnerships.</p>
+                </div>
+            </div>
+
+            <div class="chamber-cta fade-in">
+                <p>Live abroad. Stay connected to opportunity at home. Help commerce move through trusted diaspora
+                    relationships.</p>
+                <a href="https://app.diasporanearby.com" class="btn btn-sage">
+                    <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                    Join Your Chamber
+                </a>
             </div>
         </div>
     </section>
@@ -1223,7 +1358,9 @@
             </div>
             <div class="team-grid fade-in">
                 <div class="team-card">
-                    <img src="images/peter-swai.jpg" alt="Peter Swai" class="team-avatar-img">
+                    <div class="team-avatar">
+                        <img src="images/peter-swai.jpg" alt="Peter Swai — Founder of Diaspora Nearby" class="team-avatar-img">
+                    </div>
                     <div class="team-info">
                         <h3>Peter Swai</h3>
                         <span class="role">Founder & Lead Developer</span>
@@ -1248,52 +1385,37 @@
                 <div class="get-app-icon">
                     <i data-lucide="smartphone" style="width:40px;height:40px;color:var(--sage)"></i>
                 </div>
-                <h2>Get Early Access</h2>
-                <p>We’re launching native apps for Android & iOS. Enter your email to get access — Android users will
-                    be redirected to install from Google Play.</p>
+                <h2>Get the App</h2>
+                <p>The native Android app is live on Google Play. iPhone users can install the web app from Safari (instructions below).</p>
 
-                <div class="platform-detect-card" id="install-platform-card">
-                    <div class="platform-icon-row">
-                        <div class="platform-option" id="install-android-opt">
-                            <i data-lucide="smartphone" style="width:24px;height:24px"></i>
-                            <span>Android</span>
-                            <span class="platform-tag">Google Play</span>
-                        </div>
-                        <div class="platform-divider"></div>
-                        <div class="platform-option" id="install-ios-opt">
-                            <i data-lucide="tablet" style="width:24px;height:24px"></i>
-                            <span>iOS</span>
-                            <span class="platform-tag coming-soon">TestFlight</span>
-                        </div>
-                    </div>
-                    <div class="detected-platform-label" id="install-detected-label">
-                        <i data-lucide="check-circle" style="width:14px;height:14px"></i>
-                        <span id="install-detected-text">Detecting your device…</span>
-                    </div>
-                </div>
-
+                <!-- Primary CTA: Google Play -->
                 <div class="signup-form" style="margin-top: 24px;">
-                    <div class="form-row" style="flex-direction: column;">
-                        <input type="email" id="install-email" placeholder="your@email.com" autocomplete="email"
-                            style="width: 100%;">
-                        <button class="btn btn-sage" id="install-signup-btn" onclick="submitEarlyAccess('install')"
-                            style="width: 100%; justify-content: center;">
-                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
-                            <span id="install-btn-text">Sign Up & Get the App</span>
-                        </button>
-                    </div>
-                    <div class="form-message" id="install-signup-message"></div>
+                    <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
+                       target="_blank"
+                       rel="noopener"
+                       id="install-signup-btn"
+                       class="btn btn-sage"
+                       style="width:100%; justify-content:center; text-decoration:none;">
+                        <i data-lucide="smartphone" style="width:18px;height:18px"></i>
+                        <span id="install-btn-text">Install on Google Play</span>
+                    </a>
+                    <p id="install-signup-message" style="margin-top:12px; color:var(--fg-muted); font-size:13px; text-align:center;">
+                        Tap the button — Google Play handles the install.
+                    </p>
                 </div>
 
-                <!-- Direct Play Store button for Android users -->
-                <div id="play-store-direct" class="play-store-direct" style="display:none;">
-                    <p style="color:var(--fg-muted); font-size:14px; margin-bottom:12px;">
-                        Already a tester? Install directly from Google Play:
+                <!-- iPhone: PWA install instructions -->
+                <div class="ios-pwa-card" style="margin-top:24px; padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid var(--border);">
+                    <p style="font-weight:600; font-size:14px; margin-bottom:8px;">
+                        <i data-lucide="apple" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                        On iPhone? Install the web app
                     </p>
-                    <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby" target="_blank" rel="noopener" class="btn btn-play-store" style="text-decoration:none;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                        <span>Install from Google Play</span>
-                    </a>
+                    <ol style="color:var(--fg-muted); font-size:13px; padding-left:20px; margin:0; line-height:1.7;">
+                        <li>Open <a href="https://app.diasporanearby.com" style="color:var(--sage);">app.diasporanearby.com</a> in Safari</li>
+                        <li>Tap the <strong>Share</strong> button at the bottom</li>
+                        <li>Scroll and tap <strong>Add to Home Screen</strong></li>
+                        <li>Tap <strong>Add</strong> — the app appears on your home screen</li>
+                    </ol>
                 </div>
 
                 <!-- APK fallback for users who can’t use Play Store -->
@@ -1371,7 +1493,7 @@
                         <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
                         <li><a href="#decoupling">DSP vs $DIASPORA</a></li>
                         <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
-                        <li><a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                        <li><a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735"
                                 target="_blank" rel="noopener">Basescan <i data-lucide="external-link"
                                     style="width:10px;height:10px;display:inline;vertical-align:middle"></i></a></li>
                     </ul>
@@ -1396,13 +1518,11 @@
         </div>
     </footer>
 
-    <!-- Firebase JS SDK (for tester signup) -->
+    <!-- Firebase JS SDK (real-time Epoch progress only — tester signup removed) -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-        import { getFirestore, collection, addDoc, doc, onSnapshot, serverTimestamp }
+        import { getFirestore, doc, onSnapshot }
             from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-        import { getFunctions, httpsCallable }
-            from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
 
         // Firebase client config is intentionally public — security is enforced
         // via Firestore/Auth security rules, not API key secrecy.
@@ -1417,16 +1537,6 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-
-        // Cloud Functions
-        const funcs = getFunctions(app);
-
-        // Expose to global scope for onclick handlers
-        window._firestoreDb = db;
-        window._addDoc = addDoc;
-        window._collection = collection;
-        window._serverTimestamp = serverTimestamp;
-        window._addPlayStoreTester = httpsCallable(funcs, 'addPlayStoreTester');
 
         // ── Real-time Epoch Progress ──
         const GENESIS_MILESTONE = 1000000;

@@ -16,6 +16,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
 import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart'; // [NEW] Shared Providers
+import 'package:diaspora_nearby/features/chat/widgets/bilateral_flag_avatar.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 class GroupInfoScreen extends ConsumerStatefulWidget {
   final String chatId;
@@ -49,6 +51,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   String? _inviterId; // [NEW]
   bool _isMuted = false; // [NEW] Mute State
   bool _isFamilyGroup = false; // [NEW] Family Group Detection
+  bool _isChamber = false;
+  bool _isDdiDiscussion = false;
+  bool _isPlatformAdmin = false;
+  String? _homeCountryCode;
+  String? _hostCountryCode;
 
   // For Batch Editing
   final Set<String> _membersToRemove = {};
@@ -111,6 +118,12 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
           // Fetch Member Profiles
           // [MODIFIED] Always fetch members so invitees can see who is in the group
           var members = await profileRepo.getProfiles(chat.participants);
+          final currentProfile = await profileRepo.getUserProfile(
+            widget.currentUserId,
+          );
+          final isChamber = chat.isChamber;
+          final isDdiDiscussion = chat.isDdiDiscussion;
+          final isPlatformAdmin = currentProfile?.isAdmin == true;
 
           // Sort Members: Creator -> Admins -> Others
           members.sort((a, b) {
@@ -149,11 +162,19 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             _adminIds = chat.admins ?? [];
             _inviterId = foundInviterId; // [NEW]
             _isFamilyGroup = chat.metadata?['isFamilyGroup'] == true;
+            _isChamber = isChamber;
+            _isDdiDiscussion = isDdiDiscussion;
+            _isPlatformAdmin = isPlatformAdmin;
+            _homeCountryCode = chat.homeCountryCode;
+            _hostCountryCode = chat.hostCountryCode;
 
-            _isAdmin =
-                (chat.admins?.contains(widget.currentUserId) ?? false) ||
-                (chat.participants.isNotEmpty &&
-                    chat.participants.first == widget.currentUserId);
+            _isAdmin = isChamber
+                ? isPlatformAdmin
+                : isDdiDiscussion
+                ? false
+                : (chat.admins?.contains(widget.currentUserId) ?? false) ||
+                      (chat.participants.isNotEmpty &&
+                          chat.participants.first == widget.currentUserId);
 
             _isLoading = false;
           });
@@ -260,6 +281,66 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     }
   }
 
+  Future<void> _joinManagedPublicGroup() async {
+    setState(() => _isLoading = true);
+    try {
+      if (_isChamber) {
+        final profileRepo = ref.read(profileRepositoryProvider);
+        final myProfile = await profileRepo.getUserProfile(
+          widget.currentUserId,
+        );
+        if (myProfile != null) {
+          final isHomeDiaspora =
+              myProfile.homeCountryCode?.toUpperCase() ==
+              _homeCountryCode?.toUpperCase();
+          if (isHomeDiaspora && !_hasLivedInHostCountry(myProfile)) {
+            setState(() => _isLoading = false);
+            final hostCountry = _hostCountryCode != null
+                ? country_data.getCountryByCode(_hostCountryCode!)
+                : null;
+            final hostName = hostCountry?.name ?? 'Host Country';
+
+            if (mounted) {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(LucideIcons.shieldAlert, color: Colors.amber),
+                      SizedBox(width: 8),
+                      Text('Corridor Rep Gate'),
+                    ],
+                  ),
+                  content: Text(
+                    'To join the bilateral chamber as a representative of the home country diaspora, you must have lived in the host country ($hostName).\n\nPlease verify your past locations in your Profile settings.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => context.pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return;
+          }
+        }
+      }
+
+      await ref.read(chatRepositoryProvider).joinGroup(widget.chatId);
+      ref.invalidate(chatProvider(widget.chatId));
+      await _loadGroupData();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Unable to join group: $e')));
+      }
+    }
+  }
+
   Future<void> _rejectInvitation() async {
     setState(() => _isLoading = true);
     final pointsService = ref.read(pointsServiceProvider);
@@ -293,6 +374,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   // [NEW] Helper to split members
   bool _isMemberAdmin(ProfileData member) {
+    if (_isChamber || _isDdiDiscussion) return false;
     return _adminIds.contains(member.uid) ||
         (_members.isNotEmpty &&
             _members.first.uid == member.uid &&
@@ -305,6 +387,37 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _inviteSelectedMembers() async {
     if (_selectedContactIds.isEmpty) return;
+
+    if (_isChamber) {
+      final homeCountry = _homeCountryCode;
+      final hostCountry = _hostCountryCode;
+      final hostCountryModel = hostCountry != null
+          ? country_data.getCountryByCode(hostCountry)
+          : null;
+      final hostName = hostCountryModel?.name ?? 'Host Country';
+
+      if (homeCountry != null && hostCountry != null) {
+        for (final userId in _selectedContactIds) {
+          final contactProfile = _chatContacts.firstWhere(
+            (c) => c.uid == userId,
+          );
+          final isHomeDiaspora =
+              contactProfile.homeCountryCode?.toUpperCase() ==
+              homeCountry.toUpperCase();
+          if (isHomeDiaspora && !_hasLivedInHostCountry(contactProfile)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                content: Text(
+                  'Gate Enforced: ${contactProfile.fullName} has not lived in $hostName and cannot be invited as a rep.',
+                ),
+              ),
+            );
+            return;
+          }
+        }
+      }
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -344,33 +457,71 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     try {
       final repo = ref.read(chatRepositoryProvider);
 
-      // 1. Update Group Info if changed
-      String? finalImageUrl;
-      if (_newGroupImageFile != null) {
-        finalImageUrl = await repo.uploadGroupImage(
+      if (_isChamber) {
+        // Enforce representative gate:
+        // Any added member who is home diaspora MUST have lived in the host country!
+        final homeCountry = _homeCountryCode;
+        final hostCountry = _hostCountryCode;
+        final hostCountryModel = hostCountry != null
+            ? country_data.getCountryByCode(hostCountry)
+            : null;
+        final hostName = hostCountryModel?.name ?? 'Host Country';
+
+        if (homeCountry != null && hostCountry != null) {
+          for (final userId in _membersToAdd) {
+            final contactProfile = _chatContacts.firstWhere(
+              (c) => c.uid == userId,
+            );
+            final isHomeDiaspora =
+                contactProfile.homeCountryCode?.toUpperCase() ==
+                homeCountry.toUpperCase();
+            if (isHomeDiaspora && !_hasLivedInHostCountry(contactProfile)) {
+              setState(() => _isSaving = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  content: Text(
+                    'Gate Enforced: ${contactProfile.fullName} is from the $homeCountry diaspora but has not lived in $hostName. They cannot join as a representative.',
+                  ),
+                ),
+              );
+              return;
+            }
+          }
+        }
+
+        await repo.manageChamber(
           widget.chatId,
-          _newGroupImageFile!,
+          description: _descriptionController.text.trim(),
+          addMemberIds: _membersToAdd.toList(),
+          removeMemberIds: _membersToRemove.toList(),
         );
-      }
+      } else if (!_isDdiDiscussion) {
+        // 1. Update Group Info if changed
+        String? finalImageUrl;
+        if (_newGroupImageFile != null) {
+          finalImageUrl = await repo.uploadGroupImage(
+            widget.chatId,
+            _newGroupImageFile!,
+          );
+        }
 
-      // Always update group info when saving changes in edit mode
-      // optimizing by strictly checking against previous values is good but
-      // the previous logic was flawed. Simplest is to just update.
-      await repo.updateGroupInfo(
-        widget.chatId,
-        name: _nameController.text.trim(),
-        description: _descriptionController.text.trim(),
-        image: finalImageUrl,
-      );
+        await repo.updateGroupInfo(
+          widget.chatId,
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+          image: finalImageUrl,
+        );
 
-      // 2. Remove members
-      for (final userId in _membersToRemove) {
-        await repo.removeGroupMember(widget.chatId, userId);
-      }
+        // 2. Remove members
+        for (final userId in _membersToRemove) {
+          await repo.removeGroupMember(widget.chatId, userId);
+        }
 
-      // 3. Add members
-      for (final userId in _membersToAdd) {
-        await repo.addGroupMember(widget.chatId, userId);
+        // 3. Add members
+        for (final userId in _membersToAdd) {
+          await repo.addGroupMember(widget.chatId, userId);
+        }
       }
 
       if (mounted) {
@@ -413,6 +564,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   }
 
   Future<void> _promoteToAdmin(String userId) async {
+    if (_isChamber || _isDdiDiscussion) return;
     final repo = ref.read(chatRepositoryProvider);
     final success = await repo.promoteToAdmin(widget.chatId, userId);
     if (success) _loadGroupData();
@@ -536,61 +688,70 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                           // Image
                           Stack(
                             children: [
-                              Container(
-                                width: 96,
-                                height: 96,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: theme.colorScheme.primaryContainer,
-                                  image: _newGroupImageFile != null
-                                      ? DecorationImage(
-                                          image:
-                                              (kIsWeb
-                                                      ? NetworkImage(
-                                                          _newGroupImageFile!
-                                                              .path,
-                                                        )
-                                                      : FileImage(
-                                                          File(
+                              if (_isChamber)
+                                BilateralFlagAvatar(
+                                  homeCountryCode: _homeCountryCode,
+                                  hostCountryCode: _hostCountryCode,
+                                  size: 96,
+                                )
+                              else
+                                Container(
+                                  width: 96,
+                                  height: 96,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: theme.colorScheme.primaryContainer,
+                                    image: _newGroupImageFile != null
+                                        ? DecorationImage(
+                                            image:
+                                                (kIsWeb
+                                                        ? NetworkImage(
                                                             _newGroupImageFile!
                                                                 .path,
-                                                          ),
-                                                        ))
-                                                  as ImageProvider,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : _currentGroupImage != null
-                                      ? DecorationImage(
-                                          image: CachedNetworkImageProvider(
-                                            _currentGroupImage!,
-                                          ),
-                                          fit: BoxFit.cover,
+                                                          )
+                                                        : FileImage(
+                                                            File(
+                                                              _newGroupImageFile!
+                                                                  .path,
+                                                            ),
+                                                          ))
+                                                    as ImageProvider,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : _currentGroupImage != null
+                                        ? DecorationImage(
+                                            image: CachedNetworkImageProvider(
+                                              _currentGroupImage!,
+                                            ),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child:
+                                      (_newGroupImageFile == null &&
+                                          _currentGroupImage == null)
+                                      ? Center(
+                                          child: _isFamilyGroup
+                                              ? Icon(
+                                                  LucideIcons.heartHandshake,
+                                                  color: Colors.blue.shade600,
+                                                  size: 42,
+                                                )
+                                              : Text(
+                                                  _nameController.text.isEmpty
+                                                      ? '?'
+                                                      : _nameController.text[0]
+                                                            .toUpperCase(),
+                                                  style: theme
+                                                      .textTheme
+                                                      .displayMedium,
+                                                ),
                                         )
                                       : null,
                                 ),
-                                child:
-                                    (_newGroupImageFile == null &&
-                                        _currentGroupImage == null)
-                                    ? Center(
-                                        child: _isFamilyGroup
-                                            ? Icon(
-                                                LucideIcons.heartHandshake,
-                                                color: Colors.blue.shade600,
-                                                size: 42,
-                                              )
-                                            : Text(
-                                                _nameController.text.isEmpty
-                                                    ? '?'
-                                                    : _nameController.text[0]
-                                                          .toUpperCase(),
-                                                style: theme
-                                                    .textTheme
-                                                    .displayMedium,
-                                              ),
-                                      )
-                                    : null,
-                              ),
-                              if (_isEditing)
+                              if (_isEditing &&
+                                  !_isChamber &&
+                                  !_isDdiDiscussion)
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
@@ -618,7 +779,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                           ),
                           const SizedBox(height: 16),
                           // Name
-                          if (_isEditing)
+                          if (_isEditing && !_isChamber && !_isDdiDiscussion)
                             SizedBox(
                               width: double.infinity,
                               child: Padding(
@@ -641,7 +802,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                             )
                           else
                             Text(
-                              widget.groupName,
+                              _nameController.text,
                               style: theme.textTheme.headlineSmall,
                               textAlign: TextAlign.center,
                             ),
@@ -662,6 +823,24 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                          if (_isChamber)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 10),
+                              child: Chip(
+                                avatar: Icon(LucideIcons.badgeCheck, size: 16),
+                                label: Text(
+                                  'Official platform-managed chamber',
+                                ),
+                              ),
+                            ),
+                          if (_isDdiDiscussion)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 10),
+                              child: Chip(
+                                avatar: Icon(LucideIcons.vote, size: 16),
+                                label: Text('Official DDI loan discussion'),
+                              ),
                             ),
 
                           // Invitation Banner Removed explicitly by user request
@@ -704,22 +883,38 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
                     const SizedBox(height: 32),
 
-                    // [NEW] Mute Notifications Switch
-                    SwitchListTile(
-                      value: _isMuted,
-                      onChanged: (value) async {
-                        setState(() => _isMuted = value);
-                        await ref
-                            .read(chatRepositoryProvider)
-                            .toggleMute(widget.chatId, value);
-                      },
-                      title: const Text('Mute Notifications'),
-                      secondary: Icon(
-                        _isMuted ? LucideIcons.bellOff : LucideIcons.bell,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    if (_isChamber) ...[
+                      _buildChamberGuide(theme),
+                      const SizedBox(height: 32),
+                    ],
+
+                    if (_isChamber || _isDdiDiscussion)
+                      ListTile(
+                        leading: Icon(
+                          LucideIcons.bellOff,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        title: const Text('Quiet by default'),
+                        subtitle: const Text(
+                          'Routine discussion messages are muted; mentions notify you.',
+                        ),
+                      )
+                    else
+                      SwitchListTile(
+                        value: _isMuted,
+                        onChanged: (value) async {
+                          setState(() => _isMuted = value);
+                          await ref
+                              .read(chatRepositoryProvider)
+                              .toggleMute(widget.chatId, value);
+                        },
+                        title: const Text('Mute Notifications'),
+                        secondary: Icon(
+                          _isMuted ? LucideIcons.bellOff : LucideIcons.bell,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        activeThumbColor: theme.colorScheme.primary,
                       ),
-                      activeThumbColor: theme.colorScheme.primary,
-                    ),
 
                     // Members Section (Always Show)
                     Align(
@@ -785,6 +980,20 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
                     // Invitation View
                     if (!isMember) {
+                      if (_isChamber || _isDdiDiscussion) {
+                        return SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _joinManagedPublicGroup,
+                            icon: const Icon(LucideIcons.landmark, size: 18),
+                            label: Text(
+                              _isChamber
+                                  ? 'Join Chamber'
+                                  : 'Join DDI Discussion',
+                            ),
+                          ),
+                        );
+                      }
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -852,6 +1061,10 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                       );
                     }
 
+                    if (_isChamber || _isDdiDiscussion) {
+                      return const SizedBox.shrink();
+                    }
+
                     // Member View (Leave Group)
                     return SizedBox(
                       width: double.infinity,
@@ -901,6 +1114,28 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     );
   }
 
+  bool _hasLivedInHostCountry(ProfileData member) {
+    if (_hostCountryCode == null) return false;
+
+    // Check current host country code
+    if (member.hostCountryCode?.toUpperCase() ==
+        _hostCountryCode!.toUpperCase()) {
+      return true;
+    }
+
+    // Check past locations ("Also lived in" variable)
+    if (member.pastLocations != null) {
+      for (final past in member.pastLocations!) {
+        if (past.location.countryCode?.toUpperCase() ==
+            _hostCountryCode!.toUpperCase()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   List<Widget> _buildMembersList(
     ThemeData theme,
     List<ProfileData> membersList,
@@ -924,8 +1159,114 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       ...membersList.map((member) {
         final isMe = member.uid == widget.currentUserId;
         final isMemberAdmin =
-            _adminIds.contains(member.uid) ||
-            (_members.indexOf(member) == 0 && _adminIds.isEmpty);
+            !_isChamber &&
+            !_isDdiDiscussion &&
+            (_adminIds.contains(member.uid) ||
+                (_members.indexOf(member) == 0 && _adminIds.isEmpty));
+
+        Widget? chamberRoleBadge;
+        if (_isChamber) {
+          final isHomeDiaspora =
+              member.homeCountryCode?.toUpperCase() ==
+              _homeCountryCode?.toUpperCase();
+          final isHostNative =
+              member.hostCountryCode?.toUpperCase() ==
+              _hostCountryCode?.toUpperCase();
+          final hasLived = _hasLivedInHostCountry(member);
+          final hostCountryModel = _hostCountryCode != null
+              ? country_data.getCountryByCode(_hostCountryCode!)
+              : null;
+          final hostName = hostCountryModel?.name ?? 'Host Country';
+
+          if (isHomeDiaspora) {
+            if (hasLived) {
+              chamberRoleBadge = Container(
+                margin: const EdgeInsets.only(left: 8, bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.checkCircle2,
+                      size: 10,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Verified Rep',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              chamberRoleBadge = Container(
+                margin: const EdgeInsets.only(left: 8, bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.amber.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.alertTriangle,
+                      size: 10,
+                      color: Colors.amber,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Ineligible Rep (Not lived in $hostName)',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.amber.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+          } else if (isHostNative) {
+            chamberRoleBadge = Container(
+              margin: const EdgeInsets.only(left: 8, bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                'Native B2B Member',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
+            );
+          }
+        }
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
@@ -934,7 +1275,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
               Expanded(
                 child: GestureDetector(
                   onLongPress: () {
-                    if (_isAdmin && !isMe && !_isEditing) {
+                    if (_isAdmin &&
+                        !_isChamber &&
+                        !_isDdiDiscussion &&
+                        !isMe &&
+                        !_isEditing) {
                       if (!isMemberAdmin) {
                         _promoteToAdmin(member.uid!);
                       }
@@ -970,6 +1315,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (isMemberAdmin) _buildAdminBadge(theme),
+                          ?chamberRoleBadge,
                           Builder(
                             builder: (context) {
                               double? distanceKm;
@@ -1031,7 +1377,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   List<Widget> _buildContactsList(ThemeData theme) {
     // Only show contacts if user is a member (not just invited)
     final isMember = _members.any((m) => m.uid == widget.currentUserId);
-    if (!isMember) return [];
+    if (_isDdiDiscussion) return [];
+    if (_isChamber && (!_isPlatformAdmin || !_isEditing)) return [];
+    if (!isMember && !(_isChamber && _isPlatformAdmin)) return [];
 
     if (_chatContacts.isEmpty) return [];
 
@@ -1050,6 +1398,110 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
         ),
       ),
       ..._chatContacts.map((contact) {
+        Widget? chamberRoleBadge;
+        if (_isChamber) {
+          final isHomeDiaspora =
+              contact.homeCountryCode?.toUpperCase() ==
+              _homeCountryCode?.toUpperCase();
+          final isHostNative =
+              contact.hostCountryCode?.toUpperCase() ==
+              _hostCountryCode?.toUpperCase();
+          final hasLived = _hasLivedInHostCountry(contact);
+          final hostCountryModel = _hostCountryCode != null
+              ? country_data.getCountryByCode(_hostCountryCode!)
+              : null;
+          final hostName = hostCountryModel?.name ?? 'Host Country';
+
+          if (isHomeDiaspora) {
+            if (hasLived) {
+              chamberRoleBadge = Container(
+                margin: const EdgeInsets.only(left: 8, bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.checkCircle2,
+                      size: 10,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Verified Rep',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              chamberRoleBadge = Container(
+                margin: const EdgeInsets.only(left: 8, bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.amber.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.alertTriangle,
+                      size: 10,
+                      color: Colors.amber,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Ineligible Rep (Not lived in $hostName)',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.amber.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+          } else if (isHostNative) {
+            chamberRoleBadge = Container(
+              margin: const EdgeInsets.only(left: 8, bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                'Native B2B Member',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
+            );
+          }
+        }
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
           child: Row(
@@ -1137,17 +1589,25 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                           );
                         }
 
-                        return UserCardView(
-                          user: contact,
-                          distanceKm: distanceKm,
-                          onNameTap: (_isEditing || _isSelectingContacts)
-                              ? null
-                              : () => context.push('/profile/${contact.uid}'),
-                          onChatTap: (_isEditing || _isSelectingContacts)
-                              ? null
-                              : () =>
-                                    context.push('/chat/direct/${contact.uid}'),
-                          isStatic: _isEditing || _isSelectingContacts,
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ?chamberRoleBadge,
+                            UserCardView(
+                              user: contact,
+                              distanceKm: distanceKm,
+                              onNameTap: (_isEditing || _isSelectingContacts)
+                                  ? null
+                                  : () =>
+                                        context.push('/profile/${contact.uid}'),
+                              onChatTap: (_isEditing || _isSelectingContacts)
+                                  ? null
+                                  : () => context.push(
+                                      '/chat/direct/${contact.uid}',
+                                    ),
+                              isStatic: _isEditing || _isSelectingContacts,
+                            ),
+                          ],
                         );
                       },
                     ),
@@ -1160,5 +1620,136 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
         );
       }),
     ];
+  }
+
+  Widget _buildChamberGuide(ThemeData theme) {
+    final homeCountry = _homeCountryCode != null
+        ? country_data.getCountryByCode(_homeCountryCode!)
+        : null;
+    final hostCountry = _hostCountryCode != null
+        ? country_data.getCountryByCode(_hostCountryCode!)
+        : null;
+
+    final homeName = homeCountry?.name ?? 'Diaspora Home';
+    final hostName = hostCountry?.name ?? 'Host Country';
+    final homeFlag = homeCountry?.flag ?? '🌍';
+    final hostFlag = hostCountry?.flag ?? '📍';
+
+    return Container(
+      decoration: AppTheme.cardDecoration(context),
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                LucideIcons.landmark,
+                color: theme.colorScheme.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Bilateral Chamber Guidelines',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'This official chamber governs bilateral trade and community collaboration between the home diaspora and host country communities.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1, thickness: 0.5),
+          const SizedBox(height: 16),
+
+          _buildGuideItem(
+            theme: theme,
+            icon: LucideIcons.globe,
+            title: 'Bilateral Corridor Link',
+            description:
+                'Connects the $homeFlag $homeName Diaspora Chamber directly with the local businesses/natives and Diaspora members of $hostFlag $hostName.',
+          ),
+          const SizedBox(height: 16),
+
+          _buildGuideItem(
+            theme: theme,
+            icon: LucideIcons.users,
+            title: 'Lived-Experience Representation',
+            description:
+                'The $homeName Diaspora Chamber houses dedicated, active representatives who have physically lived in $hostName to ensure first-hand understanding of both business cultures.',
+          ),
+          const SizedBox(height: 16),
+
+          _buildGuideItem(
+            theme: theme,
+            icon: LucideIcons.briefcase,
+            title: 'Native & B2B Host Access',
+            description:
+                'Native individuals, local businesses, and corporate entities in $hostName have full, unrestricted access to register and participate in the $homeName bilateral chamber for direct trading, partnership, and cross-border commerce.',
+          ),
+          const SizedBox(height: 16),
+
+          _buildGuideItem(
+            theme: theme,
+            icon: LucideIcons.shieldCheck,
+            title: 'Unified Governance (Ex-Officio)',
+            description:
+                'Elected Community Leaders (President, Treasurer, Secretary) of the Diaspora in $hostName serve as the ex-officio leaders of this Chamber of Commerce to ensure complete alignment on decentralized identity (DDI/FDDI) verification and zero-fee escrows.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideItem({
+    required ThemeData theme,
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 16, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

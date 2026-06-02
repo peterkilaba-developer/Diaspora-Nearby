@@ -213,7 +213,9 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     const double h = 1200;
 
     // Load the pre-processed transparent logo
-    final logoBytes = await rootBundle.load('assets/icons/logo-transparent.png');
+    final logoBytes = await rootBundle.load(
+      'assets/icons/logo-transparent.png',
+    );
     final logoCodec = await ui.instantiateImageCodec(
       logoBytes.buffer.asUint8List(),
       targetWidth: 170,
@@ -237,18 +239,21 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
       ..shader = ui.Gradient.linear(
         const Offset(0, 0),
         const Offset(0, h),
-        [const Color(0xFF0F1714), const Color(0xFF0A0A0A), const Color(0xFF0A0A0A)],
+        [
+          const Color(0xFF0F1714),
+          const Color(0xFF0A0A0A),
+          const Color(0xFF0A0A0A),
+        ],
         [0.0, 0.25, 1.0],
       );
     canvas.drawRect(const Rect.fromLTWH(0, 0, w, h), bgPaint);
 
     // ── Subtle glow behind logo
     final glowPaint = Paint()
-      ..shader = ui.Gradient.radial(
-        const Offset(w / 2, 175),
-        280,
-        [const Color(0xFF6B9B7A).withValues(alpha: 0.12), const Color(0xFF6B9B7A).withValues(alpha: 0.0)],
-      );
+      ..shader = ui.Gradient.radial(const Offset(w / 2, 175), 280, [
+        const Color(0xFF6B9B7A).withValues(alpha: 0.12),
+        const Color(0xFF6B9B7A).withValues(alpha: 0.0),
+      ]);
     canvas.drawCircle(const Offset(w / 2, 175), 280, glowPaint);
 
     // ── Logo circle background
@@ -272,15 +277,27 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     );
 
     // ── Title: "Share & Earn Together"
-    _drawText(canvas, 'Share & Earn Together', w / 2, 350,
-        fontSize: 46, color: const Color(0xFFF5F5F5), fontWeight: FontWeight.bold, width: w - 80);
+    _drawText(
+      canvas,
+      'Share & Earn Together',
+      w / 2,
+      350,
+      fontSize: 46,
+      color: const Color(0xFFF5F5F5),
+      fontWeight: FontWeight.bold,
+      width: w - 80,
+    );
 
     // ── Subtitle (multi-line)
     _drawText(
       canvas,
       'Invite your family and friends—whether\nback home or abroad—to connect on\nDiaspora Nearby. Every person you bring\nearns you both crypto tokens!',
-      w / 2, 400,
-      fontSize: 24, color: const Color(0xFF6B9B7A), fontWeight: FontWeight.w600, width: w - 100,
+      w / 2,
+      400,
+      fontSize: 24,
+      color: const Color(0xFF6B9B7A),
+      fontWeight: FontWeight.w600,
+      width: w - 100,
     );
 
     // ── Progress card
@@ -290,15 +307,36 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
       const Rect.fromLTWH(cardMargin, 520, w - cardMargin * 2, 145),
       const Radius.circular(cardRadius),
     );
-    canvas.drawRRect(progressCardRect, Paint()..color = const Color(0xFF121212));
+    canvas.drawRRect(
+      progressCardRect,
+      Paint()..color = const Color(0xFF121212),
+    );
 
     // Progress header
-    _drawText(canvas, 'Global TGE Progress', cardMargin + 24, 555,
-        fontSize: 21, color: const Color(0xFFF5F5F5), fontWeight: FontWeight.bold,
-        width: 400, textAlign: TextAlign.left, anchorCenter: false);
-    _drawText(canvas, '$percent%', w - cardMargin - 24, 555,
-        fontSize: 21, color: const Color(0xFF6B9B7A), fontWeight: FontWeight.bold,
-        width: 120, textAlign: TextAlign.right, anchorCenter: false);
+    _drawText(
+      canvas,
+      'Global TGE Progress',
+      cardMargin + 24,
+      555,
+      fontSize: 21,
+      color: const Color(0xFFF5F5F5),
+      fontWeight: FontWeight.bold,
+      width: 400,
+      textAlign: TextAlign.left,
+      anchorCenter: false,
+    );
+    _drawText(
+      canvas,
+      '$percent%',
+      w - cardMargin - 24,
+      555,
+      fontSize: 21,
+      color: const Color(0xFF6B9B7A),
+      fontWeight: FontWeight.bold,
+      width: 120,
+      textAlign: TextAlign.right,
+      anchorCenter: false,
+    );
 
     // Progress bar background
     final barY = 572.0;
@@ -306,10 +344,16 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
       Rect.fromLTWH(cardMargin + 24, barY, progressBarMaxW, 11),
       const Radius.circular(5),
     );
-    canvas.drawRRect(barRect, Paint()..color = Colors.grey.withValues(alpha: 0.1));
+    canvas.drawRRect(
+      barRect,
+      Paint()..color = Colors.grey.withValues(alpha: 0.1),
+    );
 
     // Progress bar fill
-    final fillW = (progressFraction / 100 * progressBarMaxW).clamp(11.0, progressBarMaxW);
+    final fillW = (progressFraction / 100 * progressBarMaxW).clamp(
+      11.0,
+      progressBarMaxW,
+    );
     final fillRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(cardMargin + 24, barY, fillW, 11),
       const Radius.circular(5),
@@ -317,10 +361,24 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     canvas.drawRRect(fillRect, Paint()..color = const Color(0xFF6B9B7A));
 
     // Progress description
-    _drawText(canvas, 'The Race to $targetLabel is $percent% complete!', w / 2, 612,
-        fontSize: 17, color: const Color(0xFF999999), width: w - 120);
-    _drawText(canvas, 'Pulse TGE events occur as we grow.', w / 2, 636,
-        fontSize: 17, color: const Color(0xFF999999), width: w - 120);
+    _drawText(
+      canvas,
+      'The Race to $targetLabel is $percent% complete!',
+      w / 2,
+      612,
+      fontSize: 17,
+      color: const Color(0xFF999999),
+      width: w - 120,
+    );
+    _drawText(
+      canvas,
+      'Pulse TGE events occur as we grow.',
+      w / 2,
+      636,
+      fontSize: 17,
+      color: const Color(0xFF999999),
+      width: w - 120,
+    );
 
     // ── Referral code card
     final codeCardRect = RRect.fromRectAndRadius(
@@ -329,12 +387,28 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     );
     canvas.drawRRect(codeCardRect, Paint()..color = const Color(0xFF121212));
 
-    _drawText(canvas, 'YOUR REFERRAL CODE', w / 2, 738,
-        fontSize: 17, color: const Color(0xFF999999), fontWeight: FontWeight.bold,
-        width: w - 120, letterSpacing: 2.5);
-    _drawText(canvas, referralCode, w / 2, 792,
-        fontSize: 40, color: const Color(0xFFF5F5F5), fontWeight: FontWeight.bold,
-        width: w - 120, letterSpacing: 4);
+    _drawText(
+      canvas,
+      'YOUR REFERRAL CODE',
+      w / 2,
+      738,
+      fontSize: 17,
+      color: const Color(0xFF999999),
+      fontWeight: FontWeight.bold,
+      width: w - 120,
+      letterSpacing: 2.5,
+    );
+    _drawText(
+      canvas,
+      referralCode,
+      w / 2,
+      792,
+      fontSize: 40,
+      color: const Color(0xFFF5F5F5),
+      fontWeight: FontWeight.bold,
+      width: w - 120,
+      letterSpacing: 4,
+    );
 
     // ── CTA button
     final ctaRect = RRect.fromRectAndRadius(
@@ -342,12 +416,27 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
       const Radius.circular(14),
     );
     canvas.drawRRect(ctaRect, Paint()..color = const Color(0xFF6B9B7A));
-    _drawText(canvas, 'diasporanearby.com/invite?code=$referralCode', w / 2, 910,
-        fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold, width: w - 200);
+    _drawText(
+      canvas,
+      'diasporanearby.com/invite?code=$referralCode',
+      w / 2,
+      910,
+      fontSize: 22,
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+      width: w - 200,
+    );
 
     // ── Bottom branding
-    _drawText(canvas, 'diasporanearby.com', w / 2, h - 55,
-        fontSize: 19, color: const Color(0xFF999999).withValues(alpha: 0.6), width: w - 100);
+    _drawText(
+      canvas,
+      'diasporanearby.com',
+      w / 2,
+      h - 55,
+      fontSize: 19,
+      color: const Color(0xFF999999).withValues(alpha: 0.6),
+      width: w - 100,
+    );
 
     // Bottom accent bar
     canvas.drawRect(
@@ -381,17 +470,16 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     bool anchorCenter = true,
     double letterSpacing = 0,
   }) {
-    final style = ui.ParagraphStyle(
-      textAlign: textAlign,
-      maxLines: 10,
-    );
+    final style = ui.ParagraphStyle(textAlign: textAlign, maxLines: 10);
     final builder = ui.ParagraphBuilder(style)
-      ..pushStyle(ui.TextStyle(
-        color: color,
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        letterSpacing: letterSpacing > 0 ? letterSpacing : null,
-      ))
+      ..pushStyle(
+        ui.TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          letterSpacing: letterSpacing > 0 ? letterSpacing : null,
+        ),
+      )
       ..addText(text);
     final paragraph = builder.build();
     paragraph.layout(ui.ParagraphConstraints(width: width));
@@ -410,10 +498,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
       final cardFile = await _buildShareCard(code);
 
       await SharePlus.instance.share(
-        ShareParams(
-          text: fullMessage,
-          files: [XFile(cardFile.path)],
-        ),
+        ShareParams(text: fullMessage, files: [XFile(cardFile.path)]),
       );
     } catch (e) {
       debugPrint('Error sharing with logo: $e');
@@ -660,7 +745,4 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
       ),
     );
   }
-
-
-
 }

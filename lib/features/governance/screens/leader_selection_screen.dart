@@ -414,10 +414,9 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               children: [
                 _buildEligibilityCriterion(
                   '100+ Days on App',
-                  isMet: profile?.createdAt != null &&
-                      DateTime.now()
-                              .difference(profile!.createdAt!)
-                              .inDays >=
+                  isMet:
+                      profile?.createdAt != null &&
+                      DateTime.now().difference(profile!.createdAt!).inDays >=
                           100,
                 ),
                 _buildEligibilityCriterion(

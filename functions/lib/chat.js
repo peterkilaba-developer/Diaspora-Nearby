@@ -71,6 +71,9 @@ exports.onDirectMessageCreated = functions.firestore
       chatId.startsWith('host_') ||
       chatId.startsWith('past_') ||
       chatId === 'global_community';
+    const isChamber = chatData.metadata && chatData.metadata.isChamber === true;
+    const isDdiDiscussion = chatData.metadata &&
+      chatData.metadata.isDdiDiscussion === true;
 
     const promises = recipients.map(async (recipientId) => {
       const mentions = Array.isArray(message.mentions) ? message.mentions : [];
@@ -102,8 +105,8 @@ exports.onDirectMessageCreated = functions.firestore
       } else if (isManuallyMuted) {
         // [RESPECT] Manual mute takes precedence if not mentioned
         shouldNotify = false;
-      } else if (isCommunity) {
-        // [DEFAULT] Communities are muted by default
+      } else if (isCommunity || isChamber || isDdiDiscussion) {
+        // [DEFAULT] Community-governed traffic is muted by default
         shouldNotify = false;
       } else {
         // [DEFAULT] Direct messages and Private Groups notify by default
@@ -111,7 +114,8 @@ exports.onDirectMessageCreated = functions.firestore
       }
 
       if (!shouldNotify) {
-        const reason = isManuallyMuted ? "manually muted" : "community default mute";
+        const reason = isManuallyMuted ?
+          "manually muted" : "community-managed default mute";
         console.log(`[Chat] Skipping notification for ${recipientId} in ${chatId} (${reason})`);
         return null;
       }

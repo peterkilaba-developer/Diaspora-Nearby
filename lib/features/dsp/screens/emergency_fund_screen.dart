@@ -126,14 +126,22 @@ class _OverviewTab extends StatelessWidget {
         // Concise support areas — icon + title only
         Text(
           'What We Cover',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildCoverageRow(context, LucideIcons.stethoscope, 'Medical Emergency'),
+        _buildCoverageRow(
+          context,
+          LucideIcons.stethoscope,
+          'Medical Emergency',
+        ),
         _buildCoverageRow(context, LucideIcons.gavel, 'Legal Aid'),
-        _buildCoverageRow(context, LucideIcons.heartHandshake, 'Bereavement Support'),
+        _buildCoverageRow(
+          context,
+          LucideIcons.heartHandshake,
+          'Bereavement Support',
+        ),
         _buildCoverageRow(context, LucideIcons.plane, 'Repatriation'),
 
         const SizedBox(height: 24),
@@ -141,14 +149,26 @@ class _OverviewTab extends StatelessWidget {
         // How it works — condensed to 3 short steps
         Text(
           'How It Works',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildStepRow(context, '1', 'Submit a Support Request via the Support tab'),
-        _buildStepRow(context, '2', 'Provide documentation to your Community Secretary'),
-        _buildStepRow(context, '3', 'Leadership reviews and authorizes disbursement'),
+        _buildStepRow(
+          context,
+          '1',
+          'Submit a Support Request via the Support tab',
+        ),
+        _buildStepRow(
+          context,
+          '2',
+          'Provide documentation to your Community Secretary',
+        ),
+        _buildStepRow(
+          context,
+          '3',
+          'Leadership reviews and authorizes disbursement',
+        ),
 
         const SizedBox(height: 24),
 
@@ -163,7 +183,11 @@ class _OverviewTab extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(LucideIcons.alertTriangle, size: 16, color: Colors.orange),
+              const Icon(
+                LucideIcons.alertTriangle,
+                size: 16,
+                color: Colors.orange,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -171,7 +195,9 @@ class _OverviewTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ),
@@ -298,7 +324,9 @@ class _OverviewTab extends StatelessWidget {
             label,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
               fontSize: 10,
             ),
           ),
@@ -318,7 +346,11 @@ class _OverviewTab extends StatelessWidget {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 18),
+            child: Icon(
+              icon,
+              color: Theme.of(context).colorScheme.primary,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           Text(
@@ -359,7 +391,9 @@ class _OverviewTab extends StatelessWidget {
               text,
               style: TextStyle(
                 fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.8),
                 height: 1.4,
               ),
             ),
@@ -686,249 +720,257 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
         Column(
           children: [
             // Before staking: stake details
-                if (!_hasStakedDSP)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: AppTheme.cardDecoration(context),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Stake details (inline, no popup)
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.coins,
-                          'Amount',
-                          '1,000 DSP',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.dollarSign,
-                          'Contribution',
-                          '\$100 annual contribution',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.refreshCw,
-                          'Refund',
-                          'DSP refunded after contribution',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.shieldCheck,
-                          'Purpose',
-                          'Secures your membership slot',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.award,
-                          'Benefit',
-                          '+10 PoCT when you contribute',
-                        ),
-                      ],
+            if (!_hasStakedDSP)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: AppTheme.cardDecoration(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Stake details (inline, no popup)
+                    _buildStakeInfoRow(
+                      theme,
+                      LucideIcons.coins,
+                      'Amount',
+                      '1,000 DSP',
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    _buildStakeInfoRow(
+                      theme,
+                      LucideIcons.dollarSign,
+                      'Contribution',
+                      '\$100 annual contribution',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStakeInfoRow(
+                      theme,
+                      LucideIcons.refreshCw,
+                      'Refund',
+                      'DSP refunded after contribution',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStakeInfoRow(
+                      theme,
+                      LucideIcons.shieldCheck,
+                      'Purpose',
+                      'Secures your membership slot',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStakeInfoRow(
+                      theme,
+                      LucideIcons.award,
+                      'Benefit',
+                      '+10 PoCT when you contribute',
+                    ),
+                  ],
+                ),
+              ),
 
-                // After staking: card form with button integrated
-                if (_hasStakedDSP)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: AppTheme.cardDecoration(context),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            // After staking: card form with button integrated
+            if (_hasStakedDSP)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: AppTheme.cardDecoration(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header with staked badge
+                    Row(
                       children: [
-                        // Header with staked badge
-                        Row(
-                          children: [
-                            Icon(
-                              LucideIcons.creditCard,
-                              size: 18,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Payment',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.checkCircle,
-                                    size: 12,
-                                    color: Colors.green.shade700,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '1,000 DSP Staked',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.green.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          LucideIcons.creditCard,
+                          size: 18,
+                          color: theme.colorScheme.primary,
                         ),
-                        const SizedBox(height: 16),
-
-                        // Loading state while fetching PaymentIntent
-                        if (_isLoadingIntent)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        else ...[
-                          // Compact Stripe CardField (no country dropdown)
-                          // CardField is not supported on web
-                          if (kIsWeb)
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(LucideIcons.smartphone, size: 18, color: theme.hintColor),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Card payment is available on the mobile app. Please use the Diaspora Nearby app to complete your membership.',
-                                      style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            CardField(
-                              enablePostalCode: false,
-                              cursorColor: const Color(0xFF7CAE7A),
-                              onCardChanged: (details) {
-                                final complete = details?.complete ?? false;
-                                debugPrint('▶ [CardField] complete=$complete');
-                                if (complete != _isCardComplete) {
-                                  setState(() => _isCardComplete = complete);
-                                }
-                              },
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: theme.colorScheme.surface,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.outline.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.outline.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFF7CAE7A),
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                          const SizedBox(height: 16),
-
-                          // Pay button integrated in form
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: (thresholdMet && !_isProcessingPayment)
-                                  ? _confirmPayment
-                                  : null,
-                              icon: _isProcessingPayment
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Icon(
-                                      thresholdMet
-                                          ? LucideIcons.creditCard
-                                          : LucideIcons.users,
-                                      size: 16,
-                                    ),
-                              label: Text(
-                                _isProcessingPayment
-                                    ? 'Processing Payment...'
-                                    : thresholdMet
-                                    ? 'Pay \$100 to Join Now'
-                                    : '${NumberFormat('#,###').format(_stakerCount)} / 10,000 Members Staked',
-                              ),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.all(16),
-                                backgroundColor: const Color(0xFF7CAE7A),
-                                disabledBackgroundColor: const Color(
-                                  0xFF7CAE7A,
-                                ).withValues(alpha: 0.4),
-                              ),
-                            ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Payment',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
                           ),
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                LucideIcons.lock,
+                                LucideIcons.checkCircle,
                                 size: 12,
-                                color: theme.hintColor,
+                                color: Colors.green.shade700,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Secure payment powered by Stripe',
+                                '1,000 DSP Staked',
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  color: theme.hintColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green.shade700,
                                 ),
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    // Loading state while fetching PaymentIntent
+                    if (_isLoadingIntent)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else ...[
+                      // Compact Stripe CardField (no country dropdown)
+                      // CardField is not supported on web
+                      if (kIsWeb)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: theme.colorScheme.outline.withValues(
+                                alpha: 0.3,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                LucideIcons.smartphone,
+                                size: 18,
+                                color: theme.hintColor,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Card payment is available on the mobile app. Please use the Diaspora Nearby app to complete your membership.',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: theme.hintColor,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        CardField(
+                          enablePostalCode: false,
+                          cursorColor: const Color(0xFF7CAE7A),
+                          onCardChanged: (details) {
+                            final complete = details?.complete ?? false;
+                            debugPrint('▶ [CardField] complete=$complete');
+                            if (complete != _isCardComplete) {
+                              setState(() => _isCardComplete = complete);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: theme.colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: theme.colorScheme.outline.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: theme.colorScheme.outline.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF7CAE7A),
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          style: TextStyle(color: theme.colorScheme.onSurface),
+                        ),
+                      const SizedBox(height: 16),
+
+                      // Pay button integrated in form
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: (thresholdMet && !_isProcessingPayment)
+                              ? _confirmPayment
+                              : null,
+                          icon: _isProcessingPayment
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Icon(
+                                  thresholdMet
+                                      ? LucideIcons.creditCard
+                                      : LucideIcons.users,
+                                  size: 16,
+                                ),
+                          label: Text(
+                            _isProcessingPayment
+                                ? 'Processing Payment...'
+                                : thresholdMet
+                                ? 'Pay \$100 to Join Now'
+                                : '${NumberFormat('#,###').format(_stakerCount)} / 10,000 Members Staked',
+                          ),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.all(16),
+                            backgroundColor: const Color(0xFF7CAE7A),
+                            disabledBackgroundColor: const Color(
+                              0xFF7CAE7A,
+                            ).withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.lock,
+                            size: 12,
+                            color: theme.hintColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Secure payment powered by Stripe',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
           ],
         ),
 
@@ -964,7 +1006,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       ],
     );
   }
-
 
   /// One-tap stake: deducts DSP and transitions to card form
   Future<void> _stakeAndTransition() async {
@@ -1031,17 +1072,21 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
     final Color statusColor = met == null
         ? theme.hintColor
         : met
-            ? const Color(0xFF7CAE7A)
-            : Colors.redAccent;
+        ? const Color(0xFF7CAE7A)
+        : Colors.redAccent;
     final IconData statusIcon = met == null
         ? LucideIcons.loader
         : met
-            ? LucideIcons.checkCircle
-            : LucideIcons.xCircle;
+        ? LucideIcons.checkCircle
+        : LucideIcons.xCircle;
 
     return Row(
       children: [
-        Icon(icon, size: 16, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+        Icon(
+          icon,
+          size: 16,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(

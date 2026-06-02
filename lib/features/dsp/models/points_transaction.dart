@@ -26,6 +26,11 @@ class PointsTransaction {
     final mergedMeta = <String, dynamic>{
       ...rawMeta,
       if (map['txHash'] != null) 'txHash': map['txHash'],
+      if (map['settlementMode'] != null &&
+          !rawMeta.containsKey('settlementMode'))
+        'settlementMode': map['settlementMode'],
+      if (map['testReference'] != null && !rawMeta.containsKey('testReference'))
+        'testReference': map['testReference'],
       if (map['toUserId'] != null && !rawMeta.containsKey('toUserId'))
         'toUserId': map['toUserId'],
       if (map['fromUserId'] != null && !rawMeta.containsKey('fromUserId'))
@@ -55,6 +60,13 @@ class PointsTransaction {
   }
 
   String get displayAction {
+    if (metadata?['settlementMode'] == 'simulated_test') {
+      if (action == 'token_transfer_sent') return '\$DIASPORA Sent (Test)';
+      if (action == 'token_transfer_received') {
+        return '\$DIASPORA Received (Test)';
+      }
+    }
+
     // 1. Check Metadata for human-readable overrides
     if (metadata != null) {
       if (metadata!.containsKey('description')) {

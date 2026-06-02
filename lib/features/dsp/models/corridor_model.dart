@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Corridor {
   final String id; // Format: {senderCountry}_{receiverCountry} (e.g., GB_TZ)
   final String senderCountry;
@@ -22,9 +24,7 @@ class Corridor {
       receiverCountry: json['receiverCountry'] as String? ?? '',
       cumulativeGdp: json['cumulativeGdp'] as int? ?? 0,
       transactionCount: json['transactionCount'] as int? ?? 0,
-      lastTransactionAt: json['lastTransactionAt'] != null
-          ? DateTime.parse(json['lastTransactionAt'] as String)
-          : DateTime.now(),
+      lastTransactionAt: _parseDate(json['lastTransactionAt']),
     );
   }
 
@@ -37,6 +37,15 @@ class Corridor {
       'transactionCount': transactionCount,
       'lastTransactionAt': lastTransactionAt.toIso8601String(),
     };
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    return DateTime.now();
   }
 
   Corridor copyWith({

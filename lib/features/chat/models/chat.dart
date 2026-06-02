@@ -327,6 +327,14 @@ class Chat {
   /// Check if this is a group chat
   bool get isGroup => type == 'group' || id.startsWith('group_');
 
+  /// Check if this is a platform-managed bilateral chamber group.
+  bool get isChamber =>
+      metadata?['isChamber'] == true || id.startsWith('chamber_');
+
+  /// Check if this is a platform-managed DDI public discussion group.
+  bool get isDdiDiscussion =>
+      metadata?['isDdiDiscussion'] == true || id.startsWith('ddi_discussion_');
+
   /// Check if this is an event chat
   bool get isEvent => type == 'event' || eventId != null;
 

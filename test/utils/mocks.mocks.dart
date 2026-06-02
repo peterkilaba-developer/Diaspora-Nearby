@@ -694,12 +694,13 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
     int? points,
     String? action, {
     Map<String, dynamic>? metadata,
+    bool? skipTreasury = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #addPoints,
               [userId, points, action],
-              {#metadata: metadata},
+              {#metadata: metadata, #skipTreasury: skipTreasury},
             ),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
@@ -816,7 +817,7 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
           as _i5.Future<String>);
 
   @override
-  _i5.Future<void> transferAsset({
+  _i5.Future<Map<String, dynamic>> transferAsset({
     required String? fromUserId,
     required String? toUserId,
     required int? amount,
@@ -829,10 +830,12 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
               #amount: amount,
               #assetType: assetType,
             }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i5.Future<Map<String, dynamic>>.value({}),
+            returnValueForMissingStub: _i5.Future<Map<String, dynamic>>.value(
+              {},
+            ),
           )
-          as _i5.Future<void>);
+          as _i5.Future<Map<String, dynamic>>);
 
   @override
   _i5.Future<String?> getReferralCode(String? userId) =>
@@ -1538,7 +1541,7 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
           as _i5.Future<String?>);
 
   @override
-  _i5.Future<void> transferAsset({
+  _i5.Future<Map<String, dynamic>> transferAsset({
     required String? fromUserId,
     required String? toUserId,
     required int? amount,
@@ -1551,10 +1554,12 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
               #amount: amount,
               #assetType: assetType,
             }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i5.Future<Map<String, dynamic>>.value({}),
+            returnValueForMissingStub: _i5.Future<Map<String, dynamic>>.value(
+              {},
+            ),
           )
-          as _i5.Future<void>);
+          as _i5.Future<Map<String, dynamic>>);
 
   @override
   _i5.Future<void> syncTreasuryBalances() =>

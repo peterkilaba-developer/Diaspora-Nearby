@@ -97,7 +97,13 @@ class PointsService {
     }
 
     _validateAmount(points, action);
-    await _repository.addPoints(userId, points, action, metadata: metadata, skipTreasury: skipTreasury);
+    await _repository.addPoints(
+      userId,
+      points,
+      action,
+      metadata: metadata,
+      skipTreasury: skipTreasury,
+    );
 
     // Streak increment removed from here to ensure it only counts for SHARING
   }
@@ -153,7 +159,9 @@ class PointsService {
 
   // [DEPRECATED v7] Community messages no longer award DSP. Gameable vanity action.
   Future<void> trackCommunityMessage(String userId, String communityId) async {
-    debugPrint('DSP: trackCommunityMessage is deprecated and no longer awards DSP');
+    debugPrint(
+      'DSP: trackCommunityMessage is deprecated and no longer awards DSP',
+    );
   }
 
   // [DEPRECATED v7] New DM no longer awards DSP. Not a high-impact action.
@@ -204,11 +212,7 @@ class PointsService {
   }) async {
     try {
       if (isAgree) {
-        await _addPoints(
-          voucherId,
-          100,
-          'vouch_consensus_agree',
-        );
+        await _addPoints(voucherId, 100, 'vouch_consensus_agree');
       } else {
         await _repository.deductPoints(
           voucherId,
@@ -223,19 +227,25 @@ class PointsService {
 
   // [DEPRECATED v7] External shares no longer award DSP. No proof of engagement.
   Future<bool> trackExternalShare(String userId, String contentType) async {
-    debugPrint('DSP: trackExternalShare is deprecated and no longer awards DSP');
+    debugPrint(
+      'DSP: trackExternalShare is deprecated and no longer awards DSP',
+    );
     return false;
   }
 
   // [DEPRECATED v7] Incoming shares no longer award DSP. Zero-effort action.
   Future<void> trackIncomingShare(String userId, String contentType) async {
-    debugPrint('DSP: trackIncomingShare is deprecated and no longer awards DSP');
+    debugPrint(
+      'DSP: trackIncomingShare is deprecated and no longer awards DSP',
+    );
   }
 
   // [DEPRECATED v7] Streak tracking and bonuses removed. Presence ≠ value.
   // Kept for backward compatibility but does nothing.
   Future<void> _updateStreak(String userId, UserPoints userPoints) async {
-    debugPrint('DSP: _updateStreak is deprecated — streaks no longer award DSP');
+    debugPrint(
+      'DSP: _updateStreak is deprecated — streaks no longer award DSP',
+    );
   }
 
   // Process referral: Returns referrerId for relationship connection (No immediate reward)
@@ -270,7 +280,9 @@ class PointsService {
       //    the referrer's document and get PERMISSION_DENIED, silently killing
       //    the entire referrer reward.
       try {
-        debugPrint('DSP: Step 1 - Awarding $referralBonus DSP to referrer $referrerId...');
+        debugPrint(
+          'DSP: Step 1 - Awarding $referralBonus DSP to referrer $referrerId...',
+        );
         await _addPoints(
           referrerId,
           referralBonus,
@@ -278,7 +290,9 @@ class PointsService {
           metadata: {'referredUserId': newUserId, 'code': normalizedCode},
           skipTreasury: true,
         );
-        debugPrint('DSP: Step 1 SUCCESS - Referrer $referrerId awarded $referralBonus DSP');
+        debugPrint(
+          'DSP: Step 1 SUCCESS - Referrer $referrerId awarded $referralBonus DSP',
+        );
       } catch (e, stack) {
         debugPrint('DSP: Step 1 FAILED - Error awarding referrer: $e');
         debugPrint('DSP: Stack trace: $stack');
@@ -289,7 +303,9 @@ class PointsService {
       //    [FIX] skipTreasury: true avoids redundant initializeUserPoints call
       //    and daily counter reset. Cloud Function handles treasury server-side.
       try {
-        debugPrint('DSP: Step 2 - Awarding $referralBonus DSP to referee $newUserId...');
+        debugPrint(
+          'DSP: Step 2 - Awarding $referralBonus DSP to referee $newUserId...',
+        );
         await _addPoints(
           newUserId,
           referralBonus,
@@ -297,7 +313,9 @@ class PointsService {
           metadata: {'referrerId': referrerId, 'code': normalizedCode},
           skipTreasury: true,
         );
-        debugPrint('DSP: Step 2 SUCCESS - Referee $newUserId awarded $referralBonus DSP');
+        debugPrint(
+          'DSP: Step 2 SUCCESS - Referee $newUserId awarded $referralBonus DSP',
+        );
       } catch (e, stack) {
         debugPrint('DSP: Step 2 FAILED - Error awarding referee: $e');
         debugPrint('DSP: Stack trace: $stack');
@@ -312,7 +330,10 @@ class PointsService {
 
       // [NEW] Record HTS Referral Activity for the Referrer
       try {
-        await _trustService.recordActivity(referrerId, HTSActivityType.referral);
+        await _trustService.recordActivity(
+          referrerId,
+          HTSActivityType.referral,
+        );
         debugPrint('DSP: Step 4 SUCCESS - HTS referral activity recorded');
       } catch (e) {
         debugPrint('DSP: Step 4 FAILED - recordActivity: $e');
@@ -331,13 +352,17 @@ class PointsService {
     String actionId, {
     int points = 10,
   }) async {
-    debugPrint('DSP: trackExplorationReward is deprecated and no longer awards DSP');
+    debugPrint(
+      'DSP: trackExplorationReward is deprecated and no longer awards DSP',
+    );
     return false;
   }
 
   // [DEPRECATED v7] Feedback rewards removed. Not in 10-action system.
   Future<bool> trackFeedbackReward(String userId) async {
-    debugPrint('DSP: trackFeedbackReward is deprecated and no longer awards DSP');
+    debugPrint(
+      'DSP: trackFeedbackReward is deprecated and no longer awards DSP',
+    );
     return false;
   }
 
@@ -396,7 +421,9 @@ class PointsService {
 
   // [DEPRECATED v8] Spam report DSP penalty removed → PoCT milestone in TrustService
   Future<void> reportSpam(String senderId) async {
-    debugPrint('DSP: Spam report penalty deprecated — PoCT handled in TrustService');
+    debugPrint(
+      'DSP: Spam report penalty deprecated — PoCT handled in TrustService',
+    );
     await _trustService.updateTrustForUser(senderId);
   }
 
@@ -435,7 +462,9 @@ class PointsService {
 
   // [DEPRECATED v8] Vouching bad actor penalty removed (handled by staking)
   Future<void> recordVouchingBadActorPenalty(String userId) async {
-    debugPrint('DSP: Vouching bad actor penalty removed — handled by staking (v8)');
+    debugPrint(
+      'DSP: Vouching bad actor penalty removed — handled by staking (v8)',
+    );
   }
 
   // --- [NEW] Travelers & Diaspora Rewards ---
@@ -459,7 +488,9 @@ class PointsService {
 
   // [DEPRECATED v8] Chat ad DSP penalty removed → PoCT milestone in TrustService
   Future<void> trackChatAdPenalty(String userId) async {
-    debugPrint('DSP: Chat ad penalty deprecated — PoCT handled in TrustService');
+    debugPrint(
+      'DSP: Chat ad penalty deprecated — PoCT handled in TrustService',
+    );
     await _trustService.updateTrustForUser(userId);
   }
 
@@ -610,15 +641,15 @@ class PointsService {
   Future<String?> getReferralCode(String userId) =>
       _repository.getReferralCode(userId);
 
-  // [SIMPLIFIED] Transfer asset with 1% DSP transfer fee applied to sender.
-  Future<void> transferAsset({
+  // Transfers are zero-fee; token responses include on-chain/test settlement mode.
+  Future<Map<String, dynamic>> transferAsset({
     required String fromUserId,
     required String toUserId,
     required int amount,
     required String assetType,
   }) async {
     // No transfer fee — execute the transfer directly
-    await _repository.transferAsset(
+    return _repository.transferAsset(
       fromUserId: fromUserId,
       toUserId: toUserId,
       amount: amount,

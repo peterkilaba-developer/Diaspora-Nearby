@@ -19,7 +19,9 @@ class SharingService {
 
     try {
       // Load logo from assets
-      final byteData = await rootBundle.load('assets/icons/logo-transparent-128.png');
+      final byteData = await rootBundle.load(
+        'assets/icons/logo-transparent-128.png',
+      );
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/logo.png');
       await file.writeAsBytes(

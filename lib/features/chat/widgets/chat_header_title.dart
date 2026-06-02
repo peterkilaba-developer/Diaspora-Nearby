@@ -5,13 +5,15 @@ import 'package:flutter/material.dart' as material show Text;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/config/env.dart';
 
-class ChatHeaderTitle extends StatefulWidget {
+class ChatHeaderTitle extends ConsumerStatefulWidget {
   final ProfileData? profile;
   final String fallbackTitle;
   final String? imageUrl;
@@ -34,10 +36,10 @@ class ChatHeaderTitle extends StatefulWidget {
   });
 
   @override
-  State<ChatHeaderTitle> createState() => _ChatHeaderTitleState();
+  ConsumerState<ChatHeaderTitle> createState() => _ChatHeaderTitleState();
 }
 
-class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
+class _ChatHeaderTitleState extends ConsumerState<ChatHeaderTitle> {
   String? _localTimeStr;
   String? _locationName;
   String? _countryFlag;
@@ -281,6 +283,9 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final currentUserProfile = ref.watch(userProfileProvider).value;
+    final bool currentUserHidesLocation =
+        currentUserProfile?.showCurrentLocationName == false;
 
     if (widget.profile == null &&
         widget.imageUrl == null &&
@@ -321,8 +326,10 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                if ((_localTimeStr != null ||
-                    (_locationName != null && _locationName!.isNotEmpty))) ...[
+                if (!currentUserHidesLocation &&
+                    (_localTimeStr != null ||
+                        (_locationName != null &&
+                            _locationName!.isNotEmpty))) ...[
                   const SizedBox(height: 2),
                   Row(
                     children: [

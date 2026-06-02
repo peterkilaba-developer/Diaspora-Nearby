@@ -181,10 +181,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       _vehicleTrim = listing.vehicleDetails!['trim'] as String?;
       _vehicleSeries = listing.vehicleDetails!['series'] as String?;
       _vehicleAbs = listing.vehicleDetails!['abs'] as String?;
-      _vehicleAirbagLocations = listing.vehicleDetails!['airbagLocations'] as String?;
+      _vehicleAirbagLocations =
+          listing.vehicleDetails!['airbagLocations'] as String?;
       _vehicleGvwr = listing.vehicleDetails!['gvwr'] as String?;
       _vehicleType = listing.vehicleDetails!['vehicleType'] as String?;
-      _vehicleElectrificationType = listing.vehicleDetails!['electrificationType'] as String?;
+      _vehicleElectrificationType =
+          listing.vehicleDetails!['electrificationType'] as String?;
       _vehicleBatteryKWh = listing.vehicleDetails!['batteryKWh'] as String?;
     }
 
@@ -898,9 +900,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         _buildSearchableDropdown(
           label: 'Make',
           value: _vehicleMake,
-          items: _vehicleMake != null &&
-              !VehicleData.brands.any(
-                  (b) => b.toLowerCase() == _vehicleMake!.toLowerCase())
+          items:
+              _vehicleMake != null &&
+                  !VehicleData.brands.any(
+                    (b) => b.toLowerCase() == _vehicleMake!.toLowerCase(),
+                  )
               ? [_vehicleMake!, ...VehicleData.brands]
               : VehicleData.brands,
           hint: 'Select brand',
@@ -1205,9 +1209,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
         ],
 
         // ── VIN-decoded extended info ──
-        if (_vehicleTrim != null || _vehicleSeries != null ||
-            _vehicleAbs != null || _vehicleAirbagLocations != null ||
-            _vehicleGvwr != null || _vehicleType != null ||
+        if (_vehicleTrim != null ||
+            _vehicleSeries != null ||
+            _vehicleAbs != null ||
+            _vehicleAirbagLocations != null ||
+            _vehicleGvwr != null ||
+            _vehicleType != null ||
             _vehicleElectrificationType != null ||
             _vehicleBatteryKWh != null ||
             _vehiclePlantCity != null) ...[
@@ -1226,35 +1233,57 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             runSpacing: 6,
             children: [
               if (_vehicleTrim != null)
-                _buildInfoChip(LucideIcons.star,
-                  'Trim: $_vehicleTrim', isDark),
+                _buildInfoChip(LucideIcons.star, 'Trim: $_vehicleTrim', isDark),
               if (_vehicleSeries != null)
-                _buildInfoChip(LucideIcons.layers,
-                  'Series: $_vehicleSeries', isDark),
+                _buildInfoChip(
+                  LucideIcons.layers,
+                  'Series: $_vehicleSeries',
+                  isDark,
+                ),
               if (_vehicleType != null)
-                _buildInfoChip(LucideIcons.car,
-                  '$_vehicleType', isDark),
+                _buildInfoChip(LucideIcons.car, '$_vehicleType', isDark),
               if (_vehicleAbs != null)
-                _buildInfoChip(LucideIcons.shieldCheck,
-                  'ABS: $_vehicleAbs', isDark),
+                _buildInfoChip(
+                  LucideIcons.shieldCheck,
+                  'ABS: $_vehicleAbs',
+                  isDark,
+                ),
               if (_vehicleAirbagLocations != null)
-                _buildInfoChip(LucideIcons.shieldAlert,
-                  'Airbags: $_vehicleAirbagLocations', isDark),
+                _buildInfoChip(
+                  LucideIcons.shieldAlert,
+                  'Airbags: $_vehicleAirbagLocations',
+                  isDark,
+                ),
               if (_vehicleGvwr != null)
-                _buildInfoChip(LucideIcons.scale,
-                  'GVWR: $_vehicleGvwr', isDark),
+                _buildInfoChip(
+                  LucideIcons.scale,
+                  'GVWR: $_vehicleGvwr',
+                  isDark,
+                ),
               if (_vehicleElectrificationType != null)
-                _buildInfoChip(LucideIcons.batteryCharging,
-                  '$_vehicleElectrificationType', isDark),
+                _buildInfoChip(
+                  LucideIcons.batteryCharging,
+                  '$_vehicleElectrificationType',
+                  isDark,
+                ),
               if (_vehicleBatteryKWh != null)
-                _buildInfoChip(LucideIcons.battery,
-                  '$_vehicleBatteryKWh kWh', isDark),
+                _buildInfoChip(
+                  LucideIcons.battery,
+                  '$_vehicleBatteryKWh kWh',
+                  isDark,
+                ),
               if (_vehiclePlantCity != null && _vehiclePlantCountry != null)
-                _buildInfoChip(LucideIcons.mapPin,
-                  'Made in $_vehiclePlantCity, $_vehiclePlantCountry', isDark)
+                _buildInfoChip(
+                  LucideIcons.mapPin,
+                  'Made in $_vehiclePlantCity, $_vehiclePlantCountry',
+                  isDark,
+                )
               else if (_vehiclePlantCity != null)
-                _buildInfoChip(LucideIcons.mapPin,
-                  'Made in $_vehiclePlantCity', isDark),
+                _buildInfoChip(
+                  LucideIcons.mapPin,
+                  'Made in $_vehiclePlantCity',
+                  isDark,
+                ),
             ],
           ),
         ],
@@ -1607,7 +1636,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               ),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.25)),
+                color: AppTheme.accent.withValues(alpha: 0.25),
+              ),
             ),
             child: Row(
               children: [
@@ -1617,29 +1647,38 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     color: AppTheme.accent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(LucideIcons.focus, size: 20,
-                    color: AppTheme.accent),
+                  child: const Icon(
+                    LucideIcons.focus,
+                    size: 20,
+                    color: AppTheme.accent,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Scan VIN Number', style: GoogleFonts.outfit(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: AppTheme.accent,
-                      )),
+                      Text(
+                        'Scan VIN Number',
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.accent,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         'Scan barcode on door panel or photo of paperwork',
-                        style: TextStyle(fontSize: 11,
-                          color: theme.hintColor),
+                        style: TextStyle(fontSize: 11, color: theme.hintColor),
                       ),
                     ],
                   ),
                 ),
-                Icon(LucideIcons.chevronRight, size: 18,
-                  color: AppTheme.accent.withValues(alpha: 0.6)),
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 18,
+                  color: AppTheme.accent.withValues(alpha: 0.6),
+                ),
               ],
             ),
           ),
@@ -1853,10 +1892,12 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
 
     _vehicleVinController.text = result.vin;
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('VIN captured via ${result.source}: ${result.vin}'),
-      backgroundColor: AppTheme.accent,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('VIN captured via ${result.source}: ${result.vin}'),
+        backgroundColor: AppTheme.accent,
+      ),
+    );
 
     // Auto-trigger lookup
     _lookupVin();

@@ -184,7 +184,7 @@ class ChatMessagingService {
         'updatedAt': now,
       };
 
-      if (targetParticipants.isNotEmpty) {
+      if (targetParticipants.isNotEmpty && !chatId.startsWith('chamber_')) {
         chatDocUpdate['participants'] = targetParticipants;
       }
 
@@ -806,11 +806,7 @@ class ChatMessagingService {
       'senderHomeCountryCode': homeCountryCode,
       'content': messageContent,
       'type': 'location',
-      'location': {
-        'lat': latitude,
-        'lng': longitude,
-        'address': address,
-      },
+      'location': {'lat': latitude, 'lng': longitude, 'address': address},
       'timestamp': now,
       'status': 'sent',
     };

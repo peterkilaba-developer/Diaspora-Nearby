@@ -46,7 +46,10 @@ class PeerListingRepository {
   Future<List<PeerListing>> getMyListings(String uid) async {
     try {
       // Only filter by ownerId — sort client-side to avoid composite index
-      final query = await _listings.where('ownerId', isEqualTo: uid).limit(100).get();
+      final query = await _listings
+          .where('ownerId', isEqualTo: uid)
+          .limit(100)
+          .get();
       debugPrint(
         '[getMyListings] Found ${query.docs.length} listings for uid=$uid',
       );
@@ -236,7 +239,10 @@ class PeerListingRepository {
   /// Get bookings for a guest (my trips)
   Future<List<PeerBooking>> getGuestBookings(String uid) async {
     try {
-      final query = await _bookings.where('guestId', isEqualTo: uid).limit(100).get();
+      final query = await _bookings
+          .where('guestId', isEqualTo: uid)
+          .limit(100)
+          .get();
       final bookings = query.docs
           .map(
             (d) => PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id),
@@ -254,7 +260,10 @@ class PeerListingRepository {
   /// Get bookings for a host (incoming requests)
   Future<List<PeerBooking>> getHostBookings(String uid) async {
     try {
-      final query = await _bookings.where('hostId', isEqualTo: uid).limit(100).get();
+      final query = await _bookings
+          .where('hostId', isEqualTo: uid)
+          .limit(100)
+          .get();
       final bookings = query.docs
           .map(
             (d) => PeerBooking.fromJson(d.data() as Map<String, dynamic>, d.id),

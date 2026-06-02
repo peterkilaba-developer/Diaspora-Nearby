@@ -2,92 +2,20 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/core/widgets/app_install_card.dart';
 
-class EconomyHubScreen extends ConsumerStatefulWidget {
+class EconomyHubScreen extends ConsumerWidget {
   const EconomyHubScreen({super.key});
 
   @override
-  ConsumerState<EconomyHubScreen> createState() => _EconomyHubScreenState();
-}
-
-class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
-    with WidgetsBindingObserver {
-  bool _locationAlwaysGranted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _checkLocationAlwaysStatus();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Re-check when user returns from system settings
-    if (state == AppLifecycleState.resumed) {
-      _checkLocationAlwaysStatus();
-    }
-  }
-
-  Future<void> _checkLocationAlwaysStatus() async {
-    if (kIsWeb) {
-      if (mounted) setState(() => _locationAlwaysGranted = true);
-      return;
-    }
-    try {
-      final status = await Permission.locationAlways.status;
-      if (mounted) {
-        setState(() {
-          _locationAlwaysGranted = status.isGranted || status.isLimited;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error checking locationAlways: $e');
-      // Treat as granted if we can't check, to avoid confusion
-      if (mounted) setState(() => _locationAlwaysGranted = true);
-    }
-  }
-
-  Future<void> _requestLocationAlways() async {
-    if (kIsWeb) return;
-    try {
-      // Ensure foreground location is granted first
-      final fgStatus = await Permission.location.status;
-      if (!fgStatus.isGranted && !fgStatus.isLimited) {
-        await Permission.location.request();
-      }
-
-      final status = await Permission.locationAlways.request();
-      if (status.isPermanentlyDenied || status.isDenied) {
-        // On most Android versions, locationAlways requires going to Settings
-        await openAppSettings();
-      }
-      await _checkLocationAlwaysStatus();
-    } catch (e) {
-      debugPrint('Error requesting locationAlways: $e');
-      await openAppSettings();
-      await _checkLocationAlwaysStatus();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final profileAsync = ref.watch(userProfileProvider);
     final isAdmin = profileAsync.value?.isAdmin == true;
@@ -127,10 +55,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- PWA INSTALL + TESTER SIGNUP (web only) ---
-            if (kIsWeb) ...[
-              const AppInstallCard(),
-              const SizedBox(height: 16),
-            ],
+            if (kIsWeb) ...[const AppInstallCard(), const SizedBox(height: 16)],
 
             // ============================================
             // SECTION 1: SAFETY NET (Emergency Fund first)
@@ -197,32 +122,41 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                       onTap: () => context.push('/dsp/remittances'),
                       isComingSoon: true,
                     ),
-                   // DDI — Host Community Loans (Admin only)
-                   if (isAdmin)
-                     _buildRow(
-                       context,
-                       ref: ref,
-                       icon: LucideIcons.landmark,
-                       iconColor: AppTheme.accent,
-                       title: 'DDI Loans',
-                       subtitle: 'Host community business loans — funded by host treasury',
-                       explorationAction: ExplorationAction.economyDfdi,
-                       onTap: () => context.push('/dsp/dfdi'),
-                       isComingSoon: true,
-                     ),
-                   // DFDI — Home Country Large Projects (Admin only)
-                   if (isAdmin)
-                     _buildRow(
-                       context,
-                       ref: ref,
-                       icon: LucideIcons.trendingUp,
-                       iconColor: AppTheme.accent,
-                       title: 'DFDI Projects',
-                       subtitle: 'Home country direct investments — \$1M+ from home treasury',
-                       explorationAction: ExplorationAction.economyDfdi,
-                       onTap: () => context.push('/dsp/dfdi'),
-                       isComingSoon: true,
-                     ),
+                  // DDI - Host Community Loans are opened from community chat
+                  // so the application and vote are bound to that community.
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.landmark,
+                    iconColor: AppTheme.accent,
+                    title: 'DDI Loans',
+                    subtitle: 'Apply and vote through your host community chat',
+                    explorationAction: ExplorationAction.economyDfdi,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Open your host community chat menu to apply or vote on DDI loans.',
+                          ),
+                        ),
+                      );
+                      context.go('/chats');
+                    },
+                  ),
+                  // DFDI — Home Country Large Projects (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.trendingUp,
+                      iconColor: AppTheme.accent,
+                      title: 'DFDI Projects',
+                      subtitle:
+                          'Home country direct investments — \$1M+ from home treasury',
+                      explorationAction: ExplorationAction.economyDfdi,
+                      onTap: () => context.push('/dsp/dfdi'),
+                      isComingSoon: true,
+                    ),
                 ],
               ),
             ),
@@ -369,50 +303,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
               context,
               child: Column(
                 children: [
-                  // Notification toggle
-                  _buildToggleRow(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.bell,
-                    iconColor: Colors.purple,
-                    title: 'Push Notifications',
-                    subtitle: 'Receive updates & alerts',
-                    value: profile?.notificationsEnabled ?? false,
-                    onChanged: (val) async {
-                      final uid = profile?.uid;
-                      if (uid == null) return;
-                      if (val) {
-                        await ref
-                            .read(pushNotificationServiceProvider)
-                            .registerForUser(uid);
-                      } else {
-                        await ref
-                            .read(pushNotificationServiceProvider)
-                            .disableNotifications(uid);
-                      }
-                    },
-                  ),
-                  // Location Always toggle (native only)
-                  if (!kIsWeb)
-                    _buildToggleRow(
-                      context,
-                      ref: ref,
-                      icon: LucideIcons.mapPin,
-                      iconColor: Colors.blue,
-                      title: 'Location Always',
-                      subtitle: 'Allow background location updates',
-                      value: _locationAlwaysGranted,
-                      onChanged: (val) async {
-                        if (val) {
-                          await _requestLocationAlways();
-                        } else {
-                          // Can't revoke programmatically — send to settings
-                          await openAppSettings();
-                          // Re-check after returning from settings
-                          await _checkLocationAlwaysStatus();
-                        }
-                      },
-                    ),
                   // My Profile
                   _buildRow(
                     context,
@@ -477,10 +367,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
   }
 
   // ─── Section card container ───
-  Widget _buildSectionContainer(
-    BuildContext context, {
-    required Widget child,
-  }) {
+  Widget _buildSectionContainer(BuildContext context, {required Widget child}) {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
@@ -570,10 +457,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             if (isComingSoon)
               Container(
                 margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: theme.brightness == Brightness.dark
                       ? Colors.grey.shade800
@@ -599,70 +483,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  // ─── Toggle row (switch instead of chevron) ───
-  Widget _buildToggleRow(
-    BuildContext context, {
-    required WidgetRef ref,
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.sectionHorizontalPadding,
-        vertical: 10,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 15,
-                    color: theme.textTheme.bodyMedium?.color,
-                  ),
-                ),
-                if (subtitle.isNotEmpty)
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.textTheme.bodySmall?.color?.withValues(
-                        alpha: 0.7,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppTheme.accent,
-          ),
-        ],
       ),
     );
   }

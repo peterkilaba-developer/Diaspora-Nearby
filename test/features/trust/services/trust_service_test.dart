@@ -1,4 +1,3 @@
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
@@ -57,15 +56,17 @@ void main() {
 
     // The real PointsService calls getUserPoints via _addPoints when
     // milestone awards fire. Stub to return a valid UserPoints.
-    when(mockPointsRepo.getUserPoints(any)).thenAnswer((_) async => UserPoints(
-          userId: 'stub',
-          totalPoints: 0,
-          availablePoints: 0,
-          lastUpdated: DateTime.now(),
-          signupDate: DateTime.now(),
-          currentStreak: 0,
-          dailyMessageCount: 0,
-        ));
+    when(mockPointsRepo.getUserPoints(any)).thenAnswer(
+      (_) async => UserPoints(
+        userId: 'stub',
+        totalPoints: 0,
+        availablePoints: 0,
+        lastUpdated: DateTime.now(),
+        signupDate: DateTime.now(),
+        currentStreak: 0,
+        dailyMessageCount: 0,
+      ),
+    );
 
     trustService = container.read(trustServiceProvider);
   });
@@ -82,7 +83,13 @@ void main() {
         profileImage: 'url',
         bio: 'Bio',
         occupation: 'Dev',
-        education: [Education(degree: 'Degree', institution: 'Uni', graduationYear: '2020')],
+        education: [
+          Education(
+            degree: 'Degree',
+            institution: 'Uni',
+            graduationYear: '2020',
+          ),
+        ],
         yearsInHostCountry: '5',
         industry: ['Tech'],
         profession: ['Coder'],
@@ -92,18 +99,30 @@ void main() {
         servicesOffered: ['Coding'],
         lookingFor: ['Networking'],
         interests: ['Technology'],
-        homeLocation: const UserLocation(city: 'Home', country: 'Country', formattedAddress: 'Home Addr', placeId: 'home-id', countryCode: 'US'),
-        hostLocation: const UserLocation(city: 'Host', country: 'Country', formattedAddress: 'Host Addr', placeId: 'host-id', countryCode: 'US'),
+        homeLocation: const UserLocation(
+          city: 'Home',
+          country: 'Country',
+          formattedAddress: 'Home Addr',
+          placeId: 'home-id',
+          countryCode: 'US',
+        ),
+        hostLocation: const UserLocation(
+          city: 'Host',
+          country: 'Country',
+          formattedAddress: 'Host Addr',
+          placeId: 'host-id',
+          countryCode: 'US',
+        ),
         phone: '1234567890',
         createdAt: DateTime.now().subtract(const Duration(days: 200)),
       );
-      
+
       // 2. Mock Points
       final points = UserPoints(
-        userId: userId, 
-        totalPoints: 100, 
+        userId: userId,
+        totalPoints: 100,
         availablePoints: 50,
-        lastUpdated: DateTime.now(), 
+        lastUpdated: DateTime.now(),
         signupDate: DateTime.now(),
         currentStreak: 0,
         dailyMessageCount: 0,
@@ -111,36 +130,59 @@ void main() {
 
       // 3. Mock Repositories
       // Relationships: 10 Family members
-      final relationships = List.generate(10, (i) => Relationship(
-        id: 'family-$i',
-        type: 'Brother',
-        name: 'Fam $i',
-        createdAt: DateTime.now(),
-        status: 'active',
-      ));
-      when(mockRelRepo.getRelationships(userId)).thenAnswer((_) => Stream.value(relationships));
+      final relationships = List.generate(
+        10,
+        (i) => Relationship(
+          id: 'family-$i',
+          type: 'Brother',
+          name: 'Fam $i',
+          createdAt: DateTime.now(),
+          status: 'active',
+        ),
+      );
+      when(
+        mockRelRepo.getRelationships(userId),
+      ).thenAnswer((_) => Stream.value(relationships));
 
       // QR Exchanges: 10 Non-Family users
-      final qrIds = List.generate(10, (i) => 'qr-$i'); // Distinct from family-$i
-      when(mockTrustRepo.getQrExchangeUserIds(userId)).thenAnswer((_) async => qrIds);
+      final qrIds = List.generate(
+        10,
+        (i) => 'qr-$i',
+      ); // Distinct from family-$i
+      when(
+        mockTrustRepo.getQrExchangeUserIds(userId),
+      ).thenAnswer((_) async => qrIds);
 
       // Vouches (Ratings): 10 Non-Family/Non-QR users with score 100
-      final ratings = List.generate(10, (i) => {
-        'fromUserId': 'vouch-$i',
-        'toUserId': userId,
-        'score': 100.0,
-      });
-      when(mockTrustRepo.getDetailedTrustRatingsForUser(userId)).thenAnswer((_) async => ratings);
-      when(mockTrustRepo.getVouchesForUser(userId)).thenAnswer((_) async => []); // Regular vouches empty
-      when(mockTrustRepo.getTrustData(userId)).thenAnswer((_) async => null); // Old data null
-      
+      final ratings = List.generate(
+        10,
+        (i) => {'fromUserId': 'vouch-$i', 'toUserId': userId, 'score': 100.0},
+      );
+      when(
+        mockTrustRepo.getDetailedTrustRatingsForUser(userId),
+      ).thenAnswer((_) async => ratings);
+      when(
+        mockTrustRepo.getVouchesForUser(userId),
+      ).thenAnswer((_) async => []); // Regular vouches empty
+      when(
+        mockTrustRepo.getTrustData(userId),
+      ).thenAnswer((_) async => null); // Old data null
+
       // Mock Report counts etc
       // ... (Stubbing other repo calls to avoid null errors)
-      when(mockTrustRepo.getVouchesByVoucher(userId)).thenAnswer((_) async => []);
-      when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer((_) async => []);
-      
+      when(
+        mockTrustRepo.getVouchesByVoucher(userId),
+      ).thenAnswer((_) async => []);
+      when(
+        mockTrustRepo.getAllVerificationsForUser(userId),
+      ).thenAnswer((_) async => []);
+
       // 4. Act
-      await trustService.recalculateTrustScore(userId: userId, profile: profile, points: points);
+      await trustService.recalculateTrustScore(
+        userId: userId,
+        profile: profile,
+        points: points,
+      );
 
       // 5. Assert
       // Verify saveTrustData was called with isCouncilEligible = true
@@ -152,44 +194,59 @@ void main() {
       expect(savedData.uniqueVouchCount, 10);
       expect(savedData.isCouncilEligible, true);
     });
-    
+
     test('fails eligibility if one condition not met', () async {
-       final userId = 'user-2';
-        // Profile Incomplete
+      final userId = 'user-2';
+      // Profile Incomplete
       final profile = ProfileData(
-          uid: userId, 
-          firstName: 'Incomplete', 
-          lastName: 'User',
-          phone: '1234567890',
-          profileImage: 'url', // Added to satisfy required parameter, but incomplete fields below imply tests still valid for other missing fields?
-          // Actually, failing eligibility requires ONE missing field or count.
-          // Let's make it incomplete by missing Bio etc.
-          homeLocation: const UserLocation(formattedAddress: 'A', placeId: 'B'),
-          hostLocation: const UserLocation(formattedAddress: 'A', placeId: 'B'),
-      ); 
+        uid: userId,
+        firstName: 'Incomplete',
+        lastName: 'User',
+        phone: '1234567890',
+        profileImage:
+            'url', // Added to satisfy required parameter, but incomplete fields below imply tests still valid for other missing fields?
+        // Actually, failing eligibility requires ONE missing field or count.
+        // Let's make it incomplete by missing Bio etc.
+        homeLocation: const UserLocation(formattedAddress: 'A', placeId: 'B'),
+        hostLocation: const UserLocation(formattedAddress: 'A', placeId: 'B'),
+      );
       final points = UserPoints(
-          userId: userId, 
-          totalPoints: 100, 
-          availablePoints: 50,
-          lastUpdated: DateTime.now(), 
-          signupDate: DateTime.now(),
-          currentStreak: 0,
-          dailyMessageCount: 0,
+        userId: userId,
+        totalPoints: 100,
+        availablePoints: 50,
+        lastUpdated: DateTime.now(),
+        signupDate: DateTime.now(),
+        currentStreak: 0,
+        dailyMessageCount: 0,
       );
 
-      when(mockRelRepo.getRelationships(userId)).thenAnswer((_) => Stream.value([]));
-      when(mockTrustRepo.getQrExchangeUserIds(userId)).thenAnswer((_) async => []);
-      when(mockTrustRepo.getDetailedTrustRatingsForUser(userId)).thenAnswer((_) async => []);
+      when(
+        mockRelRepo.getRelationships(userId),
+      ).thenAnswer((_) => Stream.value([]));
+      when(
+        mockTrustRepo.getQrExchangeUserIds(userId),
+      ).thenAnswer((_) async => []);
+      when(
+        mockTrustRepo.getDetailedTrustRatingsForUser(userId),
+      ).thenAnswer((_) async => []);
       when(mockTrustRepo.getVouchesForUser(userId)).thenAnswer((_) async => []);
       when(mockTrustRepo.getTrustData(userId)).thenAnswer((_) async => null);
-      when(mockTrustRepo.getVouchesByVoucher(userId)).thenAnswer((_) async => []);
-      when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer((_) async => []);
+      when(
+        mockTrustRepo.getVouchesByVoucher(userId),
+      ).thenAnswer((_) async => []);
+      when(
+        mockTrustRepo.getAllVerificationsForUser(userId),
+      ).thenAnswer((_) async => []);
 
-      await trustService.recalculateTrustScore(userId: userId, profile: profile, points: points);
+      await trustService.recalculateTrustScore(
+        userId: userId,
+        profile: profile,
+        points: points,
+      );
 
       final captured = verify(mockTrustRepo.saveTrustData(captureAny)).captured;
       final savedData = captured.first as TrustData;
-      
+
       expect(savedData.isCouncilEligible, false);
     });
   });

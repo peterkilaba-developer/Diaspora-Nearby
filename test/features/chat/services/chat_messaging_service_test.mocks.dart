@@ -3470,7 +3470,7 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
           as _i5.Future<String?>);
 
   @override
-  _i5.Future<void> transferAsset({
+  _i5.Future<Map<String, dynamic>> transferAsset({
     required String? fromUserId,
     required String? toUserId,
     required int? amount,
@@ -3483,10 +3483,12 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
               #amount: amount,
               #assetType: assetType,
             }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i5.Future<Map<String, dynamic>>.value({}),
+            returnValueForMissingStub: _i5.Future<Map<String, dynamic>>.value(
+              {},
+            ),
           )
-          as _i5.Future<void>);
+          as _i5.Future<Map<String, dynamic>>);
 
   @override
   _i5.Future<void> syncTreasuryBalances() =>

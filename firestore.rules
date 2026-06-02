@@ -19,6 +19,25 @@ service cloud.firestore {
       return isAuthenticated() &&
         get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
     }
+    function isChamberChatId(chatId) {
+      return chatId.matches('^chamber_.*$');
+    }
+    function isDdiDiscussionChatId(chatId) {
+      return chatId.matches('^ddi_discussion_.*$');
+    }
+    function isPlatformManagedGroupChatId(chatId) {
+      return isChamberChatId(chatId) || isDdiDiscussionChatId(chatId);
+    }
+    function isCommunityMember(communityId) {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/communities/$(communityId))
+        && (
+          (get(/databases/$(database)/documents/communities/$(communityId)).data.members is list
+            && get(/databases/$(database)/documents/communities/$(communityId)).data.members.hasAny([request.auth.uid]))
+          || (get(/databases/$(database)/documents/communities/$(communityId)).data.memberIds is list
+            && get(/databases/$(database)/documents/communities/$(communityId)).data.memberIds.hasAny([request.auth.uid]))
+        );
+    }
     // Check if user is an admin of the organization (requires reading the org doc)
     function isOrgAdmin(orgId) {
       return isAuthenticated() && 
@@ -80,18 +99,24 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow read: if isAuthenticated();
       // Only participants can modify chat docs
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && !isPlatformManagedGroupChatId(chatId);
       // Allow existing participants/creator for any update,
       // OR any auth user for join-related updates (adding to participants/memberCount)
       allow update: if isAuthenticated() && (
-        resource.data.participants.hasAny([request.auth.uid])
-        || resource.data.createdBy == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['participants', 'memberCount', 'updatedAt', 'lastMessage', 'adminIds'])
+        (!isPlatformManagedGroupChatId(chatId) && (
+          resource.data.participants.hasAny([request.auth.uid])
+          || resource.data.createdBy == request.auth.uid
+          || request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['participants', 'memberCount', 'updatedAt', 'lastMessage', 'adminIds'])
+        ))
+        || (isPlatformManagedGroupChatId(chatId)
+          && resource.data.participants.hasAny([request.auth.uid])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['updatedAt', 'lastMessage']))
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && !isPlatformManagedGroupChatId(chatId);
 
-      // Messages subcollection — participants only
+      // Messages subcollection â€” participants only
       // [SECURITY] Only chat participants can read/write messages
       match /messages/{messageId} {
         allow read: if isChatParticipant(chatId);
@@ -116,27 +141,28 @@ service cloud.firestore {
     }
 
     // --- User Chats Subcollection (under users) ---
-    // [SECURITY] Owner has full read/delete access.
-    // Any authenticated user can create or update entries — this is required
-    // because sending a message updates ALL participants' userChats entries
-    // (lastMessage, unreadCount, updatedAt). Without this, the sender can't
-    // update the recipient's chat index.
+    // Sending a message updates all participants' userChats entries.
+    // Platform-managed indexes are created and removed only through callables.
     match /users/{userId}/userChats/{chatId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      allow create, update: if isAuthenticated();
-      allow delete: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && !isPlatformManagedGroupChatId(chatId);
+      allow update: if isAuthenticated() && (
+        !isPlatformManagedGroupChatId(chatId)
+        || get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([userId])
+      );
+      allow delete: if isAuthenticated() && isOwner(userId) && !isPlatformManagedGroupChatId(chatId);
     }
 
     // --- Discoverable Chats Collection ---
     match /discoverableChats/{chatId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() && !isPlatformManagedGroupChatId(chatId);
       // Allow memberCount updates from any auth user (when joining public groups)
-      allow update: if isAuthenticated() && (
+      allow update: if isAuthenticated() && !isPlatformManagedGroupChatId(chatId) && (
         isAdmin()
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
       );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && !isPlatformManagedGroupChatId(chatId);
     }
     
     // --- Communities Collection ---
@@ -181,39 +207,40 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if isAuthenticated();
       
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      
+      allow create: if isAuthenticated() && request.resource.data.creatorId == request.auth.uid;
+
       allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || 
+        resource.data.creatorId == request.auth.uid ||
         (resource.data.organizationId != null && isOrgAdmin(resource.data.organizationId))
       );
-      
+
       allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || isAdmin()
+        resource.data.creatorId == request.auth.uid || isAdmin()
       );
-      
+
        // Subcollections (attendees, etc.)
        // [SECURITY] Only event creator or users adding/removing themselves
        match /attendees/{attendeeId} {
           allow read: if isAuthenticated();
           allow create, delete: if isAuthenticated() && isOwner(attendeeId);
           allow update: if isAuthenticated() && (
-            isOwner(attendeeId) || resource.data.createdBy == request.auth.uid
+            isOwner(attendeeId) || resource.data.creatorId == request.auth.uid
           );
        }
        match /{subcollection}/{docId} {
           allow read: if isAuthenticated();
           allow write: if isAuthenticated() && (
             isOwner(docId)
-            || get(/databases/$(database)/documents/events/$(eventId)).data.createdBy == request.auth.uid
+            || get(/databases/$(database)/documents/events/$(eventId)).data.creatorId == request.auth.uid
           );
        }
     }
-    
+
     // --- Organizations Collection ---
     match /organizations/{orgId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
+
       allow update: if isOrgAdmin(orgId) || (
         isAuthenticated() && 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers'])
@@ -249,7 +276,7 @@ service cloud.firestore {
 
     // --- DSP Points System ---
     
-    // User Points — owner can update non-financial fields only
+    // User Points â€” owner can update non-financial fields only
     // [SECURITY] Financial balance fields (totalPoints, availablePoints, lifetimeEarnings)
     // MUST only be modified via Cloud Functions admin SDK to prevent manipulation
     match /user_points/{userId} {
@@ -264,7 +291,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Points Transactions — any auth user can create (penalties/rewards for other users)
+    // Points Transactions â€” any auth user can create (penalties/rewards for other users)
     // Ledger is immutable (no update/delete)
     match /points_transactions/{transactionId} {
       allow read: if isAuthenticated();
@@ -272,7 +299,7 @@ service cloud.firestore {
       allow update, delete: if false; // Immutable ledger
     }
 
-    // Referral Codes — anyone can read (to validate), owner creates
+    // Referral Codes â€” anyone can read (to validate), owner creates
     match /referral_codes/{code} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
@@ -332,19 +359,19 @@ service cloud.firestore {
       allow update: if isAuthenticated() && resource.data.toUserId == request.auth.uid;
     }
 
-    // Emergency Fund Stakers — users can read all (for count), write their own
+    // Emergency Fund Stakers â€” users can read all (for count), write their own
     match /emergency_fund_stakers/{userId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && isOwner(userId);
     }
 
-    // Trust Scores — users can read all, write their own (webhook uses admin SDK)
+    // Trust Scores â€” users can read all, write their own (webhook uses admin SDK)
     match /trust_scores/{userId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isOwner(userId);
     }
 
-    // Stripe Customers — users can read their own, writes via Cloud Functions
+    // Stripe Customers â€” users can read their own, writes via Cloud Functions
     match /stripe_customers/{userId} {
       allow read: if isAuthenticated() && isOwner(userId);
       allow write: if false; // Cloud Functions only
@@ -415,6 +442,27 @@ service cloud.firestore {
 
     match /interest_registrations/{registrationId} {
       allow read, write: if isAuthenticated() && registrationId.matches('^' + request.auth.uid + '_.*');
+    }
+
+    // --- Diaspora Direct Investment Loan Applications ---
+    match /ddi_loan_applications/{applicationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.applicantId == request.auth.uid
+        || isAdmin()
+        || isCommunityMember(resource.data.communityId)
+      );
+      // Applications are created through submitDdiLoanApplication so that
+      // admission checks execute before application records are written.
+      allow create, update, delete: if false;
+    }
+
+    match /ddi_loan_votes/{voteId} {
+      allow read: if isAuthenticated() && (
+        resource.data.voterId == request.auth.uid
+        || isAdmin()
+        || isCommunityMember(resource.data.communityId)
+      );
+      allow create, update, delete: if false;
     }
 
     // --- Governance ---
@@ -622,7 +670,7 @@ service cloud.firestore {
 
     // --- Landing Page Tester Signups (unauthenticated) ---
     // [SECURITY] Create-only, no read/update/delete from client.
-    // Field validation prevents abuse — only expected fields are allowed.
+    // Field validation prevents abuse â€” only expected fields are allowed.
     match /tester_signups/{signupId} {
       allow create: if request.resource.data.keys().hasOnly(
         ['email', 'platform', 'source', 'signup_type', 'timestamp']

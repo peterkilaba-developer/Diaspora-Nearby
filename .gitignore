@@ -64,6 +64,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/.gradle/
+/android/.gradle_home/
+/android/.cxx/
+/android/local.properties
 
 # Firebase
 google-services.json
@@ -107,6 +111,15 @@ blockchain/typechain-types/
 # Firebase deploy caches (regenerated on every deploy)
 .firebase/
 
+# Flutter generated plugin registrants (regenerated on every build per platform)
+windows/flutter/generated_plugin_registrant.cc
+windows/flutter/generated_plugin_registrant.h
+windows/flutter/generated_plugins.cmake
+linux/flutter/generated_plugin_registrant.cc
+linux/flutter/generated_plugin_registrant.h
+linux/flutter/generated_plugins.cmake
+macos/Flutter/GeneratedPluginRegistrant.swift
+
 # Stray logs / diff dumps that accumulate at repo root
 *.log
 *_log.txt
@@ -136,3 +149,4 @@ app_deploy/
 
 # APK files
 *.apk
+log.txt

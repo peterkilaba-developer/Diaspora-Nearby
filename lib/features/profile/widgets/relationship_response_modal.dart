@@ -56,7 +56,9 @@ class _RelationshipResponseModalState
               Center(
                 child: CircleAvatar(
                   radius: 32,
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer,
                   backgroundImage:
                       widget.request.fromUserPhoto != null &&
                           widget.request.fromUserPhoto!.isNotEmpty
@@ -72,7 +74,9 @@ class _RelationshipResponseModalState
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 24,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onPrimaryContainer,
                           ),
                         )
                       : null,

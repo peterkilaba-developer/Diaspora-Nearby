@@ -76,20 +76,34 @@ class ChatMoreMenuSheet extends ConsumerWidget {
   /// Also checks pending requests for family types
   bool _isExistingFamily() {
     const familyTypes = {
-      'wife', 'husband', 'daughter', 'son',
-      'mother', 'father', 'sister', 'brother',
-      'aunt', 'uncle', 'nephew', 'niece', 'cousin',
+      'wife',
+      'husband',
+      'daughter',
+      'son',
+      'mother',
+      'father',
+      'sister',
+      'brother',
+      'aunt',
+      'uncle',
+      'nephew',
+      'niece',
+      'cousin',
     };
     if (existingRelationship != null &&
         familyTypes.contains(existingRelationship!.type.toLowerCase())) {
       return true;
     }
     if (pendingSentRequest != null &&
-        familyTypes.contains(pendingSentRequest!.relationshipType.toLowerCase())) {
+        familyTypes.contains(
+          pendingSentRequest!.relationshipType.toLowerCase(),
+        )) {
       return true;
     }
     if (pendingIncomingRequest != null &&
-        familyTypes.contains(pendingIncomingRequest!.relationshipType.toLowerCase())) {
+        familyTypes.contains(
+          pendingIncomingRequest!.relationshipType.toLowerCase(),
+        )) {
       return true;
     }
     return false;
@@ -104,6 +118,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     final isGroup = chat.isGroup;
     final isCommunity = chat.isCommunity;
     final isEvent = chat.isEvent;
+    final isChamber = chat.isChamber;
+    final isDdiDiscussion = chat.isDdiDiscussion;
 
     final nameToUse = isDirect ? displayName.split(' ').first : displayName;
 
@@ -314,11 +330,12 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     subtitle: 'Register a business in this community',
                     onTap: onCreateCommunityOrg,
                   ),
-                  // Diaspora Direct Investments: for communities with treasuries (city, country, continent, global)
-                  if (community?.type == 'city' ||
-                      community?.type == 'country' ||
-                      community?.type == 'continent' ||
-                      community?.type == 'global')
+                  // Host-community business loans; treasury cascading is
+                  // handled after a valid application reaches review.
+                  if (community?.locationType == 'host' &&
+                      (community?.type == 'city' ||
+                          community?.type == 'country' ||
+                          community?.type == 'continent'))
                     AppBottomSheetItem(
                       icon: LucideIcons.landmark,
                       iconColor: Colors.orange,
@@ -382,7 +399,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     onTap: onReportUser,
                     isDestructive: true,
                   ),
-                ] else if (!isCommunity) ...[
+                ] else if (!isCommunity && !isChamber && !isDdiDiscussion) ...[
                   AppBottomSheetItem(
                     icon: LucideIcons.logOut,
                     iconColor: Colors.red.shade700,

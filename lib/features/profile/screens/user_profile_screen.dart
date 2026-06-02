@@ -213,15 +213,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     }
 
     try {
-      debugPrint('🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading)');
+      debugPrint(
+        '🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading)',
+      );
       final profile = await ref
           .read(profileRepositoryProvider)
           .getUserProfile(widget.userId);
-      debugPrint('🔍 [ProfileScreen] _refreshProfile result → '
-          'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
-          'profileImage="${profile?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
-          'homeCity="${profile?.homeLocation.city}", '
-          'hostCity="${profile?.hostLocation.city}"');
+      debugPrint(
+        '🔍 [ProfileScreen] _refreshProfile result → '
+        'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
+        'profileImage="${profile?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
+        'homeCity="${profile?.homeLocation.city}", '
+        'hostCity="${profile?.hostLocation.city}"',
+      );
       if (mounted) {
         setState(() {
           _profile = profile;
@@ -235,7 +239,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         // overwrite it with an error — the profile was just saved successfully
         // and only the background refresh failed (timeout / network).
         if (_profile != null && !showLoading) {
-          debugPrint('📋 [ProfileScreen] Background refresh failed but using existing profile data');
+          debugPrint(
+            '📋 [ProfileScreen] Background refresh failed but using existing profile data',
+          );
           setState(() => _isLoadingProfile = false);
         } else {
           setState(() {
@@ -254,7 +260,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (user == null || user.uid != widget.userId) return;
 
     try {
-      debugPrint('🔄 [Profile] Triggering background trust recalculation for ${user.uid}');
+      debugPrint(
+        '🔄 [Profile] Triggering background trust recalculation for ${user.uid}',
+      );
       await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
       debugPrint('✅ [Profile] Trust recalculation complete');
     } catch (e) {
@@ -422,7 +430,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
         // Update global provider safely
         ref.read(userProfileProvider.notifier).updateProfile(profileToSave);
-        _refreshProfile(showLoading: false); // [FIX] Don't show loading spinner or error on post-save refresh
+        _refreshProfile(
+          showLoading: false,
+        ); // [FIX] Don't show loading spinner or error on post-save refresh
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
@@ -491,7 +501,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                               final user = ref
                                   .read(authRepositoryProvider)
                                   .currentUser;
-                              String shareUrl = 'https://diasporanearby.com/invite';
+                              String shareUrl =
+                                  'https://diasporanearby.com/invite';
 
                               if (user != null) {
                                 try {

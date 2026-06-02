@@ -15,6 +15,7 @@ import 'package:diaspora_nearby/features/organization/repository/organization_re
 import 'package:diaspora_nearby/features/shared/models/location.dart'; // [NEW] Needed for UserLocationGeometry
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
+import 'package:diaspora_nearby/features/chat/widgets/bilateral_flag_avatar.dart';
 
 /// Provider for other user's profile in direct chats (or Organization details)
 /// Provider for chat partner profile (User or Organization)
@@ -240,7 +241,9 @@ class ChatCard extends ConsumerWidget {
           final isSent = lastMessage.senderId == currentUserId;
           final direction = isSent ? 'Sent' : 'Received';
           final assetLabel = isTokenTransfer ? r'$DIASPORA' : 'DSP';
-          final assetColor = isTokenTransfer ? AppTheme.tokenColor : AppTheme.dspColor;
+          final assetColor = isTokenTransfer
+              ? AppTheme.tokenColor
+              : AppTheme.dspColor;
 
           // Build a rich Row widget directly for transfers
           return Row(
@@ -483,6 +486,14 @@ class ChatCard extends ConsumerWidget {
         chat: chat,
         size: 56,
         context: context,
+      );
+    }
+
+    if (chat.isChamber) {
+      return BilateralFlagAvatar(
+        homeCountryCode: chat.homeCountryCode,
+        hostCountryCode: chat.hostCountryCode,
+        size: 56,
       );
     }
 

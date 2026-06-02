@@ -89,6 +89,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authControllerProvider);
+    final showGoogleFallback = ref.watch(googleFallbackVisibleProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -259,6 +260,40 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                       icon: const Icon(LucideIcons.refreshCw, size: 16),
                       label: const Text('Retry SMS detection'),
                     ),
+                  if (showGoogleFallback) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      "Didn't get the SMS? Sign in with Google and we'll link your number to your account.",
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: isLoading
+                            ? null
+                            : () => ref
+                                  .read(authControllerProvider.notifier)
+                                  .signInWithGoogleFallback(context),
+                        icon: const Icon(LucideIcons.chrome),
+                        label: const Text(
+                          'Sign in with Google',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),
