@@ -106,7 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             itemCount: users.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               return UserCardView(
                 user: users[index],
@@ -165,7 +165,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           itemCount: users.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             return UserCardView(
               user: users[index],

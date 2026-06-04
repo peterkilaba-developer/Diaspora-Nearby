@@ -60,7 +60,7 @@ void main() {
 
   // Current distribution model: 10 allocation units per user.
   //   - Founders: 10% (1 unit)
-  //   - Investors: 10% (1 unit)
+  //   - Liquidity: 10% (1 unit)
   //   - Burn: 10% (1 unit, FIXED — not based on empty slots)
   //   - Community Hierarchy: 7 units across 7 slots
   //     (Global, Home Continent, Home Country, Home City,

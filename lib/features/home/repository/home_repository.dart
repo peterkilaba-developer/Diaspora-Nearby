@@ -9,8 +9,7 @@ import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 
 final homeRepositoryProvider = Provider((ref) {
   final auth = ref.watch(authRepositoryProvider);
-  final chatRepo = ref.watch(chatRepositoryProvider);
-  return HomeRepository(FirebaseFirestore.instance, auth, chatRepo);
+  return HomeRepository(FirebaseFirestore.instance, auth);
 });
 
 // ─── [PERF] Cached DM exclusion list ───
@@ -96,9 +95,8 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
 class HomeRepository {
   final FirebaseFirestore _firestore;
   final AuthRepository _auth;
-  final ChatRepository _chatRepo;
 
-  HomeRepository(this._firestore, this._auth, this._chatRepo);
+  HomeRepository(this._firestore, this._auth);
 
   /// [PERF] Accepts pre-cached DM exclusion set to avoid re-fetching chats
   Future<List<ProfileData>> getNearbyUsers({

@@ -88,7 +88,6 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final profileAsync = ref.watch(userProfileProvider);
     final isAdmin = profileAsync.value?.isAdmin == true;
     final homeCountry = profileAsync.value?.homeCountry;
@@ -660,7 +659,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
-            activeColor: AppTheme.accent,
+            activeTrackColor: AppTheme.accent,
           ),
         ],
       ),

@@ -214,9 +214,9 @@ void main() {
       final treasuryStats = await fakeFirestore.collection('system_stats').doc('treasury').get();
       final data = treasuryStats.data()!;
 
-      // 10% each: founders, investors, burn
+      // 10% each: founders, liquidity, burn
       expect(data['foundersPoints'], greaterThan(0));
-      expect(data['investorsPoints'], greaterThan(0));
+      expect(data['liquidityPoints'], greaterThan(0));
       expect(data['burnedPoints'], greaterThan(0));
     });
   });

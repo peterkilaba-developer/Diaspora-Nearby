@@ -147,12 +147,24 @@ class PointsRepository {
   }
 
   /// Streams the total internal GDP from system stats.
+  ///
+  /// Reconciled source: this used to read `system_stats/treasury.totalInternalGdp`,
+  /// which was independently incremented by `transferDiaspora` and could
+  /// drift from the per-chamber rollups. We now derive it from the same
+  /// source as the per-corridor view — the sum of `gdpTotal` across all
+  /// chamber docs — so there's only one authoritative number.
   Stream<int> streamInternalGdp() {
     return _firestore
-        .collection('system_stats')
-        .doc('treasury')
+        .collection('organizations')
+        .where('kind', isEqualTo: 'corridor_chamber')
         .snapshots()
-        .map((doc) => doc.data()?['totalInternalGdp'] as int? ?? 0);
+        .map((snap) {
+          var total = 0;
+          for (final doc in snap.docs) {
+            total += (doc.data()['gdpTotal'] as num? ?? 0).toInt();
+          }
+          return total;
+        });
   }
 
   /// Streams the total fiat GDP in USD from system stats.
@@ -192,16 +204,39 @@ class PointsRepository {
   }
 
   /// Streams all bilateral corridors.
+  ///
+  /// Source of truth is now the chamber doc (`organizations` where
+  /// `kind == 'corridor_chamber'`). Each chamber projects into a
+  /// drop-in-compatible [Corridor] view so existing UIs keep working.
+  /// Bilateral (single doc per real corridor); the legacy directional
+  /// `corridors/{senderCC_receiverCC}` collection is no longer read.
   Stream<List<Corridor>> streamCorridors() {
     return _firestore
-        .collection('corridors')
-        .orderBy('cumulativeGdp', descending: true)
+        .collection('organizations')
+        .where('kind', isEqualTo: 'corridor_chamber')
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => Corridor.fromJson(doc.data()))
-              .toList(),
-        );
+        .map((snapshot) {
+          final corridors = snapshot.docs.map((doc) {
+            final d = doc.data();
+            final host = (d['hostCountryCode'] as String?) ?? '';
+            final home = (d['homeCountryCode'] as String?) ?? '';
+            return Corridor(
+              id: doc.id,
+              // Sender / receiver kept for shape compatibility — host
+              // represents the country the activity happens IN, home is
+              // the diaspora origin. The UI uses them only for flag icons.
+              senderCountry: host,
+              receiverCountry: home,
+              cumulativeGdp: (d['gdpTotal'] as num? ?? 0).toInt(),
+              transactionCount:
+                  (d['transactionCount'] as num? ?? 0).toInt(),
+              lastTransactionAt: Corridor.parseTimestamp(d['lastTransactionAt']),
+            );
+          }).toList();
+          // Sort client-side by GDP desc (Firestore index would also work).
+          corridors.sort((a, b) => b.cumulativeGdp.compareTo(a.cumulativeGdp));
+          return corridors;
+        });
   }
 
   // NOTE: Global supply tracking and treasury distribution are now handled

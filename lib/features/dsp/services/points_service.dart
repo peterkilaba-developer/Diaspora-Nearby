@@ -44,12 +44,6 @@ class PointsService {
   // Calculate Reward based on Activity + Global Epoch Multiplier
   // [UPDATED] Removed Individual Time-Decay (Deprecated in favor of Global Epochs)
   // --- Core Calculation Logic ---
-  // [UPDATED] Removed all Multipliers (Epoch & Trust).
-  // 1:1 Expansion Model: User Reward = Base Reward.
-  Future<int> _calculateReward(String userId, {required int baseReward}) async {
-    return baseReward;
-  }
-
   /// Checks if a new day has started and resets counters if needed.
   Future<void> _checkAndResetDaily(String userId, UserPoints userPoints) async {
     final now = DateTime.now();
@@ -230,12 +224,6 @@ class PointsService {
   // [DEPRECATED v7] Incoming shares no longer award DSP. Zero-effort action.
   Future<void> trackIncomingShare(String userId, String contentType) async {
     debugPrint('DSP: trackIncomingShare is deprecated and no longer awards DSP');
-  }
-
-  // [DEPRECATED v7] Streak tracking and bonuses removed. Presence ≠ value.
-  // Kept for backward compatibility but does nothing.
-  Future<void> _updateStreak(String userId, UserPoints userPoints) async {
-    debugPrint('DSP: _updateStreak is deprecated — streaks no longer award DSP');
   }
 
   // Process referral: Returns referrerId for relationship connection (No immediate reward)

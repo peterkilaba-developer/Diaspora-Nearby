@@ -75,7 +75,7 @@ Map<String, int> simulateDistribution({
 
   // System treasuries
   result['founders'] = unit;
-  result['investors'] = unit;
+  result['liquidity'] = unit;
   result['burn'] = unit;
 
   return result;
@@ -119,14 +119,14 @@ void main() {
 
       // System treasuries
       expect(result['founders'], 100);
-      expect(result['investors'], 100);
+      expect(result['liquidity'], 100);
       expect(result['burn'], 100);
 
       // Total verification
       final communityTotal = result.entries
-          .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
+          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal = result['founders']! + result['liquidity']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -171,14 +171,14 @@ void main() {
 
       // System treasuries
       expect(result['founders'], 100);
-      expect(result['investors'], 100);
+      expect(result['liquidity'], 100);
       expect(result['burn'], 100);
 
       // Total verification
       final communityTotal = result.entries
-          .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
+          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal = result['founders']! + result['liquidity']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -224,14 +224,14 @@ void main() {
 
       // System treasuries
       expect(result['founders'], 100);
-      expect(result['investors'], 100);
+      expect(result['liquidity'], 100);
       expect(result['burn'], 100);
 
       // Total verification
       final communityTotal = result.entries
-          .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
+          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal = result['founders']! + result['liquidity']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -277,14 +277,14 @@ void main() {
 
       // System treasuries
       expect(result['founders'], 100);
-      expect(result['investors'], 100);
+      expect(result['liquidity'], 100);
       expect(result['burn'], 100);
 
       // Total verification
       final communityTotal = result.entries
-          .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
+          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal = result['founders']! + result['investors']! + result['burn']!;
+      final systemTotal = result['founders']! + result['liquidity']! + result['burn']!;
 
       expect(communityTotal, 700, reason: 'Community pool must be 700');
       expect(systemTotal, 300, reason: 'System pool must be 300');
@@ -333,7 +333,7 @@ void main() {
 
       // Total still 700 community + 300 system = 1000
       final communityTotal = result.entries
-          .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
+          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
       expect(communityTotal, 700, reason: 'Community pool must still be 700');
       print('  Community Total: $communityTotal ✅');
@@ -366,7 +366,7 @@ void main() {
           reason: 'Global absorbs missing host city slot');
 
       final communityTotal = result.entries
-          .where((e) => !['founders', 'investors', 'burn'].contains(e.key))
+          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
           .fold<int>(0, (sum, e) => sum + e.value);
       expect(communityTotal, 700, reason: 'Community pool must still be 700');
       print('  Community Total: $communityTotal ✅');

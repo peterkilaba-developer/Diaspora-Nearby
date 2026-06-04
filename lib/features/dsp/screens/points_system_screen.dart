@@ -1060,34 +1060,6 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  Widget _buildStreakCard(BuildContext context, UserPoints points) {
-    return Container(
-      padding: AppTheme.cardPaddingEdgeInsets,
-      decoration: AppTheme.cardDecoration(context),
-      child: Row(
-        children: [
-          const Icon(LucideIcons.flame, color: Colors.deepOrange, size: 32),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${points.currentStreak} Day Streak',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-              const Text(
-                'Consistency unlocks higher rewards',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   // [NEW] Provider for global member count
   final globalMemberCountProvider = StreamProvider<int>((ref) {
@@ -2471,7 +2443,14 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     final systemTreasury = ref.watch(systemTreasuryProvider).value ?? {};
 
     final foundersPoints = systemTreasury['foundersPoints'] as int? ?? 0;
-    final investorsPoints = systemTreasury['investorsPoints'] as int? ?? 0;
+    // Post-2026-06-04: backend writes `liquidityPoints`. We sum both so this
+    // screen renders correctly during the transition window (old backend
+    // still writing `investorsPoints` → migration runs → new backend writes
+    // `liquidityPoints`). After the data migration zeros `investorsPoints`,
+    // the legacy term is 0 and only `liquidityPoints` contributes.
+    final liquidityPoints =
+        (systemTreasury['liquidityPoints'] as int? ?? 0) +
+        (systemTreasury['investorsPoints'] as int? ?? 0);
     final burnedPoints = systemTreasury['burnedPoints'] as int? ?? 0;
 
     // [FIX] Total Community Wealth is derived from Global Supply / 2 (1:1 Match Ratio)
@@ -2630,7 +2609,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             icon: LucideIcons.droplets,
             color: Colors.cyan,
             percentage: '10%',
-            points: investorsPoints,
+            points: liquidityPoints,
             efficiency: 1.0,
             epochLabel: 'DEX Liquidity & Market Access • TGE $globalTgeEvent/10',
           ),

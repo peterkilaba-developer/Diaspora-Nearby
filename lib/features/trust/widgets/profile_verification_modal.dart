@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/trust/widgets/verification_alert_modal.dart';
+import 'package:diaspora_nearby/features/trust/widgets/trust_slider_widget.dart';
 
 class ProfileVerificationModal extends ConsumerStatefulWidget {
   final ProfileData targetUser;
@@ -31,10 +32,6 @@ class _ProfileVerificationModalState
       {}; // Stores actual values for display
   Set<String> _verifiedFields = {}; // Fields already verified by community
   bool _isLoadingEligibility = true;
-
-  // Trust Slider — always visible (interaction is implicit via chat)
-  double _trustScore = 50.0;
-  bool _hasMovedSlider = false;
 
   @override
   void initState() {
@@ -257,131 +254,14 @@ class _ProfileVerificationModalState
                                 );
                               }),
 
-                          // Trust Slider — always visible
-                          ...[
-                            const SizedBox(height: 16),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                 Text(
-                                  'Trustworthiness Rating: ${_trustScore.toInt()}/100',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (_trustScore > 90)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Row(
-                                      children: [
-                                        Icon(LucideIcons.coins, size: 14, color: Colors.amber.shade700),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Full Trust requires staking 1,000 DSP',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.amber.shade700,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                Row(
-                                  children: [
-                                    Text('0', style: theme.textTheme.bodySmall),
-                                    Expanded(
-                                      child: Slider(
-                                        value: _trustScore,
-                                        min: 0,
-                                        max: 100,
-                                        divisions: 100,
-                                        activeColor: _getScoreColor(
-                                          _trustScore,
-                                        ),
-                                        onChanged: (val) {
-                                            setState(() {
-                                              _trustScore = val;
-                                              _hasMovedSlider = true;
-                                            });
-                                        },
-                                      ),
-                                    ),
-                                    Text(
-                                      '100',
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                  ],
-                                ),
-                                Center(
-                                  child: Text(
-                                    _getScoreLabel(_trustScore),
-                                    style: TextStyle(
-                                      color: _getScoreColor(_trustScore),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                // Inline staking info card for Full Trust
-                                if (_trustScore > 90) ...[
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.amber.shade700.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.amber.shade700.withValues(alpha: 0.3),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(LucideIcons.shieldCheck, size: 18, color: Colors.amber.shade700),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              'Full Trust Stake',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                                color: Colors.amber.shade700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          '1,000 DSP will be locked as your guarantee of this person\'s trustworthiness. If they act dishonestly, your staked DSP may be slashed.',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                                            height: 1.4,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Icon(LucideIcons.coins, size: 14, color: Colors.amber.shade700),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              'Stake: 1,000 DSP',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 13,
-                                                color: Colors.amber.shade700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
+                          // Trust Slider — shared widget so updates flow consistently everywhere
+                          const SizedBox(height: 16),
+                          if (widget.targetUser.uid != null)
+                            TrustSliderWidget(
+                              targetUserId: widget.targetUser.uid!,
+                              currentUserId: widget.currentUserId,
+                              displayName: widget.targetUser.firstName,
                             ),
-                          ],
                         ],
                       ),
                     ),
@@ -390,37 +270,22 @@ class _ProfileVerificationModalState
                     Builder(
                       builder: (context) {
                         final hasFields = _fieldVerifications.values.any((v) => v != null);
-                        final isReady = hasFields && _hasMovedSlider;
-                        final isFullTrust = _trustScore > 90;
-                        final String buttonLabel;
-                        if (!hasFields && !_hasMovedSlider) {
-                          buttonLabel = 'Verify a field & rate trust to submit';
-                        } else if (!hasFields) {
-                          buttonLabel = 'Verify at least one field';
-                        } else if (!_hasMovedSlider) {
-                          buttonLabel = 'Adjust trust slider to submit';
-                        } else if (isFullTrust) {
-                          buttonLabel = 'Submit & Stake 1,000 DSP';
-                        } else {
-                          buttonLabel = 'Submit Verification (+1,000 DSP)';
-                        }
+                        final buttonLabel = hasFields
+                            ? 'Submit Verification (+1,000 DSP)'
+                            : 'Verify at least one field';
                         return SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: isReady ? _submitVerification : null,
+                            onPressed: hasFields ? _submitVerification : null,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: isReady
-                                  ? (isFullTrust ? Colors.amber.shade700 : AppTheme.accent)
-                                  : null,
+                              backgroundColor: hasFields ? AppTheme.accent : null,
                               disabledBackgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.12),
                               disabledForegroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.38),
                             ),
                             child: Text(
                               buttonLabel,
-                              style: TextStyle(
-                                fontSize: isReady ? 14 : 12,
-                              ),
+                              style: TextStyle(fontSize: hasFields ? 14 : 12),
                             ),
                           ),
                         );
@@ -628,26 +493,7 @@ class _ProfileVerificationModalState
     });
   }
 
-  Color _getScoreColor(double score) {
-    if (score <= 1.0) return Colors.grey.shade300; // Neutral
-    if (score <= 20.0) return Colors.red; // Low Trust
-    if (score <= 40.0) return Colors.deepOrange; // Basic Trust
-    if (score <= 60.0) return Colors.amber; // Medium Trust
-    if (score <= 80.0) return Colors.lightGreen; // Standard Trust
-    return AppTheme.success; // High Trust (81-100)
-  }
-
-  String _getScoreLabel(double score) {
-    if (score <= 1.0) return "Neutral";
-    if (score <= 20.0) return "Low Trust";
-    if (score <= 40.0) return "Basic Trust";
-    if (score <= 60.0) return "Medium Trust";
-    if (score <= 80.0) return "Standard Trust";
-    return "High Trust";
-  }
-
   Future<void> _submitVerification() async {
-    // Validate inputs — BOTH field verify AND trust slider required
     bool hasVerifications = false;
     _fieldVerifications.forEach((k, v) {
       if (v != null) hasVerifications = true;
@@ -664,40 +510,17 @@ class _ProfileVerificationModalState
       return;
     }
 
-    if (!_hasMovedSlider) {
-      VerificationAlertModal.show(
-        context,
-        type: VerificationAlertType.error,
-        title: 'Trust Rating Required',
-        message:
-            'Please adjust the trust slider to rate this user\'s trustworthiness.',
-      );
-      return;
-    }
-
     try {
       final trustService = ref.read(trustServiceProvider);
       final pointsService = ref.read(pointsServiceProvider);
 
-      // Ensure target UID is present
       final toUserId = widget.targetUser.uid;
       if (toUserId == null) throw Exception("Target user ID is missing.");
 
-      // 1. Submit Rating (always — slider is always visible)
-      {
-        await trustService.rateUser(
-          fromUserId: widget.currentUserId,
-          toUserId: toUserId,
-          score: _trustScore,
-        );
-      }
-
-      // 2. Submit Field Verifications (Save only non-nulls)
       final Map<String, bool> submittedFields = {};
       _fieldVerifications.forEach((key, value) {
         if (value != null) {
           if (key.startsWith('Relative:')) {
-            // Map any relative verification to the main 'Relatives' key
             submittedFields['Relatives'] = value;
           } else {
             submittedFields[key] = value;
@@ -713,20 +536,17 @@ class _ProfileVerificationModalState
         );
       }
 
-      // 3. Award Points (1,000 DSP for Verifier)
       await pointsService.trackVerifierReward(widget.currentUserId);
 
       if (!mounted) return;
       Navigator.pop(context);
 
-      final isStaked = _trustScore > 90;
       VerificationAlertModal.show(
         context,
         type: VerificationAlertType.success,
-        title: isStaked ? 'Verification & Stake Complete' : 'Verification Success',
-        message: isStaked
-            ? 'Thank you! You have earned 1,000 DSP and staked 1,000 DSP as full trust guarantee.'
-            : 'Thank you for contributing to the community trust! You have earned 1,000 DSP.',
+        title: 'Verification Success',
+        message:
+            'Thank you for contributing to the community trust! You have earned 1,000 DSP.',
       );
     } catch (e) {
       if (!mounted) return;

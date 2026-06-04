@@ -205,11 +205,12 @@ async function performTGE(triggerSource) {
 
     // APoCT: Average PoCT of community members → decile efficiency.
     // Hard-fail on missing field — silent default to 0 burns the entire tribute.
-    // System treasuries (founders / investors / liquidity / burn) are exempt:
+    // System treasuries (founders / liquidity / burn) are exempt:
     // they're handled separately below with efficiency=100 per whitepaper.
-    // Note: both `investors` (legacy) and `liquidity` doc IDs exist in
-    // production from different setup eras — both are treated as system.
-    const SYSTEM_DOC_IDS = new Set(["founders", "investors", "liquidity", "burn"]);
+    // `investors` is still skipped here to avoid mis-classifying the legacy
+    // doc as a community treasury; it should hold treasuryBalance=0 after the
+    // 2026-06-04 investors→liquidity migration.
+    const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
     if (SYSTEM_DOC_IDS.has(doc.id)) continue;
 
     if (d.averagePoCT === undefined || d.averagePoCT === null) {
@@ -259,22 +260,19 @@ async function performTGE(triggerSource) {
   //
   // Wallet resolution priority:
   //   1. env override (FOUNDERS_TREASURY_ADDRESS / LIQUIDITY_TREASURY_ADDRESS)
-  //   2. governance/<id>.walletAddress
+  //   2. governance/<id>.walletAddress (Safe address post-2026-06-04 migration)
   //
   // Amount source: governance/<id>.treasuryBalance, accumulated by
   // awardPoints() (10% per signup).
   //
-  // Two documented anomalies in production Firestore (as of 2026-06):
-  //   - governance/investors exists with balance but no walletAddress
-  //     (legacy doc; superseded by governance/liquidity)
-  //   - governance/liquidity is the doc the production pipeline actually uses
-  // We handle both by iterating known slot IDs; an orphan doc with balance
-  // but no resolvable wallet emits a WARN and is skipped (not a hard fail —
-  // failing here would block every TGE on a known-bad legacy doc).
+  // The legacy `investors` slot was removed from this loop on 2026-06-04 after
+  // the investors→liquidity data migration. governance/investors is preserved
+  // as an audit trail (with treasuryBalance=0); awardPoints() no longer writes
+  // to it. If you find treasuryBalance > 0 there in the future, something
+  // regressed — run functions/scripts/migrate-investors-to-liquidity.js again.
   const systemSlotSpecs = [
     { id: "founders",  envWallet: foundersTreasuryAddress,  label: "Founders & Core Team" },
     { id: "liquidity", envWallet: liquidityTreasuryAddress, label: "Liquidity Treasury" },
-    { id: "investors", envWallet: null,                     label: "Investors Treasury (legacy)" },
     { id: "burn",      envWallet: null,                     label: "Deflationary Burn" },
   ];
 
@@ -611,10 +609,10 @@ exports.awardPoints = functions
       // 10% of TOTAL (not 10% of user points) → base-10 SAFT alignment
       const unit = Math.floor(totalMinted * 0.10); // 10% of total per treasury
 
-      // System treasuries (Founders 10% + Investors 10% + Burn 10%)
+      // System treasuries (Founders 10% + Liquidity 10% + Burn 10%)
       batch.set(db.collection("system_stats").doc("treasury"), {
         foundersPoints: admin.firestore.FieldValue.increment(unit),
-        investorsPoints: admin.firestore.FieldValue.increment(unit),
+        liquidityPoints: admin.firestore.FieldValue.increment(unit),
         burnedPoints: admin.firestore.FieldValue.increment(unit),
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -635,9 +633,9 @@ exports.awardPoints = functions
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      batch.set(db.collection("governance").doc("investors"), {
-        id: "investors",
-        name: "Investors & Partners",
+      batch.set(db.collection("governance").doc("liquidity"), {
+        id: "liquidity",
+        name: "Liquidity (DEX)",
         type: "system",
         treasuryBalance: admin.firestore.FieldValue.increment(unit),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -968,12 +966,12 @@ exports.initializeUserPoints = functions
         lastUpdated: now,
       }, { merge: true });
 
-      // Treasury distribution: 10% of TOTAL each to founders, investors, burn
+      // Treasury distribution: 10% of TOTAL each to founders, liquidity, burn
       const unit = 200; // 10% of totalMinted (2000)
       const points = 1000;
       batch.set(db.collection("system_stats").doc("treasury"), {
         foundersPoints: admin.firestore.FieldValue.increment(unit),
-        investorsPoints: admin.firestore.FieldValue.increment(unit),
+        liquidityPoints: admin.firestore.FieldValue.increment(unit),
         burnedPoints: admin.firestore.FieldValue.increment(unit),
         lastUpdated: now,
       }, { merge: true });
@@ -988,9 +986,9 @@ exports.initializeUserPoints = functions
         updatedAt: now,
       }, { merge: true });
 
-      batch.set(db.collection("governance").doc("investors"), {
-        id: "investors",
-        name: "Investors & Partners",
+      batch.set(db.collection("governance").doc("liquidity"), {
+        id: "liquidity",
+        name: "Liquidity (DEX)",
         type: "system",
         treasuryBalance: admin.firestore.FieldValue.increment(unit),
         updatedAt: now,
@@ -1135,13 +1133,17 @@ exports.initializeUserPoints = functions
               const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
               const DEPLOYER_FALLBACK = signer.address; // Fallback if treasury wallet not created yet
 
-              // Look up system treasury wallet addresses from governance docs
-              const [foundersGov, investorsGov] = await Promise.all([
+              // Look up system treasury wallet addresses from governance docs.
+              // Post-2026-06-04: founders, liquidity, and global_community are
+              // Safe-controlled — see [[project-treasury-safe-addresses]].
+              // The old "governance/investors" doc is deprecated; the live
+              // Liquidity treasury lives at governance/liquidity.
+              const [foundersGov, liquidityGov] = await Promise.all([
                 db.collection("governance").doc("founders").get(),
-                db.collection("governance").doc("investors").get(),
+                db.collection("governance").doc("liquidity").get(),
               ]);
               const foundersWallet = foundersGov.exists ? foundersGov.data().walletAddress : null;
-              const investorsWallet = investorsGov.exists ? investorsGov.data().walletAddress : null;
+              const liquidityWallet = liquidityGov.exists ? liquidityGov.data().walletAddress : null;
 
               // V2 contract signature splits the user recipient (capped + deduped)
               // from treasury recipients (uncapped). Build them separately.
@@ -1165,11 +1167,10 @@ exports.initializeUserPoints = functions
 
               // 3. Liquidity (Treasury): 100 $DIASPORA (10% of tribute)
               //    Source of truth is the landing page tokenomics — see whitepaper.html § Liquidity Treasury.
-              //    Code still reads governance/investors during the rename; that doc holds the live wallet address.
-              treasuryRecipients.push(investorsWallet || DEPLOYER_FALLBACK);
+              treasuryRecipients.push(liquidityWallet || DEPLOYER_FALLBACK);
               treasuryAmounts.push(ethers.parseUnits("100", 18));
               totalTokens += ethers.parseUnits("100", 18);
-              if (!investorsWallet) console.warn("[Token Welcome Bonus] Liquidity wallet not found, using deployer fallback");
+              if (!liquidityWallet) console.warn("[Token Welcome Bonus] Liquidity wallet not found, using deployer fallback");
 
               // 5. Community treasuries: 700 $DIASPORA (70% of tribute)
               //    Mirror exact same fractions as DSP distribution (unit=100 per slot)
@@ -1423,12 +1424,12 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Treasury distribution: 10% of TOTAL each to founders, investors, burn
+      // Treasury distribution: 10% of TOTAL each to founders, liquidity, burn
       const unit = Math.floor(pointsToAward * 0.20); // 10% of total (points × 2 × 0.10)
       if (unit > 0) {
         transaction.set(db.collection("system_stats").doc("treasury"), {
           foundersPoints: admin.firestore.FieldValue.increment(unit),
-          investorsPoints: admin.firestore.FieldValue.increment(unit),
+          liquidityPoints: admin.firestore.FieldValue.increment(unit),
           burnedPoints: admin.firestore.FieldValue.increment(unit),
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1441,8 +1442,8 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        transaction.set(db.collection("governance").doc("investors"), {
-          id: "investors", name: "Investors & Partners", type: "system",
+        transaction.set(db.collection("governance").doc("liquidity"), {
+          id: "liquidity", name: "Liquidity (DEX)", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1576,12 +1577,12 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
         metadata: metadata || {},
       });
 
-      // Treasury: 10% of TOTAL each to founders, investors, burn
+      // Treasury: 10% of TOTAL each to founders, liquidity, burn
       const unit = Math.floor(points * 0.20); // 10% of total (points × 2 × 0.10)
       if (unit > 0) {
         transaction.set(db.collection("system_stats").doc("treasury"), {
           foundersPoints: admin.firestore.FieldValue.increment(unit),
-          investorsPoints: admin.firestore.FieldValue.increment(unit),
+          liquidityPoints: admin.firestore.FieldValue.increment(unit),
           burnedPoints: admin.firestore.FieldValue.increment(unit),
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1594,8 +1595,8 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        transaction.set(db.collection("governance").doc("investors"), {
-          id: "investors", name: "Investors & Partners", type: "system",
+        transaction.set(db.collection("governance").doc("liquidity"), {
+          id: "liquidity", name: "Liquidity (DEX)", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1740,7 +1741,7 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
       if (unit > 0) {
         transaction.set(db.collection("system_stats").doc("treasury"), {
           foundersPoints: admin.firestore.FieldValue.increment(unit),
-          investorsPoints: admin.firestore.FieldValue.increment(unit),
+          liquidityPoints: admin.firestore.FieldValue.increment(unit),
           burnedPoints: admin.firestore.FieldValue.increment(unit),
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1753,8 +1754,8 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        transaction.set(db.collection("governance").doc("investors"), {
-          id: "investors", name: "Investors & Partners", type: "system",
+        transaction.set(db.collection("governance").doc("liquidity"), {
+          id: "liquidity", name: "Liquidity (DEX)", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1857,26 +1858,27 @@ exports.recordFiatGdp = functions.https.onCall(async (data, context) => {
   }
 
   try {
-    const batch = db.batch();
-
-    // Increment global fiat GDP counter
-    batch.set(db.collection("system_stats").doc("treasury"), {
+    // Global treasury counter (platform-wide, regardless of corridor).
+    await db.collection("system_stats").doc("treasury").set({
       totalFiatGdpUsd: admin.firestore.FieldValue.increment(amountUsd),
       lastFiatGdpUpdate: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // Log individual GDP transaction for audit trail
-    const gdpTxRef = db.collection("gdp_transactions").doc();
-    batch.set(gdpTxRef, {
-      id: gdpTxRef.id,
+    // Unified corridor roll-up. Derives the corridor from the caller's
+    // profile and bumps their chamber's GDP counters. Audit row is
+    // written inside the helper (no double-log).
+    const callerProfile = (
+      await db.collection("users").doc(context.auth.uid).get()
+    ).data() || {};
+    const { recordCorridorActivity } = require("./corridor_activity");
+    await recordCorridorActivity({
+      homeCountryCode: callerProfile.homeCountryCode,
+      hostCountryCode: callerProfile.hostCountryCode,
       amountUsd,
       activityType,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      recordedBy: context.auth.uid,
-      ...(metadata || {}),
+      actorUid: context.auth.uid,
+      metadata: metadata || {},
     });
-
-    await batch.commit();
 
     return { success: true, amountUsd, activityType };
   } catch (error) {
@@ -1916,7 +1918,7 @@ exports.syncTreasuryBalances = functions
 
       let totalUserPoints = 0;
       let totalFoundersPoints = 0;
-      let totalInvestorsPoints = 0;
+      let totalLiquidityPoints = 0;
       let totalBurnedPoints = 0;
 
       userPointsSnap.forEach((doc) => {
@@ -1931,7 +1933,7 @@ exports.syncTreasuryBalances = functions
         const unit = Math.floor(userPoints * 0.10);
 
         totalFoundersPoints += unit;
-        totalInvestorsPoints += unit;
+        totalLiquidityPoints += unit;
 
         // Community hierarchy distribution
         const userMemberships = (userProfiles[userId] || {}).communityMemberships || [];
@@ -2009,7 +2011,7 @@ exports.syncTreasuryBalances = functions
       // System treasury
       batch.set(db.collection("system_stats").doc("treasury"), {
         foundersPoints: totalFoundersPoints,
-        investorsPoints: totalInvestorsPoints,
+        liquidityPoints: totalLiquidityPoints,
         burnedPoints: totalBurnedPoints,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         syncedBy: callerId,
@@ -2023,8 +2025,8 @@ exports.syncTreasuryBalances = functions
       }, { merge: true });
       opCount++;
 
-      batch.set(db.collection("governance").doc("investors"), {
-        treasuryBalance: totalInvestorsPoints,
+      batch.set(db.collection("governance").doc("liquidity"), {
+        treasuryBalance: totalLiquidityPoints,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       opCount++;
@@ -2101,7 +2103,7 @@ exports.syncTreasuryBalances = functions
         success: true,
         totalUserPoints,
         totalFoundersPoints,
-        totalInvestorsPoints,
+        totalLiquidityPoints,
         totalBurnedPoints,
         communitiesProcessed: Object.keys(communityPointsMap).length,
       };
@@ -2204,13 +2206,22 @@ exports.retryPendingWelcomeBonuses = functions
         const BURN = "0x000000000000000000000000000000000000dEaD";
         const DEPLOYER_FALLBACK = signer.address;
 
-        // Compute treasury wallets deterministically from the factory
-        const sysSalts = {
-          founders: ethers.keccak256(ethers.toUtf8Bytes("system:founders_treasury")),
-          liquidity: ethers.keccak256(ethers.toUtf8Bytes("system:investors_treasury")),
-        };
-        const foundersWallet = await factory.computeAddress(sysSalts.founders).catch(() => DEPLOYER_FALLBACK);
-        const liquidityWallet = await factory.computeAddress(sysSalts.liquidity).catch(() => DEPLOYER_FALLBACK);
+        // Read live treasury wallets from Firestore. Post-2026-06-04 these
+        // are Safe addresses, NOT factory-computed smart wallets. Computing
+        // from CREATE2 salts here would target the abandoned pre-migration
+        // wallets and lose tokens. See [[project-treasury-safe-addresses]].
+        const [foundersGov, liquidityGov] = await Promise.all([
+          db.collection("governance").doc("founders").get(),
+          db.collection("governance").doc("liquidity").get(),
+        ]);
+        const foundersWallet = (foundersGov.exists && foundersGov.data().walletAddress) || DEPLOYER_FALLBACK;
+        const liquidityWallet = (liquidityGov.exists && liquidityGov.data().walletAddress) || DEPLOYER_FALLBACK;
+        if (!foundersGov.exists || !foundersGov.data().walletAddress) {
+          console.warn("[Token Welcome Bonus retry] Founders wallet not found in Firestore, using deployer fallback");
+        }
+        if (!liquidityGov.exists || !liquidityGov.data().walletAddress) {
+          console.warn("[Token Welcome Bonus retry] Liquidity wallet not found in Firestore, using deployer fallback");
+        }
 
         const treasuryRecipients = [BURN, foundersWallet, liquidityWallet];
         const treasuryAmounts = [

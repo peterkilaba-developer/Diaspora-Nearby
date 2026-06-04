@@ -58,13 +58,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
   // Economic Tracking State (Replaced simulated GVI)
   Timer? _corridorTimer;
 
-  Future<void> _launchURL(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not launch $url');
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -124,6 +117,24 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     _tabController.dispose();
     _corridorTimer?.cancel();
     super.dispose();
+  }
+
+  /// Pull-to-refresh handler — invalidates the on-chain balance providers so
+  /// the next read re-fetches from the chain. Without this, Riverpod's
+  /// FutureProvider caches the first response forever, leaving users staring
+  /// at a stale balance until they kill the app.
+  Future<void> _refreshBalances() async {
+    ref.invalidate(tokenBalanceProvider);
+    ref.invalidate(batchTokenBalancesProvider);
+    ref.invalidate(onChainTransfersProvider);
+    try {
+      // Await the user-balance refetch so the RefreshIndicator spinner stays
+      // up until the value is actually back, not just a tick after invalidate.
+      await ref.read(tokenBalanceProvider.future);
+    } catch (_) {
+      // Provider already handles its own errors and returns '0'. Swallow here
+      // so the refresh indicator dismisses cleanly even on RPC failure.
+    }
   }
 
   @override
@@ -191,12 +202,17 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     String country,
     String userId,
   ) {
-    return SingleChildScrollView(
-      child: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            _buildHero(country),
+    return RefreshIndicator(
+      onRefresh: _refreshBalances,
+      child: SingleChildScrollView(
+        // AlwaysScrollable ensures pull-to-refresh works even when content is
+        // shorter than the viewport.
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              _buildHero(country),
             const SizedBox(height: 24),
             // Token Transactions
             Padding(
@@ -257,7 +273,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ],
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -463,12 +480,15 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 
   Widget _buildTreasuriesTab(BuildContext context, ProfileData? profile) {
     final country = profile?.homeCountry ?? 'Home Country';
-    return SingleChildScrollView(
-      child: SafeArea(
-        top: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return RefreshIndicator(
+      onRefresh: _refreshBalances,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Economy dashboard flush to top
             _buildEconomyDashboard(country),
             const SizedBox(height: 24),
@@ -529,7 +549,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ],
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -875,12 +896,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       (a, b) => getTypeWeight(b.type).compareTo(getTypeWeight(a.type)),
     ); // Reverse sort for host pool
 
-    // Calculate Total Wealth for Community Earnings
-    final systemTreasury = ref.watch(systemTreasuryProvider).value ?? {};
-    final foundersPoints = systemTreasury['foundersPoints'] as int? ?? 0;
-    // burnedPoints tracked but used downstream
-    systemTreasury['burnedPoints'] as int? ?? 0;
-
     final epochService = EpochService();
     // Use Global Community for Epoch calculation as a baseline
     final globalCommunity = communities.firstWhere(
@@ -899,28 +914,10 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     epochService.getCurrentCommunityEpoch(globalCumulative, globalMembers);
     epochService.getCurrentTgeEventNumber(globalCumulative, globalMembers);
 
-    // Calculate Circulating Wealth (Post-TGE only)
-    double circulatingWealth = 0;
-
-    // 1. Community Pools (Unlocked by their specific TGE progress)
-    for (var c in communities) {
-      final int completedTge = epochService.getCompletedTgeEvents(
-        c.cumulativeEarnings,
-        c.memberCount,
-      );
-      final double unlockPercent = completedTge * 0.10; // 10% per TGE event
-      circulatingWealth += (c.points * unlockPercent);
-    }
-
-    // 2. Founders (Unlocked by Global TGE progress)
-    final int globalCompletedTge = epochService.getCompletedTgeEvents(
-      globalCumulative,
-      globalMembers,
-    );
-    final double globalUnlockPercent = globalCompletedTge * 0.10;
-    circulatingWealth += (foundersPoints * globalUnlockPercent);
-
-    // Note: Burned points are NOT in circulation, so they are excluded.
+    // Circulating wealth was previously computed here but never read.
+    // The pre-TGE display shows only locked treasuries, so the calculation
+    // was effectively dead. Removed to keep the file clean; the inputs
+    // (`globalCumulative`, `globalMembers`) are still referenced above.
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1004,7 +1001,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                                 final total = batchAsync.when(
                                   data: (b) => b.totalDistributed,
                                   loading: () => '...',
-                                  error: (_, __) => '0',
+                                  error: (_, _) => '0',
                                 );
                                 return Text(
                                   '$total \$DIASPORA',
@@ -1185,7 +1182,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
         const Padding(
           padding: EdgeInsets.only(bottom: 16),
           child: _GovernanceUnitCard(
-            unitId: 'investors',
+            unitId: 'liquidity',
             defaultTitle: 'Liquidity Treasury',
             subtitle: 'DEX Liquidity & Market Access',
             icon: LucideIcons.droplets,
@@ -1250,7 +1247,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           child: CircularProgressIndicator(color: Colors.white),
         ),
       ),
-      error: (_, __) => _buildSmartWalletContent(null),
+      error: (_, _) => _buildSmartWalletContent(null),
       data: (walletData) {
         // Auto-trigger wallet creation if user doesn't have one yet
         if ((walletData == null || !walletData.hasWallet) &&
@@ -1472,7 +1469,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                             ),
                           ],
                         ),
-                        error: (_, __) => Row(
+                        error: (_, _) => Row(
                           children: [
                             Text(
                               'Balance: ',
@@ -2037,150 +2034,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
   }
 
   /// Builds a compact card showing the DSP estimated value and factor breakdown.
-  Widget _buildDspEstimatedValueCard(BuildContext context) {
-    final valuation = ref.watch(dspValuationProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final subTextColor = isDark ? Colors.white54 : Colors.black54;
-
-    return Container(
-      padding: AppTheme.cardPaddingEdgeInsets,
-      decoration: AppTheme.cardDecoration(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                LucideIcons.trendingUp,
-                size: 16,
-                color: AppTheme.accent,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'DSP ESTIMATED VALUE',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: subTextColor,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'LIVE',
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.accent,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => launchUrl(
-                  Uri.parse(
-                    'https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c',
-                  ),
-                  mode: LaunchMode.externalApplication,
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        LucideIcons.externalLink,
-                        size: 10,
-                        color: Colors.blue,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'TOKEN',
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Price per DSP
-          Text(
-            '1 DSP = ${valuation.formattedImpliedValue}',
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.accent,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Factor breakdown
-          Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            children: [
-              _buildFactorChip(
-                'Network',
-                '+${(valuation.networkMultiplier * 100).toStringAsFixed(1)}%',
-                LucideIcons.users,
-              ),
-              _buildFactorChip(
-                'Deflation',
-                '+${(valuation.deflationRatio * 100).toStringAsFixed(1)}%',
-                LucideIcons.flame,
-              ),
-              _buildFactorChip(
-                'Epoch',
-                '×${valuation.epochScarcity.toStringAsFixed(1)}',
-                LucideIcons.clock,
-              ),
-              _buildFactorChip(
-                'GDP',
-                '×${valuation.fiatGdpBoost.toStringAsFixed(2)}',
-                LucideIcons.dollarSign,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   /// Compact factor chip for the valuation card.
-  Widget _buildFactorChip(String label, String value, IconData icon) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 10, color: Colors.grey),
-        const SizedBox(width: 4),
-        Text(
-          '$label $value',
-          style: const TextStyle(fontSize: 10, color: Colors.grey),
-        ),
-      ],
-    );
-  }
 }
 
 class _GovernanceUnitCard extends ConsumerWidget {
@@ -2229,7 +2084,7 @@ class _GovernanceUnitCard extends ConsumerWidget {
         return firestoreBalance > 0 ? firestoreBalance.toInt().toString() : '0';
       },
       loading: () => '...',
-      error: (_, __) =>
+      error: (_, _) =>
           firestoreBalance > 0 ? firestoreBalance.toInt().toString() : '0',
     );
     // Show DSP label when using Firestore fallback (no on-chain balance available)
@@ -2239,7 +2094,7 @@ class _GovernanceUnitCard extends ConsumerWidget {
     final bool showingDsp =
         !hasOnChain && walletAddr.isEmpty && firestoreBalance > 0;
     final bool isSystemReserve =
-        unitId == 'founders' || unitId == 'investors' || unitId == 'burn';
+        unitId == 'founders' || unitId == 'liquidity' || unitId == 'burn';
 
     // Show loading state while governance unit hasn't loaded yet
     if (unitAsync.isLoading) {
