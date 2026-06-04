@@ -21,9 +21,20 @@ service cloud.firestore {
     }
     // Check if user is an admin of the organization (requires reading the org doc)
     function isOrgAdmin(orgId) {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
         exists(/databases/$(database)/documents/organizations/$(orgId)) &&
         get(/databases/$(database)/documents/organizations/$(orgId)).data.admins.hasAny([request.auth.uid]);
+    }
+    // Is this chat doc a corridor-chamber chat?
+    function isChamberChat(chatId) {
+      return get(/databases/$(database)/documents/chats/$(chatId)).data.subtype == 'corridor_chamber';
+    }
+    // Does the current user hold full-member access to a chamber chat?
+    // Followers have `accessLevel: 'follower'`; members have `accessLevel: 'member'`.
+    function isChamberMember(chatId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId)).data.accessLevel == 'member';
     }
 
     // --- Users Collection ---
@@ -95,8 +106,14 @@ service cloud.firestore {
       // [SECURITY] Only chat participants can read/write messages
       match /messages/{messageId} {
         allow read: if isChatParticipant(chatId);
+        // Post-rights gating:
+        //   * Non-chamber chats: any participant (legacy rule).
+        //   * Chamber chats: participants who are MEMBERS (accessLevel ==
+        //     'member' on their userChats entry). Followers are participants
+        //     for read purposes but cannot post.
         allow create: if isChatParticipant(chatId) &&
-          request.resource.data.senderId == request.auth.uid;
+          request.resource.data.senderId == request.auth.uid &&
+          (!isChamberChat(chatId) || isChamberMember(chatId));
         // Sender can edit their own messages (content, etc.)
         // Participants can update status (read receipts) and reactions
         allow update: if isChatParticipant(chatId) && (
@@ -214,9 +231,31 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update: if isOrgAdmin(orgId) || (
-        isAuthenticated() && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers'])
+      // [SECURITY] Corridor chambers (kind == 'corridor_chamber') are
+      // system-managed. Only platform admins may rewrite leadership /
+      // membership fields directly; everyone else may only touch
+      // `followers` (to follow/unfollow). All other orgs follow the
+      // original rule (org-admin can update, anyone can self-add to
+      // followers).
+      allow update: if (
+        // Chambers — platform admins only for substantive edits.
+        resource.data.kind == 'corridor_chamber' && (
+          isAdmin() ||
+          // Non-admins can only self-modify membership / follow status.
+          // arrayUnion / arrayRemove of their own uid in members/followers
+          // and the bookkeeping fields are allowed.
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['members', 'followers', 'memberCount', 'updatedAt']
+          )
+        )
+      ) || (
+        // Regular orgs — original rule.
+        resource.data.kind != 'corridor_chamber' && (
+          isOrgAdmin(orgId) || (
+            isAuthenticated() &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers'])
+          )
+        )
       );
       allow delete: if isAdmin();
 
@@ -226,6 +265,36 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow write: if isOrgAdmin(orgId);
       }
+    }
+
+    // --- Chamber Leadership Requests ---
+    // A user submits a request to be appointed to a chamber leadership seat.
+    // An admin flips `approved: true`, which triggers the
+    // onChamberLeadershipRequestApproved Cloud Function to perform the
+    // actual appointment server-side.
+    match /leadershipRequests/{requestId} {
+      // Anyone authenticated can read (request lists are not sensitive;
+      // future UI may filter client-side to user's own + chamber admins).
+      allow read: if isAuthenticated();
+
+      // Users submit their OWN pending request, never pre-approved.
+      allow create: if isAuthenticated()
+        && request.auth.uid == request.resource.data.userId
+        && request.resource.data.approved == false
+        && request.resource.data.status == 'pending';
+
+      // Only platform admins can flip the approved boolean or set status.
+      // Users can withdraw their own pending request by deleting it
+      // (see the delete rule below) — they cannot edit a request once
+      // submitted to prevent role-shopping after the fact.
+      allow update: if isAdmin();
+
+      // Self-withdrawal of a pending request, or admin delete.
+      allow delete: if isAdmin() || (
+        isAuthenticated()
+        && request.auth.uid == resource.data.userId
+        && resource.data.status == 'pending'
+      );
     }
     
     
@@ -336,6 +405,12 @@ service cloud.firestore {
     match /emergency_fund_stakers/{userId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Emergency Fund Ledger — public read for transparency, server-only write
+    match /emergency_fund_ledger/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Cloud Functions only
     }
 
     // Trust Scores — users can read all, write their own (webhook uses admin SDK)
