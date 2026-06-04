@@ -83,6 +83,7 @@ void main() {
       industry: ['Tech'],
       profession: ['Engineer'],
       languages: ['English'],
+      interests: ['Music'],
       meetingPreferences: ['Online'],
       availability: ['Weekends'],
       servicesOffered: ['Coding'],
@@ -96,7 +97,16 @@ void main() {
   group('checkEligibility', () {
     const userId = 'user123';
 
+    // Eligibility model now requires `uniqueQrCount >= 10` from trust_scores
+     // (PoCT in-person QR scans). Seed it for tests that expect eligibility.
+     Future<void> seedQrScans(int count) async {
+       await fakeFirestore.collection('trust_scores').doc(userId).set({
+         'uniqueQrCount': count,
+       });
+     }
+
     test('should return eligible when all criteria are met', () async {
+      await seedQrScans(10);
       // 1. Profile Complete
       when(mockProfileRepo.getUserProfile(userId))
           .thenAnswer((_) async => createValidProfile(userId));
@@ -132,6 +142,7 @@ void main() {
     });
 
     test('should return ineligible if points are insufficient', () async {
+      await seedQrScans(10);
       when(mockProfileRepo.getUserProfile(userId))
           .thenAnswer((_) async => createValidProfile(userId));
 
@@ -159,6 +170,7 @@ void main() {
     });
 
     test('should return ineligible if not enough family members', () async {
+      await seedQrScans(10);
       when(mockProfileRepo.getUserProfile(userId)).thenAnswer((_) async => createValidProfile(userId));
       when(mockPointsRepo.getUserPoints(userId)).thenAnswer((_) async => UserPoints(userId: userId, totalPoints: 100000, availablePoints: 100000, currentStreak: 1, dailyMessageCount: 0, lastUpdated: DateTime.now(), signupDate: DateTime.now()));
       fakeTrustRepo.setTrustData(TrustData(uid: userId, trustScore: 70, isVerified: true, vouchCount: 5, lastUpdated: DateTime.now()));

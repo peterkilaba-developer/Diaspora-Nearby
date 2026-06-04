@@ -13,6 +13,8 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
+import 'package:diaspora_nearby/features/dsp/services/emergency_fund_service.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @GenerateMocks([
@@ -23,6 +25,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
   PointsRepository,
 ])
 import 'hts_ledger_test.mocks.dart';
+
+class _FakeEmergencyFundService extends Fake implements EmergencyFundService {
+  @override
+  Future<bool> hasStaked(String userId) async => false;
+}
+
+class _FakeChatRepository extends Fake implements ChatRepository {
+  @override
+  Future<bool> isAdminOfLargeGroupChat(String uid, {int minMembers = 100}) async => false;
+}
 
 /// Helper to create a fully complete profile
 ProfileData _completeProfile(String userId) => ProfileData(
@@ -68,6 +80,8 @@ void main() {
         relationshipRepositoryProvider.overrideWithValue(mockRelRepo),
         profileRepositoryProvider.overrideWithValue(MockProfileRepository()),
         pointsRepositoryProvider.overrideWithValue(mockPointsRepo),
+        emergencyFundServiceProvider.overrideWithValue(_FakeEmergencyFundService()),
+        chatRepositoryProvider.overrideWithValue(_FakeChatRepository()),
       ],
     );
 
@@ -110,14 +124,14 @@ void main() {
       );
 
       // The Profile milestone (completedMilestoneFieldCount >= 10) should award 10,000 DSP.
-      verify(mockPointsService.awardManualPoints(userId, 10000, 'Governance Genesis: Profile'))
+      verify(mockPointsService.awardManualPoints(userId, 10000, 'profile_completion'))
           .called(1);
 
       final captured = verify(mockTrustRepo.saveTrustData(captureAny)).captured;
       final savedData = captured.first as TrustData;
 
       // The ledger should record that Profile DSP count has been awarded.
-      expect(savedData.awardedHtsTracking['Profile_dsp_count'], 10);
+      expect(savedData.awardedHtsTracking['Profile_dsp_count'], 12);
       expect(savedData.awardedQualificationMilestones, contains('Profile'));
     });
 

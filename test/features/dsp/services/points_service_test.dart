@@ -85,14 +85,16 @@ void main() {
 
       final rewarded = await pointsService.trackExplorationReward(userId, actionId);
 
-      expect(rewarded, isTrue);
-      verify(mockRepository.initializeUserPoints(userId)).called(1);
-      verify(mockRepository.awardExplorationPoints(
+      // trackExplorationReward is deprecated — it now always returns false
+      // without awarding points or initializing the user.
+      expect(rewarded, isFalse);
+      verifyNever(mockRepository.initializeUserPoints(userId));
+      verifyNever(mockRepository.awardExplorationPoints(
         userId: userId,
         actionId: actionId,
         points: anyNamed('points'),
         metadata: anyNamed('metadata'),
-      )).called(1);
+      ));
     });
   });
 }

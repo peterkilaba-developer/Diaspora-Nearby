@@ -1,5 +1,6 @@
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, SetOptions;
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -24,7 +25,68 @@ class MockSessionService extends Mock implements SessionService {
   }
 }
 
-class FakeFirebaseFunctions extends Fake implements FirebaseFunctions {}
+/// Smart fake that emulates the subset of Cloud Functions the simulation
+/// touches by mutating the provided fake Firestore — just enough to keep
+/// TGE eligibility + treasury distribution tests grounded.
+class FakeFirebaseFunctions extends Fake implements FirebaseFunctions {
+  FakeFirebaseFunctions(this._firestore);
+  final FakeFirebaseFirestore _firestore;
+
+  @override
+  HttpsCallable httpsCallable(String name, {HttpsCallableOptions? options}) {
+    return _SimulatedHttpsCallable(_firestore, name);
+  }
+}
+
+class _SimulatedHttpsCallable extends Fake implements HttpsCallable {
+  _SimulatedHttpsCallable(this._firestore, this._name);
+  final FakeFirebaseFirestore _firestore;
+  final String _name;
+
+  @override
+  Future<HttpsCallableResult<T>> call<T>([dynamic parameters]) async {
+    final p = (parameters as Map?) ?? const {};
+    switch (_name) {
+      case 'initializeUserPoints':
+        // The real CF derives userId from auth context; the simulation tests
+        // pass it explicitly via the points service path. We just ensure a
+        // welcome-bonus baseline exists for any users seeded above.
+        break;
+      case 'awardPoints':
+        final userId = p['userId'] as String?;
+        final points = (p['points'] as num?)?.toInt() ?? 0;
+        if (userId != null && points > 0) {
+          await _firestore.collection('user_points').doc(userId).set({
+            'totalPoints': FieldValue.increment(points),
+            'availablePoints': FieldValue.increment(points),
+          }, SetOptions(merge: true));
+        }
+        break;
+      case 'syncTreasuryBalances':
+        // Aggregate every user's totalPoints, then write 10% each to
+        // founders / liquidity / burn so transparency stats are non-zero.
+        final usersSnap = await _firestore.collection('user_points').get();
+        var total = 0;
+        for (final d in usersSnap.docs) {
+          total += ((d.data()['totalPoints'] as num?) ?? 0).toInt();
+        }
+        final unit = (total * 0.10).floor();
+        await _firestore.collection('system_stats').doc('treasury').set({
+          'foundersPoints': unit,
+          'liquidityPoints': unit,
+          'burnedPoints': unit,
+        }, SetOptions(merge: true));
+        break;
+    }
+    return _FakeHttpsCallableResult<T>();
+  }
+}
+
+class _FakeHttpsCallableResult<T> extends Fake
+    implements HttpsCallableResult<T> {
+  @override
+  T get data => null as T;
+}
 
 void main() {
   late FakeFirebaseFirestore fakeFirestore;
@@ -39,7 +101,7 @@ void main() {
     fakeFirestore = FakeFirebaseFirestore();
     mockSessionService = MockSessionService();
 
-    pointsRepository = PointsRepository(fakeFirestore, FakeFirebaseFunctions());
+    pointsRepository = PointsRepository(fakeFirestore, FakeFirebaseFunctions(fakeFirestore));
     trustRepository = TrustRepository(fakeFirestore);
     profileRepository = ProfileRepository(fakeFirestore, mockSessionService);
 
@@ -88,6 +150,18 @@ void main() {
     test('User with >= 10k DSP is eligible regardless of PoCT', () async {
       final userId = 'user_dsp_pass';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
+      // Seed a baseline user_points doc — the real client-side initializeUserPoints
+      // routes through a Cloud Function, which the simulated fake can't tie to
+      // an auth context. Tests pre-seed the doc so awardManualPoints' daily-reset
+      // path has something to read.
+      await fakeFirestore.collection('user_points').doc(userId).set({
+        'totalPoints': 0,
+        'availablePoints': 0,
+        'currentStreak': 0,
+        'dailyMessageCount': 0,
+        'signupDate': DateTime.now(),
+        'lastUpdated': DateTime.now(),
+      });
 
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Grant');
@@ -106,6 +180,18 @@ void main() {
     test('User with < 10k DSP is NOT eligible even with max PoCT', () async {
       final userId = 'user_dsp_fail';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
+      // Seed a baseline user_points doc — the real client-side initializeUserPoints
+      // routes through a Cloud Function, which the simulated fake can't tie to
+      // an auth context. Tests pre-seed the doc so awardManualPoints' daily-reset
+      // path has something to read.
+      await fakeFirestore.collection('user_points').doc(userId).set({
+        'totalPoints': 0,
+        'availablePoints': 0,
+        'currentStreak': 0,
+        'dailyMessageCount': 0,
+        'signupDate': DateTime.now(),
+        'lastUpdated': DateTime.now(),
+      });
 
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 1000, 'Small Grant');
@@ -123,6 +209,18 @@ void main() {
     test('Epoch parameter has no effect (flat gate across all epochs)', () async {
       final userId = 'user_flat_gate';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
+      // Seed a baseline user_points doc — the real client-side initializeUserPoints
+      // routes through a Cloud Function, which the simulated fake can't tie to
+      // an auth context. Tests pre-seed the doc so awardManualPoints' daily-reset
+      // path has something to read.
+      await fakeFirestore.collection('user_points').doc(userId).set({
+        'totalPoints': 0,
+        'availablePoints': 0,
+        'currentStreak': 0,
+        'dailyMessageCount': 0,
+        'signupDate': DateTime.now(),
+        'lastUpdated': DateTime.now(),
+      });
 
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Grant');
@@ -204,8 +302,16 @@ void main() {
         ],
       });
 
-      await pointsRepository.initializeUserPoints(userId);
-      
+      // Seed baseline user_points (see TGE eligibility tests for context).
+      await fakeFirestore.collection('user_points').doc(userId).set({
+        'totalPoints': 0,
+        'availablePoints': 0,
+        'currentStreak': 0,
+        'dailyMessageCount': 0,
+        'signupDate': DateTime.now(),
+        'lastUpdated': DateTime.now(),
+      });
+
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Initial Grant');
 

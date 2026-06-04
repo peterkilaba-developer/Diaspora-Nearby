@@ -12,7 +12,9 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/report_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/emergency_fund_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Generate Mocks
@@ -25,6 +27,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ])
 import 'trust_service_test.mocks.dart';
 
+class FakeEmergencyFundService extends Fake implements EmergencyFundService {
+  final Set<String> stakers = {};
+
+  @override
+  Future<bool> hasStaked(String userId) async => stakers.contains(userId);
+}
+
+class FakeChatRepository extends Fake implements ChatRepository {
+  final Set<String> largeGroupAdmins = {};
+
+  @override
+  Future<bool> isAdminOfLargeGroupChat(String uid, {int minMembers = 100}) async =>
+      largeGroupAdmins.contains(uid);
+}
+
 void main() {
   provideDummy<TrustRepository>(MockTrustRepository());
   provideDummy<RelationshipRepository>(MockRelationshipRepository());
@@ -36,6 +53,8 @@ void main() {
   late MockRelationshipRepository mockRelRepo;
   late MockPointsRepository mockPointsRepo;
   late MockReportRepository mockReportRepo;
+  late FakeChatRepository fakeChatRepo;
+  late FakeEmergencyFundService fakeEmergencyFundService;
   late ProviderContainer container;
 
   setUp(() {
@@ -44,6 +63,8 @@ void main() {
     mockRelRepo = MockRelationshipRepository();
     mockPointsRepo = MockPointsRepository();
     mockReportRepo = MockReportRepository();
+    fakeChatRepo = FakeChatRepository();
+    fakeEmergencyFundService = FakeEmergencyFundService();
 
     container = ProviderContainer(
       overrides: [
@@ -52,6 +73,9 @@ void main() {
         relationshipRepositoryProvider.overrideWithValue(mockRelRepo),
         pointsRepositoryProvider.overrideWithValue(mockPointsRepo),
         reportRepositoryProvider.overrideWithValue(mockReportRepo),
+        emergencyFundServiceProvider
+            .overrideWithValue(fakeEmergencyFundService),
+        chatRepositoryProvider.overrideWithValue(fakeChatRepo),
       ],
     );
 
@@ -73,6 +97,8 @@ void main() {
   group('TrustService - Council Eligibility', () {
     test('calculates council eligibility correctly', () async {
       final userId = 'user-1';
+      fakeChatRepo.largeGroupAdmins.add(userId);
+      fakeEmergencyFundService.stakers.add(userId);
 
       // 1. Mock Profile (Complete)
       final profile = ProfileData(
@@ -95,6 +121,7 @@ void main() {
         homeLocation: const UserLocation(city: 'Home', country: 'Country', formattedAddress: 'Home Addr', placeId: 'home-id', countryCode: 'US'),
         hostLocation: const UserLocation(city: 'Host', country: 'Country', formattedAddress: 'Host Addr', placeId: 'host-id', countryCode: 'US'),
         phone: '1234567890',
+        showCurrentLocationName: true, // +10 PoCT transparency
         createdAt: DateTime.now().subtract(const Duration(days: 200)),
       );
       
@@ -110,14 +137,23 @@ void main() {
       );
 
       // 3. Mock Repositories
-      // Relationships: 10 Family members
-      final relationships = List.generate(10, (i) => Relationship(
-        id: 'family-$i',
-        type: 'Brother',
-        name: 'Fam $i',
-        createdAt: DateTime.now(),
-        status: 'active',
-      ));
+      // Relationships: 10 Family members + 10 Friends
+      final relationships = [
+        ...List.generate(10, (i) => Relationship(
+          id: 'family-$i',
+          type: 'Brother',
+          name: 'Fam $i',
+          createdAt: DateTime.now(),
+          status: 'active',
+        )),
+        ...List.generate(10, (i) => Relationship(
+          id: 'friend-$i',
+          type: 'Friend',
+          name: 'Friend $i',
+          createdAt: DateTime.now(),
+          status: 'active',
+        )),
+      ];
       when(mockRelRepo.getRelationships(userId)).thenAnswer((_) => Stream.value(relationships));
 
       // QR Exchanges: 10 Non-Family users
@@ -132,13 +168,21 @@ void main() {
       });
       when(mockTrustRepo.getDetailedTrustRatingsForUser(userId)).thenAnswer((_) async => ratings);
       when(mockTrustRepo.getVouchesForUser(userId)).thenAnswer((_) async => []); // Regular vouches empty
-      when(mockTrustRepo.getTrustData(userId)).thenAnswer((_) async => null); // Old data null
+      // Old trust data with 10 event check-ins (+10 PoCT participation)
+      when(mockTrustRepo.getTrustData(userId)).thenAnswer((_) async => TrustData(
+            uid: userId,
+            trustScore: 0,
+            verifiedCheckInCount: 10,
+            lastUpdated: DateTime.now(),
+          ));
       
       // Mock Report counts etc
       // ... (Stubbing other repo calls to avoid null errors)
       when(mockTrustRepo.getVouchesByVoucher(userId)).thenAnswer((_) async => []);
-      when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer((_) async => []);
-      
+      // 10 verifications (+10 PoCT verified milestone)
+      when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer((_) async =>
+        List.generate(10, (i) => {'fromUserId': 'verifier-$i', 'toUserId': userId}));
+
       // 4. Act
       await trustService.recalculateTrustScore(userId: userId, profile: profile, points: points);
 
