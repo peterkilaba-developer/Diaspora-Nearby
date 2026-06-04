@@ -1940,6 +1940,10 @@ class ChatRepository {
               createdAt: 0,
               updatedAt: 0,
               communityId: orgId,
+              // Carry corridor metadata so the chat card can render the
+              // dual-flag avatar for chamber-of-commerce orgs.
+              homeCountryCode: org['homeCountryCode'] as String?,
+              hostCountryCode: org['hostCountryCode'] as String?,
             ),
           );
         }

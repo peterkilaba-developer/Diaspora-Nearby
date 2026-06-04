@@ -104,6 +104,11 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     final isGroup = chat.isGroup;
     final isCommunity = chat.isCommunity;
     final isEvent = chat.isEvent;
+    // Corridor chambers are auto-membership organizations — treat them as a
+    // distinct "kind" of organization so labels and exit-actions can differ
+    // (e.g. they can't be "unfollowed").
+    final isChamber =
+        chat.isOrganization && chat.id.startsWith('org_chamber_');
 
     final nameToUse = isDirect ? displayName.split(' ').first : displayName;
 
@@ -256,10 +261,24 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     icon: LucideIcons.settings,
                     iconColor: Colors.grey.shade700,
                     iconBgColor: Colors.grey.shade100,
-                    title: 'Group info',
-                    subtitle: 'Manage group settings',
+                    title: isChamber
+                        ? 'Chamber info'
+                        : (chat.isOrganization ? 'Organization info' : 'Group info'),
+                    subtitle: isChamber
+                        ? 'Council, members, and chamber settings'
+                        : (chat.isOrganization
+                            ? 'Manage organization settings'
+                            : 'Manage group settings'),
                     onTap: () {
                       Navigator.pop(context);
+                      // Chambers route to their full detail screen so users
+                      // get the Chamber Council card + leadership-request CTA,
+                      // not the generic org-info screen.
+                      if (isChamber) {
+                        final orgId = chat.id.replaceFirst('org_', '');
+                        context.push('/organization/$orgId');
+                        return;
+                      }
                       context.push(
                         '/chats/${chat.id}/info',
                         extra: {
@@ -274,8 +293,16 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     icon: LucideIcons.calendarPlus,
                     iconColor: Colors.orange.shade700,
                     iconBgColor: Colors.orange.shade50,
-                    title: 'Create Group Event',
-                    subtitle: 'Host an event for this group',
+                    title: isChamber
+                        ? 'Create Chamber Event'
+                        : (chat.isOrganization
+                            ? 'Create Organization Event'
+                            : 'Create Group Event'),
+                    subtitle: isChamber
+                        ? 'Host an event for this chamber'
+                        : (chat.isOrganization
+                            ? 'Host an event for this organization'
+                            : 'Host an event for this group'),
                     onTap: onCreateGroupEvent,
                   ),
                 ],
@@ -382,7 +409,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     onTap: onReportUser,
                     isDestructive: true,
                   ),
-                ] else if (!isCommunity) ...[
+                ] else if (!isCommunity && !isChamber) ...[
+                  // Chambers are auto-membership and cannot be unfollowed —
+                  // skip this destructive action entirely on chamber chats.
                   AppBottomSheetItem(
                     icon: LucideIcons.logOut,
                     iconColor: Colors.red.shade700,

@@ -10,14 +10,18 @@ import 'package:diaspora_nearby/core/utils/location_utils.dart'
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
+import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 
 final communityServiceProvider = Provider<CommunityService>((ref) {
-  return CommunityService();
+  return CommunityService(ref);
 });
 
 /// CommunityService handles community and chat creation during user registration.
 class CommunityService {
   final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
+  final Ref? _ref;
+
+  CommunityService([this._ref]);
 
   /// Searches for communities matching the query string (e.g., country name).
   Future<List<Community>> searchCommunities(String query) async {
@@ -141,6 +145,29 @@ class CommunityService {
     );
     communityIds.addAll(hostCommunityIds);
     chatIds.addAll(hostCommunityIds.map((id) => 'chat_$id'));
+
+    // ========================================
+    // 3.5 CORRIDOR CHAMBER OF COMMERCE (Organization)
+    // ========================================
+    // The bilateral (home ↔ host) public business identity for the diaspora
+    // corridor — modelled as an Organization, not a community. Idempotent.
+    if (_ref != null && hostCountryCode != 'XX') {
+      try {
+        final chamberId = await _ref
+            .read(organizationRepositoryProvider)
+            .ensureCorridorChamber(
+              userId: userId,
+              homeCountryCode: homeCountryCode,
+              hostCountryCode: hostCountryCode,
+              userName: userName,
+            );
+        if (chamberId != null) {
+          chatIds.add('org_$chamberId');
+        }
+      } catch (e) {
+        debugPrint('⚠️ ensureCorridorChamber failed: $e');
+      }
+    }
 
     // ========================================
     // 4. BATCH UPDATE userChats INDEX + PROFILE

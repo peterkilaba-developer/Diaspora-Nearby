@@ -140,7 +140,7 @@ class _OrganizationChatPreviewState
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             FutureBuilder<bool>(
-              future: _isParticipant(ref),
+              future: _canPost(ref),
               builder: (context, snapshot) {
                 if (snapshot.data == true) {
                   return IconButton(
@@ -203,7 +203,15 @@ class _OrganizationChatPreviewState
     );
   }
 
-  Future<bool> _isParticipant(WidgetRef ref) async {
+  /// Returns true iff the current user is allowed to post into this chat.
+  ///
+  /// For chamber chats, posting is restricted to users whose userChats
+  /// entry has `accessLevel == 'member'` — followers and visitors must NOT
+  /// see the Write button (otherwise Firestore Security Rules will reject
+  /// the message at send time and the user sees a confusing error).
+  ///
+  /// For regular chats, the legacy participant check applies.
+  Future<bool> _canPost(WidgetRef ref) async {
     final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
     if (currentUserId == null) return false;
 
@@ -212,13 +220,27 @@ class _OrganizationChatPreviewState
           .collection('chats')
           .doc(widget.chatId)
           .get();
-      if (chatDoc.exists) {
-        final data = chatDoc.data();
-        final participants = List<String>.from(data?['participants'] ?? []);
-        return participants.contains(currentUserId);
-      }
+      if (!chatDoc.exists) return false;
+      final data = chatDoc.data() ?? {};
+      final participants = List<String>.from(data['participants'] ?? []);
+      final isParticipant = participants.contains(currentUserId);
+      if (!isParticipant) return false;
+
+      // Chamber-of-commerce chats require member-level access to post.
+      // Other chat types: participant alone is enough.
+      final isChamberChat = data['subtype'] == 'corridor_chamber';
+      if (!isChamberChat) return true;
+
+      final userChatDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .collection('userChats')
+          .doc(widget.chatId)
+          .get();
+      final accessLevel = userChatDoc.data()?['accessLevel'] as String?;
+      return accessLevel == 'member';
     } catch (e) {
-      debugPrint('Error checking participant status: $e');
+      debugPrint('Error checking can-post status: $e');
     }
     return false;
   }

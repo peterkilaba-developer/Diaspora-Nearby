@@ -286,10 +286,17 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
         widget.imageUrl == null &&
         widget.customImage == null &&
         widget.customAvatarWidget == null) {
-      return material.Text(
-        widget.fallbackTitle,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
+      // Wrap in GestureDetector so the title is still tappable even when no
+      // avatar variant is supplied (e.g. corridor chamber chats whose header
+      // is built from chat.name + onTap alone).
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: material.Text(
+          widget.fallbackTitle,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
     }

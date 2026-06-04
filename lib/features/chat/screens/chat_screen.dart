@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,8 @@ import 'package:diaspora_nearby/features/chat/widgets/message_input.dart';
 import 'package:diaspora_nearby/features/chat/widgets/message_action_sheet.dart';
 
 import 'package:diaspora_nearby/features/chat/widgets/chat_header_title.dart';
+import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/community/repository/community_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/theme/app_theme.dart'; // [FIXED]
 
@@ -1286,6 +1289,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 final showMemberInfo =
                     (chat?.type == 'community' || chat?.type == 'group');
 
+                // Corridor chamber dual-flag avatar — render BEFORE the
+                // family-group branch so chamber chats get the merged-flag
+                // visual in the chat header (matching the chats list).
+                if (chat?.type == 'organization' &&
+                    (chat?.id ?? '').startsWith('org_chamber_')) {
+                  final host = chat?.hostCountryCode;
+                  final home = chat?.homeCountryCode;
+                  if (host != null && home != null) {
+                    final hostFlag =
+                        country_data.getCountryByCode(host)?.flag;
+                    final homeFlag =
+                        country_data.getCountryByCode(home)?.flag;
+                    if (hostFlag != null && homeFlag != null) {
+                      communityAvatar = SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 0,
+                              bottom: 0,
+                              child: Text(
+                                hostFlag,
+                                style: const TextStyle(fontSize: 22),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Text(
+                                homeFlag,
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  }
+                }
+
                 // Family group chat avatar
                 final isFamilyGroup = chat?.metadata?['isFamilyGroup'] == true;
                 Widget? headerAvatar = communityAvatar;
@@ -1337,7 +1381,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   // [NEW] Event Status
                   eventStatus: eventStatus,
                   onTap: () async {
-                    if (chat?.type == 'group' || chat?.type == 'organization') {
+                    // Chamber chats jump straight to the org detail screen
+                    // (Chamber Council, leadership requests, etc.) instead of
+                    // the generic chat-info screen.
+                    if (chat?.type == 'organization' &&
+                        (chat?.id ?? '').startsWith('org_chamber_')) {
+                      final orgId = chat!.id.replaceFirst('org_', '');
+                      context.push('/organization/$orgId');
+                    } else if (chat?.type == 'group' ||
+                        chat?.type == 'organization') {
                       context.push(
                         '/chats/${chat!.id}/info',
                         extra: {
@@ -1688,6 +1740,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           }
                         }
                       : null,
+                );
+              }
+
+
+              // Corridor chamber: followers can read but not post.
+              // Substitute the input with an upgrade banner when accessLevel
+              // is anything other than 'member' on the user's userChats doc.
+              final isChamberChat = chat != null &&
+                  chat.type == 'organization' &&
+                  chat.id.startsWith('org_chamber_');
+              if (isChamberChat) {
+                return _ChamberFollowerGate(
+                  chatId: chat.id,
+                  orgId: chat.id.replaceFirst('org_', ''),
+                  uid: currentUserId,
+                  fullInput: SafeArea(
+                    child: MessageInput(
+                      controller: _messageController,
+                      chatId: _activeChatId!,
+                      participantIds: chat.participants
+                          .where((id) => id != currentUserId)
+                          .toList(),
+                      recipientUserId: null,
+                      onSendMessage: (text, {type, metadata}) =>
+                          _sendMessage(text, metadata: metadata),
+                      onSendMedia: _sendMedia,
+                      onSendAudio: _sendAudio,
+                      onSendAudioFile: _sendAudioFile,
+                      onSendDocument: _sendDocument,
+                      onPickLocation: _pickLocation,
+                      onSendLocation: _sendLocationMessage,
+                      onSendDSP: _sendDSP,
+                      onMediaSelected: _onMediaPicked,
+                      onCancelReply: _clearReply,
+                      replyingTo: _replyingTo,
+                    ),
+                  ),
                 );
               }
 
@@ -2859,3 +2948,108 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 }
 
 // End of file or removed classes
+
+/// Gates the chamber chat input on the user's `accessLevel` field in their
+/// userChats subcollection entry:
+///   - `member`  → render [fullInput] (full posting affordance)
+///   - anything else (typically `follower`) → render a read-only banner
+///     with a Join Chamber CTA.
+///
+/// Followers are added to chat `participants` so they can read messages,
+/// but the input is hidden so they can't post. Server-side this would also
+/// be enforced via Firestore rules; this widget is the UX layer.
+class _ChamberFollowerGate extends ConsumerWidget {
+  final String chatId;
+  final String orgId;
+  final String uid;
+  final Widget fullInput;
+
+  const _ChamberFollowerGate({
+    required this.chatId,
+    required this.orgId,
+    required this.uid,
+    required this.fullInput,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('userChats')
+          .doc(chatId)
+          .snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() ?? const <String, dynamic>{};
+        final accessLevel = data['accessLevel'] as String?;
+        if (accessLevel == 'member') return fullInput;
+
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(top: BorderSide(color: theme.dividerColor)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      LucideIcons.eye,
+                      size: 18,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Read-only access. Join the chamber to post.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: const Icon(LucideIcons.userPlus, size: 16),
+                    label: const Text('Join Chamber'),
+                    onPressed: () async {
+                      try {
+                        await ref
+                            .read(organizationRepositoryProvider)
+                            .joinChamber(orgId: orgId, userId: uid);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Joined the chamber.'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Couldn\'t join: $e')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

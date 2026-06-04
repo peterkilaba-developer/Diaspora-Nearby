@@ -32,7 +32,6 @@ class _LocationMessageContentState extends State<LocationMessageContent>
   late final double _lng;
   late final String _cacheKey;
   Uint8List? _imageBytes;
-  bool _loading = true;
   bool _error = false;
 
   @override
@@ -48,8 +47,7 @@ class _LocationMessageContentState extends State<LocationMessageContent>
     // Check static cache first
     if (_mapImageCache.containsKey(_cacheKey)) {
       _imageBytes = _mapImageCache[_cacheKey];
-      _loading = false;
-    } else {
+          } else {
       _fetchMapImage();
     }
   }
@@ -76,18 +74,17 @@ class _LocationMessageContentState extends State<LocationMessageContent>
         if (mounted) {
           setState(() {
             _imageBytes = bytes;
-            _loading = false;
-          });
+                      });
         }
       } else {
         debugPrint(
             '[LocationMsg] Bad response: ${response.statusCode} '
             'content-type: ${response.headers['content-type']}');
-        if (mounted) setState(() { _loading = false; _error = true; });
+        if (mounted) setState(() { _error = true; });
       }
     } catch (e) {
       debugPrint('[LocationMsg] Fetch error: $e');
-      if (mounted) setState(() { _loading = false; _error = true; });
+      if (mounted) setState(() { _error = true; });
     }
   }
 
@@ -168,7 +165,7 @@ class _LocationMessageContentState extends State<LocationMessageContent>
         _imageBytes!,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _buildMapPlaceholder(theme, isDark),
+        errorBuilder: (_, _, _) => _buildMapPlaceholder(theme, isDark),
       );
     }
     if (_error) {

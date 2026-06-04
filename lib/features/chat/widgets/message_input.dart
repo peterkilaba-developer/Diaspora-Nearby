@@ -311,7 +311,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
         border: Border(top: BorderSide(color: theme.dividerColor)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, -2),
           ),
@@ -2478,7 +2478,7 @@ class _AttachmentPickerModalState
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-              error: (_, __) => Text(
+              error: (_, _) => Text(
                 'Could not load transactions',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
@@ -2642,7 +2642,7 @@ class _AttachmentPickerModalState
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-              error: (_, __) => Text(
+              error: (_, _) => Text(
                 'Could not load transactions',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,

@@ -8,6 +8,7 @@ import 'package:diaspora_nearby/features/organization/repository/organization_re
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart'; // [NEW]
@@ -215,6 +216,60 @@ class _OrganizationInfoScreenState
     return baseTitle;
   }
 
+  Widget _buildAvatar(bool isChamber) {
+    final logo = _orgData!['profileImage'] as String?;
+    final fallback = widget.orgImage;
+
+    // Chambers: render the dual-flag avatar (host lead, home offset) instead
+    // of the building icon so the screen visually matches the chat list.
+    if (isChamber && (logo == null || logo.isEmpty)) {
+      final host = _orgData!['hostCountryCode'] as String?;
+      final home = _orgData!['homeCountryCode'] as String?;
+      if (host != null && home != null) {
+        final hostFlag = country_data.getCountryByCode(host)?.flag;
+        final homeFlag = country_data.getCountryByCode(home)?.flag;
+        if (hostFlag != null && homeFlag != null) {
+          return SizedBox(
+            width: 96,
+            height: 96,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: Text(
+                    hostFlag,
+                    style: const TextStyle(fontSize: 60),
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Text(
+                    homeFlag,
+                    style: const TextStyle(fontSize: 44),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    }
+
+    return CircleAvatar(
+      radius: 48,
+      backgroundImage: (logo != null && logo.isNotEmpty)
+          ? CachedNetworkImageProvider(logo)
+          : (fallback != null
+              ? CachedNetworkImageProvider(fallback)
+              : null),
+      child: ((logo == null || logo.isEmpty) && fallback == null)
+          ? const Icon(LucideIcons.building2, size: 48)
+          : null,
+    );
+  }
+
   Future<void> _toggleFollow() async {
     if (_orgData == null) return;
     setState(() => _isFollowLoading = true);
@@ -248,9 +303,12 @@ class _OrganizationInfoScreenState
     final theme = Theme.of(context);
     final currentUserProfile = ref.watch(userProfileProvider).value;
 
+    final isChamber = _orgData?['kind'] == 'corridor_chamber';
+    final appBarTitle = isChamber ? 'Chamber Info' : 'Organization Info';
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Organization Info'),
+        title: Text(appBarTitle),
         actions: [
           if (_isAdmin)
             IconButton(
@@ -279,21 +337,7 @@ class _OrganizationInfoScreenState
                     child: Center(
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 48,
-                            backgroundImage: (_orgData!['profileImage'] != null)
-                                ? CachedNetworkImageProvider(
-                                    _orgData!['profileImage'],
-                                  )
-                                : widget.orgImage != null
-                                ? CachedNetworkImageProvider(widget.orgImage!)
-                                : null,
-                            child:
-                                (_orgData!['profileImage'] == null &&
-                                    widget.orgImage == null)
-                                ? const Icon(LucideIcons.building2, size: 48)
-                                : null,
-                          ),
+                          _buildAvatar(isChamber),
                           const SizedBox(height: 16),
                           Text(
                             _orgData!['businessName'] ?? widget.orgName,
@@ -312,38 +356,54 @@ class _OrganizationInfoScreenState
 
                   const SizedBox(height: 24),
 
-                  // Follow Button
+                  // Follow / Membership Indicator.
+                  // Chambers are auto-membership; show a static badge so the
+                  // user can't try to "unfollow" something they were never
+                  // opting into.
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppTheme.pageHorizontalPadding,
                     ),
                     child: SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _isFollowLoading ? null : _toggleFollow,
-                        icon: _isFollowLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                      child: isChamber
+                          ? OutlinedButton.icon(
+                              onPressed: null,
+                              icon: const Icon(LucideIcons.shieldCheck),
+                              label: const Text('Chamber Member'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                              )
-                            : Icon(
-                                _isFollowing
-                                    ? LucideIcons.check
-                                    : LucideIcons.plus,
                               ),
-                        label: Text(
-                          _isFollowing ? 'Following' : 'Follow Organization',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
+                            )
+                          : OutlinedButton.icon(
+                              onPressed:
+                                  _isFollowLoading ? null : _toggleFollow,
+                              icon: _isFollowLoading
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      _isFollowing
+                                          ? LucideIcons.check
+                                          : LucideIcons.plus,
+                                    ),
+                              label: Text(
+                                _isFollowing ? 'Following' : 'Follow Organization',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
                     ),
                   ),
 
@@ -448,7 +508,7 @@ class _OrganizationInfoScreenState
                     const SizedBox(height: 24),
                   ],
 
-                  // Board Participants Section (Second)
+                  // Members / Board Participants Section.
                   if (_participants.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -457,7 +517,9 @@ class _OrganizationInfoScreenState
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'BOARD PARTICIPANTS (${_participants.length})',
+                          isChamber
+                              ? 'CHAMBER MEMBERS (${_participants.length})'
+                              : 'BOARD PARTICIPANTS (${_participants.length})',
                           style: theme.textTheme.labelSmall,
                         ),
                       ),
@@ -492,7 +554,10 @@ class _OrganizationInfoScreenState
                         onNameTap: () => context.push('/profile/${p.uid}'),
                       );
                     }),
-                    if (_isAdmin) ...[
+                    // "Add Participants" only applies to user-registered orgs.
+                    // Chamber membership is auto-derived from the (home, host)
+                    // corridor — admins can't manually invite people.
+                    if (_isAdmin && !isChamber) ...[
                       const SizedBox(height: 8),
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -510,8 +575,10 @@ class _OrganizationInfoScreenState
                     const SizedBox(height: 24),
                   ],
 
-                  // Followers Section (Last)
-                  if (_followers.isNotEmpty) ...[
+                  // Followers Section (Last). Hidden for chambers — chamber
+                  // followers == chamber members, so the list above is the
+                  // complete picture and a duplicate section just creates noise.
+                  if (!isChamber && _followers.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppTheme.pageHorizontalPadding,

@@ -83,11 +83,6 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
     super.dispose();
   }
 
-  void _handleSend() {
-    widget.onSend(widget.files, _captionController.text.trim());
-    Navigator.pop(context); // Close preview
-  }
-
   void _toggleVideo() {
     if (_videoController == null || !_isInitialized) return;
 

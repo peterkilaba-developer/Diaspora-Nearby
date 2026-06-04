@@ -505,6 +505,38 @@ class ChatCard extends ConsumerWidget {
       );
     }
 
+    // Corridor Chamber of Commerce — dual-flag avatar (host first, home second)
+    if (chat.isOrganization && chat.id.startsWith('org_chamber_')) {
+      final host = chat.hostCountryCode;
+      final home = chat.homeCountryCode;
+      if (host != null && home != null) {
+        final hostFlag = country_data.getCountryByCode(host)?.flag;
+        final homeFlag = country_data.getCountryByCode(home)?.flag;
+        if (hostFlag != null && homeFlag != null) {
+          return SizedBox(
+            width: 56,
+            height: 56,
+            child: Stack(
+              children: [
+                // Host country flag — bottom-left, slightly larger (leads)
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: Text(hostFlag, style: const TextStyle(fontSize: 34)),
+                ),
+                // Home country flag — top-right, slightly smaller
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Text(homeFlag, style: const TextStyle(fontSize: 26)),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    }
+
     // For group/event/org chats, show photo if available, else icon
     if ((chat.isEvent || chat.isGroup || chat.isOrganization) &&
         chat.photoUrl != null &&
