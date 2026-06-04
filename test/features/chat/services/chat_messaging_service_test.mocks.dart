@@ -3111,6 +3111,21 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
           as _i5.Future<void>);
 
   @override
+  _i5.Future<void> trackVouchConsensusVote({
+    required String? voucherId,
+    required bool? isAgree,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackVouchConsensusVote, [], {
+              #voucherId: voucherId,
+              #isAgree: isAgree,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   _i5.Future<bool> trackExternalShare(String? userId, String? contentType) =>
       (super.noSuchMethod(
             Invocation.method(#trackExternalShare, [userId, contentType]),
@@ -3510,6 +3525,46 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
               #countryCode: countryCode,
               #activityType: activityType,
               #metadata: metadata,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackEconomyTransaction({
+    required String? buyerUserId,
+    required String? sellerUserId,
+    required double? fiatAmount,
+    required String? countryCode,
+    String? transactionType,
+    Map<String, dynamic>? metadata,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEconomyTransaction, [], {
+              #buyerUserId: buyerUserId,
+              #sellerUserId: sellerUserId,
+              #fiatAmount: fiatAmount,
+              #countryCode: countryCode,
+              #transactionType: transactionType,
+              #metadata: metadata,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackEventAttendance({
+    required String? attendeeUserId,
+    required String? hostUserId,
+    required String? eventId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEventAttendance, [], {
+              #attendeeUserId: attendeeUserId,
+              #hostUserId: hostUserId,
+              #eventId: eventId,
             }),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),

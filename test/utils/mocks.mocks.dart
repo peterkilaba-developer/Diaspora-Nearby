@@ -229,6 +229,18 @@ class MockProfileRepository extends _i1.Mock implements _i7.ProfileRepository {
   }
 
   @override
+  void invalidateProfileCache(String? uid) => super.noSuchMethod(
+    Invocation.method(#invalidateProfileCache, [uid]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void clearProfileCache() => super.noSuchMethod(
+    Invocation.method(#clearProfileCache, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i5.Future<_i8.ProfileData?> getUserProfile(String? uid) =>
       (super.noSuchMethod(
             Invocation.method(#getUserProfile, [uid]),
@@ -694,12 +706,13 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
     int? points,
     String? action, {
     Map<String, dynamic>? metadata,
+    bool? skipTreasury = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #addPoints,
               [userId, points, action],
-              {#metadata: metadata},
+              {#metadata: metadata, #skipTreasury: skipTreasury},
             ),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
@@ -1195,6 +1208,21 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
           as _i5.Future<void>);
 
   @override
+  _i5.Future<void> trackVouchConsensusVote({
+    required String? voucherId,
+    required bool? isAgree,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackVouchConsensusVote, [], {
+              #voucherId: voucherId,
+              #isAgree: isAgree,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   _i5.Future<bool> trackExternalShare(String? userId, String? contentType) =>
       (super.noSuchMethod(
             Invocation.method(#trackExternalShare, [userId, contentType]),
@@ -1578,6 +1606,46 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
               #countryCode: countryCode,
               #activityType: activityType,
               #metadata: metadata,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackEconomyTransaction({
+    required String? buyerUserId,
+    required String? sellerUserId,
+    required double? fiatAmount,
+    required String? countryCode,
+    String? transactionType,
+    Map<String, dynamic>? metadata,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEconomyTransaction, [], {
+              #buyerUserId: buyerUserId,
+              #sellerUserId: sellerUserId,
+              #fiatAmount: fiatAmount,
+              #countryCode: countryCode,
+              #transactionType: transactionType,
+              #metadata: metadata,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackEventAttendance({
+    required String? attendeeUserId,
+    required String? hostUserId,
+    required String? eventId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEventAttendance, [], {
+              #attendeeUserId: attendeeUserId,
+              #hostUserId: hostUserId,
+              #eventId: eventId,
             }),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),

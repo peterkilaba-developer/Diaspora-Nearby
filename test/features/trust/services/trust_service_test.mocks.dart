@@ -174,6 +174,22 @@ class MockTrustRepository extends _i1.Mock implements _i2.TrustRepository {
           as _i3.Future<List<String>>);
 
   @override
+  _i3.Future<Map<String, Map<String, dynamic>>> getQrExchangeRecords(
+    String? userId,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getQrExchangeRecords, [userId]),
+            returnValue: _i3.Future<Map<String, Map<String, dynamic>>>.value(
+              <String, Map<String, dynamic>>{},
+            ),
+            returnValueForMissingStub:
+                _i3.Future<Map<String, Map<String, dynamic>>>.value(
+                  <String, Map<String, dynamic>>{},
+                ),
+          )
+          as _i3.Future<Map<String, Map<String, dynamic>>>);
+
+  @override
   _i3.Future<void> saveCheckInRecord(
     String? userId,
     String? entityId,
@@ -438,6 +454,18 @@ class MockTrustRepository extends _i1.Mock implements _i2.TrustRepository {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockProfileRepository extends _i1.Mock implements _i5.ProfileRepository {
+  @override
+  void invalidateProfileCache(String? uid) => super.noSuchMethod(
+    Invocation.method(#invalidateProfileCache, [uid]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void clearProfileCache() => super.noSuchMethod(
+    Invocation.method(#clearProfileCache, []),
+    returnValueForMissingStub: null,
+  );
+
   @override
   _i3.Future<_i6.ProfileData?> getUserProfile(String? uid) =>
       (super.noSuchMethod(
@@ -1094,12 +1122,13 @@ class MockPointsRepository extends _i1.Mock implements _i13.PointsRepository {
     int? points,
     String? action, {
     Map<String, dynamic>? metadata,
+    bool? skipTreasury = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #addPoints,
               [userId, points, action],
-              {#metadata: metadata},
+              {#metadata: metadata, #skipTreasury: skipTreasury},
             ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),

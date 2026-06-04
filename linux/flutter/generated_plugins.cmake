@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  device_region
   file_selector_linux
   record_linux
   syncfusion_pdfviewer_linux

@@ -169,6 +169,18 @@ class MockTrustRepository extends _i1.Mock implements _i2.TrustRepository {
           as _i3.Future<List<String>>);
 
   @override
+  _i3.Future<Map<String, Map<String, dynamic>>> getQrExchangeRecords(
+    String? userId,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getQrExchangeRecords, [userId]),
+            returnValue: _i3.Future<Map<String, Map<String, dynamic>>>.value(
+              <String, Map<String, dynamic>>{},
+            ),
+          )
+          as _i3.Future<Map<String, Map<String, dynamic>>>);
+
+  @override
   _i3.Future<void> saveCheckInRecord(
     String? userId,
     String? entityId,
@@ -500,6 +512,21 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
   _i3.Future<void> trackVouchReward(String? userId, String? vouchedUserId) =>
       (super.noSuchMethod(
             Invocation.method(#trackVouchReward, [userId, vouchedUserId]),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> trackVouchConsensusVote({
+    required String? voucherId,
+    required bool? isAgree,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackVouchConsensusVote, [], {
+              #voucherId: voucherId,
+              #isAgree: isAgree,
+            }),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
@@ -896,6 +923,46 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
+  _i3.Future<void> trackEconomyTransaction({
+    required String? buyerUserId,
+    required String? sellerUserId,
+    required double? fiatAmount,
+    required String? countryCode,
+    String? transactionType,
+    Map<String, dynamic>? metadata,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEconomyTransaction, [], {
+              #buyerUserId: buyerUserId,
+              #sellerUserId: sellerUserId,
+              #fiatAmount: fiatAmount,
+              #countryCode: countryCode,
+              #transactionType: transactionType,
+              #metadata: metadata,
+            }),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> trackEventAttendance({
+    required String? attendeeUserId,
+    required String? hostUserId,
+    required String? eventId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEventAttendance, [], {
+              #attendeeUserId: attendeeUserId,
+              #hostUserId: hostUserId,
+              #eventId: eventId,
+            }),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
   _i3.Future<void> awardPoints({
     required String? userId,
     required int? amount,
@@ -1195,6 +1262,18 @@ class MockProfileRepository extends _i1.Mock implements _i10.ProfileRepository {
   MockProfileRepository() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  void invalidateProfileCache(String? uid) => super.noSuchMethod(
+    Invocation.method(#invalidateProfileCache, [uid]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void clearProfileCache() => super.noSuchMethod(
+    Invocation.method(#clearProfileCache, []),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i3.Future<_i11.ProfileData?> getUserProfile(String? uid) =>
@@ -1541,12 +1620,13 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
     int? points,
     String? action, {
     Map<String, dynamic>? metadata,
+    bool? skipTreasury = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #addPoints,
               [userId, points, action],
-              {#metadata: metadata},
+              {#metadata: metadata, #skipTreasury: skipTreasury},
             ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
