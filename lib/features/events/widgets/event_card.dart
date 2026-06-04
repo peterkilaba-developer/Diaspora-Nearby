@@ -3,10 +3,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
-import 'package:diaspora_nearby/models/event_data.dart';
-import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
+import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:diaspora_nearby/features/events/widgets/event_venue_card.dart';
 
 class EventCard extends StatelessWidget {
   final Event event;
@@ -16,7 +17,7 @@ class EventCard extends StatelessWidget {
   final Position? userLocation;
   final bool isInterested;
   final VoidCallback? onInterestToggle;
-  final bool isCreator; 
+  final bool isCreator;
   final VoidCallback? onEditTap;
   final String? searchQuery; // [NEW] for highlighting
 
@@ -45,20 +46,26 @@ class EventCard extends StatelessWidget {
       startDate = DateTime.parse(event.startDate);
     } catch (_) {}
 
-    final monthStr = startDate != null ? DateFormat('MMM').format(startDate).toUpperCase() : '';
+    final monthStr = startDate != null
+        ? DateFormat('MMM').format(startDate).toUpperCase()
+        : '';
     final dayStr = startDate != null ? DateFormat('d').format(startDate) : '';
-    
-    final dateStr = startDate != null ? DateFormat('EEE, MMM d, y').format(startDate) : event.startDate;
+
+    final dateStr = startDate != null
+        ? DateFormat('EEE, MMM d, y').format(startDate)
+        : event.startDate;
     final timeStr = event.startTime;
 
     // End Date Parsing
     DateTime? endDate;
     if (event.endDate != null) {
-        try {
-          endDate = DateTime.parse(event.endDate!);
-        } catch (_) {}
+      try {
+        endDate = DateTime.parse(event.endDate!);
+      } catch (_) {}
     }
-    final endDateStr = endDate != null ? DateFormat('EEE, MMM d, y').format(endDate) : dateStr;
+    final endDateStr = endDate != null
+        ? DateFormat('EEE, MMM d, y').format(endDate)
+        : dateStr;
     final endTimeStr = event.endTime ?? timeStr;
 
     // Time Formatting Helper
@@ -78,12 +85,28 @@ class EventCard extends StatelessWidget {
     final displayStartTime = formatToAmPm(timeStr);
     final displayEndTime = formatToAmPm(endTimeStr);
 
+    // [NEW] Calculate distance if missing and user location is available
+    if (event.distance == null &&
+        userLocation != null &&
+        event.latitude != null &&
+        event.longitude != null) {
+      event.distance =
+          Geolocator.distanceBetween(
+            userLocation!.latitude,
+            userLocation!.longitude,
+            event.latitude!,
+            event.longitude!,
+          ) /
+          1000; // Convert to km
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap ?? () => context.push('/events/${event.id}', extra: event),
+          onTap:
+              onTap ?? () => context.push('/events/${event.id}', extra: event),
           borderRadius: BorderRadius.circular(24),
           child: Ink(
             decoration: BoxDecoration(
@@ -106,7 +129,9 @@ class EventCard extends StatelessWidget {
                     Hero(
                       tag: 'event_image_${event.id}',
                       child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
                         child: Container(
                           height: 200,
                           width: double.infinity,
@@ -122,28 +147,44 @@ class EventCard extends StatelessWidget {
                                     ),
                                   ),
                                   errorWidget: (context, url, error) => Center(
-                                    child: Icon(LucideIcons.image, size: 50, color: theme.colorScheme.outline),
+                                    child: Icon(
+                                      LucideIcons.image,
+                                      size: 50,
+                                      color: theme.colorScheme.outline,
+                                    ),
                                   ),
                                 )
-                              : Center(child: Icon(LucideIcons.image, size: 50, color: theme.colorScheme.outline)),
+                              : Center(
+                                  child: Icon(
+                                    LucideIcons.image,
+                                    size: 50,
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
 
                     // Date Badge Overlay (Calendar Sheet Style)
                     Positioned(
-                      top: 8,
-                      left: 8,
-                      child: GlassContainer(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        borderRadius: BorderRadius.circular(12),
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               monthStr,
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
+                              style: const TextStyle(
+                                color: Colors.white70,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1,
@@ -151,8 +192,8 @@ class EventCard extends StatelessWidget {
                             ),
                             Text(
                               dayStr,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
+                              style: const TextStyle(
+                                color: Colors.white,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 height: 1.1,
@@ -163,29 +204,58 @@ class EventCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Price Badge
+                    // Entry Fee / Free Badge
                     Positioned(
-                      top: 8,
-                      right: 8,
-                      child: GlassContainer(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        borderRadius: BorderRadius.circular(30),
-                        child: Text(
-                          event.isPaid == true ? '\$${event.ticketPrice?.toStringAsFixed(0)}' : 'FREE',
-                          style: TextStyle(
-                            color: theme.colorScheme.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              event.isPaid == true &&
+                                  (event.ticketPrice ?? 0) > 0
+                              ? Colors.black.withValues(alpha: 0.65)
+                              : Colors.green.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              event.isPaid == true &&
+                                      (event.ticketPrice ?? 0) > 0
+                                  ? LucideIcons.ticket
+                                  : LucideIcons.sparkles,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              event.isPaid == true &&
+                                      (event.ticketPrice ?? 0) > 0
+                                  ? '\$${event.ticketPrice!.toStringAsFixed(event.ticketPrice! == event.ticketPrice!.roundToDouble() ? 0 : 2)}'
+                                  : 'Free',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ],
                 ),
 
-                // Content Section
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 16,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -194,9 +264,14 @@ class EventCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.1,
+                              ),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -218,28 +293,40 @@ class EventCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(left: 8),
                         child: SearchHighlightUtils.highlightText(
-                          event.title, 
-                          searchQuery, 
+                          event.title,
+                          searchQuery,
                           theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w900,
                             letterSpacing: -0.5,
                           ),
-                          context
+                          context,
                         ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Stats (Going • Interested)
+                      // Stats (Going \u2022 Interested)
                       Padding(
-                        padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+                        padding: const EdgeInsets.only(
+                          left: 8,
+                          top: 8,
+                          bottom: 8,
+                        ),
                         child: Row(
                           children: [
-                            Icon(LucideIcons.users, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                            Icon(
+                              LucideIcons.users,
+                              size: 14,
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             Text(
-                              '${event.attendeeCount ?? event.attendees?.length ?? 0} going • ${event.interested?.length ?? 0} interested',
+                              '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
                               style: theme.textTheme.labelMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -252,29 +339,56 @@ class EventCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Start', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10)),
-                                  Text(dateStr, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    'Start',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  Text(
+                                    dateStr,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                   Row(
                                     children: [
-                                      Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                                      Icon(
+                                        LucideIcons.clock,
+                                        size: 10,
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.6),
+                                      ),
                                       const SizedBox(width: 4),
                                       Expanded(
                                         child: Text(
-                                          displayStartTime, 
-                                          style: theme.textTheme.labelSmall?.copyWith(
-                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6), 
-                                            fontWeight: FontWeight.w600
-                                          ), 
-                                          maxLines: 1, 
-                                          overflow: TextOverflow.ellipsis
+                                          displayStartTime,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withValues(alpha: 0.6),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -286,29 +400,56 @@ class EventCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('End', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 10)),
-                                  Text(endDateStr, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    'End',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  Text(
+                                    endDateStr,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                   Row(
                                     children: [
-                                      Icon(LucideIcons.clock, size: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                                      Icon(
+                                        LucideIcons.clock,
+                                        size: 10,
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.6),
+                                      ),
                                       const SizedBox(width: 4),
                                       Expanded(
                                         child: Text(
-                                          displayEndTime, 
-                                          style: theme.textTheme.labelSmall?.copyWith(
-                                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6), 
-                                            fontWeight: FontWeight.w600
-                                          ), 
-                                          maxLines: 1, 
-                                          overflow: TextOverflow.ellipsis
+                                          displayEndTime,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withValues(alpha: 0.6),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -320,152 +461,21 @@ class EventCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // Location Display (Synced with Detail Page Style)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 40, width: 0), // Minimum height for circle match
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(LucideIcons.mapPin, color: Colors.orange, size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                    // Title Logic: Venue Name OR City
-                                    Builder(
-                                      builder: (context) {
-                                        String displayTitle = '';
-                                        bool showSubtitle = false;
-                                        String subtitleText = '';
-
-                                        // Prioritize Venue Name
-                                        if (event.venueName != null && event.venueName!.isNotEmpty) {
-                                          displayTitle = event.venueName!; // Don't split, show full name unless too long? Actually split is okay for title.
-                                          // displayTitle = event.venueName!.split(',').first.trim(); // Maybe keep full name
-                                          showSubtitle = true; 
-                                        } 
-                                        // Fallback to City Name if no Venue Name
-                                        else if (event.venueCity != null && event.venueCity!.isNotEmpty) {
-                                          displayTitle = event.venueCity!;
-                                          showSubtitle = true;
-                                        }
-                                        // Fallback to parsing raw location string
-                                        else {
-                                           final rawLocation = event.venueAddress?.isNotEmpty == true ? event.venueAddress! : event.location;
-                                           // Heuristic: If it looks like "123 Main St, City, State", grab "123 Main St" or "City".
-                                           // User wants to avoid raw address. Maybe prioritize City if possible?
-                                           // Actually, if we don't have structured data, splitting by comma is risky.
-                                           // BUT, if we have structure:
-                                           
-                                           final parts = rawLocation.split(',');
-                                           if (parts.length >= 2) {
-                                              // Assume format: "Venue/Street, City, ..."
-                                              // If part 0 is numeric (street), maybe skip to part 1 (City)?
-                                              // Let's try to be smart.
-                                              displayTitle = parts.first.trim();
-                                              if (parts.length > 1) {
-                                                 showSubtitle = true;
-                                                 subtitleText = parts.sublist(1).join(', ').trim(); 
-                                              }
-                                           } else {
-                                              displayTitle = rawLocation;
-                                           }
-                                        }
-
-                                        // Construct Subtitle 
-                                        // If we already have a subtitleText from parsing, use it.
-                                        // Otherwise build from City/State/Country
-                                        if (subtitleText.isEmpty) {
-                                           // If we used VenueName -> Subtitle = City, State
-                                           if (event.venueName != null && event.venueName!.isNotEmpty) {
-                                              subtitleText = [
-                                                event.venueAddress, // Maybe address is useful as subtitle?
-                                                event.venueCity,
-                                              ].where((e) => e != null && e.isNotEmpty).join(', ');
-                                              // Actually better: City, State
-                                               if (event.venueCity != null) {
-                                                  subtitleText = event.venueCity!;
-                                               } else if (event.venueAddress != null) {
-                                                  subtitleText = event.venueAddress!;
-                                               }
-                                           } 
-                                           // If we used City -> Subtitle = State, Country
-                                           else if (event.venueCity != null) {
-                                              subtitleText = [
-                                                event.venueState,
-                                                event.venueCountry
-                                              ].where((e) => e != null && e.isNotEmpty).join(', ');
-                                           }
-                                        }
-
-                                        return Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            SearchHighlightUtils.highlightText(
-                                              displayTitle,
-                                              searchQuery,
-                                              theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-                                              context
-                                            ),
-                                            if (showSubtitle && subtitleText.isNotEmpty)
-                                              Padding(
-                                                padding: const EdgeInsets.only(top: 2),
-                                                child: SearchHighlightUtils.highlightText(
-                                                  subtitleText,
-                                                  searchQuery,
-                                                  theme.textTheme.labelSmall?.copyWith(
-                                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                                    fontSize: 10,
-                                                  ),
-                                                  context
-                                                ),
-                                              ),
-                                          ],
-                                        );
-                                      }
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            if (event.distance != null)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '${event.distance!.toStringAsFixed(1)}km',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(LucideIcons.navigation, size: 14, color: Colors.orange),
-                                  ],
-                                ),
-                              )
-                            else
-                               const Icon(LucideIcons.chevronRight, size: 16, color: Colors.grey),
-                          ],
-                        ),
+                      EventVenueCard(
+                        event: event,
+                        searchQuery: searchQuery,
+                        compact: true,
+                        showDirections: true,
+                        onDirectionsTap: (query) async {
+                          final uri = Uri.parse(
+                            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
+                          );
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri);
+                          }
+                        },
                       ),
-                      
+
                       // Creator Actions (Edit) vs Interested
                       if (isCreator && onEditTap != null) ...[
                         const SizedBox(height: 16),
@@ -474,11 +484,19 @@ class EventCard extends StatelessWidget {
                           child: OutlinedButton.icon(
                             onPressed: onEditTap,
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: theme.colorScheme.primary),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              side: BorderSide(
+                                color: theme.colorScheme.primary,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 10),
                             ),
-                            icon: Icon(LucideIcons.edit3, size: 16, color: theme.colorScheme.primary),
+                            icon: Icon(
+                              LucideIcons.edit3,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
                             label: Text(
                               'Edit Event',
                               style: TextStyle(
@@ -495,35 +513,54 @@ class EventCard extends StatelessWidget {
                           child: OutlinedButton.icon(
                             onPressed: isAttending ? null : onInterestToggle,
                             style: OutlinedButton.styleFrom(
-                              backgroundColor: isAttending 
-                                  ? Colors.green.withValues(alpha: 0.1) 
-                                  : (isInterested ? theme.colorScheme.primary.withValues(alpha: 0.1) : null),
+                              backgroundColor: isAttending
+                                  ? Colors.green.withValues(alpha: 0.1)
+                                  : (isInterested
+                                        ? theme.colorScheme.primary.withValues(
+                                            alpha: 0.1,
+                                          )
+                                        : null),
                               side: BorderSide(
-                                color: isAttending 
-                                  ? Colors.green 
-                                  : (isInterested ? theme.colorScheme.primary : theme.colorScheme.outline.withValues(alpha: 0.3))
+                                color: isAttending
+                                    ? Colors.green
+                                    : (isInterested
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.outline
+                                                .withValues(alpha: 0.3)),
                               ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 10),
                             ),
                             icon: Icon(
-                              isAttending 
-                                  ? LucideIcons.checkCircle2 
-                                  : (isInterested ? LucideIcons.star : LucideIcons.star), 
-                              size: 16, 
-                              color: isAttending 
-                                  ? Colors.green 
-                                  : (isInterested ? theme.colorScheme.primary : theme.colorScheme.onSurface)
+                              isAttending
+                                  ? LucideIcons.checkCircle2
+                                  : (isInterested
+                                        ? LucideIcons.star
+                                        : LucideIcons.star),
+                              size: 16,
+                              color: isAttending
+                                  ? Colors.green
+                                  : (isInterested
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface),
                             ),
                             label: Text(
-                              isAttending 
-                                  ? 'Going' 
-                                  : (isInterested ? 'Interested' : 'Interested?'),
+                              isAttending
+                                  ? 'Going'
+                                  : (isInterested
+                                        ? 'Interested'
+                                        : 'Interested?'),
                               style: TextStyle(
-                                color: isAttending 
-                                    ? Colors.green 
-                                    : (isInterested ? theme.colorScheme.primary : theme.colorScheme.onSurface),
-                                fontWeight: (isAttending || isInterested) ? FontWeight.bold : FontWeight.normal,
+                                color: isAttending
+                                    ? Colors.green
+                                    : (isInterested
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurface),
+                                fontWeight: (isAttending || isInterested)
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           ),
@@ -534,7 +571,7 @@ class EventCard extends StatelessWidget {
                       if (extraContent != null) ...[
                         const SizedBox(height: 20),
                         extraContent!,
-                      ]
+                      ],
                     ],
                   ),
                 ),
@@ -548,7 +585,7 @@ class EventCard extends StatelessWidget {
 
   Widget _buildStatusBadge(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     final statusInfo = event.getStatusBadgeInfo();
     final statusText = statusInfo['text'] as String?;
     final semanticColor = statusInfo['color'] as String?;
@@ -556,25 +593,19 @@ class EventCard extends StatelessWidget {
     if (statusText == null) return const SizedBox.shrink();
 
     // Map semantic color to Color
-    Color badgeColor = theme.colorScheme.secondary;
+    Color badgeColor = theme.colorScheme.primary;
     if (semanticColor == 'green') badgeColor = Colors.green;
-    
+
     // For default secondary, maybe orange?
     // Original code used theme.colorScheme.secondary mostly.
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
+    return Text(
+      statusText.toUpperCase(),
+      style: TextStyle(
         color: badgeColor,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        statusText,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
       ),
     );
   }

@@ -2,35 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
+import 'package:diaspora_nearby/features/sharing/services/share_receiver_service.dart';
+import 'package:diaspora_nearby/core/initialization/app_bootstrap.dart'; // [NEW] Bootstrap import
+import 'package:google_fonts/google_fonts.dart'; // [PERF] For disabling runtime fetching
+
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:diaspora_nearby/firebase_options.dart';
+import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
+import 'package:diaspora_nearby/core/providers/theme_provider.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/router.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'router.dart';
-import 'theme/app_theme.dart';
-import 'firebase_options.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:diaspora_nearby/providers/theme_provider.dart';
-import 'package:diaspora_nearby/services/local_cache_service.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:diaspora_nearby/services/push_notification_service.dart';
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:diaspora_nearby/services/background_location_service.dart';
-import 'package:diaspora_nearby/services/database_service.dart';
-import 'package:diaspora_nearby/services/database_service.dart';
-import 'package:diaspora_nearby/services/mention_monitor_service.dart';
-import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize Firebase only if not already initialized
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     }
   } catch (e) {
     debugPrint('Firebase already initialized in background handler: $e');
@@ -38,141 +38,202 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   // Handle Data-only messages (Android doesn't show these automatically)
   if (message.notification == null) {
-      final data = message.data;
-      String? title;
-      String? body;
+    final data = message.data;
+    String? title;
+    String? body;
 
-      // Logic mirrors PushNotificationService foreground logic
-      if (data['type'] == 'chat' || data['type'] == 'text' || data['type'] == 'image' || data['type'] == 'video') {
-          title = data['senderName'] ?? 'New Message';
-          body = data['content'] ?? data['body'] ?? 'Sent a message';
-          
-          if ((body == null || body.isEmpty) && data['type'] != 'text') {
-              if (data['type'] == 'image') body = 'Photo';
-              else if (data['type'] == 'video') body = 'Video';
-          }
-      } else if (data['type'] == 'dsp_transfer') {
-           title = 'Diaspora Nearby';
-           dynamic amountVal = data['amount'];
-           // Try parsing metadata if amount is missing
-           if (amountVal == null && data['metadata'] != null) {
-              if (data['metadata'] is String) {
-                 try {
-                   final meta = jsonDecode(data['metadata']);
-                   amountVal = meta['amount'];
-                 } catch (_) {}
-              } else if (data['metadata'] is Map) {
-                 amountVal = data['metadata']['amount'];
-              }
-           }
-           
-           if (amountVal != null) {
-             final senderName = data['senderName'] ?? 'Someone';
-             body = 'You received $amountVal DSP from $senderName';
-           }
-      }
+    // Logic mirrors PushNotificationService foreground logic
+    String? msgType = data['type'];
+    String msgContent = (data['content'] ?? data['body'] ?? '') as String;
+    String? senderName = data['senderName']?.toString();
+    // Default title is sender name, can be overridden (e.g. for System messages)
+    title = (senderName?.trim().isNotEmpty ?? false)
+        ? senderName
+        : 'New Message';
 
-      if (title != null && body != null) {
-          try {
-             final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-             const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-             const settings = InitializationSettings(android: androidSettings);
-             await flutterLocalNotificationsPlugin.initialize(settings);
-             
-             await flutterLocalNotificationsPlugin.show(
-              message.hashCode,
-              title,
-              body,
-              const NotificationDetails(
-                android: AndroidNotificationDetails(
-                  'high_importance_channel',
-                  'High Importance Notifications',
-                  icon: '@mipmap/ic_launcher',
-                  priority: Priority.high,
-                  importance: Importance.max,
-                ),
-              ),
-              payload: jsonEncode(message.data),
-            );
-          } catch (e) {
-             debugPrint('Error showing background notification: $e');
+    if (msgType != null) {
+      switch (msgType) {
+        case 'audio':
+          body = msgContent.isEmpty ? 'Voice message' : msgContent;
+          break;
+        case 'audio_file':
+          body = msgContent.isEmpty ? 'Audio file' : msgContent;
+          break;
+        case 'image':
+          body = msgContent.isEmpty ? 'Photo' : msgContent;
+          break;
+        case 'video':
+          body = msgContent.isEmpty ? 'Video' : msgContent;
+          break;
+        case 'location':
+          if (msgContent.isEmpty ||
+              msgContent == 'Location' ||
+              msgContent == 'Location') {
+            body = 'Location';
+          } else {
+            body = msgContent;
           }
+          break;
+        case 'document':
+          body = msgContent.isEmpty ? 'Document' : msgContent;
+          break;
+        case 'dsp_transfer':
+          title = 'Diaspora Nearby';
+          body = 'Transfer';
+          break;
+        case 'money-transfer':
+          body = 'Money transfer';
+          break;
+        case 'relationship_request':
+          title = 'New Relationship Request';
+          final fromName = data['fromUserName'] ?? 'Someone';
+          final relType = data['relationshipType'] ?? 'relative';
+          body = '$fromName wants to add you as their $relType';
+          break;
+        case 'text':
+        case 'chat':
+        default:
+          body = msgContent.isEmpty ? 'Sent a message' : msgContent;
+          break;
       }
+    }
+
+    if (body == null || body.trim().isEmpty) {
+      body = msgContent.trim().isNotEmpty ? msgContent : 'Sent a message';
+    }
+
+    if (title != null) {
+      try {
+        final flutterLocalNotificationsPlugin =
+            FlutterLocalNotificationsPlugin();
+        const androidSettings = AndroidInitializationSettings(
+          '@mipmap/ic_launcher',
+        );
+        const settings = InitializationSettings(android: androidSettings);
+        await flutterLocalNotificationsPlugin.initialize(settings: settings);
+
+        await flutterLocalNotificationsPlugin.show(
+          id: message.hashCode,
+          title: title,
+          body: body,
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'High Importance Notifications',
+              icon: '@mipmap/ic_launcher',
+              priority: Priority.high,
+              importance: Importance.max,
+            ),
+          ),
+          payload: jsonEncode(message.data),
+        );
+      } catch (e) {
+        debugPrint('Error showing background notification: $e');
+      }
+    }
   }
 }
 
 void main() async {
-  runZonedGuarded<Future<void>>(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    
-    // Local Cache initialization
-    final sharedPreferences = await SharedPreferences.getInstance();
-    LocalCacheService.init(sharedPreferences);
-    await DatabaseService().init();
+  runZonedGuarded<Future<void>>(
+    () async {
+      // [NEW] Centralized Initialization
+      await AppBootstrap.init();
 
-    // Initialize Push Notifications
-    final container = ProviderContainer(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(sharedPreferences),
-      ],
-    );
-
-    try {
-      if (Firebase.apps.isEmpty) { 
-        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform); 
-      }
-      
-      if (!kIsWeb) {
-        // Pass all uncaught "fatal" errors from the framework to Crashlytics
-        FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-      }
-      
-      // Web App Check
+      // [PERF] Disable runtime font fetching on native (fonts bundled in release).
+      // On web, allow runtime fetching since .ttf files aren't bundled as assets.
       try {
-        await FirebaseAppCheck.instance.activate(
-          webProvider: ReCaptchaV3Provider('6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G'),
-          androidProvider: kReleaseMode ? AndroidProvider.playIntegrity : AndroidProvider.debug,
-          appleProvider: AppleProvider.deviceCheck,
+        // ignore: deprecated_member_use
+        GoogleFonts.config.allowRuntimeFetching = kIsWeb;
+      } catch (_) {
+        // GoogleFonts config may not be available on all platforms
+      }
+
+      // Initialize Stripe (non-blocking — not supported on web)
+      // Key is injected at build time: --dart-define=STRIPE_PUBLISHABLE_KEY=pk_live_...
+      try {
+        const stripeKey = String.fromEnvironment(
+          'STRIPE_PUBLISHABLE_KEY',
+          defaultValue:
+              'pk_test_51SCn3gI1F9UMWfaWdPiGbCBhcv2jpHOC06TrLhU2iHS5GxslRN4ltU4Chqc0rhTo7aW01BzxOjoXEPcCN7bafrlJ00jxw3bQsJ',
+        );
+        Stripe.publishableKey = stripeKey;
+        await Stripe.instance.applySettings();
+        debugPrint(
+          '▶ Stripe initialized ✓ (live=${stripeKey.startsWith("pk_live")})',
         );
       } catch (e) {
-        debugPrint('Firebase App Check Init Error: $e');
+        debugPrint('▶ Stripe init skipped: $e');
       }
 
-      // Initialize Push Notifications
-      container.read(pushNotificationServiceProvider).initialize().catchError((e) {
-        debugPrint('Push Notification Init Failed: $e');
-      });
+      // Initialize Providers requiring SharedPreferences
+      final sharedPreferences = await SharedPreferences.getInstance();
 
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-      
-      // [NEW] Initialize Mention Monitor Service (Foreground Listener)
-      await MentionMonitorService().initialize();
-    } catch (e) {
-      debugPrint('Firebase Init Error: $e');
-    }
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+        ],
+      );
 
-    runApp(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MyApp(),
-      ),
-    );
-  }, (error, stack) {
-    if (!kIsWeb) {
-      // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    } else {
-      debugPrint('Web Error: $error');
-      debugPrint('Stack Trace: $stack');
-    }
-  });
+      // Initialize Push Notifications (Provider-dependent)
+      try {
+        container.read(pushNotificationServiceProvider).initialize().catchError(
+          (e) {
+            debugPrint('Push Notification Init Failed: $e');
+          },
+        );
+        FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler,
+        );
+      } catch (e) {
+        debugPrint('Push Notification Setup Error: $e');
+      }
+
+      runApp(
+        UncontrolledProviderScope(container: container, child: const MyApp()),
+      );
+    },
+    (error, stack) {
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      } else {
+        debugPrint('Web Error: $error');
+        debugPrint('Stack Trace: $stack');
+      }
+    },
+  );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize Share Receiver
+    // Post-frame callback to ensure providers are ready?
+    // Usually safe in initState for event listeners.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(shareReceiverServiceProvider).initialize();
+    });
+  }
+
+  @override
+  void dispose() {
+    // We can't easily dispose the service here as it's a Provider,
+    // but the provider itself will be disposed if the container is.
+    // However, for manual cleanup if needed:
+    // ref.read(shareReceiverServiceProvider).dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     final router = ref.watch(routerProvider);
 

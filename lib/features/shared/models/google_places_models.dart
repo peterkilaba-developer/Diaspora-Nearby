@@ -1,5 +1,6 @@
 /// Independent data models for Google Places
 /// Replaces dependnecy on flutter_google_places_sdk
+// ignore_for_file: constant_identifier_names
 library;
 
 class AutocompletePrediction {

@@ -1,93 +1,204 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:diaspora_nearby/models/profile_data.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
-import 'package:diaspora_nearby/utils/location_utils.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 
 final homeRepositoryProvider = Provider((ref) {
   final auth = ref.watch(authRepositoryProvider);
-  final chatRepo = ref.watch(chatRepositoryProvider);
-  return HomeRepository(FirebaseFirestore.instance, auth, chatRepo);
+  return HomeRepository(FirebaseFirestore.instance, auth);
 });
+
+// ─── [PERF] Cached DM exclusion list ───
+// Fetching all chats to build an exclusion set is expensive.
+// Cache it for 10 minutes — only rebuild on explicit invalidation.
+final _dmExclusionProvider = FutureProvider<Set<String>>((ref) async {
+  final auth = ref.watch(authRepositoryProvider);
+  final chatRepo = ref.watch(chatRepositoryProvider);
+  final currentUser = auth.currentUser;
+  if (currentUser == null) return {};
+
+  final Set<String> dmUserIds = {};
+  try {
+    final chats = await chatRepo.getUserChats();
+    for (var chat in chats) {
+      if (chat.type == 'direct') {
+        for (var pid in chat.participants) {
+          if (pid != currentUser.uid) dmUserIds.add(pid);
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('[PERF] DM exclusion fetch failed: $e');
+  }
+  return dmUserIds;
+});
+
+// ─── [PERF] Cached Nearby Users Provider ───
+// Replaces the raw FutureBuilder approach. Data is cached and only
+// re-fetched when the view mode changes or the user explicitly refreshes.
+final nearbyUsersProvider =
+    AsyncNotifierProvider<NearbyUsersNotifier, List<ProfileData>>(
+  NearbyUsersNotifier.new,
+);
+
+class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
+  // [PERF] In-memory cache with TTL to avoid hammering Firestore
+  static List<ProfileData>? _cachedUsers;
+  static ViewMode? _cachedViewMode;
+  static DateTime _lastFetch = DateTime(2000);
+  static const _cacheTtl = Duration(minutes: 3);
+
+  @override
+  Future<List<ProfileData>> build() async {
+    final viewMode = ref.watch(nearbyViewModeProvider);
+    final isGlobal = viewMode == ViewMode.global;
+
+    // [PERF] Serve from cache if still fresh and same view mode
+    final now = DateTime.now();
+    if (_cachedUsers != null &&
+        _cachedViewMode == viewMode &&
+        now.difference(_lastFetch) < _cacheTtl) {
+      debugPrint('[PERF] nearbyUsersProvider CACHE HIT (${_cachedUsers!.length} users, ${now.difference(_lastFetch).inSeconds}s old)');
+      return _cachedUsers!;
+    }
+
+    debugPrint('[PERF] nearbyUsersProvider FETCHING (isGlobal=$isGlobal)');
+    final repo = ref.read(homeRepositoryProvider);
+    final dmExclusion = await ref.watch(_dmExclusionProvider.future);
+    final users = await repo.getNearbyUsers(
+      isGlobal: isGlobal,
+      dmExclusionIds: dmExclusion,
+    );
+
+    // Cache result
+    _cachedUsers = users;
+    _cachedViewMode = viewMode;
+    _lastFetch = DateTime.now();
+
+    debugPrint('[PERF] nearbyUsersProvider FETCHED ${users.length} users');
+    return users;
+  }
+
+  /// Force refresh — called by pull-to-refresh
+  Future<void> refresh() async {
+    _cachedUsers = null; // Bust cache
+    _lastFetch = DateTime(2000);
+    ref.invalidate(_dmExclusionProvider); // Also refresh DM exclusion
+    ref.invalidateSelf();
+  }
+}
 
 class HomeRepository {
   final FirebaseFirestore _firestore;
   final AuthRepository _auth;
-  final ChatRepository _chatRepo;
 
-  HomeRepository(this._firestore, this._auth, this._chatRepo);
+  HomeRepository(this._firestore, this._auth);
 
-  Future<List<ProfileData>> getNearbyUsers({bool isGlobal = false}) async {
+  /// [PERF] Accepts pre-cached DM exclusion set to avoid re-fetching chats
+  Future<List<ProfileData>> getNearbyUsers({
+    bool isGlobal = false,
+    Set<String> dmExclusionIds = const {},
+  }) async {
     try {
       final currentUser = _auth.currentUser;
       if (currentUser == null) return [];
 
-      final currentUserDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      // [PERF] Use cache-first for current user doc — profile data doesn't
+      // change frequently and cache-first avoids a network roundtrip.
+      DocumentSnapshot<Map<String, dynamic>> currentUserDoc;
+      try {
+        currentUserDoc = await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .get(const GetOptions(source: Source.cache))
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {
+        // Cache miss — fall back to server
+        currentUserDoc = await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+      }
       if (!currentUserDoc.exists) return [];
-      
+
       final currentUserData = currentUserDoc.data()!;
       final homeCountryCode = currentUserData['homeCountryCode'] as String?;
-      
+      final blockedUsers =
+          currentUserData['blockedUsers'] as List<dynamic>? ?? [];
+      final Set<String> blockedUserIds = blockedUsers
+          .map((e) => e.toString())
+          .toSet();
+
       // Location variables for distance calc
       final currentUserProfile = ProfileData.fromJson(currentUserData);
-      final myLat = currentUserProfile.currentLocation?.geometry.location.lat ?? 
-                    currentUserProfile.hostLocation.geometry?.location.lat ?? 0.0;
-      final myLng = currentUserProfile.currentLocation?.geometry.location.lng ?? 
-                    currentUserProfile.hostLocation.geometry?.location.lng ?? 0.0;
-
-      // 1. Fetch DM user IDs to exclude
-      final Set<String> dmUserIds = {};
-      try {
-        final chats = await _chatRepo.getUserChats();
-        for (var chat in chats) {
-          if (chat.type == 'direct') {
-             for (var pid in chat.participants) {
-                if (pid != currentUser.uid) dmUserIds.add(pid);
-             }
-          }
-        }
-      } catch (e) {
-        // Continue even if chat fetch fails
-      }
+      final myLat =
+          currentUserProfile.currentLocation?.geometry.location.lat ??
+          currentUserProfile.hostLocation.geometry?.location.lat ??
+          0.0;
+      final myLng =
+          currentUserProfile.currentLocation?.geometry.location.lng ??
+          currentUserProfile.hostLocation.geometry?.location.lng ??
+          0.0;
 
       Query query = _firestore.collection('users');
 
-      // Note: We use the same filtering logic as before
       if (!isGlobal && homeCountryCode != null) {
-         // Local Code: Filter by homeCountryCode
-         query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
+        query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
       }
-      
-      // Fetch more users (1000) for distance-based sorting and exclusion
-      final snapshot = await query.limit(1000).get(); 
-      
+
+      // [PERF] Reduced from 1000 → 200. 1000 docs was causing massive
+      // read costs and slow parsing on mobile. 200 is plenty for a feed.
+      final snapshot = await query.limit(200).get();
+
       final users = snapshot.docs
           .where((doc) {
-              if (doc.id == currentUser.uid) return false;
-              if (dmUserIds.contains(doc.id)) return false; // Exclude connected users
-              return true;
+            if (doc.id == currentUser.uid) return false;
+            if (blockedUserIds.contains(doc.id)) return false;
+            if (dmExclusionIds.contains(doc.id)) return false;
+            return true;
           })
           .map((doc) {
+            try {
               final data = doc.data() as Map<String, dynamic>;
               var profile = ProfileData.fromJson(data);
               profile.uid = doc.id;
-              
+
+              // Check if the other user has blocked US
+              final theirBlockedList =
+                  data['blockedUsers'] as List<dynamic>? ?? [];
+              if (theirBlockedList.contains(currentUser.uid)) return null;
+
               // Calculate Distance
-              final theirLat = profile.currentLocation?.geometry.location.lat ?? 
-                               profile.hostLocation.geometry?.location.lat ?? 0.0;
-              final theirLng = profile.currentLocation?.geometry.location.lng ?? 
-                               profile.hostLocation.geometry?.location.lng ?? 0.0;
-                               
+              final theirLat =
+                  profile.currentLocation?.geometry.location.lat ??
+                  profile.hostLocation.geometry?.location.lat ??
+                  0.0;
+              final theirLng =
+                  profile.currentLocation?.geometry.location.lng ??
+                  profile.hostLocation.geometry?.location.lng ??
+                  0.0;
+
               final dist = calculateDistance(myLat, myLng, theirLat, theirLng);
               return profile.copyWith(distance: dist);
-          }).toList();
+            } catch (e) {
+              return null;
+            }
+          })
+          .whereType<ProfileData>()
+          .toList();
 
       // Sort by distance (ascending)
-      users.sort((a, b) => (a.distance ?? 999999).compareTo(b.distance ?? 999999));
-      
+      users.sort(
+        (a, b) => (a.distance ?? 999999).compareTo(b.distance ?? 999999),
+      );
+
       return users;
     } catch (e) {
+      debugPrint('[HomeRepository] getNearbyUsers error: $e');
       return [];
     }
   }
@@ -99,95 +210,128 @@ class HomeRepository {
 
       final queryLower = queryText.toLowerCase();
 
-      // 1. Fetch DM user IDs to exclude
-      final Set<String> dmUserIds = {};
+      // [PERF] Use cache-first for current user doc
+      DocumentSnapshot<Map<String, dynamic>> currentUserDoc;
       try {
-        final chats = await _chatRepo.getUserChats();
-        for (var chat in chats) {
-          if (chat.type == 'direct') {
-             for (var pid in chat.participants) {
-                if (pid != currentUser.uid) dmUserIds.add(pid);
-             }
-          }
-        }
-      } catch (e) {
-        // Continue even if chat fetch fails
+        currentUserDoc = await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .get(const GetOptions(source: Source.cache))
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {
+        currentUserDoc = await _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
       }
 
-      final snapshot = await _firestore.collection('users').limit(1000).get();
+      if (!currentUserDoc.exists) return [];
 
-      // Current user location for distance calc
-      final currentUserDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      final currentUserData = currentUserDoc.data()!;
+      final blockedUsers =
+          currentUserData['blockedUsers'] as List<dynamic>? ?? [];
+      final Set<String> blockedUserIds = blockedUsers
+          .map((e) => e.toString())
+          .toSet();
+
       double? myLat, myLng;
-      if (currentUserDoc.exists) {
-        final profile = ProfileData.fromJson(currentUserDoc.data()!);
-        myLat = profile.currentLocation?.geometry.location.lat ?? 
-                profile.hostLocation.geometry?.location.lat ?? 0.0;
-        myLng = profile.currentLocation?.geometry.location.lng ?? 
-                profile.hostLocation.geometry?.location.lng ?? 0.0;
-      }
+      final profile = ProfileData.fromJson(currentUserData);
+      myLat =
+          profile.currentLocation?.geometry.location.lat ??
+          profile.hostLocation.geometry?.location.lat ??
+          0.0;
+      myLng =
+          profile.currentLocation?.geometry.location.lng ??
+          profile.hostLocation.geometry?.location.lng ??
+          0.0;
+
+      // [PERF] Reduced from 1000 → 200 for search as well
+      final snapshot = await _firestore.collection('users').limit(200).get();
 
       final users = snapshot.docs
           .where((doc) {
-              if (doc.id == currentUser.uid) return false;
-              if (dmUserIds.contains(doc.id)) return false; // Exclude connected users
-              final data = doc.data();
-              final firstName = (data['firstName'] as String?)?.toLowerCase() ?? '';
-              final lastName = (data['lastName'] as String?)?.toLowerCase() ?? '';
-              final fullName = '$firstName $lastName'.toLowerCase();
-              
-              final homeLoc = data['homeLocation'] as Map<String, dynamic>?;
-              final hostLoc = data['hostLocation'] as Map<String, dynamic>?;
-              final currLoc = data['currentLocation'] as Map<String, dynamic>?;
-              
-              final homeAddr = (homeLoc?['formatted_address'] as String?)?.toLowerCase() ?? '';
-              final hostAddr = (hostLoc?['formatted_address'] as String?)?.toLowerCase() ?? '';
-              final currAddr = (currLoc?['formatted_address'] as String?)?.toLowerCase() ?? '';
-              
-              final homeCity = (homeLoc?['city'] as String?)?.toLowerCase() ?? '';
-              final hostCity = (hostLoc?['city'] as String?)?.toLowerCase() ?? '';
-              final currCity = (currLoc?['city'] as String?)?.toLowerCase() ?? '';
-              
-              final homeCountry = (homeLoc?['country'] as String?)?.toLowerCase() ?? '';
-              final hostCountry = (hostLoc?['country'] as String?)?.toLowerCase() ?? '';
-              final currCountryCode = (currLoc?['countryCode'] as String?)?.toLowerCase() ?? '';
-              
-              final query = queryLower;
-              
-              return fullName.contains(query) || 
-                     homeAddr.contains(query) || 
-                     hostAddr.contains(query) || 
-                     currAddr.contains(query) ||
-                     homeCity.contains(query) ||
-                     hostCity.contains(query) ||
-                     currCity.contains(query) ||
-                     homeCountry.contains(query) ||
-                     hostCountry.contains(query) ||
-                     currCountryCode.contains(query);
+            if (doc.id == currentUser.uid) return false;
+            if (blockedUserIds.contains(doc.id)) return false;
+
+            final data = doc.data();
+
+            final theirBlockedList =
+                data['blockedUsers'] as List<dynamic>? ?? [];
+            if (theirBlockedList.contains(currentUser.uid)) return false;
+
+            final firstName =
+                (data['firstName'] as String?)?.toLowerCase() ?? '';
+            final lastName = (data['lastName'] as String?)?.toLowerCase() ?? '';
+            final fullName = '$firstName $lastName'.toLowerCase();
+
+            final homeLoc = data['homeLocation'] as Map<String, dynamic>?;
+            final hostLoc = data['hostLocation'] as Map<String, dynamic>?;
+            final currLoc = data['currentLocation'] as Map<String, dynamic>?;
+
+            final homeAddr =
+                (homeLoc?['formatted_address'] as String?)?.toLowerCase() ?? '';
+            final hostAddr =
+                (hostLoc?['formatted_address'] as String?)?.toLowerCase() ?? '';
+            final currAddr =
+                (currLoc?['formatted_address'] as String?)?.toLowerCase() ?? '';
+
+            final homeCity = (homeLoc?['city'] as String?)?.toLowerCase() ?? '';
+            final hostCity = (hostLoc?['city'] as String?)?.toLowerCase() ?? '';
+            final currCity = (currLoc?['city'] as String?)?.toLowerCase() ?? '';
+
+            final homeCountry =
+                (homeLoc?['country'] as String?)?.toLowerCase() ?? '';
+            final hostCountry =
+                (hostLoc?['country'] as String?)?.toLowerCase() ?? '';
+            final currCountryCode =
+                (currLoc?['countryCode'] as String?)?.toLowerCase() ?? '';
+
+            final query = queryLower;
+
+            return fullName.contains(query) ||
+                homeAddr.contains(query) ||
+                hostAddr.contains(query) ||
+                currAddr.contains(query) ||
+                homeCity.contains(query) ||
+                hostCity.contains(query) ||
+                currCity.contains(query) ||
+                homeCountry.contains(query) ||
+                hostCountry.contains(query) ||
+                currCountryCode.contains(query);
           })
           .map((doc) {
-              final data = doc.data();
-              data['uid'] = doc.id;
-              try {
-                 var profile = ProfileData.fromJson(data);
-                 if (myLat != null && myLng != null) {
-                    final theirLat = profile.currentLocation?.geometry.location.lat 
-                    ?? profile.hostLocation.geometry?.location.lat ?? 0.0;
-                    final theirLng = profile.currentLocation?.geometry.location.lng 
-                    ?? profile.hostLocation.geometry?.location.lng ?? 0.0;
-                    profile = profile.copyWith(distance: calculateDistance(myLat, myLng, theirLat, theirLng));
-                 }
-                 return profile;
-              } catch (e) { return null; }
+            final data = doc.data();
+            data['uid'] = doc.id;
+            try {
+              var userProfile = ProfileData.fromJson(data);
+              if (myLat != null && myLng != null) {
+                final theirLat =
+                    userProfile.currentLocation?.geometry.location.lat ??
+                    userProfile.hostLocation.geometry?.location.lat ??
+                    0.0;
+                final theirLng =
+                    userProfile.currentLocation?.geometry.location.lng ??
+                    userProfile.hostLocation.geometry?.location.lng ??
+                    0.0;
+                userProfile = userProfile.copyWith(
+                  distance: calculateDistance(myLat, myLng, theirLat, theirLng),
+                );
+              }
+              return userProfile;
+            } catch (e) {
+              return null;
+            }
           })
           .whereType<ProfileData>()
           .toList();
 
-      // Sort results by distance if available
-      users.sort((a, b) => (a.distance ?? 999999).compareTo(b.distance ?? 999999));
+      users.sort(
+        (a, b) => (a.distance ?? 999999).compareTo(b.distance ?? 999999),
+      );
 
       return users;
     } catch (e) {
+      debugPrint('[HomeRepository] searchUsers error: $e');
       return [];
     }
   }
@@ -197,65 +341,74 @@ class HomeRepository {
       final currentUser = _auth.currentUser;
       if (currentUser == null) return [];
 
-      final currentUserDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      final currentUserDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
       if (!currentUserDoc.exists) return [];
-      
+
       final currentUserData = currentUserDoc.data()!;
       final homeCountryCode = currentUserData['homeCountryCode'] as String?;
       if (homeCountryCode == null) return [];
-      
+
       final currentUserProfile = ProfileData.fromJson(currentUserData);
-      final myLat = currentUserProfile.currentLocation?.geometry.location.lat ?? 
-                    currentUserProfile.hostLocation.geometry?.location.lat ?? 0.0;
-      final myLng = currentUserProfile.currentLocation?.geometry.location.lng ?? 
-                    currentUserProfile.hostLocation.geometry?.location.lng ?? 0.0;
+      final myLat =
+          currentUserProfile.currentLocation?.geometry.location.lat ??
+          currentUserProfile.hostLocation.geometry?.location.lat ??
+          0.0;
+      final myLng =
+          currentUserProfile.currentLocation?.geometry.location.lng ??
+          currentUserProfile.hostLocation.geometry?.location.lng ??
+          0.0;
 
-      // 1. Fetch DM user IDs to exclude
-      final Set<String> dmUserIds = {};
-      try {
-        final chats = await _chatRepo.getUserChats();
-        for (var chat in chats) {
-          if (chat.type == 'direct') {
-             for (var pid in chat.participants) {
-                if (pid != currentUser.uid) dmUserIds.add(pid);
-             }
-          }
-        }
-      } catch (e) {
-        // Continue even if chat fetch fails
-      }
-
-      // 2. Query users from the same country
-      final snapshot = await _firestore.collection('users')
+      // [PERF] Reduced from unlimited → 200
+      final snapshot = await _firestore
+          .collection('users')
           .where('homeCountryCode', isEqualTo: homeCountryCode)
+          .limit(200)
           .get();
 
       final users = snapshot.docs
           .where((doc) {
-              if (doc.id == currentUser.uid) return false;
-              if (dmUserIds.contains(doc.id)) return false;
-              return true;
+            if (doc.id == currentUser.uid) return false;
+            return true;
           })
           .map((doc) {
+            try {
               final data = doc.data();
-              var profile = ProfileData.fromJson(data);
-              profile.uid = doc.id;
-              
-              final theirLat = profile.currentLocation?.geometry.location.lat ?? 
-                               profile.hostLocation.geometry?.location.lat ?? 0.0;
-              final theirLng = profile.currentLocation?.geometry.location.lng ?? 
-                               profile.hostLocation.geometry?.location.lng ?? 0.0;
-                               
-              final distKm = calculateDistance(myLat, myLng, theirLat, theirLng);
-              // Convert km to miles (1 km ≈ 0.621371 miles)
+              var userProfile = ProfileData.fromJson(data);
+              userProfile.uid = doc.id;
+
+              final theirLat =
+                  userProfile.currentLocation?.geometry.location.lat ??
+                  userProfile.hostLocation.geometry?.location.lat ??
+                  0.0;
+              final theirLng =
+                  userProfile.currentLocation?.geometry.location.lng ??
+                  userProfile.hostLocation.geometry?.location.lng ??
+                  0.0;
+
+              final distKm = calculateDistance(
+                myLat,
+                myLng,
+                theirLat,
+                theirLng,
+              );
               final distanceMiles = distKm * 0.621371;
-              return profile.copyWith(distance: distanceMiles);
+              return userProfile.copyWith(distance: distanceMiles);
+            } catch (e) {
+              return null;
+            }
           })
-          .where((profile) => (profile.distance ?? 999999) <= 999) // Within 999 miles
+          .whereType<ProfileData>()
+          .where(
+            (profile) => (profile.distance ?? 999999) <= 999,
+          )
           .toList();
 
       return users;
     } catch (e) {
+      debugPrint('[HomeRepository] getNearbyCompatriots error: $e');
       return [];
     }
   }

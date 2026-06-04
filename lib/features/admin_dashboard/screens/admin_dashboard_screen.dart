@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   final Widget child;
 
-  const AdminDashboardScreen({
-    super.key,
-    required this.child,
-  });
+  const AdminDashboardScreen({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +26,11 @@ class AdminDashboardScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(24),
                   child: const Row(
                     children: [
-                      Icon(LucideIcons.shieldCheck, color: Colors.blue, size: 24),
+                      Icon(
+                        LucideIcons.shieldCheck,
+                        color: Colors.blue,
+                        size: 24,
+                      ),
                       SizedBox(width: 12),
                       Text(
                         'Admin Panel',
@@ -61,34 +63,46 @@ class AdminDashboardScreen extends StatelessWidget {
                   isActive: location == '/admin/communities',
                   onTap: () => context.go('/admin/communities'),
                 ),
+                _SidebarItem(
+                  icon: LucideIcons.landmark,
+                  label: 'Chamber Requests',
+                  isActive: location == '/admin/chamber-requests',
+                  onTap: () => context.go('/admin/chamber-requests'),
+                ),
                 const Spacer(),
                 _SidebarItem(
                   icon: LucideIcons.arrowLeft,
                   label: 'Exit Admin',
                   isActive: false,
-                  onTap: () => context.go('/more'),
+                  onTap: () => context.go('/profile'),
                 ),
                 const SizedBox(height: 24),
               ],
             ),
           ),
-          
+
           // Main Content
           Expanded(
             child: Column(
               children: [
                 AppBar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppTheme.elevationColor(
+                    context,
+                    1,
+                  ), // Level 1 header
                   elevation: 0,
                   title: Text(
                     _getTitle(location),
-                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   iconTheme: const IconThemeData(color: Colors.black),
                   actions: [
                     IconButton(
-                        icon: const Icon(LucideIcons.bell),
-                        onPressed: () {},
+                      icon: const Icon(LucideIcons.bell),
+                      onPressed: () {},
                     ),
                     const SizedBox(width: 16),
                   ],
@@ -130,12 +144,20 @@ class _SidebarItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          color: isActive ? Colors.blue.withOpacity(0.1) : Colors.transparent,
-          border: isActive ? const Border(left: BorderSide(color: Colors.blue, width: 4)) : null,
+          color: isActive
+              ? Colors.blue.withValues(alpha: 0.1)
+              : Colors.transparent,
+          border: isActive
+              ? const Border(left: BorderSide(color: Colors.blue, width: 4))
+              : null,
         ),
         child: Row(
           children: [
-            Icon(icon, color: isActive ? Colors.blue : Colors.grey[400], size: 20),
+            Icon(
+              icon,
+              color: isActive ? Colors.blue : Colors.grey[400],
+              size: 20,
+            ),
             const SizedBox(width: 16),
             Text(
               label,
@@ -150,4 +172,3 @@ class _SidebarItem extends StatelessWidget {
     );
   }
 }
-

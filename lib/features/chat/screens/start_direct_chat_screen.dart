@@ -6,23 +6,25 @@ import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/chat/screens/chat_screen.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
-/// Screen that handles starting a direct chat with a user
-/// First checks if chat already exists, if so navigates to it
-/// Otherwise shows pending DM state - the actual chat is created when first message is sent
+/// Screen that handles starting a direct chat with a user.
+///
+/// Flow:
+/// 1. If a DM chat already exists → navigate directly to it.
+/// 2. If no DM exists → open pending DM (chat created on first message).
+///
+/// Relationship selection is NOT required to start a chat.
+/// Users can add relationships from the DM chat's "show more" menu.
 class StartDirectChatScreen extends ConsumerStatefulWidget {
   final String otherUserId;
 
-  const StartDirectChatScreen({
-    super.key,
-    required this.otherUserId,
-  });
+  const StartDirectChatScreen({super.key, required this.otherUserId});
 
   @override
-  ConsumerState<StartDirectChatScreen> createState() => _StartDirectChatScreenState();
+  ConsumerState<StartDirectChatScreen> createState() =>
+      _StartDirectChatScreenState();
 }
 
 class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
-  bool _isLoading = true;
   String? _error;
 
   @override
@@ -38,14 +40,18 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       final currentUser = ref.read(authRepositoryProvider).currentUser;
       if (currentUser != null && currentUser.uid == widget.otherUserId) {
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You cannot chat with yourself")));
-           context.pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("You cannot chat with yourself")),
+          );
+          context.pop();
         }
         return;
       }
 
-      // First check if a chat already exists with this user
-      final existingChat = await chatRepo.getExistingDirectChat(widget.otherUserId);
+      // 1. Check if a chat already exists with this user
+      final existingChat = await chatRepo.getExistingDirectChat(
+        widget.otherUserId,
+      );
 
       if (!mounted) return;
 
@@ -55,7 +61,7 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
         return;
       }
 
-      // No existing chat - fetch user info for pending DM state
+      // 2. Fetch user info for the pending DM screen
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.otherUserId)
@@ -66,7 +72,6 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       if (!userDoc.exists) {
         setState(() {
           _error = 'User not found';
-          _isLoading = false;
         });
         return;
       }
@@ -77,8 +82,10 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       final userName = '$firstName $lastName'.trim();
       final profileImage = userData['profileImage'] as String?;
 
-      // Navigate to chat screen with pending DM info
-      // The actual chat will be created when the first message is sent
+      // 3. No existing DM → Navigate directly to pending DM chat
+      // Chat will be created when the first message is sent.
+      // User can add relationship from the DM chat's "show more" menu.
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => ChatScreen.pendingDM(
@@ -92,7 +99,6 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
       if (mounted) {
         setState(() {
           _error = 'Error: $e';
-          _isLoading = false;
         });
       }
     }
@@ -109,7 +115,11 @@ class _StartDirectChatScreenState extends ConsumerState<StartDirectChatScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: theme.colorScheme.error,
+              ),
               const SizedBox(height: 16),
               Text(_error!, style: theme.textTheme.bodyLarge),
               const SizedBox(height: 16),

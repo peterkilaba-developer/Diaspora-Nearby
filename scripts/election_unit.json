@@ -1,0 +1,9 @@
+{
+    "isActiveElection": true,
+    "electionEndTime": 1772000000000,
+    "updatedAt": {
+        "__type__": "timestamp",
+        "seconds": 1771000000,
+        "nanoseconds": 0
+    }
+}

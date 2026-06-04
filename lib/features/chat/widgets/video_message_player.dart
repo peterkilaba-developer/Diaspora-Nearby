@@ -19,7 +19,8 @@ class VideoMessagePlayer extends StatefulWidget {
   State<VideoMessagePlayer> createState() => _VideoMessagePlayerState();
 }
 
-class _VideoMessagePlayerState extends State<VideoMessagePlayer> with AutomaticKeepAliveClientMixin {
+class _VideoMessagePlayerState extends State<VideoMessagePlayer>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   late VideoPlayerController _videoController;
   ChewieController? _chewieController;
   bool _isInitialized = false;
@@ -31,23 +32,38 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer> with AutomaticK
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeVideo();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      if (_isInitialized && _videoController.value.isPlaying) {
+        _videoController.pause();
+      }
+    }
   }
 
   Future<void> _initializeVideo() async {
     try {
-      if (widget.videoUrl.startsWith('http') || widget.videoUrl.startsWith('blob:') || kIsWeb) {
-        _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      if (widget.videoUrl.startsWith('http') ||
+          widget.videoUrl.startsWith('blob:') ||
+          kIsWeb) {
+        _videoController = VideoPlayerController.networkUrl(
+          Uri.parse(widget.videoUrl),
+        );
       } else {
-         // Local file (Optimistic UI)
-         String filePath = widget.videoUrl;
-         if (filePath.startsWith('file://')) {
-            filePath = filePath.substring(7);
-         }
-         _videoController = VideoPlayerController.file(File(filePath));
+        // Local file (Optimistic UI)
+        String filePath = widget.videoUrl;
+        if (filePath.startsWith('file://')) {
+          filePath = filePath.substring(7);
+        }
+        _videoController = VideoPlayerController.file(File(filePath));
       }
       await _videoController.initialize();
-      
+
       _chewieController = ChewieController(
         videoPlayerController: _videoController,
         aspectRatio: _videoController.value.aspectRatio,
@@ -89,6 +105,8 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer> with AutomaticK
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _videoController.pause(); // Stop decoding before disposing
     _videoController.dispose();
     _chewieController?.dispose();
     super.dispose();
@@ -137,7 +155,7 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer> with AutomaticK
     }
 
     if (_videoController.value.aspectRatio == 0.0) {
-       return const SizedBox(width: double.infinity, height: 200);
+      return const SizedBox(width: double.infinity, height: 200);
     }
 
     return LayoutBuilder(
@@ -151,18 +169,19 @@ class _VideoMessagePlayerState extends State<VideoMessagePlayer> with AutomaticK
         // If height exceeds max constraint (e.g. 400 from parent), clamp it
         // Note: parent has maxHeight: 400 constraint usually.
         // If we just let it grow, it might be clipped or overflow.
-        // We want it to be AT LEAST full width. 
+        // We want it to be AT LEAST full width.
         // If the video is tall (portrait), height will be large.
         // We probably want to limit height to avoid super long messages.
-        // If height exceeds max constraint, clamp it. 
+        // If height exceeds max constraint, clamp it.
         // Increased to 600 to better accommodate portrait videos (9:16 on typical screens)
         if (height > 600) {
-           height = 600;
+          height = 600;
         }
 
-        return SizedBox(
+        return Container(
           width: width,
           height: height,
+          color: Colors.black,
           child: Chewie(controller: _chewieController!),
         );
       },

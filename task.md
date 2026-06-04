@@ -1,12 +1,21 @@
 # DiasporaNearby Task Tracker
 
 ## Active Tasks
-- [ ] **Data Model Audit**
+- [x] **Data Model Audit**
     - [x] Audit `users` collection vs `ProfileData`
     - [x] Audit `communities` collection vs `Community`
     - [x] Audit `events` collection vs `Event`
     - [x] Audit `points_transactions` vs `PointsTransaction`
     - [x] Audit `referral_codes`
+- [x] Refine Profile Completion Screen
+    - [x] Make `ProfileQRCodeDialog` full-screen with `Scaffold` and `AppBar`
+    - [x] Apply theme padding (`AppTheme.pageHorizontalPadding`)
+    - [x] Refine requirements logic:
+        - [x] Remove "Lived in" from required fields
+        - [x] Ensure "Years in Host Country" is required
+        - [x] Ensure "Services I can offer" is required
+        - [x] Improve Education logic (No School OR School submitted)
+    - [x] Implement reactive error border dismissal in `UserProfileForm`
 - [x] **DSP Earning & Trust Logic Implementation**
     - [x] Create `DSP_EARNING_MODEL.md` specification.
     - [x] Refactor `PointsService` to use new reward values (1200 welcome, 120 Msg, etc).
@@ -32,13 +41,23 @@
     - [x] Enhance `PointsRepository` with community transaction support.
     - [x] Define Token Allocation Table (Founders, Team, Treasury).
     - [x] Complete `DSP_TGE_FEASIBILITY.md` study.
-- [ ] **Integrating Elections into Chat**
-    - [x] Locate chat screen and header implementation.
-    - [x] Verify "Pillar Elections" menu item in `_showMoreMenu`.
-    - [x] Verify link to `PillarSelectionScreen` for voting.
-    - [ ] Perform final verification and polish UI/UX.
-
-## Completed Audits
+- [x] **Investigate and resolve database reset errors**
+    - [x] Identify root cause of `[firebase_functions/unavailable]` error.
+    - [x] Verify function region and App Check configuration.
+    - [x] Test reset with explicit `us-central1` region.
+- [ ] **Firebase Phone Auth Enhancement (Primary/Fallback)**
+    - [ ] Configure Play Integrity and SHA-256.
+    - [ ] Implement Primary/Fallback verification logic.
+    - [ ] Enhace UI with auto-detection and secure indicators.
+- [x] **Fix Mock Candidates Initialization Loop**
+    - [x] Debug infinite loading state in `LeaderSelectionScreen`.
+    - [x] Add error handling and logging to `GovernanceService`.
+    - [x] Fix Profile Parsing Crash (Null Cast Error) in `ProfileRepository`.
+    - [x] Fix `PERMISSION_DENIED` by correcting collection name in `GovernanceService` and updating `firestore.rules`.
+- [x] **Refining Voting UX and Election Results**
+  - [x] Remove "Runner Up" mock data injection in `LeaderSelectionScreen`
+  - [x] Fix Quorum Display "1 of 0" by setting `totalPillars` in `GovernanceService`
+  - [x] Smooth Voting UX by always showing "Election Progress" section using `AnimatedSize`
 - [x] Integrate Location and Education fields in `CompleteProfileForm`.
 - [x] Final code review and verification of all QR/Profile flows.
 - [x] Profile Completeness Getter implementation.
@@ -57,3 +76,13 @@
 - [x] Add "No School" checkbox and hide/show fields logic.
 - [x] Fix Degree dropdown overflow and update title to "School/College/University".
 - [x] Remove "Since Birth" from Graduation Year dropdown.
+
+## Phase 9: Tokenomics & Value Sinks
+- [x] Implement **Verification Fee Sink** (10 DSP deduction in `saveVerificationEvent`).
+- [x] Implement **Vouch Collateral Sink** (50 DSP deduction in `vouchForUser`).
+- [x] Implement **Candidacy Registration Sink** (5,000 DSP deduction in `registerAsCandidate`).
+- [x] Update `GovernanceUnit` model with `candidateIds` and manual JSON serialization.
+- [x] Refactor `GovernanceService.getCandidates` to filter by registered candidates (Paid Sinks).
+- [x] Implement "Run for Council" UI in `LeaderSelectionScreen` with commitment prompt.
+- [x] Verify **Internal GDP** and **Corridor** data population in `DiasporaCryptoScreen`.
+- [x] Implement **Utility Burn** (1% for <100 PoCT users) in transfer logic (Backend check).

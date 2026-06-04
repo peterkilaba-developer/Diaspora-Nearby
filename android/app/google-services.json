@@ -15,6 +15,80 @@
       },
       "oauth_client": [
         {
+          "client_id": "512074182214-dkag9afp4eqjj6h0ve3c83dpcgl9rv9d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.diasporanearby.diasporanearby",
+            "certificate_hash": "43010e70514f3895499036ab84eae1e8c395a804"
+          }
+        },
+        {
+          "client_id": "512074182214-ub7m1gj7agb49iq83v9tra896qs2pp8e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.diasporanearby.diasporanearby",
+            "certificate_hash": "0d7bd88379c396519fc15a5f90b251e5f357b3ba"
+          }
+        },
+        {
+          "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgWq-6gdzy6TxODM3WuUUmQ0zu7-6aVlc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:512074182214:android:d5b41cb4a3f20493b92447",
+        "android_client_info": {
+          "package_name": "com.owneroperatorai.owner_operator_ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAgWq-6gdzy6TxODM3WuUUmQ0zu7-6aVlc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:512074182214:android:425648fa9cc49121b92447",
+        "android_client_info": {
+          "package_name": "com.redflags.greenflags"
+        }
+      },
+      "oauth_client": [
+        {
           "client_id": "512074182214-hp54qogcok74k1900oog441c0t4d2kgd.apps.googleusercontent.com",
           "client_type": 3
         }

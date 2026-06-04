@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/radio/providers/radio_provider.dart';
 import 'package:diaspora_nearby/features/radio/repository/radio_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:diaspora_nearby/data/countries.dart';
+import 'package:diaspora_nearby/core/data/countries.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/features/radio/screens/radio_screen.dart';
@@ -19,13 +19,16 @@ class MiniPlayer extends ConsumerWidget {
     if (station == null) return const SizedBox.shrink();
 
     // Check if station is favorited
-    final favoriteStations = ref.watch(favoriteStationsProvider).asData?.value ?? [];
-    final isFavorite = favoriteStations.any((s) => s.stationuuid == station.stationuuid);
+    final favoriteStations =
+        ref.watch(favoriteStationsProvider).asData?.value ?? [];
+    final isFavorite = favoriteStations.any(
+      (s) => s.stationuuid == station.stationuuid,
+    );
 
     // Standardize Country Name
     final countryObj = getCountryByCode(station.countrycode);
     final countryName = countryObj?.name ?? station.country;
-    final flag = countryObj?.flag ?? '🌐';
+    final flag = countryObj?.flag ?? 'ðŸŒ';
 
     // Random listener count (100-10,000) and countries count (1-100) based on station hash for consistency
     final stationHash = station.stationuuid.hashCode.abs();
@@ -75,15 +78,20 @@ class MiniPlayer extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: theme.inputDecorationTheme.fillColor,
                     shape: BoxShape.circle,
-                    image: (station.favicon.isNotEmpty && station.favicon.startsWith('http'))
-                        ? DecorationImage(image: NetworkImage(station.favicon), fit: BoxFit.cover)
+                    image:
+                        (station.favicon.isNotEmpty &&
+                            station.favicon.startsWith('http'))
+                        ? DecorationImage(
+                            image: NetworkImage(station.favicon),
+                            fit: BoxFit.cover,
+                          )
                         : null,
                     boxShadow: [
                       BoxShadow(
                         color: theme.shadowColor.withAlpha(isDark ? 76 : 25),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
-                      )
+                      ),
                     ],
                   ),
                   child: station.favicon.isEmpty
@@ -91,8 +99,9 @@ class MiniPlayer extends ConsumerWidget {
                       : null,
                 ),
 
-                const SizedBox(width: 8), // 8px gap to match card horizontalTitleGap
-
+                const SizedBox(
+                  width: 8,
+                ), // 8px gap to match card horizontalTitleGap
                 // 2. Station Info
                 Expanded(
                   child: SizedBox(
@@ -102,15 +111,17 @@ class MiniPlayer extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         // Line 1: Name
-                        Text(station.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              height: 1.1,
-                              color: Colors.white,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
+                        Text(
+                          station.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            height: 1.1,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
 
                         // Line 2: Country
                         Row(
@@ -118,15 +129,17 @@ class MiniPlayer extends ConsumerWidget {
                             Text(flag, style: const TextStyle(fontSize: 12)),
                             const SizedBox(width: 4),
                             Expanded(
-                              child: Text(countryName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w400,
-                                    fontSize: 11,
-                                    height: 1.1,
-                                    color: Colors.white,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                countryName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: 11,
+                                  height: 1.1,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
@@ -136,31 +149,44 @@ class MiniPlayer extends ConsumerWidget {
                           children: [
                             if (radioState.isLoading)
                               const SizedBox(
-                                  width: 10,
-                                  height: 10,
-                                  child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white))
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: Colors.white,
+                                ),
+                              )
                             else if (radioState.isPlaying)
-                              const Icon(LucideIcons.activity, size: 10, color: Colors.greenAccent)
+                              const Icon(
+                                LucideIcons.activity,
+                                size: 10,
+                                color: Colors.greenAccent,
+                              )
                             else
-                              const Icon(LucideIcons.pauseCircle, size: 10, color: Colors.white),
+                              const Icon(
+                                LucideIcons.pauseCircle,
+                                size: 10,
+                                color: Colors.white,
+                              ),
                             const SizedBox(width: 4),
                             Text(
                               radioState.error != null
                                   ? 'Connection Failed'
                                   : radioState.isLoading
-                                      ? 'Buffering...'
-                                      : radioState.isPlaying
-                                          ? 'Broadcasting Live'
-                                          : 'Paused',
+                                  ? 'Buffering...'
+                                  : radioState.isPlaying
+                                  ? 'Broadcasting Live'
+                                  : 'Paused',
                               style: TextStyle(
-                                  fontSize: 10,
-                                  height: 1.1,
-                                  color: radioState.error != null
-                                      ? Colors.redAccent
-                                      : radioState.isPlaying
-                                          ? Colors.greenAccent
-                                          : Colors.white,
-                                  fontWeight: FontWeight.w600),
+                                fontSize: 10,
+                                height: 1.1,
+                                color: radioState.error != null
+                                    ? Colors.redAccent
+                                    : radioState.isPlaying
+                                    ? Colors.greenAccent
+                                    : Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -175,9 +201,13 @@ class MiniPlayer extends ConsumerWidget {
                   children: [
                     // Play/Pause button (matches card play button position)
                     IconButton(
-                      icon: radioState.isPlaying 
+                      icon: radioState.isPlaying
                           ? const AnimatedBars(color: Colors.white, size: 24)
-                          : const Icon(LucideIcons.play, size: 24, color: Colors.white),
+                          : const Icon(
+                              LucideIcons.play,
+                              size: 24,
+                              color: Colors.white,
+                            ),
                       onPressed: () {
                         if (radioState.isPlaying) {
                           ref.read(radioProvider.notifier).pause();
@@ -191,12 +221,16 @@ class MiniPlayer extends ConsumerWidget {
                       icon: Icon(
                         LucideIcons.heart,
                         size: 20,
-                        color: isFavorite ? Theme.of(context).colorScheme.primary : Colors.white,
+                        color: isFavorite
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white,
                       ),
                       onPressed: () async {
                         final user = ref.read(authStateProvider).value;
                         if (user != null) {
-                          await ref.read(radioRepositoryProvider).toggleFavorite(user.uid, station);
+                          await ref
+                              .read(radioRepositoryProvider)
+                              .toggleFavorite(user.uid, station);
                           ref.invalidate(favoriteStationsProvider);
                         }
                       },
@@ -215,10 +249,14 @@ class MiniPlayer extends ConsumerWidget {
                   const SizedBox(width: 58),
 
                   // Listeners count
-                  Icon(LucideIcons.headphones, size: 12, color: bottomContentColor),
+                  Icon(
+                    LucideIcons.headphones,
+                    size: 12,
+                    color: bottomContentColor,
+                  ),
                   const SizedBox(width: 4),
                   Text(
-                    '${NumberFormat.compact().format(listeners)} listeners • $countriesCount countries',
+                    '${NumberFormat.compact().format(listeners)} listeners \u2022 $countriesCount countries',
                     style: TextStyle(color: bottomContentColor, fontSize: 12),
                   ),
 
@@ -226,7 +264,11 @@ class MiniPlayer extends ConsumerWidget {
 
                   // Close button
                   IconButton(
-                    icon: Icon(LucideIcons.x, size: 20, color: bottomContentColor),
+                    icon: Icon(
+                      LucideIcons.x,
+                      size: 20,
+                      color: bottomContentColor,
+                    ),
                     onPressed: () {
                       ref.read(radioProvider.notifier).stop();
                     },

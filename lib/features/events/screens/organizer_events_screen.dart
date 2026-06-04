@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:diaspora_nearby/features/shared/widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:diaspora_nearby/models/event_data.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 
 class OrganizerEventsScreen extends StatelessWidget {
@@ -33,47 +31,37 @@ class OrganizerEventsList extends ConsumerWidget {
       return const Center(child: Text('Please Log In'));
     }
 
-    final eventRepo = ref.watch(eventRepositoryProvider);
-    
-    return StreamBuilder<List<Event>>(
-      stream: eventRepo.getEvents(
-          isGlobal: true, 
-          userCommunityMemberships: [],
-          currentUserId: user.uid,
-          homeCountryCode: null
-      ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final events = snapshot.data ?? [];
-        
-        final myEvents = events.where((e) => e.creatorId == user.uid).toList();
+    // Use userEventsProvider to get ALL events created by this user (past + future)
+    final userEventsAsync = ref.watch(userEventsProvider(user.uid));
 
+    return userEventsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error loading events: $e')),
+      data: (myEvents) {
         if (myEvents.isEmpty) {
           return const Center(child: Text('You have not created any events.'));
         }
 
+        // Sort by startDate descending (most recent first)
+        myEvents.sort((a, b) => b.startDate.compareTo(a.startDate));
+
         return ListView.separated(
-          padding: padding,
+          padding: padding.add(EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom,
+          )),
           itemCount: myEvents.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
             final event = myEvents[index];
             return EventCard(
-              event: event, 
+              event: event,
               isAttending: true,
-              isCreator: true, // [NEW] Enable Edit Button
+              isCreator: true,
               onTap: () {
-                 // Navigate to detail
-                 context.push('/events/${event.id}', extra: event);
+                context.push('/events/${event.id}', extra: event);
               },
               onEditTap: () {
-                 // User requested "edit or republish... as new event"
-                 // For now, we allow editing the EXISTING event. 
-                 // If they want to "republish as new", we might need a separate "Clone" action later.
-                 // But editing the date of an ended event effectively republishes it.
-                 context.push('/events/edit/${event.id}', extra: event);
+                context.push('/events/edit/${event.id}', extra: event);
               },
             );
           },
@@ -82,6 +70,3 @@ class OrganizerEventsList extends ConsumerWidget {
     );
   }
 }
-
-
-

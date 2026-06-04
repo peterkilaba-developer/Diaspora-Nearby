@@ -1,4 +1,4 @@
-library provider;
+library;
 
 export 'src/async_provider.dart'
     show FutureProvider, StreamProvider, ErrorBuilder;

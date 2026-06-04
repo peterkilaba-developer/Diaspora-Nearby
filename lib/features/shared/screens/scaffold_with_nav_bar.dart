@@ -5,7 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../radio/screens/mini_player.dart';
 import '../widgets/diaspora_app_bar.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/core/services/location_update_service.dart';
@@ -21,7 +21,7 @@ import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; 
 import 'package:diaspora_nearby/features/shared/screens/share_invite_screen.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
-
+import 'package:diaspora_nearby/features/chat/services/audio_playback_service.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -34,12 +34,19 @@ class ScaffoldWithNavBar extends ConsumerStatefulWidget {
 
 class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     with WidgetsBindingObserver {
+
+  // [PERF FIX] Debounce resume actions — was running location update +
+  // background service check + proximity check on EVERY resume (switching
+  // apps, returning from notification, etc.). Now cooldown 5 minutes.
+  DateTime? _lastResumeAction;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _updateLocation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _triggerDailyCheckIn();
       _ensureBackgroundService();
     });
   }
@@ -52,39 +59,35 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
 
       final service = FlutterBackgroundService();
       final isRunning = await service.isRunning();
-      print('Shell: Background Service status: isRunning=$isRunning');
+      // No-log: Background Service status
 
       if (!isRunning) {
         if (await Permission.location.isGranted) {
-          print(
-            'Shell: Permission granted. Initializing and starting service...',
-          );
+          // No-log: Permission granted
 
           await BackgroundLocationService.initializeService();
 
           if (await service.isRunning()) {
-            print('Shell: Service started successfully during initialization.');
+            // No-log: Service started
           } else {
-            print('Shell: Starting service manually...');
+            // No-log: Starting manually
             await service.startService();
           }
         } else {
-          print(
-            'Shell: Skipping background service start: Permission not granted yet.',
-          );
+          // No-log: Skipping
         }
       } else {
-        print('Shell: Service is already running.');
+        // No-log: Already running
       }
 
       // [DEBUG] Trigger Foreground Proximity Check
       final user = ref.read(authRepositoryProvider).currentUser;
       if (user != null) {
-        print('Shell: Triggering FOREGROUND Proximity Check...');
+        // No-log: Triggering proximity
         await ProximityService().checkAndNotify(user.uid);
       }
     } catch (e) {
-      print('Error starting background service from Shell: $e');
+      debugPrint('Error starting background service from Shell: $e');
     }
   }
 
@@ -97,9 +100,28 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // [PERF FIX] Debounce: only run resume actions at most once every 5 minutes.
+      // Prevents hammering Firestore/GPS/network on rapid app switches.
+      final now = DateTime.now();
+      if (_lastResumeAction != null &&
+          now.difference(_lastResumeAction!) < const Duration(minutes: 5)) {
+        debugPrint('ScaffoldWithNavBar: resume debounced (< 5 min since last)');
+        return;
+      }
+      _lastResumeAction = now;
+
       _updateLocation();
+      _triggerDailyCheckIn();
       // Re-check background service state on resume
       _ensureBackgroundService();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // STOP Chat Audio when backgrounded (prevents MediaCodec leakage/errors)
+      try {
+        ref.read(audioPlaybackServiceProvider).stopAll();
+      } catch (e) {
+        debugPrint('Error stopping chat audio on background: $e');
+      }
     }
   }
 
@@ -107,6 +129,13 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user != null) {
       await LocationUpdateService().updateCurrentLocation(user.uid);
+    }
+  }
+
+  void _triggerDailyCheckIn() {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user != null) {
+      ref.read(pointsServiceProvider).trackDailyCheckIn(user.uid);
     }
   }
 
@@ -123,7 +152,7 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
 
         // Show Toast/SnackBar
         if (mounted) {
-           showExplorationRewardToast(context);
+          showExplorationRewardToast(context);
         }
       }
     }
@@ -194,9 +223,6 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     // Get User for home country
     final userProfile = ref.watch(userProfileProvider).value;
     final homeCountryCode = userProfile?.homeCountryCode;
-    final homeCountry = homeCountryCode != null
-        ? country_data.getCountryByCode(homeCountryCode)?.name
-        : null;
 
     // View Mode Logic localized per screen
     bool isGlobalView = false;
@@ -324,12 +350,12 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
   }
 
   // Helpers to force unselected state
-  MaterialStateProperty<IconThemeData?> validIconTheme(
+  WidgetStateProperty<IconThemeData?> validIconTheme(
     BuildContext context,
     bool selected,
   ) {
-    return MaterialStateProperty.resolveWith((states) {
-      if (states.contains(MaterialState.selected)) {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) {
         // Return unselected style even if selected
         return IconThemeData(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -343,11 +369,11 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     });
   }
 
-  MaterialStateProperty<TextStyle?> validLabelStyle(
+  WidgetStateProperty<TextStyle?> validLabelStyle(
     BuildContext context,
     bool selected,
   ) {
-    return MaterialStateProperty.resolveWith((states) {
+    return WidgetStateProperty.resolveWith((states) {
       return TextStyle(
         color: Theme.of(context).colorScheme.onSurfaceVariant,
         fontWeight: FontWeight.w500,

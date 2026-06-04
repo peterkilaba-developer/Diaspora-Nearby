@@ -6,43 +6,122 @@
     "storage": {
         "rules": "storage.rules"
     },
-    "database": {
-        "rules": "database.rules.json"
+    "functions": {
+        "source": "functions"
     },
-    "hosting": {
-        "public": "build/web",
-        "ignore": [
-            "firebase.json",
-            "**/.*",
-            "**/node_modules/**"
-        ],
-        "rewrites": [
-            {
-                "source": "**",
-                "destination": "/index.html"
-            }
-        ],
-        "headers": [
-            {
-                "source": "/.well-known/apple-app-site-association",
-                "headers": [
-                    {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                    }
-                ]
-            },
-            {
-                "source": "/.well-known/assetlinks.json",
-                "headers": [
-                    {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                    }
-                ]
-            }
-        ]
-    },
+    "hosting": [
+        {
+            "target": "landing",
+            "public": "landing",
+            "ignore": [
+                "firebase.json",
+                "**/.*",
+                "**/node_modules/**"
+            ],
+            "rewrites": [
+                {
+                    "source": "/invite",
+                    "destination": "/index.html"
+                },
+                {
+                    "source": "/profile/**",
+                    "destination": "/index.html"
+                },
+                {
+                    "source": "/privacy-policy",
+                    "destination": "/privacy-policy.html"
+                },
+                {
+                    "source": "/terms-of-service",
+                    "destination": "/terms-of-service.html"
+                },
+                {
+                    "source": "/liquidity_treasury",
+                    "destination": "/liquidity_treasury.html"
+                },
+                {
+                    "source": "/investors_saft",
+                    "destination": "/liquidity_treasury.html"
+                },
+                {
+                    "source": "/whitepaper",
+                    "destination": "/whitepaper.html"
+                }
+            ],
+            "headers": [
+                {
+                    "source": "**/*.html",
+                    "headers": [
+                        {
+                            "key": "Cache-Control",
+                            "value": "no-cache"
+                        }
+                    ]
+                },
+                {
+                    "source": "**/*.@(css|js)",
+                    "headers": [
+                        {
+                            "key": "Cache-Control",
+                            "value": "public, max-age=3600, must-revalidate"
+                        }
+                    ]
+                },
+                {
+                    "source": "**/*.apk",
+                    "headers": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/vnd.android.package-archive"
+                        },
+                        {
+                            "key": "Content-Disposition",
+                            "value": "attachment; filename=\"diaspora-nearby.apk\""
+                        },
+                        {
+                            "key": "Cache-Control",
+                            "value": "no-cache"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "target": "app",
+            "public": "app_deploy",
+            "ignore": [
+                "firebase.json",
+                "**/.*",
+                "**/node_modules/**"
+            ],
+            "rewrites": [
+                {
+                    "source": "**",
+                    "destination": "/index.html"
+                }
+            ],
+            "headers": [
+                {
+                    "source": "/.well-known/apple-app-site-association",
+                    "headers": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                {
+                    "source": "/.well-known/assetlinks.json",
+                    "headers": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
     "flutter": {
         "platforms": {
             "android": {

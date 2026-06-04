@@ -23,7 +23,7 @@ npm run deploy:sepolia
 
 ## 3. Step 2: Epoch Snapshot
 When the **Epoch 1 Milestone** (1k Users / 1M DSP) is hit:
-1.  Query your Firebase Firestore for all users with `totalDsp >= 100,000` and `trustScore >= 67`.
+1.  Query your Firebase Firestore for all users with `totalDsp >= 100,000` and `trustScore >= 51`.
 2.  Export them into a JSON format: `[{"address": "0x...", "amount": "1000..."}]`.
 3.  Save this as `blockchain/scripts/snapshot_epoch1.json`.
 

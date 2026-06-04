@@ -21,6 +21,79 @@ Ensure code quality before committing:
 flutter analyze
 ```
 
+### Testing
+Run all tests before submitting PRs:
+```bash
+flutter test
+```
+
+For integration tests:
+```bash
+flutter test integration_test/app_test.dart
+```
+
+### Code Formatting
+Auto-format code to match project standards:
+```bash
+dart format .
+```
+
+## Git Flow Protocol
+
+We follow a **Git Flow** branching strategy. See [CONTRIBUTING.md](../CONTRIBUTING.md) for full details.
+
+### Branch Structure
+- **`main`** - Production-ready code (protected, PR only)
+- **`develop`** - Integration branch (default working branch)
+- **`feature/*`** - New features (branch from develop)
+- **`bugfix/*`** - Bug fixes (branch from develop)
+- **`hotfix/*`** - Critical fixes (branch from main)
+
+### Standard Workflow
+```bash
+# 1. Start new work
+git checkout develop
+git pull origin develop
+git checkout -b feature/your-feature-name
+
+# 2. Commit changes (use semantic commits)
+git add .
+git commit -m "feat: describe your change"
+
+# 3. Keep updated with develop
+git fetch origin
+git rebase origin/develop
+
+# 4. Push and create PR
+git push origin feature/your-feature-name
+# Create PR targeting 'develop'
+```
+
+### Commit Conventions
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation
+- `refactor:` - Code restructuring
+- `test:` - Testing
+- `chore:` - Build/tooling
+
+### Before Submitting PR
+1. ✅ Run `flutter analyze` (must pass)
+2. ✅ Run `flutter test` (all tests must pass)
+3. ✅ Run `dart format .` (code formatting)
+4. ✅ Write tests for new features (see [test/README.md](../test/README.md))
+5. ✅ Update INTERFACE.md if changing public APIs
+
+### CI/CD Automation
+GitHub Actions automatically runs on all PRs:
+- Code analysis (`flutter analyze`)
+- All tests (`flutter test`)
+- Code formatting checks
+- PR title and branch naming validation
+
+See [.github/workflows/](../.github/workflows/) for workflow definitions.
+
+
 ## Architectural Guidelines
 
 ### 1. Feature-First Structure

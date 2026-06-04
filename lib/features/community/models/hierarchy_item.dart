@@ -1,24 +1,25 @@
-import 'package:diaspora_nearby/models/chat.dart';
+import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
-// [NEW] Import  
+// [NEW] Import
 class HierarchyItem {
   final String id;
   final String name;
   final String type;
-  // 'global', 'continent', 'country', 'state', 'city'   
+  // 'global', 'continent', 'country', 'state', 'city'
   final String? locationType;
-  // 'home', 'host', 'global'   
+  // 'home', 'host', 'global'
   final String? homeCountryCode;
   final String? hostCountryCode;
   final String? flag;
   final String? continent;
   final Map<String, dynamic>? location;
-  // [NEW] Added for reconstruction   
+  // [NEW] Added for reconstruction
   final ChatProfileImage? profileImage;
-  // [NEW] Rich avatar data   
+  // [NEW] Rich avatar data
   final int totalMembers;
   final List<HierarchyItem> children;
   final bool isExpandable;
+  final bool initiallyExpanded; // [NEW]
   final GlobalStats? globalStats;
 
   HierarchyItem({
@@ -35,6 +36,7 @@ class HierarchyItem {
     required this.totalMembers,
     this.children = const [],
     this.isExpandable = false,
+    this.initiallyExpanded = false, // [NEW]
     this.globalStats,
   });
 
@@ -52,6 +54,7 @@ class HierarchyItem {
     int? totalMembers,
     List<HierarchyItem>? children,
     bool? isExpandable,
+    bool? initiallyExpanded, // [NEW]
     GlobalStats? globalStats,
   }) {
     return HierarchyItem(
@@ -68,6 +71,7 @@ class HierarchyItem {
       totalMembers: totalMembers ?? this.totalMembers,
       children: children ?? this.children,
       isExpandable: isExpandable ?? this.isExpandable,
+      initiallyExpanded: initiallyExpanded ?? this.initiallyExpanded, // [NEW]
       globalStats: globalStats ?? this.globalStats,
     );
   }
@@ -86,4 +90,3 @@ class GlobalStats {
     required this.cities,
   });
 }
-

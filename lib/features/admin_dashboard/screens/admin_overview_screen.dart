@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,7 +10,7 @@ class AdminOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.elevationColor(context, 0), // Level 0 page bg
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -20,17 +21,21 @@ class AdminOverviewScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-            
+
             // Stats Row
             StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('users').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .snapshots(),
               builder: (context, userSnapshot) {
                 return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('communities').snapshots(),
+                  stream: FirebaseFirestore.instance
+                      .collection('communities')
+                      .snapshots(),
                   builder: (context, commSnapshot) {
                     final userCount = userSnapshot.data?.size ?? 0;
                     final commCount = commSnapshot.data?.size ?? 0;
-                    
+
                     return Row(
                       children: [
                         Expanded(
@@ -51,7 +56,7 @@ class AdminOverviewScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 24),
-                        Expanded(
+                        const Expanded(
                           child: _StatCard(
                             title: 'Active Chats',
                             value: '...', // Placeholder until RTDB integration
@@ -61,13 +66,13 @@ class AdminOverviewScreen extends ConsumerWidget {
                         ),
                       ],
                     );
-                  }
+                  },
                 );
-              }
+              },
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Recent Activity / Charts Placeholder
             const Text(
               'User Growth (Last 30 Days)',
@@ -78,7 +83,7 @@ class AdminOverviewScreen extends ConsumerWidget {
               height: 300,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.elevationColor(context, 1), // Level 1 card
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade200),
               ),
@@ -88,7 +93,10 @@ class AdminOverviewScreen extends ConsumerWidget {
                   children: [
                     Icon(LucideIcons.barChart, size: 48, color: Colors.grey),
                     SizedBox(height: 16),
-                    Text('Growth chart visualization placeholder', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      'Growth chart visualization placeholder',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   ],
                 ),
               ),
@@ -118,12 +126,12 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             offset: const Offset(0, 4),
             blurRadius: 10,
           ),
@@ -148,14 +156,10 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 }
-

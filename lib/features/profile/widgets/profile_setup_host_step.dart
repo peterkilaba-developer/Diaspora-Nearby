@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/google_places_models.dart';
-import 'package:diaspora_nearby/models/location.dart' as loc_model;
+import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
+import 'package:diaspora_nearby/features/shared/models/location.dart'
+    as loc_model;
 
 class ProfileSetupHostStep extends StatelessWidget {
   final TextEditingController searchController;
@@ -28,7 +29,7 @@ class ProfileSetupHostStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -36,17 +37,21 @@ class ProfileSetupHostStep extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           'Where do you live now?',
-          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
           'Search for your host city. We will verify you are nearby.',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
-        
+
         // 1. Search Bar
         TextFormField(
           controller: searchController,
@@ -55,27 +60,28 @@ class ProfileSetupHostStep extends StatelessWidget {
           decoration: InputDecoration(
             hintText: 'Search your current city',
             prefixIcon: const Icon(LucideIcons.search),
-            suffixIcon: searchController.text.isNotEmpty 
-               ? IconButton(
-                   icon: const Icon(LucideIcons.x, size: 18),
-                   onPressed: () {
-                     searchController.clear();
-                     onSearchChanged(''); // Clear predictions
-                   },
-                 )
-               : null,
+            suffixIcon: searchController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(LucideIcons.x, size: 18),
+                    onPressed: () {
+                      searchController.clear();
+                      onSearchChanged(''); // Clear predictions
+                    },
+                  )
+                : null,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             filled: true,
           ),
           onChanged: onSearchChanged,
         ),
-        
+
         // 2. Suggestions List
-        if (predictions.isNotEmpty)
-          _buildSuggestionsList(theme, context),
-        
+        if (predictions.isNotEmpty) _buildSuggestionsList(theme, context),
+
         // 3. Selection Confirmation
-        if (selectedLocation != null && predictions.isEmpty && searchController.text.isNotEmpty) ...[
+        if (selectedLocation != null &&
+            predictions.isEmpty &&
+            searchController.text.isNotEmpty) ...[
           const SizedBox(height: 16),
           OutlinedButton(
             onPressed: onNext,
@@ -83,7 +89,9 @@ class ProfileSetupHostStep extends StatelessWidget {
               foregroundColor: Colors.green,
               side: const BorderSide(color: Colors.green, width: 2),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -106,8 +114,6 @@ class ProfileSetupHostStep extends StatelessWidget {
 
         const SizedBox(height: 24),
 
-
-        
         const SizedBox(height: 16),
         TextButton.icon(
           onPressed: onBack,
@@ -133,15 +139,17 @@ class ProfileSetupHostStep extends StatelessWidget {
         itemBuilder: (context, index) {
           final prediction = predictions[index];
           return ListTile(
-            leading: const Icon(LucideIcons.mapPin, size: 20, color: Colors.grey),
+            leading: const Icon(
+              LucideIcons.mapPin,
+              size: 20,
+              color: Colors.grey,
+            ),
             title: Text(prediction.primaryText),
-            subtitle: Text(prediction.secondaryText ?? ''),
+            subtitle: Text(prediction.secondaryText),
             onTap: () => onSelectPlace(prediction.placeId),
           );
         },
       ),
     );
   }
-
-
 }

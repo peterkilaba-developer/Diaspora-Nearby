@@ -44,7 +44,7 @@ extension DartIOExtension on VmService {
       [bool? enabled]) async {
     assert(await isSocketProfilingAvailable(isolateId));
     return _callHelper('ext.dart.io.socketProfilingEnabled', isolateId, args: {
-      if (enabled != null) 'enabled': enabled,
+      'enabled': ?enabled,
     });
   }
 
@@ -90,7 +90,7 @@ extension DartIOExtension on VmService {
             : 'enable';
     return _callHelper('ext.dart.io.httpEnableTimelineLogging', isolateId,
         args: {
-          if (enabled != null) enableKey: enabled,
+          enableKey: ?enabled,
         });
   }
 
@@ -188,7 +188,7 @@ extension DartIOExtension on VmService {
       this,
       method,
       {
-        if (isolateId != null) 'isolateId': isolateId,
+        'isolateId': ?isolateId,
         ...args,
       },
     );

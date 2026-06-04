@@ -1,3 +1,26 @@
+# Analysis output files
+analysis_*.txt
+*_analysis.txt
+final_build_check.txt
+analyze_output.txt
+
+# Temporary scratch files at project root
+bctx*.txt
+bctx*.dart
+ctx_issues.txt
+build_context_warnings*.txt
+build_log*.txt
+build_logs.txt
+detailed_build_log.txt
+key_info.txt
+lib_only_analysis.txt
+logic_summary.txt
+logs_dump.txt
+proximity_test_output.txt
+targeted_analysis.txt
+temp_key_info*.txt
+temp_view.txt
+
 # Miscellaneous
 *.class
 *.log
@@ -61,7 +84,55 @@ Thumbs.db
 *_test_output.txt
 test_output.txt
 test_results.txt
-logic_summary.txt
-targeted_analysis.txt
-proximity_test_output.txt
+test_output_*.txt
 
+# Environment variables — match ALL .env files anywhere in the repo
+# (catches functions/.env.production, blockchain/.env, etc.)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Temporary analysis/test artifacts
+analyze_*.txt
+analyzer_output.txt
+users.json
+blockchain/cache/
+
+# Hardhat / Solidity build output (regenerated on every compile; never commit)
+blockchain/artifacts/
+blockchain/typechain/
+blockchain/typechain-types/
+
+# Firebase deploy caches (regenerated on every deploy)
+.firebase/
+
+# Stray logs / diff dumps that accumulate at repo root
+*.log
+*_log.txt
+flutter_*.txt
+device_flutter_log.txt
+logcat.txt
+dump.txt
+dump_*.txt
+ferr.txt
+final_analyze.txt
+final_fast_analyze.txt
+output.txt
+output2.txt
+diff*.txt
+fix_*.dart
+restore_*.dart
+rewrite_*.dart
+replace_*.dart
+replace_*.py
+
+# Agent/AI tool directories
+.agent/
+.agents/
+.gemini/
+
+app_deploy/
+
+# APK files
+*.apk

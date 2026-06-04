@@ -9,10 +9,12 @@ import 'package:flutter/services.dart';
 
 import 'main_screen.dart';
 
-void main() => runApp(ExampleApp());
+void main() => runApp(const ExampleApp());
 
 /// The example application class
 class ExampleApp extends StatelessWidget {
+  const ExampleApp({super.key});
+
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {

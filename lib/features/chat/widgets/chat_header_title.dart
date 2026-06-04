@@ -5,10 +5,10 @@ import 'package:flutter/material.dart' as material show Text;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:diaspora_nearby/models/profile_data.dart';
-import 'package:diaspora_nearby/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:diaspora_nearby/models/chat.dart';
+import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/config/env.dart';
 
 class ChatHeaderTitle extends StatefulWidget {
@@ -81,11 +81,12 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
 
     // 1. Determine City/State
     // Try Current Location First
-    if (profile.currentLocation != null && profile.currentLocation!.city != null) {
+    if (profile.currentLocation != null &&
+        profile.currentLocation!.city != null) {
       city = profile.currentLocation!.city;
       state = profile.currentLocation!.state;
-    } 
-    
+    }
+
     // Fallback to Host Location
     if (city == null || city.isEmpty) {
       city = profile.hostLocation.city;
@@ -94,9 +95,10 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
 
     // 2. Determine Country Code (for Flag)
     // Fallback chain: Current GPS -> Top-level Host Country -> Host Location Object
-    final countryCode = profile.currentLocation?.countryCode 
-        ?? profile.hostCountryCode 
-        ?? profile.hostLocation.countryCode;
+    final countryCode =
+        profile.currentLocation?.countryCode ??
+        profile.hostCountryCode ??
+        profile.hostLocation.countryCode;
 
     _countryFlag = _getFlag(countryCode);
     _locationName = _formatLocationName(city, countryCode, state);
@@ -106,7 +108,10 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
     final displayCity = city != null && city.isNotEmpty ? city : '';
     final isThreeLevel = countryCode == 'US' || countryCode == 'CA';
 
-    if (isThreeLevel && displayCity.isNotEmpty && state != null && state.isNotEmpty) {
+    if (isThreeLevel &&
+        displayCity.isNotEmpty &&
+        state != null &&
+        state.isNotEmpty) {
       return '$displayCity, $state';
     }
 
@@ -195,7 +200,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
         return Container(
           width: 36,
           height: 36,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: Colors.transparent,
             shape: BoxShape.circle,
           ),
@@ -210,7 +215,9 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
             gradient: img.gradientFrom != null && img.gradientTo != null
                 ? LinearGradient(
                     colors: [
-                      Color(int.parse(img.gradientFrom!.replaceAll('#', '0xFF'))),
+                      Color(
+                        int.parse(img.gradientFrom!.replaceAll('#', '0xFF')),
+                      ),
                       Color(int.parse(img.gradientTo!.replaceAll('#', '0xFF'))),
                     ],
                     begin: Alignment.topLeft,
@@ -233,7 +240,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
       return Container(
         width: 36,
         height: 36,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.transparent,
         ),
@@ -243,7 +250,8 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
           fit: BoxFit.cover,
           placeholder: (context, url) => Center(
             child: material.Text(
-              (widget.profile?.firstName ?? widget.fallbackTitle)[0].toUpperCase(),
+              (widget.profile?.firstName ?? widget.fallbackTitle)[0]
+                  .toUpperCase(),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -255,7 +263,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
     return Container(
       width: 36,
       height: 36,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.transparent,
       ),
@@ -278,10 +286,17 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
         widget.imageUrl == null &&
         widget.customImage == null &&
         widget.customAvatarWidget == null) {
-      return material.Text(
-        widget.fallbackTitle,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
+      // Wrap in GestureDetector so the title is still tappable even when no
+      // avatar variant is supplied (e.g. corridor chamber chats whose header
+      // is built from chat.name + onTap alone).
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: material.Text(
+          widget.fallbackTitle,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
     }
@@ -313,7 +328,8 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                if ((_localTimeStr != null || (_locationName != null && _locationName!.isNotEmpty))) ...[
+                if ((_localTimeStr != null ||
+                    (_locationName != null && _locationName!.isNotEmpty))) ...[
                   const SizedBox(height: 2),
                   Row(
                     children: [
@@ -326,11 +342,15 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                       ],
                       Expanded(
                         child: material.Text(
-                          _localTimeStr != null && _locationName != null && _locationName!.isNotEmpty
+                          _localTimeStr != null &&
+                                  _locationName != null &&
+                                  _locationName!.isNotEmpty
                               ? '$_localTimeStr in $_locationName'
                               : (_locationName ?? ''),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.textTheme.bodySmall?.color?.withAlpha(204),
+                            color: theme.textTheme.bodySmall?.color?.withAlpha(
+                              204,
+                            ),
                             fontSize: 12,
                             height: 1.1,
                           ),
@@ -355,7 +375,11 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Icon(Icons.handshake_outlined, size: 12, color: theme.colorScheme.onSurfaceVariant),
+                      Icon(
+                        LucideIcons.heartHandshake,
+                        size: 12,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 4),
                       material.Text(
                         '${widget.memberCount} members',

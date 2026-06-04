@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/router.dart' show invalidatePermissionCache;
 
 class UserPermissionsScreen extends ConsumerStatefulWidget {
   const UserPermissionsScreen({super.key});
@@ -19,12 +20,15 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
   bool _locationGranted = false;
   bool _notificationGranted = false;
   bool _backgroundLocationGranted = false;
-  bool _isLoading = false;
+  bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // [FIX] Always reset processing flag on (re-)mount — prevents permanent stuck state
+    // if the router redirected us back here after a navigation attempt.
+    _isProcessing = false;
     // Check permissions immediately to update UI state.
     _checkPermissions();
   }
@@ -38,6 +42,10 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // [FIX] Reset processing flag on resume — prevents permanent stuck state
+      // if a previous navigation attempt was intercepted by the router.
+      _isProcessing = false;
+      // Auto-navigate when returning from settings with all permissions granted
       _checkPermissions();
     }
   }
@@ -47,16 +55,21 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
       final locationStatus = await Permission.location.status;
       final notificationStatus = await Permission.notification.status;
 
-      debugPrint(
-        'Permission Check - Location: $locationStatus, Notification: $notificationStatus',
-      );
-
       // Check background location - handle legacy/new Android versions gracefully
       bool backgroundLocationGranted = false;
       try {
-        backgroundLocationGranted = await Permission.locationAlways.isGranted;
+        final bgStatus = await Permission.locationAlways.status;
+        // [FIX] Accept both isGranted and isLimited for background location
+        backgroundLocationGranted = bgStatus.isGranted || bgStatus.isLimited;
+        debugPrint(
+          'Permission Check - Location: $locationStatus, Notification: $notificationStatus, BgLocation: $bgStatus',
+        );
       } catch (e) {
         debugPrint('Error checking background location: $e');
+        // [FIX] If we can't check background location, treat as granted
+        // to avoid permanently blocking the user. The router only checks
+        // foreground location anyway.
+        backgroundLocationGranted = true;
       }
 
       if (mounted) {
@@ -69,14 +82,30 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
               ? true
               : backgroundLocationGranted;
         });
+
+        debugPrint(
+          'Permission State - loc=$_locationGranted, notif=$_notificationGranted, bgLoc=$_backgroundLocationGranted, allGranted=$_allPermissionsGranted, isProcessing=$_isProcessing',
+        );
+
+        // Auto-navigate as soon as all permissions are granted
+        if (_allPermissionsGranted && !_isProcessing) {
+          // Brief delay to let UI settle before navigating
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted && _allPermissionsGranted && !_isProcessing) {
+            _continue();
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error checking permissions: $e');
     }
   }
 
+  bool get _allPermissionsGranted =>
+      kIsWeb ||
+      (_locationGranted && _notificationGranted && _backgroundLocationGranted);
+
   Future<void> _requestLocation() async {
-    setState(() => _isLoading = true);
     try {
       final status = await Permission.location.request();
       if (status.isPermanentlyDenied) {
@@ -91,12 +120,11 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      await _checkPermissions();
     }
   }
 
   Future<void> _requestNotifications() async {
-    setState(() => _isLoading = true);
     try {
       final status = await Permission.notification.request();
       if (status.isPermanentlyDenied) {
@@ -106,12 +134,11 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
     } catch (e) {
       debugPrint('Error requesting notifications: $e');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      await _checkPermissions();
     }
   }
 
   Future<void> _requestBackgroundLocation() async {
-    setState(() => _isLoading = true);
     try {
       // Background location requires fine location first
       if (!_locationGranted) {
@@ -131,41 +158,28 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
       debugPrint('Error requesting background location: $e');
       // Don't crash, just log
     } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _proceedToNextScreen() async {
-    try {
-      // Double check all required permissions
-      if (_locationGranted &&
-          _notificationGranted &&
-          _backgroundLocationGranted) {
-        // Proceed to home.
-        // We delegate starting the background service to HomeScreen to avoid
-        // Android 12+ ForegroundServiceStartNotAllowedException on resume.
-        if (mounted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Navigate to Chats first to allow background service to stabilize
-            if (mounted) {
-              context.go('/chats');
-            }
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Error proceeding to next screen: $e');
+      await _checkPermissions();
     }
   }
 
   void _continue() {
-    final canContinue =
-        kIsWeb ||
-        (_locationGranted &&
-            _notificationGranted &&
-            _backgroundLocationGranted);
-    if (canContinue) {
-      _proceedToNextScreen();
+    if (_isProcessing) return;
+
+    if (_allPermissionsGranted) {
+      setState(() => _isProcessing = true);
+      // Invalidate the router's cached permission status so it
+      // does a fresh check and doesn't redirect back to /permissions.
+      invalidatePermissionCache();
+      if (mounted) {
+        context.go('/chats');
+      }
+      // [FIX] Safety reset — if navigation fails or router redirects back,
+      // re-enable the button after 2 seconds so user is never permanently stuck.
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && _isProcessing) {
+          setState(() => _isProcessing = false);
+        }
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -183,7 +197,9 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageHorizontalPadding),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.pageHorizontalPadding,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -279,7 +295,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
                 color: Theme.of(context).scaffoldBackgroundColor,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -4),
                   ),
@@ -289,10 +305,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed:
-                      (kIsWeb ||
-                          (_locationGranted &&
-                              _notificationGranted &&
-                              _backgroundLocationGranted))
+                      (_allPermissionsGranted && !_isProcessing)
                       ? _continue
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -331,9 +344,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(12),
+            decoration: AppTheme.cardDecoration(context).copyWith(
               border: Border.all(
                 color: isGranted
                     ? Theme.of(context).primaryColor
@@ -342,7 +353,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -354,13 +365,15 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: isGranted
-                        ? Theme.of(context).primaryColor.withOpacity(0.1)
+                        ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
                         : Colors.grey.shade100,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
-                    color: isGranted ? Theme.of(context).primaryColor : Colors.grey,
+                    color: isGranted
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -387,7 +400,10 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
                   ),
                 ),
                 if (isGranted)
-                  Icon(LucideIcons.checkCircle2, color: Theme.of(context).primaryColor)
+                  Icon(
+                    LucideIcons.checkCircle2,
+                    color: Theme.of(context).primaryColor,
+                  )
                 else
                   TextButton(
                     onPressed: isDisabled ? null : onPressed,

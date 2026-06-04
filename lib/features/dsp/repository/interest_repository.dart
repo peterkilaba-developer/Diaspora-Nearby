@@ -39,7 +39,7 @@ class InterestRepository {
         .collection('interest_registrations')
         .doc('${userId}_$service')
         .get();
-        
+
     return doc.exists;
   }
 }

@@ -12,6 +12,7 @@ class GooglePlacesAutocompleteField extends ConsumerStatefulWidget {
   final String? initialValue;
   final PlaceTypeFilter? filter; // [NEW] Support filtering
   final String? Function(String?)? validator;
+  final bool isHighlighted;
 
   const GooglePlacesAutocompleteField({
     super.key,
@@ -21,6 +22,7 @@ class GooglePlacesAutocompleteField extends ConsumerStatefulWidget {
     this.initialValue,
     this.filter,
     this.validator,
+    this.isHighlighted = false,
   });
 
   @override
@@ -136,7 +138,7 @@ class _GooglePlacesAutocompleteFieldState
                       LucideIcons.mapPin,
                       size: 20,
                       color:
-                          theme.iconTheme.color?.withOpacity(0.6) ??
+                          theme.iconTheme.color?.withValues(alpha: 0.6) ??
                           Colors.grey,
                     ),
                     title: Text(
@@ -150,7 +152,7 @@ class _GooglePlacesAutocompleteFieldState
                             secondaryText,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.textTheme.bodySmall?.color
-                                  ?.withOpacity(0.7),
+                                  ?.withValues(alpha: 0.7),
                             ),
                           )
                         : null,
@@ -185,10 +187,25 @@ class _GooglePlacesAutocompleteFieldState
       child: TextFormField(
         controller: _controller,
         focusNode: _focusNode,
+        autofocus: false, // [FIX] Disable auto-focus
+        textCapitalization: TextCapitalization.words,
         validator: widget.validator,
         decoration: InputDecoration(
           labelText: widget.label,
-          border: const OutlineInputBorder(),
+          filled: true,
+          fillColor: Theme.of(context).primaryColor.withValues(alpha: 0.05),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: widget.isHighlighted
+                ? const BorderSide(color: Colors.red, width: 1.5)
+                : BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: widget.isHighlighted
+                ? const BorderSide(color: Colors.red, width: 1.5)
+                : BorderSide.none,
+          ),
           suffixIcon: _isLoading
               ? const Padding(
                   padding: EdgeInsets.all(12),

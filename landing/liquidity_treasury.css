@@ -1,0 +1,147 @@
+/* ═══ LIQUIDITY TREASURY PAGE STYLES ═══ */
+
+/* Conversion badges */
+.conv-badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;min-width:48px;text-align:center;}
+.c100{background:#2e7d32;} .c90{background:#388e3c;} .c80{background:#43a047;}
+.c70{background:#e5933a;} .c60{background:#ef6c00;} .c50{background:#e65100;}
+.c40{background:#d84315;} .c30{background:#bf360c;} .c20{background:#b71c1c;} .c10{background:#880e4f;}
+
+/* Conversion bar visualization */
+.conversion-bars{display:flex;flex-direction:column;gap:6px;}
+.conv-bar-item{display:flex;align-items:center;gap:8px;}
+.conv-bar-label{font-size:12px;font-weight:600;min-width:48px;color:var(--fg-muted);}
+.conv-bar-track{flex:1;height:24px;background:var(--surface);border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);}
+.conv-bar-fill{height:100%;background:linear-gradient(90deg,var(--orange),#e5933a);border-radius:var(--radius-sm);transition:width 0.6s ease;}
+.conv-bar-val{font-size:12px;font-weight:700;min-width:36px;text-align:right;color:var(--fg);}
+
+/* Epoch blocks */
+.epoch-block{margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);overflow:hidden;transition:box-shadow 0.2s;}
+.epoch-block:hover{box-shadow:0 4px 20px rgba(0,0,0,0.05);}
+.epoch-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;cursor:pointer;gap:12px;flex-wrap:wrap;user-select:none;}
+.epoch-header:hover{background:var(--bg);}
+.epoch-header-left{display:flex;align-items:center;gap:8px;font-size:15px;}
+.epoch-header-right{display:flex;gap:16px;align-items:center;}
+.epoch-meta{font-size:13px;color:var(--fg-muted);font-weight:500;}
+.epoch-chevron{width:16px;height:16px;color:var(--fg-muted);transition:transform 0.2s;flex-shrink:0;}
+.epoch-block.open .epoch-chevron{transform:rotate(90deg);}
+.epoch-body{display:none;padding:0 20px 20px;border-top:1px solid var(--border);}
+.epoch-block.open .epoch-body{display:block;}
+
+/* Badges */
+.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+.badge.live{background:rgba(76,175,80,0.12);color:#2e7d32;}
+.badge.live .dot{background:#4caf50;width:6px;height:6px;display:inline-block;border-radius:50%;margin-right:4px;animation:pulse 2s infinite;}
+.badge.upcoming{background:var(--orange-bg);color:var(--orange);}
+
+/* Full epoch offer bar */
+.full-epoch-offer{display:flex;align-items:center;gap:16px;padding:16px;background:var(--bg);border:1px dashed var(--orange);border-radius:var(--radius-sm);margin-top:16px;flex-wrap:wrap;}
+.feo-info{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px;}
+.feo-info .fg-muted{font-size:12px;}
+.feo-price{font-size:18px;color:var(--orange);font-weight:800;}
+
+/* Treasury table */
+.lt-table{width:100%;border-collapse:collapse;font-size:13px;}
+.lt-table th{text-align:center;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);border-bottom:2px solid var(--border);font-weight:600;white-space:nowrap;}
+.lt-table th:first-child,.lt-table td:first-child{text-align:left;width:25%;}
+.lt-table th:nth-child(2),.lt-table td:nth-child(2){width:30%;}
+.lt-table th:last-child,.lt-table td:last-child{text-align:right;width:45%;}
+.lt-table td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap;}
+.lt-table tr:last-child td{border-bottom:none;}
+.lt-table .highlight-row{background:var(--orange-bg);}
+.lt-table .highlight-row td{font-weight:600;}
+
+/* Notify Me buttons (inline in table) */
+.btn-notify{padding:8px 18px;font-size:13px;display:inline-flex;align-items:center;gap:6px;}
+.btn-notify-sm{padding:5px 12px;background:none;border:1px solid var(--orange);color:var(--orange);border-radius:var(--radius-sm);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:var(--font);display:inline-flex;align-items:center;gap:4px;}
+.btn-notify-sm:hover{background:var(--orange);color:#fff;transform:translateY(-1px);}
+
+/* Legacy apply button (kept for compatibility) */
+.btn-apply{padding:6px 16px;background:var(--orange);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:var(--font);}
+.btn-apply:hover{background:#cf7b22;transform:translateY(-1px);}
+.btn-sm{padding:8px 16px;font-size:13px;}
+
+/* Wallet flow */
+.wallet-flow{display:flex;flex-direction:column;gap:0;}
+.wallet-step{display:flex;align-items:start;gap:16px;padding:20px 0;border-bottom:1px solid var(--border);position:relative;}
+.wallet-step:last-child{border-bottom:none;}
+.wallet-step::before{content:'';position:absolute;left:19px;top:44px;bottom:-4px;width:2px;background:var(--border);}
+.wallet-step:last-child::before{display:none;}
+.ws-num{width:40px;height:40px;border-radius:50%;background:var(--orange-bg);color:var(--orange);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0;position:relative;z-index:1;}
+.wallet-step .fg-muted{font-size:13px;color:var(--fg-muted);margin-top:4px;display:block;}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s;}
+.modal-overlay.active{opacity:1;pointer-events:all;}
+.modal-card{background:var(--surface);border-radius:var(--radius-lg);padding:32px;max-width:600px;width:92%;max-height:90vh;overflow-y:auto;position:relative;box-shadow:0 20px 60px rgba(0,0,0,0.15);transform:translateY(20px);transition:transform 0.3s;}
+.modal-overlay.active .modal-card{transform:translateY(0);}
+.modal-close{position:absolute;top:16px;right:16px;background:none;border:none;font-size:24px;color:var(--fg-muted);cursor:pointer;line-height:1;padding:4px;}
+.modal-close:hover{color:var(--fg);}
+
+/* Notify email input */
+.notify-email-input{width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);background:var(--bg);color:var(--fg);box-sizing:border-box;transition:border-color 0.2s,box-shadow 0.2s;}
+.notify-email-input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(229,147,58,0.12);}
+.notify-email-input::placeholder{color:var(--fg-dim);}
+
+/* Notify info card */
+.notify-info-card{padding:4px 0;}
+
+/* DEX link buttons */
+.dex-link-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--bg);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:var(--font);text-decoration:none;}
+.dex-link-btn:hover{border-color:var(--orange);background:var(--orange-bg);color:var(--orange);transform:translateY(-1px);}
+
+/* Trading pair badges */
+.pair-badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--border);color:var(--fg-muted);}
+
+/* Contract preview (used in notify modal) */
+.contract-preview{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 0;}
+.contract-line{display:flex;justify-content:space-between;align-items:start;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--border);gap:12px;}
+.contract-line:last-child{border-bottom:none;}
+.contract-line span{color:var(--fg-muted);white-space:nowrap;}
+.contract-line strong{text-align:right;color:var(--fg);}
+.lt-label{font-size:12px;font-weight:600;color:var(--fg-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;}
+.footer-link{transition:color 0.2s;cursor:pointer;color:var(--fg-muted);}
+.footer-link:hover{color:var(--fg);}
+
+@keyframes spin{100%{transform:rotate(360deg);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+@keyframes tickerPulse{0%{box-shadow:0 0 0 0 rgba(76,175,80,0.4);}70%{box-shadow:0 0 0 6px rgba(76,175,80,0);}100%{box-shadow:0 0 0 0 rgba(76,175,80,0);}}
+
+/* Live Price Ticker */
+.live-ticker{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 0;}
+.ticker-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg-muted);}
+.ticker-value{font-size:18px;font-weight:800;color:var(--orange);font-family:'Inter',sans-serif;letter-spacing:-0.02em;}
+.ticker-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+.ticker-dot.green{background:#4caf50;animation:tickerPulse 2s infinite;}
+.ticker-divider{width:1px;height:20px;background:var(--border);}
+
+/* Chart Container */
+.chart-container{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:20px;overflow:hidden;}
+.chart-container canvas{display:block;width:100%;}
+
+/* Factor Cards */
+.factor-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.factor-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;transition:border-color 0.2s;}
+.factor-card:hover{border-color:var(--orange);}
+.fc-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);margin-bottom:6px;}
+.fc-value{font-size:20px;font-weight:800;color:var(--orange);font-family:'Inter',sans-serif;letter-spacing:-0.02em;}
+.fc-desc{font-size:10px;color:var(--fg-dim);margin-top:4px;font-family:monospace;}
+
+/* Responsive */
+@media(max-width:768px){
+  .epoch-header{flex-direction:column;align-items:flex-start;}
+  .epoch-header-right{margin-top:4px;}
+  .full-epoch-offer{flex-direction:column;align-items:flex-start;}
+  .card-grid[style*="grid-template-columns:repeat(2"]{grid-template-columns:1fr !important;}
+  .card-grid[style*="grid-template-columns:repeat(3"]{grid-template-columns:1fr !important;}
+  .conv-bar-label{min-width:40px;}
+  .factor-cards{grid-template-columns:repeat(2,1fr);}
+  .ticker-divider{display:none;}
+  .live-ticker .container{gap:12px !important;}
+  .ticker-value{font-size:16px;}
+  .modal-card{padding:20px;}
+  .epoch-name{display:none;}
+}
+@media(max-width:480px){
+  .factor-cards{grid-template-columns:1fr 1fr;}
+  .fc-value{font-size:16px;}
+}

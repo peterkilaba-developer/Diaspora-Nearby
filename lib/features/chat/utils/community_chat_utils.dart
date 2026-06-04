@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:diaspora_nearby/models/chat.dart';
-import 'package:diaspora_nearby/data/countries.dart';
+import 'package:diaspora_nearby/features/chat/models/chat.dart';
+import 'package:diaspora_nearby/core/data/countries.dart';
 
 /// Community Chat Utilities
 /// Handles dynamic naming and avatar rendering for community chats
@@ -17,29 +17,31 @@ class CommunityChatUtils {
     'south-america': 'South America',
     'oceania': 'Oceania',
     'antarctica': 'Antarctica',
+    'caribbean': 'Caribbean',
   };
 
   /// Generate dynamic community name based on relation (Home vs Host)
   /// Ports logic from React: `utils/communityLocationUtils.ts`
   static String generateCommunityName(Chat chat) {
     if (!chat.isCommunity) return chat.name;
-    
+
     // [FIX] Derive locationType from ID if not present on object
     String type = chat.locationType ?? '';
     if (type.isEmpty) {
-       if (chat.id.contains('_host_')) {
-         type = 'host';
-       } else if (chat.id.contains('_past_')) {
-         type = 'past';
-       } else {
-         type = 'home';
-       }
+      if (chat.id.contains('_host_')) {
+        type = 'host';
+      } else if (chat.id.contains('_past_')) {
+        type = 'past';
+      } else {
+        type = 'home';
+      }
     }
 
     return generateCommunityNameFromParts(
-        name: chat.name,
-        locationType: type,
-        id: chat.id);
+      name: chat.name,
+      locationType: type,
+      id: chat.id,
+    );
   }
 
   /// Generate community name from raw parts
@@ -60,15 +62,17 @@ class CommunityChatUtils {
     if (cleanName.isEmpty || cleanName == 'Unknown') return 'Community';
 
     // 1. Global Community
-    if (locationType == 'global' || cleanName.toLowerCase().contains('global')) {
+    if (locationType == 'global' ||
+        cleanName.toLowerCase().contains('global')) {
       return 'Global Community';
     }
 
     // 2. Continent Communities
     // Check if it's a continent community (usually name is just the continent)
     final lowerName = cleanName.toLowerCase();
-    final isContinent =
-        _continentNames.values.any((c) => c.toLowerCase() == lowerName);
+    final isContinent = _continentNames.values.any(
+      (c) => c.toLowerCase() == lowerName,
+    );
 
     // Also check if ID suggests it is a continent chat (e.g. chat_host_continent_africa)
     final isContinentById = id.contains('continent');
@@ -88,8 +92,11 @@ class CommunityChatUtils {
           // Convert slug to Title Case (e.g. north-america -> North America)
           continent = slug
               .split('-')
-              .map((word) =>
-                  word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1)}' : '')
+              .map(
+                (word) => word.isNotEmpty
+                    ? '${word[0].toUpperCase()}${word.substring(1)}'
+                    : '',
+              )
               .join(' ');
         }
       }
@@ -98,7 +105,7 @@ class CommunityChatUtils {
       // Host: noun form (e.g., "Africa Community")
       // Home: adjective form (e.g., "African Community")
       if (locationType == 'host' || locationType == 'past') {
-        const Map<String, String> _reverseAdjectiveMap = {
+        const Map<String, String> reverseAdjectiveMap = {
           'african': 'Africa',
           'asian': 'Asia',
           'european': 'Europe',
@@ -106,11 +113,12 @@ class CommunityChatUtils {
           'south american': 'South America',
           'oceanian': 'Oceania',
           'antarctic': 'Antarctica',
+          'caribbean': 'Caribbean',
         };
-        final noun = _reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
+        final noun = reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
         return '$noun Community';
       } else {
-        const Map<String, String> _adjectiveMap = {
+        const Map<String, String> adjectiveMap = {
           'africa': 'African',
           'asia': 'Asian',
           'europe': 'European',
@@ -118,8 +126,9 @@ class CommunityChatUtils {
           'south america': 'South American',
           'oceania': 'Oceanian',
           'antarctica': 'Antarctic',
+          'caribbean': 'Caribbean',
         };
-        const Map<String, String> _reverseAdjectiveMap = {
+        const Map<String, String> reverseAdjectiveMap = {
           'african': 'Africa',
           'asian': 'Asia',
           'european': 'Europe',
@@ -127,11 +136,12 @@ class CommunityChatUtils {
           'south american': 'South America',
           'oceanian': 'Oceania',
           'antarctic': 'Antarctica',
+          'caribbean': 'Caribbean',
         };
         final canonicalNoun =
-            _reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
+            reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
 
-        final adj = _adjectiveMap[canonicalNoun.toLowerCase()] ?? canonicalNoun;
+        final adj = adjectiveMap[canonicalNoun.toLowerCase()] ?? canonicalNoun;
         return '$adj Community';
       }
     }
@@ -155,23 +165,24 @@ class CommunityChatUtils {
     required BuildContext context,
   }) {
     // 0. Use Profile Image if available
-    if (profileImage != null && profileImage.isNotEmpty && !profileImage.startsWith('assets/')) {
-        return Container(
-          width: size,
-          height: size,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: CachedNetworkImage(
-            imageUrl: profileImage,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(color: Colors.grey.shade200),
-            errorWidget: (context, url, error) => const Icon(LucideIcons.users),
-          ),
-        );
+    if (profileImage != null &&
+        profileImage.isNotEmpty &&
+        profileImage != 'users' && // [FIX] Ignore legacy placeholder
+        !profileImage.startsWith('assets/')) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(shape: BoxShape.circle),
+        clipBehavior: Clip.antiAlias,
+        child: CachedNetworkImage(
+          imageUrl: profileImage,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => Container(color: Colors.grey.shade200),
+          errorWidget: (context, url, error) => const Icon(LucideIcons.users),
+        ),
+      );
     }
-  
+
     // 1. Resolve effective values
     final effectiveId = communityId ?? chat?.id ?? '';
     var effectiveLocationType = locationType ?? chat?.locationType;
@@ -198,7 +209,8 @@ class CommunityChatUtils {
         effectiveType = 'continent';
       } else if (parts.contains('country')) {
         effectiveType = 'country';
-      } else if (parts.contains('city')) { // Prioritize city check (most specific)
+      } else if (parts.contains('city')) {
+        // Prioritize city check (most specific)
         effectiveType = 'city';
       } else if (parts.contains('state')) {
         effectiveType = 'state';
@@ -217,27 +229,39 @@ class CommunityChatUtils {
       final countryCode = () {
         // [FIX] Extract TARGET country from ID for ALL types (host, past, AND home)
         // ID format: host_country_[target]_[home] OR home_country_[target]
-        if ((effectiveLocationType == 'host' || effectiveLocationType == 'past' || effectiveLocationType == 'home') && effectiveId.contains('_country_')) {
-           final parts = effectiveId.split('_');
-           final countryIndex = parts.indexOf('country');
-           if (countryIndex != -1 && countryIndex + 1 < parts.length) {
-              return parts[countryIndex + 1].toUpperCase();
-           }
+        if ((effectiveLocationType == 'host' ||
+                effectiveLocationType == 'past' ||
+                effectiveLocationType == 'home') &&
+            effectiveId.contains('_country_')) {
+          final parts = effectiveId.split('_');
+          final countryIndex = parts.indexOf('country');
+          if (countryIndex != -1 && countryIndex + 1 < parts.length) {
+            return parts[countryIndex + 1].toUpperCase();
+          }
         }
-        return hostCountryCode ?? homeCountryCode ?? chat?.hostCountryCode ?? chat?.homeCountryCode;
+        return hostCountryCode ??
+            homeCountryCode ??
+            chat?.hostCountryCode ??
+            chat?.homeCountryCode;
       }();
-      final displayFlag = flag ?? chat?.flag ?? (countryCode != null ? getCountryByCode(countryCode)?.flag : null);
+      final displayFlag = (flag != null && flag.isNotEmpty)
+          ? flag
+          : (chat?.flag != null && chat!.flag!.isNotEmpty)
+          ? chat.flag
+          : (countryCode != null ? getCountryByCode(countryCode)?.flag : null);
 
       if (displayFlag != null) {
         final isHome = effectiveLocationType == 'home';
         final overlayIcon = isHome ? LucideIcons.home : LucideIcons.mapPin;
-        final iconColor = isHome ? Colors.orange.shade700 : Colors.cyan.shade700;
+        final iconColor = isHome
+            ? Colors.orange.shade700
+            : Colors.cyan.shade700;
 
         final theme = Theme.of(context);
         return Container(
           width: size,
           height: size,
-            color: Colors.transparent,
+          color: Colors.transparent,
           child: Stack(
             children: [
               Center(
@@ -252,7 +276,9 @@ class CommunityChatUtils {
                 child: Container(
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withOpacity(0.8), // Themed background for small overlay
+                    color: theme.colorScheme.surface.withValues(
+                      alpha: 0.8,
+                    ), // Themed background for small overlay
                     shape: BoxShape.circle,
                   ),
                   child: Icon(overlayIcon, size: size * 0.25, color: iconColor),
@@ -272,10 +298,7 @@ class CommunityChatUtils {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: gradient,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: gradient),
       child: Center(
         child: Icon(
           combinedType == 'global' ? LucideIcons.globe : icon,
@@ -329,7 +352,10 @@ class CommunityChatUtils {
       case 'host_city':
       case 'past_city':
         return const LinearGradient(
-          colors: [Color(0xFF6B9B7A), Color(0xFF557A63)], // Sage Green (App Accent)
+          colors: [
+            Color(0xFF6B9B7A),
+            Color(0xFF557A63),
+          ], // Sage Green (App Accent)
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         );
@@ -338,5 +364,3 @@ class CommunityChatUtils {
     }
   }
 }
-
-

@@ -1,8 +1,10 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
-  errors:
-    deprecated_member_use: ignore
+  exclude:
+    - pub_cache/**
+    - temp_cache/**
+  # errors:
 
 linter:
   rules:

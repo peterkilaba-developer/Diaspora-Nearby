@@ -1,7 +1,7 @@
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:diaspora_nearby/models/message.dart';
+import 'package:diaspora_nearby/features/chat/models/message.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'top_level_text_content.dart';
 
@@ -18,7 +18,7 @@ class ImageMessageContent extends StatelessWidget {
   void _showFullScreenImage(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.95),
+      barrierColor: Colors.black.withValues(alpha: 0.95),
       builder: (context) => Stack(
         children: [
           Positioned(
@@ -38,28 +38,35 @@ class ImageMessageContent extends StatelessWidget {
               boundaryMargin: const EdgeInsets.all(20),
               minScale: 0.5,
               maxScale: 4.0,
-              child: (kIsWeb || imageUrl.startsWith('http') || imageUrl.startsWith('blob:'))
-                ? Image.network(
-                    imageUrl,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return const Center(child: CircularProgressIndicator(color: Colors.white));
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      if (kIsWeb) {
-                        debugPrint('❌ Message Image failed to load on Web: $error');
-                      }
-                      return _buildErrorWidget();
-                    },
-                  )
-                : Image.file(
-                    File(imageUrl.replaceFirst('file://', '')),
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return _buildErrorWidget();
-                    },
-                  ),
+              child:
+                  (kIsWeb ||
+                      imageUrl.startsWith('http') ||
+                      imageUrl.startsWith('blob:'))
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        if (kIsWeb) {
+                          debugPrint(
+                            'âŒ Message Image failed to load on Web: $error',
+                          );
+                        }
+                        return _buildErrorWidget();
+                      },
+                    )
+                  : Image.file(
+                      File(imageUrl.replaceFirst('file://', '')),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return _buildErrorWidget();
+                      },
+                    ),
             ),
           ),
         ],
@@ -72,19 +79,23 @@ class ImageMessageContent extends StatelessWidget {
     final theme = Theme.of(context);
     final imageUrl = message.imageUrl;
     final isSending = message.status == 'sending';
-    final isLocalFile = imageUrl?.startsWith('file://') ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (imageUrl != null)
           GestureDetector(
-            onTap: isSending ? null : () => _showFullScreenImage(context, imageUrl),
+            onTap: isSending
+                ? null
+                : () => _showFullScreenImage(context, imageUrl),
             child: Stack(
               children: [
                 Hero(
                   tag: imageUrl,
-                  child: (kIsWeb || imageUrl.startsWith('http') || imageUrl.startsWith('blob:'))
+                  child:
+                      (kIsWeb ||
+                          imageUrl.startsWith('http') ||
+                          imageUrl.startsWith('blob:'))
                       ? Image.network(
                           imageUrl,
                           fit: BoxFit.cover,
@@ -97,15 +108,16 @@ class ImageMessageContent extends StatelessWidget {
                               color: theme.colorScheme.surfaceContainerHighest,
                               child: Center(
                                 child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
+                                  value:
+                                      loadingProgress.expectedTotalBytes != null
                                       ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
+                                            loadingProgress.expectedTotalBytes!
                                       : null,
                                 ),
                               ),
                             );
                           },
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 200,
                             height: 150,
                             color: theme.colorScheme.surfaceContainerHighest,
@@ -116,7 +128,7 @@ class ImageMessageContent extends StatelessWidget {
                           File(imageUrl.replaceFirst('file://', '')),
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             width: 200,
                             height: 150,
                             color: theme.colorScheme.surfaceContainerHighest,
@@ -127,7 +139,7 @@ class ImageMessageContent extends StatelessWidget {
                 if (isSending)
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       child: const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -154,7 +166,7 @@ class ImageMessageContent extends StatelessWidget {
             ),
           ),
         if (message.content.isNotEmpty)
-           TopLevelTextContent(message: message, isOwn: isOwn),
+          TopLevelTextContent(message: message, isOwn: isOwn),
       ],
     );
   }
@@ -168,9 +180,10 @@ class ImageMessageContent extends StatelessWidget {
         Text(
           'Could not load image',
           style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              decoration: TextDecoration.none),
+            color: Colors.white,
+            fontSize: 16,
+            decoration: TextDecoration.none,
+          ),
         ),
       ],
     );

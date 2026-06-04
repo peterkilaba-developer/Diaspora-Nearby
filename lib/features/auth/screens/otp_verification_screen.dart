@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:sms_autofill/sms_autofill.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'auth_controller.dart';
 
 class OTPVerificationScreen extends ConsumerStatefulWidget {
@@ -60,8 +61,8 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       await SmsAutoFill().listenForCode();
       // Get app signature for SMS format (useful for debugging)
       final signature = await SmsAutoFill().getAppSignature;
-      print('OTPVerificationScreen: App Signature for SMS: $signature');
-      
+      debugPrint('OTPVerificationScreen: App Signature for SMS: $signature');
+
       // Auto-stop listening after 60 seconds
       Future.delayed(const Duration(seconds: 60), () {
         if (mounted && _isListening) {
@@ -69,7 +70,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
         }
       });
     } catch (e) {
-      print('OTPVerificationScreen: Failed to start listening: $e');
+      debugPrint('OTPVerificationScreen: Failed to start listening: $e');
       setState(() => _isListening = false);
     }
   }
@@ -79,11 +80,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       final isLoading = ref.read(authControllerProvider);
       if (isLoading) return; // Prevent double submission
 
-      ref.read(authControllerProvider.notifier).verifyOTP(
-            context,
-            widget.verificationId,
-            _otpCode,
-          );
+      ref
+          .read(authControllerProvider.notifier)
+          .verifyOTP(context, widget.verificationId, _otpCode);
     }
   }
 
@@ -93,14 +92,15 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     final theme = Theme.of(context);
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: !kIsWeb,
       appBar: AppBar(title: const Text('Verify Phone')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 24.0),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height -
+              minHeight:
+                  MediaQuery.of(context).size.height -
                   MediaQuery.of(context).padding.top -
                   MediaQuery.of(context).padding.bottom -
                   kToolbarHeight -
