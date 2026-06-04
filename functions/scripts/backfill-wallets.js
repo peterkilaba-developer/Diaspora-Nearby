@@ -53,16 +53,25 @@ async function main() {
     // ── 1. System Treasuries ──
     console.log("\n=== System Treasury Wallets ===\n");
 
+    const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+
     const systemTreasuries = [
-        { label: "Founders", salt: "system:founders_treasury", govId: "founders", name: "Founders & Core Team" },
-        { label: "Investors", salt: "system:investors_treasury", govId: "investors", name: "Investors & Partners" },
-        { label: "Burn", salt: "system:burn_treasury", govId: "burn", name: "Deflationary Burn" },
+        { label: "Founders", salt: "system:founders_treasury", govId: "founders", name: "Founders & Core Team", walletType: "smart" },
+        { label: "Investors", salt: "system:investors_treasury", govId: "investors", name: "Investors & Partners", walletType: "smart" },
+        // Burn is the canonical dead address — not a smart wallet. Backfill writes
+        // 0x...dEaD directly so the burn slot is irrecoverable by design.
+        { label: "Burn", govId: "burn", name: "Deflationary Burn", walletType: "burn", fixedAddress: BURN_ADDRESS },
     ];
 
     for (const t of systemTreasuries) {
         try {
-            const saltHash = ethers.keccak256(ethers.toUtf8Bytes(t.salt));
-            const walletAddress = await factory.getWallet(saltHash);
+            let walletAddress;
+            if (t.fixedAddress) {
+                walletAddress = t.fixedAddress;
+            } else {
+                const saltHash = ethers.keccak256(ethers.toUtf8Bytes(t.salt));
+                walletAddress = await factory.getWallet(saltHash);
+            }
             console.log(`${t.label}: ${walletAddress}`);
 
             await db.collection("governance").doc(t.govId).set({
@@ -70,7 +79,7 @@ async function main() {
                 name: t.name,
                 type: "system",
                 walletAddress: walletAddress,
-                walletType: "smart",
+                walletType: t.walletType,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
 

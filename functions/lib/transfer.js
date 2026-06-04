@@ -4,6 +4,7 @@
  * All token transfers use Smart Wallets — no EOA/private key access.
  */
 const { functions, admin, db } = require("./shared");
+const { recordCorridorActivity } = require("./corridor_activity");
 
 /**
  * Transfers Diaspora (DSP) points between users.
@@ -89,16 +90,11 @@ exports.transferDiaspora = functions
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // Update Corridor
-        const corridorRef = db.collection('corridors').doc(corridorId);
-        transaction.set(corridorRef, {
-          id: corridorId,
-          senderCountry,
-          receiverCountry,
-          cumulativeGdp: admin.firestore.FieldValue.increment(amount),
-          transactionCount: admin.firestore.FieldValue.increment(1),
-          lastTransactionAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        // [DEPRECATED] Legacy `corridors/{senderCC_receiverCC}` write removed.
+        // Bilateral GDP is now tracked exclusively on the chamber doc via
+        // `recordCorridorActivity` (called after the transaction commits
+        // below). The corridorId is still computed and stamped on the
+        // points_transactions audit row for backwards-compat queries.
 
         // Update Communities (Home and Host for both if applicable)
         // For simplicity, we track against receiver's Home Country community
@@ -159,6 +155,55 @@ exports.transferDiaspora = functions
           },
         });
       });
+
+      // ── UNIFIED CORRIDOR GDP ROLL-UP ──
+      // Beyond the legacy `corridors` collection write above, also feed
+      // the chamber doc (the new bilateral source of truth). Derived from
+      // the SENDER's diaspora corridor (their home + host country): an
+      // outflow from their host country economy.
+      //
+      // We re-fetch the sender's profile because the transaction already
+      // committed; reading inside the tx would require restructuring it.
+      try {
+        const senderProfile = (await db.collection('users').doc(fromUserId).get()).data() || {};
+        const receiverProfile = (await db.collection('users').doc(toUserId).get()).data() || {};
+        // Direction within the sender's corridor:
+        //   - receiver is currently IN sender's home country → host → home
+        //     (remittance pattern)
+        //   - receiver is currently IN sender's host country → host-internal
+        //     (diaspora-to-diaspora within the host)
+        //   - anything else (third country) → no direction recorded; still
+        //     counts toward gdpTotal so we don't lose the activity.
+        const receiverCurrent = receiverProfile.hostCountryCode ||
+          receiverProfile.homeCountryCode || null;
+        let direction = null;
+        if (receiverCurrent && senderProfile.homeCountryCode &&
+            receiverCurrent === senderProfile.homeCountryCode) {
+          direction = 'hostToHome';
+        } else if (receiverCurrent && senderProfile.hostCountryCode &&
+            receiverCurrent === senderProfile.hostCountryCode) {
+          direction = 'hostInternal';
+        }
+
+        await recordCorridorActivity({
+          homeCountryCode: senderProfile.homeCountryCode,
+          hostCountryCode: senderProfile.hostCountryCode,
+          amountUsd: amount, // DSP units == USD units in current accounting
+          activityType: 'dsp_transfer',
+          direction,
+          actorUid: fromUserId,
+          metadata: {
+            corridorId,
+            toUserId,
+            senderCountry,
+            receiverCountry,
+          },
+        });
+      } catch (e) {
+        // Chamber rollup is a soft-fail: legacy corridor write succeeded
+        // and the user got their transfer, so we don't surface this.
+        console.error('[transferDiaspora] chamber rollup failed:', e.message);
+      }
 
       return { success: true, message: `Successfully transferred ${amount} DSP.` };
 

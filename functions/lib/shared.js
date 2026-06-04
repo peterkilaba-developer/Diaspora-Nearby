@@ -37,6 +37,20 @@ async function sendPushToUser(userId, payload) {
         },
     };
 
+    // Optional Android grouping/collapse so repeated alerts of the same type
+    // stack in the tray instead of flooding it.
+    if (payload.androidCollapseKey || payload.androidTag) {
+        message.android = {
+            collapseKey: payload.androidCollapseKey,
+            notification: payload.androidTag ? { tag: payload.androidTag } : undefined,
+        };
+    }
+    if (payload.apnsThreadId) {
+        message.apns = {
+            payload: { aps: { "thread-id": payload.apnsThreadId } },
+        };
+    }
+
     try {
         await admin.messaging().send(message);
         console.log(`[Push] Sent to ${userId}: ${payload.title}`);

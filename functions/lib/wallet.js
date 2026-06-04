@@ -12,6 +12,7 @@
  */
 const { functions, admin, db } = require("./shared");
 const { ethers } = require("ethers");
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
 // ── Smart Wallet Factory ABI (minimal interface) ──
 const WALLET_FACTORY_ABI = [
@@ -69,13 +70,38 @@ function getSmartWalletInfra() {
 
 /**
  * Compute the phone hash used as CREATE2 salt.
- * Normalizes the phone number first (trim whitespace, ensure + prefix).
+ *
+ * Normalizes via libphonenumber-js to canonical E.164 so that the salt is
+ * insensitive to client-side formatting variations (spaces, dashes, retained
+ * national trunk prefix). This is load-bearing: the hash is the salt for
+ * CREATE2 wallet deployment, so two clients passing the "same" number in
+ * different surface forms MUST produce the same hash, otherwise the same
+ * person ends up with two distinct wallet addresses.
+ *
+ * Audited 2026-06-02: zero existing Firebase Auth users had a trunk-prefix
+ * mismatch between stored phone and canonical E.164, so promoting the
+ * normalization here is safe (no existing CREATE2 address would shift).
  */
 function computePhoneHash(phoneNumber) {
-  // Normalize: trim, remove spaces, ensure starts with +
-  let normalized = phoneNumber.trim().replace(/\s+/g, "");
-  if (!normalized.startsWith("+")) {
-    normalized = "+" + normalized;
+  const trimmed = (phoneNumber || "").trim();
+  if (!trimmed) {
+    throw new Error("computePhoneHash: empty phone number");
+  }
+
+  const parsed = parsePhoneNumberFromString(trimmed);
+  let normalized;
+  if (parsed && parsed.isValid()) {
+    normalized = parsed.number; // E.164, leading "+"
+  } else {
+    // Fall back to the legacy minimal normalization so an unparseable but
+    // pre-existing string still hashes the same as before. Loud-log so we
+    // can investigate any production occurrences.
+    console.warn(
+      `[computePhoneHash] libphonenumber could not validate ${trimmed}; ` +
+        "falling back to whitespace-strip + '+' prefix"
+    );
+    normalized = trimmed.replace(/\s+/g, "");
+    if (!normalized.startsWith("+")) normalized = "+" + normalized;
   }
   return ethers.keccak256(ethers.toUtf8Bytes(normalized));
 }
@@ -399,8 +425,12 @@ exports.getOrCreateSmartWallet = functions
 });
 
 // ── 4. System & Community Treasury Wallets (Callable) ──
-// Creates smart wallets for ALL system treasuries (founders, investors, burn)
-// and writes walletAddress to governance docs so TGE can snapshot them.
+// Creates smart wallets for the spendable system treasuries (founders,
+// liquidity/investors) and records the canonical burn address. Writes
+// walletAddress to governance docs so TGE can snapshot them.
+//
+// Burn is special: it is always 0x000…dEaD, never a smart wallet, so that
+// burned tokens are irrecoverable by anyone (including the backend signer).
 
 /**
  * Helper: Create a deterministic smart wallet for a system treasury.
@@ -427,13 +457,20 @@ async function createSystemTreasuryWallet(infra, label) {
 }
 
 /**
- * ensureSystemWallets — Creates smart wallets for ALL system treasuries:
- *   1. Founders Treasury  (salt: "system:founders_treasury")
- *   2. Investors Treasury  (salt: "system:investors_treasury")
- *   3. Burn Treasury       (salt: "system:burn_treasury")
- * 
- * Also writes walletAddress into governance docs ("founders", "investors")
- * so TGE performTGE() can snapshot their balances.
+ * ensureSystemWallets — Provisions the system treasury addresses:
+ *   1. Founders Treasury  — smart wallet (salt: "treasury:founders")
+ *   2. Liquidity (DEX)    — Safe multisig, NOT created here (governance/liquidity.walletAddress
+ *      is set manually via repoint-treasury-wallet.js after the Safe is deployed)
+ *   3. Burn               — fixed dead address 0x000…dEaD (NOT a smart wallet)
+ *
+ * The legacy `investors` slot was removed on 2026-06-04 — see
+ * functions/scripts/migrate-investors-to-liquidity.js. Re-running this function
+ * is now safe and will NOT clobber any of the Safe-managed treasuries.
+ *
+ * Writes walletAddress into governance/{founders,burn} so TGE performTGE()
+ * can snapshot balances. The burn entry is recorded for audit/UI consistency
+ * only; no on-chain wallet exists for it. Liquidity's walletAddress is left
+ * untouched (assumed to already point at the Safe).
  */
 exports.ensureSystemWallets = functions
   .runWith({ timeoutSeconds: 120, memory: "256MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
@@ -483,60 +520,49 @@ exports.ensureSystemWallets = functions
       results.founders = { error: e.message };
     }
 
-    // ── 2. Investors Treasury ──
-    try {
-      const investors = await createSystemTreasuryWallet(infra, "treasury:investors");
-      results.investors = investors;
-
-      await db.collection("system_stats").doc("treasury").set({
-        investorsWallet: investors.address,
-        investorsWalletType: "smart",
-        ...(!investors.alreadyExisted && { investorsWalletGeneratedAt: admin.firestore.FieldValue.serverTimestamp() }),
-      }, { merge: true });
-
-      // Write walletAddress to governance doc (needed for TGE snapshot)
-      await db.collection("governance").doc("investors").set({
-        id: "investors",
-        name: "Investors & Partners",
-        type: "system",
-        title: "Investors Treasury",
-        walletAddress: investors.address,
-        walletType: "smart",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-
-      console.log(`[Wallet] ✅ Investors: ${investors.address} (${investors.alreadyExisted ? "existing" : "new"})`);
-    } catch (e) {
-      console.error(`[Wallet] ❌ Investors wallet failed: ${e.message}`);
-      results.investors = { error: e.message };
-    }
+    // ── 2. Liquidity (DEX) Treasury ──
+    // Post-2026-06-04: Liquidity is a Safe multisig, not a factory-created
+    // smart wallet. governance/liquidity.walletAddress is set manually after
+    // Safe deployment via functions/scripts/repoint-treasury-wallet.js — this
+    // function intentionally does NOT touch governance/liquidity.walletAddress
+    // so re-running ensureSystemWallets cannot clobber the Safe pointer.
+    //
+    // The deprecated `investors` slot is also intentionally NOT recreated here.
+    // If governance/investors still exists in your project, it's an audit
+    // artifact only (treasuryBalance should be 0 post-migration).
+    results.liquidity = { skipped: "managed by Safe; see governance/liquidity" };
+    console.log(`[Wallet] ⏭️  Liquidity: Safe-managed (no smart wallet to create)`);
 
     // ── 3. Burn Treasury ──
+    // Burn is the canonical Ethereum dead address — NOT a smart wallet. A burn
+    // wallet that the backend signer could move funds out of would defeat the
+    // purpose ("burned" tokens must be unrecoverable by anyone, including us).
+    // TGE/tribute distributions already send the burn slot directly to 0x...dEaD
+    // (see dsp.js BURN_ADDRESS constants); this just records that fact in
+    // Firestore for UI and audit consistency.
     try {
-      const burn = await createSystemTreasuryWallet(infra, "treasury:burn");
-      results.burn = burn;
+      const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
       await db.collection("system_stats").doc("treasury").set({
-        burnWallet: burn.address,
-        burnWalletType: "smart",
-        ...(!burn.alreadyExisted && { burnWalletGeneratedAt: admin.firestore.FieldValue.serverTimestamp() }),
+        burnWallet: BURN_ADDRESS,
+        burnWalletType: "burn",
+        burnWalletUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      // Burn doesn't need governance doc (no TGE distribution to burn address)
-      // but store it for transparency/audit
       await db.collection("governance").doc("burn").set({
         id: "burn",
         name: "Deflationary Burn",
         type: "system",
         title: "Burn Treasury",
-        walletAddress: burn.address,
-        walletType: "smart",
+        walletAddress: BURN_ADDRESS,
+        walletType: "burn",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      console.log(`[Wallet] ✅ Burn: ${burn.address} (${burn.alreadyExisted ? "existing" : "new"})`);
+      results.burn = { address: BURN_ADDRESS, alreadyExisted: true, external: true };
+      console.log(`[Wallet] ✅ Burn: ${BURN_ADDRESS} (dead address — not a controllable wallet)`);
     } catch (e) {
-      console.error(`[Wallet] ❌ Burn wallet failed: ${e.message}`);
+      console.error(`[Wallet] ❌ Burn address record failed: ${e.message}`);
       results.burn = { error: e.message };
     }
 
