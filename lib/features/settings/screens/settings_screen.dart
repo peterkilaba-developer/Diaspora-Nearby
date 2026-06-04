@@ -347,8 +347,7 @@ class SettingsScreen extends ConsumerWidget {
     String selectedPlatform = 'both';
     final currentUserId =
         ref.read(authRepositoryProvider).currentUser?.uid ?? '';
-    final profileAsync = ref.read(userProfileProvider);
-    final existingEmail = profileAsync.value?.phone ?? '';
+    ref.read(userProfileProvider);
 
     showModalBottomSheet(
       context: context,

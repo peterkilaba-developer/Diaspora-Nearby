@@ -361,7 +361,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
           // CRITICAL: Use the robust "New User" logic to create/join communities and sync chats.
           // This handles Global, Home, and Host hierarchies appropriately.
-          await CommunityService().createCommunitiesAndChats(
+          await ref.read(communityServiceProvider).createCommunitiesAndChats(
             profileToSave,
             onFirstMember: onFirstMember,
           );
@@ -372,7 +372,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
       if (profileToSave.pastLocations != null) {
         try {
-          final commService = CommunityService();
+          final commService = ref.read(communityServiceProvider);
           for (final pl in profileToSave.pastLocations!) {
             if (pl.location.city == null) continue; // Skip incomplete locations
 

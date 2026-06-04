@@ -577,7 +577,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       void onFirstMember(String name) => newCommunityNames.add(name);
 
       try {
-        createdCommunityIds = await CommunityService()
+        createdCommunityIds = await ref
+            .read(communityServiceProvider)
             .createCommunitiesAndChats(profile, onFirstMember: onFirstMember);
       } catch (e) {
         // If this fails, we must NOT proceed.
