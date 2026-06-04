@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -8,7 +10,11 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:diaspora_nearby/features/organization/models/chamber_leadership_request.dart';
+import 'package:diaspora_nearby/features/organization/models/chamber_roles.dart';
+import 'package:diaspora_nearby/features/organization/widgets/chamber_leadership_request_modal.dart';
 import 'package:diaspora_nearby/features/organization/widgets/organization_chat_preview.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -40,12 +46,39 @@ class _OrganizationDetailScreenState
   double? _userLat;
   double? _userLng;
 
+  // Live subscription to the org doc — so chamber council updates from
+  // admin appointment flow back into the UI without requiring a refresh.
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _orgDocSub;
+
   @override
   void initState() {
     super.initState();
     _orgData = widget.initialData;
     _loadData();
     _loadUserLocation();
+    _subscribeToOrgDoc();
+  }
+
+  @override
+  void dispose() {
+    _orgDocSub?.cancel();
+    super.dispose();
+  }
+
+  void _subscribeToOrgDoc() {
+    _orgDocSub = FirebaseFirestore.instance
+        .collection('organizations')
+        .doc(widget.orgId)
+        .snapshots()
+        .listen((snap) {
+          if (!snap.exists || !mounted) return;
+          final data = snap.data();
+          if (data == null) return;
+          data['id'] = snap.id;
+          setState(() => _orgData = data);
+        }, onError: (e) {
+          debugPrint('Org doc subscription error: $e');
+        });
   }
 
   Future<void> _loadData({bool force = false}) async {
@@ -346,31 +379,37 @@ class _OrganizationDetailScreenState
                   // Action Buttons Row
                   Row(
                     children: [
-                      // Follow Button
+                      // Chambers use the explicit Join / Follow lifecycle
+                      // (opt-in). Regular orgs keep the original Follow toggle.
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _isFollowLoading ? null : _toggleFollow,
-                          icon: _isFollowLoading
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Icon(
-                                  _isFollowing
-                                      ? LucideIcons.check
-                                      : LucideIcons.plus,
+                        child: _orgData!['kind'] == 'corridor_chamber'
+                            ? _buildChamberJoinFollowButton()
+                            : OutlinedButton.icon(
+                                onPressed:
+                                    _isFollowLoading ? null : _toggleFollow,
+                                icon: _isFollowLoading
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Icon(
+                                        _isFollowing
+                                            ? LucideIcons.check
+                                            : LucideIcons.plus,
+                                      ),
+                                label: Text(
+                                  _isFollowing ? 'Following' : 'Follow',
                                 ),
-                          label: Text(_isFollowing ? 'Following' : 'Follow'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 54),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 54),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
                       ),
                       const SizedBox(width: 12),
                       // Message Button
@@ -390,6 +429,21 @@ class _OrganizationDetailScreenState
                     ],
                   ),
                   const SizedBox(height: 24),
+
+                  // Chamber-of-commerce-specific affordances.
+                  if (_orgData!['kind'] == 'corridor_chamber') ...[
+                    _buildChamberSecondaryActions(currentUserId),
+                    const SizedBox(height: 16),
+                    _buildChamberLeadershipCard(theme, currentUserId),
+                    const SizedBox(height: 24),
+                    _buildLinkedBusinessesCard(theme, currentUserId),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    // Regular org — show the chambers this business is
+                    // affiliated with (reverse of the chamber's directory).
+                    _buildAffiliatedChambersCard(theme, currentUserId),
+                    const SizedBox(height: 24),
+                  ],
 
                   // [NEW] Congratulatory Message
                   // Embedded Chat Preview (Visible to all if chatId exists)
@@ -640,6 +694,709 @@ class _OrganizationDetailScreenState
     );
   }
 
+  /// Secondary action row beneath the primary chamber CTA:
+  ///   - Visitor:  "Follow (read-only)" outlined  ← lets them lurk without joining
+  ///   - Follower: "Become Member" filled         ← upgrade path
+  ///   - Member:   "Leave Chamber" text button    ← step down to follower
+  Widget _buildChamberSecondaryActions(String? currentUserId) {
+    if (currentUserId == null) return const SizedBox.shrink();
+    final members = List<String>.from(
+      (_orgData?['members'] as List?) ?? const <dynamic>[],
+    );
+    final followers = List<String>.from(
+      (_orgData?['followers'] as List?) ?? const <dynamic>[],
+    );
+    final isMember = members.contains(currentUserId);
+    final isFollower = followers.contains(currentUserId);
+
+    if (isMember) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed:
+              _chamberActionBusy ? null : () => _leaveChamber(currentUserId),
+          icon: const Icon(LucideIcons.logOut, size: 16),
+          label: const Text('Leave chamber'),
+          style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+        ),
+      );
+    }
+    if (isFollower) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed:
+              _chamberActionBusy ? null : () => _joinChamber(currentUserId),
+          icon: const Icon(LucideIcons.userPlus),
+          label: const Text('Become Member'),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      );
+    }
+    // Visitor
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed:
+            _chamberActionBusy ? null : () => _followChamber(currentUserId),
+        icon: const Icon(LucideIcons.eye),
+        label: const Text('Follow (read-only)'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds the three-state primary action for chambers based on the live
+  /// `members` / `followers` arrays:
+  ///   - Visitor (not a follower, not a member): "Join Chamber" filled
+  ///   - Follower (in followers only): "Following" outlined + "Join" CTA below
+  ///   - Member (in members): static "Chamber Member" badge
+  Widget _buildChamberJoinFollowButton() {
+    final user = ref.watch(authRepositoryProvider).currentUser;
+    if (user == null) {
+      return const SizedBox.shrink();
+    }
+    final members = List<String>.from(
+      (_orgData?['members'] as List?) ?? const <dynamic>[],
+    );
+    final followers = List<String>.from(
+      (_orgData?['followers'] as List?) ?? const <dynamic>[],
+    );
+    final isMember = members.contains(user.uid);
+    final isFollower = followers.contains(user.uid);
+
+    if (isMember) {
+      return OutlinedButton.icon(
+        onPressed: null,
+        icon: const Icon(LucideIcons.shieldCheck),
+        label: const Text('Chamber Member'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+    if (isFollower) {
+      return OutlinedButton.icon(
+        onPressed: _chamberActionBusy ? null : () => _unfollowChamber(user.uid),
+        icon: _chamberActionBusy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(LucideIcons.check),
+        label: const Text('Following'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+    // Visitor — primary action is Join; secondary Follow shown alongside in
+    // _buildChamberSecondaryActions.
+    return FilledButton.icon(
+      onPressed: _chamberActionBusy ? null : () => _joinChamber(user.uid),
+      icon: _chamberActionBusy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(LucideIcons.userPlus),
+      label: const Text('Join Chamber'),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(double.infinity, 54),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  bool _chamberActionBusy = false;
+
+  Future<void> _joinChamber(String uid) async {
+    setState(() => _chamberActionBusy = true);
+    try {
+      await ref
+          .read(organizationRepositoryProvider)
+          .joinChamber(orgId: widget.orgId, userId: uid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Joined the chamber.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t join: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _chamberActionBusy = false);
+    }
+  }
+
+  Future<void> _followChamber(String uid) async {
+    setState(() => _chamberActionBusy = true);
+    try {
+      await ref
+          .read(organizationRepositoryProvider)
+          .followChamber(orgId: widget.orgId, userId: uid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Now following the chamber.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t follow: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _chamberActionBusy = false);
+    }
+  }
+
+  Future<void> _unfollowChamber(String uid) async {
+    setState(() => _chamberActionBusy = true);
+    try {
+      await ref
+          .read(organizationRepositoryProvider)
+          .unfollowChamber(orgId: widget.orgId, userId: uid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unfollowed the chamber.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t unfollow: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _chamberActionBusy = false);
+    }
+  }
+
+  Future<void> _leaveChamber(String uid) async {
+    setState(() => _chamberActionBusy = true);
+    try {
+      await ref
+          .read(organizationRepositoryProvider)
+          .leaveChamber(orgId: widget.orgId, userId: uid);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Left the chamber (still following).')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t leave: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _chamberActionBusy = false);
+    }
+  }
+
+  /// Regular-org-only: lists corridor chambers this business is affiliated
+  /// with. The reverse of [_buildLinkedBusinessesCard]. Admins of the
+  /// business can unlink a chamber inline.
+  Widget _buildAffiliatedChambersCard(ThemeData theme, String? currentUserId) {
+    final linked = List<String>.from(
+      (_orgData?['linkedChamberIds'] as List?) ?? const <dynamic>[],
+    );
+    if (linked.isEmpty) return const SizedBox.shrink();
+
+    // Determine if the viewer can manage affiliations (admin/superAdmin).
+    final admins = List<String>.from(
+      (_orgData?['admins'] as List?) ?? const <dynamic>[],
+    );
+    final isBusinessAdmin = currentUserId != null &&
+        (admins.contains(currentUserId) ||
+            _orgData?['superAdminId'] == currentUserId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(LucideIcons.landmark, size: 20, color: AppTheme.accent),
+            SizedBox(width: 8),
+            Text(
+              'Affiliated Chambers',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${linked.length} ${linked.length == 1 ? 'chamber' : 'chambers'}',
+          style: TextStyle(
+            fontSize: 13,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...linked.map(
+          (chamberId) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _AffiliatedChamberTile(
+              chamberId: chamberId,
+              canUnlink: isBusinessAdmin,
+              onUnlink: isBusinessAdmin
+                  ? () => _unlinkChamber(chamberId, currentUserId)
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _unlinkChamber(String chamberId, String userId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Unlink chamber?'),
+        content: const Text(
+          'This business will no longer appear in the chamber\'s member directory.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Unlink'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(organizationRepositoryProvider).unlinkBusinessFromChamber(
+            chamberOrgId: chamberId,
+            businessOrgId: widget.orgId,
+            userId: userId,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Affiliation removed.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t unlink: $e')));
+      }
+    }
+  }
+
+  /// Chamber-only: lists registered businesses linked to this chamber.
+  /// Members of the chamber whose own businesses aren't yet linked see a
+  /// "Link a Business" CTA that opens a picker over their admin orgs.
+  Widget _buildLinkedBusinessesCard(ThemeData theme, String? currentUserId) {
+    final linked = List<String>.from(
+      (_orgData?['linkedBusinesses'] as List?) ?? const <dynamic>[],
+    );
+    final members = List<String>.from(
+      (_orgData?['members'] as List?) ?? const <dynamic>[],
+    );
+    final isMember =
+        currentUserId != null && members.contains(currentUserId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(LucideIcons.briefcase, size: 20, color: AppTheme.accent),
+            SizedBox(width: 8),
+            Text(
+              'Member Businesses',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          linked.isEmpty
+              ? 'No businesses linked yet.'
+              : '${linked.length} ${linked.length == 1 ? 'business' : 'businesses'} affiliated',
+          style: TextStyle(
+            fontSize: 13,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...linked.map(
+          (bizId) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _LinkedBusinessTile(orgId: bizId),
+          ),
+        ),
+        if (isMember) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(LucideIcons.plus),
+              label: const Text('Link a Business'),
+              onPressed: () => _openBusinessLinker(currentUserId, linked),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ] else if (!isMember && currentUserId != null) ...[
+          const SizedBox(height: 8),
+          _noteCard(
+            theme,
+            'Join the chamber to list your business in its directory.',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openBusinessLinker(
+    String currentUserId,
+    List<String> alreadyLinked,
+  ) async {
+    // Fetch orgs the user admins (excluding chambers + already-linked).
+    final repo = ref.read(organizationRepositoryProvider);
+    final myOrgs = await repo.getUserOrganizations(currentUserId);
+    final eligible = myOrgs.where((o) {
+      if (o['kind'] == 'corridor_chamber') return false;
+      if (alreadyLinked.contains(o['id'])) return false;
+      return true;
+    }).toList();
+
+    if (!mounted) return;
+    if (eligible.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You don\'t have any unlinked businesses you administer. '
+            'Register one first.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Text(
+                  'Pick a business to link',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              ...eligible.map(
+                (o) => ListTile(
+                  leading: const Icon(LucideIcons.briefcase),
+                  title: Text(o['businessName'] ?? o['name'] ?? 'Business'),
+                  subtitle: Text(o['type'] ?? ''),
+                  onTap: () => Navigator.pop(ctx, o['id'] as String),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null) return;
+
+    try {
+      await repo.linkBusinessToChamber(
+        chamberOrgId: widget.orgId,
+        businessOrgId: picked,
+        userId: currentUserId,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Business linked.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t link: $e')));
+      }
+    }
+  }
+
+  /// Chamber-only: shows the 6 council seats with current holders / open
+  /// seats, the requesting user's pending request status (if any), and a
+  /// "Request Leadership" CTA when the user isn't already a leader.
+  Widget _buildChamberLeadershipCard(ThemeData theme, String? currentUserId) {
+    final councilRoles = Map<String, String>.from(
+      (_orgData!['councilRoles'] as Map?)?.cast<String, String>() ??
+          const <String, String>{},
+    );
+    final homeCC = (_orgData!['homeCountryCode'] as String?) ?? '';
+    final hostCC = (_orgData!['hostCountryCode'] as String?) ?? '';
+    final chamberName = (_orgData!['name'] as String?) ?? 'Chamber';
+
+    // role -> uid for fast lookup.
+    final seatHolders = <String, String?>{};
+    for (final r in ChamberRoles.all) {
+      seatHolders[r] = null;
+    }
+    councilRoles.forEach((uid, role) {
+      if (seatHolders.containsKey(role)) seatHolders[role] = uid;
+    });
+
+    final userIsLeader =
+        currentUserId != null && councilRoles.containsKey(currentUserId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(LucideIcons.landmark, size: 20, color: AppTheme.accent),
+            SizedBox(width: 8),
+            Text(
+              'Chamber Council',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          councilRoles.isEmpty
+              ? 'System-managed — no leaders appointed yet.'
+              : '${councilRoles.length} of ${ChamberRoles.all.length} seats filled',
+          style: TextStyle(
+            fontSize: 13,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Seat grid — each row is a role with a vacancy badge or appointee uid.
+        ...ChamberRoles.all.map((role) {
+          final holderUid = seatHolders[role];
+          final isMine = holderUid != null && holderUid == currentUserId;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _ChamberSeatRow(
+              role: role,
+              holderUid: holderUid,
+              isMine: isMine,
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+
+        // The user's pending request status (if any) + "Request" CTA.
+        // Only diaspora whose own (home, host) matches the chamber's corridor
+        // may request leadership — a Tanzanian in the US shouldn't be able
+        // to pitch for the PH ⇄ TZ chamber. For non-corridor visitors, show
+        // a small explanatory note instead.
+        if (currentUserId != null && !userIsLeader)
+          _buildCorridorGatedRequestSection(
+            currentUserId: currentUserId,
+            chamberName: chamberName,
+            homeCC: homeCC,
+            hostCC: hostCC,
+          ),
+      ],
+    );
+  }
+
+  /// Gates the Request-Leadership UI on the viewer's corridor matching the
+  /// chamber's (home, host). Non-corridor viewers see a brief note explaining
+  /// why the CTA isn't available.
+  Widget _buildCorridorGatedRequestSection({
+    required String currentUserId,
+    required String chamberName,
+    required String homeCC,
+    required String hostCC,
+  }) {
+    final theme = Theme.of(context);
+    final profile = ref.watch(userProfileProvider).value;
+
+    final userHome = (profile?.homeCountryCode ?? '').toUpperCase();
+    final userHost = (profile?.hostCountryCode ?? '').toUpperCase();
+    final chamberHome = homeCC.toUpperCase();
+    final chamberHost = hostCC.toUpperCase();
+
+    final inCorridor =
+        userHome == chamberHome && userHost == chamberHost &&
+        userHome.isNotEmpty && userHost.isNotEmpty;
+
+    if (!inCorridor) {
+      return _noteCard(
+        theme,
+        'Only diaspora in the $chamberHost ⇄ $chamberHome corridor can request '
+        'a seat on this chamber.',
+      );
+    }
+
+    // Corridor match — but leadership requests still require active membership.
+    final members = List<String>.from(
+      (_orgData?['members'] as List?) ?? const <dynamic>[],
+    );
+    if (!members.contains(currentUserId)) {
+      return _noteCard(
+        theme,
+        'Join the chamber to request a leadership seat.',
+      );
+    }
+
+    return _buildMyRequestStatusOrCta(
+      currentUserId: currentUserId,
+      chamberName: chamberName,
+      homeCC: homeCC,
+      hostCC: hostCC,
+    );
+  }
+
+  Widget _noteCard(ThemeData theme, String text) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            LucideIcons.info,
+            size: 16,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyRequestStatusOrCta({
+    required String currentUserId,
+    required String chamberName,
+    required String homeCC,
+    required String hostCC,
+  }) {
+    final repo = ref.read(organizationRepositoryProvider);
+    return StreamBuilder<List<ChamberLeadershipRequest>>(
+      stream: repo.watchMyLeadershipRequests(currentUserId),
+      builder: (context, snapshot) {
+        final all = snapshot.data ?? const <ChamberLeadershipRequest>[];
+        final pendingForThis = all
+            .where(
+              (r) =>
+                  r.chamberId == widget.orgId &&
+                  r.status == ChamberLeadershipRequest.statusPending,
+            )
+            .toList();
+
+        if (pendingForThis.isNotEmpty) {
+          final req = pendingForThis.first;
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.shade700),
+            ),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.clock, color: Colors.amber, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Pending: ${ChamberRoles.displayName(req.role)} — '
+                    'awaiting admin review.',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(LucideIcons.heartHandshake),
+            label: const Text('Request Leadership'),
+            onPressed: () => ChamberLeadershipRequestModal.show(
+              context,
+              orgId: widget.orgId,
+              chamberName: chamberName,
+              homeCountryCode: homeCC,
+              hostCountryCode: hostCC,
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildProductsListingSection(ThemeData theme, bool isAdmin) {
     final isEnabled = _orgData!['isListingEnabled'] == true;
 
@@ -762,5 +1519,374 @@ class _OrganizationDetailScreenState
         if (mounted) setState(() => _isLoading = false);
       }
     }
+  }
+}
+
+/// Single seat row in the Chamber Council card. Async-loads the holder's
+/// profile so we can show their name + avatar; falls back to a placeholder
+/// while loading and "Open seat" when [holderUid] is null.
+class _ChamberSeatRow extends ConsumerWidget {
+  final String role;
+  final String? holderUid;
+  final bool isMine;
+
+  const _ChamberSeatRow({
+    required this.role,
+    required this.holderUid,
+    required this.isMine,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final hasHolder = holderUid != null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: !hasHolder
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
+            : AppTheme.accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: !hasHolder
+              ? theme.dividerColor.withValues(alpha: 0.4)
+              : AppTheme.accent.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            ChamberRoles.icon(role),
+            size: 18,
+            color: !hasHolder
+                ? theme.iconTheme.color?.withValues(alpha: 0.5)
+                : AppTheme.accent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: _buildLabel(context, ref, theme)),
+          if (!hasHolder)
+            Text(
+              'Open seat',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else if (isMine)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.accent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'You',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabel(BuildContext context, WidgetRef ref, ThemeData theme) {
+    final roleLabel = ChamberRoles.displayName(role);
+    if (holderUid == null) {
+      return Text(
+        roleLabel,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      );
+    }
+
+    final profileAsync = ref.watch(
+      userProfileByIdProvider(holderUid!),
+    );
+    return profileAsync.when(
+      loading: () => Text(
+        roleLabel,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      error: (_, _) => Text(
+        roleLabel,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      data: (profile) {
+        final fullName = profile == null
+            ? null
+            : '${profile.firstName} ${profile.lastName}'.trim();
+        return Row(
+          children: [
+            if (profile != null && profile.profileImage.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundImage:
+                      CachedNetworkImageProvider(profile.profileImage),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: AppTheme.accent.withValues(alpha: 0.2),
+                  child: Text(
+                    (fullName?.isNotEmpty ?? false)
+                        ? fullName![0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (fullName?.isNotEmpty ?? false) ? fullName! : 'Member',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    roleLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Renders a single affiliated chamber as a tile in a business's
+/// "Affiliated Chambers" card. Shows the chamber's dual-flag avatar and
+/// name, tappable to navigate into the chamber detail screen. Admins of
+/// the business get an inline unlink button.
+class _AffiliatedChamberTile extends ConsumerWidget {
+  final String chamberId;
+  final bool canUnlink;
+  final VoidCallback? onUnlink;
+
+  const _AffiliatedChamberTile({
+    required this.chamberId,
+    required this.canUnlink,
+    this.onUnlink,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final chamberAsync = ref.watch(organizationByIdProvider(chamberId));
+    return chamberAsync.when(
+      loading: () => Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (org) {
+        if (org == null) return const SizedBox.shrink();
+        final host = org['hostCountryCode'] as String?;
+        final home = org['homeCountryCode'] as String?;
+        Widget avatar = CircleAvatar(
+          radius: 16,
+          backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
+          child: const Icon(
+            LucideIcons.landmark,
+            size: 14,
+            color: AppTheme.accent,
+          ),
+        );
+        if (host != null && home != null) {
+          final hostFlag = country_data.getCountryByCode(host)?.flag;
+          final homeFlag = country_data.getCountryByCode(home)?.flag;
+          if (hostFlag != null && homeFlag != null) {
+            avatar = SizedBox(
+              width: 32,
+              height: 32,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    child: Text(
+                      hostFlag,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Text(
+                      homeFlag,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+        return InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => context.push('/organization/$chamberId'),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: theme.dividerColor.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                avatar,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    org['name'] ?? org['businessName'] ?? 'Chamber',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (canUnlink)
+                  IconButton(
+                    icon: const Icon(LucideIcons.unlink, size: 16),
+                    color: AppTheme.error,
+                    tooltip: 'Unlink',
+                    onPressed: onUnlink,
+                  )
+                else
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 16,
+                    color: theme.iconTheme.color?.withValues(alpha: 0.4),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Renders a single linked business as a tile in the chamber's Member
+/// Businesses card. Loads the business org doc by id and shows its name +
+/// type, tappable to navigate into the org detail screen.
+class _LinkedBusinessTile extends ConsumerWidget {
+  final String orgId;
+  const _LinkedBusinessTile({required this.orgId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final orgAsync = ref.watch(organizationByIdProvider(orgId));
+    return orgAsync.when(
+      loading: () => Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (org) {
+        if (org == null) return const SizedBox.shrink();
+        return InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => context.push('/organization/$orgId'),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: theme.dividerColor.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                if ((org['profileImage'] as String?)?.isNotEmpty ?? false)
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundImage:
+                        CachedNetworkImageProvider(org['profileImage']),
+                  )
+                else
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: AppTheme.accent.withValues(alpha: 0.15),
+                    child: const Icon(
+                      LucideIcons.briefcase,
+                      size: 14,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        org['businessName'] ?? org['name'] ?? 'Business',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if ((org['type'] as String?)?.isNotEmpty ?? false)
+                        Text(
+                          org['type'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 16,
+                  color: theme.iconTheme.color?.withValues(alpha: 0.4),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

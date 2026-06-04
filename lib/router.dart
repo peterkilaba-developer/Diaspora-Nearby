@@ -43,6 +43,7 @@ import 'package:diaspora_nearby/features/admin_dashboard/screens/admin_dashboard
 import 'package:diaspora_nearby/features/admin_dashboard/screens/admin_overview_screen.dart';
 import 'package:diaspora_nearby/features/admin_dashboard/screens/admin_users_screen.dart';
 import 'package:diaspora_nearby/features/admin_dashboard/screens/admin_communities_screen.dart';
+import 'package:diaspora_nearby/features/admin_dashboard/screens/admin_chamber_requests_screen.dart';
 import 'package:diaspora_nearby/features/organization/screens/organizations_list_screen.dart';
 import 'package:diaspora_nearby/features/organization/screens/organization_management_screen.dart';
 import 'package:diaspora_nearby/features/organization/screens/organization_detail_screen.dart';
@@ -1016,6 +1017,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/admin/communities',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: AdminCommunitiesScreen()),
+          ),
+          GoRoute(
+            path: '/admin/chamber-requests',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AdminChamberRequestsScreen(),
+            ),
           ),
         ],
       ),

@@ -33,6 +33,7 @@ const travel = require("./lib/travel");
 const payments = require("./lib/payments");
 const dsp = require("./lib/dsp");
 const blockchain = require("./lib/blockchain");
+const chamberLeadership = require("./lib/chamber_leadership");
 
 // ── Re-export all functions ──
 // Wallet (5)
@@ -60,6 +61,11 @@ exports.manageUserFCMTopics = notifications.manageUserFCMTopics;
 // Admin (2)
 exports.hardResetDatabase = adminReset.hardResetDatabase;
 exports.setAdminClaim = adminReset.setAdminClaim;
+
+// Chamber Leadership (1) — Triggered on leadershipRequests doc update.
+// Performs the actual appointment when an admin flips `approved: true`.
+exports.onChamberLeadershipRequestApproved =
+    chamberLeadership.onChamberLeadershipRequestApproved;
 
 // Transfer (3)
 exports.transferDiaspora = transfer.transferDiaspora;

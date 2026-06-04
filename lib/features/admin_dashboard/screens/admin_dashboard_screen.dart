@@ -63,6 +63,12 @@ class AdminDashboardScreen extends StatelessWidget {
                   isActive: location == '/admin/communities',
                   onTap: () => context.go('/admin/communities'),
                 ),
+                _SidebarItem(
+                  icon: LucideIcons.landmark,
+                  label: 'Chamber Requests',
+                  isActive: location == '/admin/chamber-requests',
+                  onTap: () => context.go('/admin/chamber-requests'),
+                ),
                 const Spacer(),
                 _SidebarItem(
                   icon: LucideIcons.arrowLeft,
