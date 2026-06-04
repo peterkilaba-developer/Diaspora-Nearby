@@ -93,7 +93,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
     );
   }
 
-  String _getProximityLevel(double distanceKm) {
+  String _getProximityLevel(double? distanceKm) {
+    if (distanceKm == null) return 'Unknown';
     if (distanceKm <= 10) return 'Nearby';
     if (distanceKm <= 50) return 'Far';
     if (distanceKm <= 200) return 'Farther';
@@ -108,15 +109,20 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
         return isDark ? Colors.yellow[400]! : Colors.yellow[600]!;
       case 'Farther':
         return isDark ? Colors.orange[400]! : Colors.orange[600]!;
+      case 'Unknown':
+        return theme.colorScheme.onSurfaceVariant;
       default:
         return isDark ? Colors.red[400]! : Colors.red[600]!;
     }
   }
 
-  String _formatDistanceMetric(double km) {
-    // Return whole numbers for cleaner UI and to save space. Minimum 1km.
-    final value = km < 1 ? 1 : km.round();
-    return '${NumberFormat("#,###").format(value)} km';
+  /// Returns ('value', 'unit') for the distance row. Caller decides how to
+  /// style each. `null` distance → ('—', '') so the row stays balanced.
+  /// Sub-kilometer → ('< 1', 'km').
+  (String, String) _formatDistanceMetric(double? km) {
+    if (km == null) return ('—', '');
+    if (km < 1) return ('< 1', 'km');
+    return (NumberFormat('#,###').format(km.round()), 'km');
   }
 
   Future<void> _launchMaps(double lat, double lng) async {
@@ -268,10 +274,12 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
         widget.user.hostCountryCode != null &&
         widget.user.homeCountryCode == widget.user.hostCountryCode;
 
-    // Calculate distance and proximity
-    final distance = widget.distanceKm ?? widget.user.distance ?? 0.0;
+    // Calculate distance and proximity. `null` is a real state — viewer
+    // has no location, or target's coords are missing — distinct from "0 km".
+    final double? distance = widget.distanceKm ?? widget.user.distance;
     final proximityLevel = _getProximityLevel(distance);
     final proximityColor = _getProximityColor(proximityLevel, isDark, theme);
+    final (distanceValue, distanceUnit) = _formatDistanceMetric(distance);
 
     // Format current city display
     String? currentCityDisplay;
@@ -832,29 +840,29 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                           text: TextSpan(
                             children: [
                               TextSpan(
-                                text: _formatDistanceMetric(
-                                  distance,
-                                ).split(' ').first,
+                                text: distanceValue,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                   color: const Color(0xFF74A383),
                                 ),
                               ),
-                              TextSpan(
-                                text: ' km',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              if (distanceUnit.isNotEmpty)
+                                TextSpan(
+                                  text: ' $distanceUnit',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                              ),
-                              TextSpan(
-                                text: ' away',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurfaceVariant,
+                              if (distance != null)
+                                TextSpan(
+                                  text: ' away',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),

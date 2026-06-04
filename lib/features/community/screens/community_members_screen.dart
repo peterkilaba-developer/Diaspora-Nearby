@@ -365,10 +365,15 @@ class _CommunityMembersScreenState
           .get();
 
       final currentUserProfile = ref.read(userProfileProvider).value;
+      // Viewer's location: prefer live `currentLocation`, fall back to
+      // `hostLocation` (set at signup). Without this fallback every distance
+      // collapses to null → the UI used to render that as "1 km away".
       final currentLat =
-          currentUserProfile?.currentLocation?.geometry.location.lat;
+          currentUserProfile?.currentLocation?.geometry.location.lat ??
+          currentUserProfile?.hostLocation.geometry?.location.lat;
       final currentLng =
-          currentUserProfile?.currentLocation?.geometry.location.lng;
+          currentUserProfile?.currentLocation?.geometry.location.lng ??
+          currentUserProfile?.hostLocation.geometry?.location.lng;
 
       List<ProfileData> members = snapshot.docs.map((doc) {
         final data = doc.data();
