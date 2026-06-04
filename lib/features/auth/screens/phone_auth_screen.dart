@@ -5,6 +5,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
 import 'package:sms_autofill/sms_autofill.dart';
+import 'package:device_region/device_region.dart';
+import 'package:diaspora_nearby/core/utils/phone_normalizer.dart';
 import 'auth_controller.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -26,10 +28,29 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   @override
   void initState() {
     super.initState();
-    // Synchronous country detection - device locale is instantly available
-    _selectedCountry = _detectCountrySync();
+    // Instant guess from device locale list so the UI never shows a blank flag.
+    _selectedCountry = _detectCountryFromLocales();
+    // Upgrade to SIM/network country async — more reliable when UI language
+    // differs from physical location (e.g. PH user with en-US phone language).
+    _refineCountryFromSim();
     // Async phone number hint
     _tryGetPhoneNumber();
+  }
+
+  Future<void> _refineCountryFromSim() async {
+    try {
+      final iso = await DeviceRegion.getSIMCountryCode();
+      if (iso == null || iso.isEmpty) return;
+      final detected = country_data.getCountryByCode(iso.toUpperCase());
+      if (detected == null || !mounted) return;
+      // Don't clobber a country the user already changed manually, and don't
+      // clobber a country we already inferred from a parsed phone-number hint.
+      if (_phoneController.text.isNotEmpty) return;
+      setState(() => _selectedCountry = detected);
+      debugPrint('SIM country: ${detected.name}');
+    } catch (e) {
+      debugPrint('SIM country lookup failed: $e');
+    }
   }
 
   Future<void> _tryGetPhoneNumber() async {
@@ -85,26 +106,25 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     }
   }
 
-  /// Synchronously detect country from device locale (instant, no waiting)
-  country_data.Country _detectCountrySync() {
+  /// Synchronously detect country from the device's preferred-locale list.
+  /// Walks every locale Android/iOS reports (not just the primary) so a user
+  /// whose UI language is "English (US)" but who has "en-PH" in their
+  /// preferred languages still resolves to PH. SIM/network country (more
+  /// reliable) is layered on top async by [_refineCountryFromSim].
+  country_data.Country _detectCountryFromLocales() {
     try {
-      // Get device locale - this is instant
-      final locale = ui.PlatformDispatcher.instance.locale;
-      final countryCode = locale.countryCode?.toUpperCase();
-
-      if (countryCode != null && countryCode.isNotEmpty) {
-        final detected = country_data.getCountryByCode(countryCode);
+      for (final locale in ui.PlatformDispatcher.instance.locales) {
+        final code = locale.countryCode?.toUpperCase();
+        if (code == null || code.isEmpty) continue;
+        final detected = country_data.getCountryByCode(code);
         if (detected != null) {
-          debugPrint('Ã¢ÂœÂ… Country auto-detected: ${detected.name}');
+          debugPrint('Country from locales[$code]: ${detected.name}');
           return detected;
         }
       }
     } catch (e) {
-      debugPrint('Ã¢ÂÂŒ Country detection failed: $e');
+      debugPrint('Locale country detection failed: $e');
     }
-
-    // Fallback to US
-    debugPrint('Ã¢Â„Â¹Ã¯Â¸Â Fallback to US');
     return country_data.getCountryByCode('US') ?? country_data.countries.first;
   }
 
@@ -138,13 +158,37 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   }
 
   void _submit() {
-    final phoneNumber =
+    if (_phoneController.text.trim().isEmpty) return;
+
+    // Combine dial code + user-entered digits, then run through libphonenumber
+    // to strip national trunk prefixes (e.g. TZ "0712..." → "+255712...") and
+    // validate against country metadata.
+    final combined =
         '${_selectedCountry.dialCode}${_phoneController.text.trim().replaceAll(RegExp(r'\D'), '')}';
-    if (_phoneController.text.isNotEmpty) {
-      ref
-          .read(authControllerProvider.notifier)
-          .signInWithPhone(context, phoneNumber);
+    final normalized = normalizePhone(
+      rawInput: combined,
+      isoCountryCode: _selectedCountry.code,
+    );
+
+    final e164 = normalized.e164;
+    if (e164 == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid phone number.')),
+      );
+      return;
     }
+    if (!normalized.isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'That number doesn\'t look right for ${_selectedCountry.name}. Double-check the digits.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    ref.read(authControllerProvider.notifier).signInWithPhone(context, e164);
   }
 
   @override

@@ -65,6 +65,8 @@ dependencies:
   audio_service: ^0.18.18
 
   sms_autofill: ^2.4.0
+  device_region: ^1.4.0  # SIM/network country ISO (Android TelephonyManager, iOS CTTelephonyNetworkInfo) for onboarding country detection
+  phone_numbers_parser: ^9.0.23  # Pure-Dart E.164 normalization (strips trunk prefix, validates NSN per country)
   video_player: ^2.10.1
   chewie: ^1.13.0
   record: ^6.1.2

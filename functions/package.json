@@ -18,6 +18,7 @@
         "firebase-admin": "^11.8.0",
         "firebase-functions": "^4.6.0",
         "googleapis": "^171.4.0",
+        "libphonenumber-js": "^1.11.7",
         "stripe": "^20.4.0"
     },
     "devDependencies": {
