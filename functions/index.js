@@ -79,6 +79,14 @@ exports.amadeusProxy = travel.amadeusProxy;
 exports.createEmergencyFundCheckout = payments.createEmergencyFundCheckout;
 exports.stripeEmergencyFundWebhook = payments.stripeEmergencyFundWebhook;
 
+// Community Emergency Fund — $DIASPORA flow
+const emergencyFund = require("./lib/emergency_fund");
+exports.getEmergencyFundContributionQuote = emergencyFund.getEmergencyFundContributionQuote;
+exports.payEmergencyFundInDiaspora = emergencyFund.payEmergencyFundInDiaspora;
+exports.getEmergencyFundStats = emergencyFund.getEmergencyFundStats;
+exports.onEmergencyClaimWrite = emergencyFund.onEmergencyClaimWrite;
+exports.slashPromissoryForFraud = emergencyFund.slashPromissoryForFraud;
+
 // DSP (10)
 exports.onGlobalDspMilestone = dsp.onGlobalDspMilestone;
 exports.executeTGE = dsp.executeTGE;

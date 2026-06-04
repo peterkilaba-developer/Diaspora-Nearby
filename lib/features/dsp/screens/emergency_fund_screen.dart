@@ -15,6 +15,7 @@ import 'package:diaspora_nearby/features/profile/repository/relationship_reposit
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
@@ -148,7 +149,7 @@ class _OverviewTab extends StatelessWidget {
         const SizedBox(height: 12),
         _buildStepRow(context, '1', 'Submit a Support Request via the Support tab'),
         _buildStepRow(context, '2', 'Provide documentation to your Community Secretary'),
-        _buildStepRow(context, '3', 'Leadership reviews and authorizes disbursement'),
+        _buildStepRow(context, '3', 'Leadership reviews — once approved, \$DIASPORA is auto-disbursed on-chain to the recipient'),
 
         const SizedBox(height: 24),
 
@@ -264,7 +265,7 @@ class _OverviewTab extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _buildStatBadge(context, '\$100/yr', 'Contribution'),
+                child: _buildStatBadge(context, '\$100 in \$DIASPORA', 'Contribution'),
               ),
               const SizedBox(width: 8),
               Expanded(child: _buildStatBadge(context, 'Global', 'Coverage')),
@@ -387,7 +388,7 @@ class _MembershipTab extends ConsumerStatefulWidget {
 
 class _MembershipTabState extends ConsumerState<_MembershipTab> {
   bool _hasStakedDSP = false;
-  bool _isProcessingPayment = false;
+  // ignore: unused_field
   int _stakerCount = 0;
 
   // Inline card form state
@@ -465,64 +466,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
   }
 
   /// Confirm inline card payment
-  Future<void> _confirmPayment() async {
-    // Dismiss keyboard
-    FocusScope.of(context).unfocus();
-
-    // Fetch secret on-demand if not yet available
-    if (_clientSecret == null) {
-      await _fetchPaymentIntent();
-      if (_clientSecret == null) return;
-    }
-    setState(() => _isProcessingPayment = true);
-    try {
-      debugPrint(
-        '▶ [EmergencyFund] Confirming payment with secret: ${_clientSecret!.substring(0, 20)}...',
-      );
-      final service = ref.read(emergencyFundServiceProvider);
-      await service.confirmInlinePayment(_clientSecret!, widget.userId);
-      debugPrint(
-        '✅ [EmergencyFund] Payment confirmed and membership activated!',
-      );
-      if (mounted) {
-        // Reset state so StreamBuilder picks up the new active membership
-        setState(() {
-          _isProcessingPayment = false;
-          _clientSecret = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '🎉 Payment successful! Welcome to the Emergency Fund.',
-            ),
-            backgroundColor: Color(0xFF7CAE7A),
-          ),
-        );
-      }
-    } on StripeException catch (e) {
-      debugPrint(
-        '❌ [EmergencyFund] StripeException: ${e.error.localizedMessage}',
-      );
-      if (mounted) {
-        setState(() => _isProcessingPayment = false);
-        final msg = e.error.localizedMessage ?? 'Payment failed';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      debugPrint('❌ [EmergencyFund] Payment error: $e');
-      if (mounted) {
-        setState(() => _isProcessingPayment = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Payment error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -564,7 +507,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
 
   Widget _buildJoinFlow(BuildContext context) {
     final theme = Theme.of(context);
-    final bool thresholdMet = _stakerCount >= 10000;
 
     return ListView(
       padding: EdgeInsets.only(
@@ -657,22 +599,12 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                   const SizedBox(height: 10),
                   _buildEligibilityRow(
                     theme,
-                    icon: LucideIcons.heartHandshake,
-                    title: '1 Family Member',
+                    icon: LucideIcons.qrCode,
+                    title: '10 In-Person QR Verifications',
                     subtitle: isLoading
-                        ? 'Checking...'
-                        : '${result!.familyCount}/1 family connection',
-                    met: isLoading ? null : result!.hasEnoughFamily,
-                  ),
-                  const SizedBox(height: 10),
-                  _buildEligibilityRow(
-                    theme,
-                    icon: LucideIcons.users,
-                    title: '1 Friend',
-                    subtitle: isLoading
-                        ? 'Checking...'
-                        : '${result!.friendCount}/1 friend connection',
-                    met: isLoading ? null : result!.hasEnoughFriends,
+                        ? 'Checking PoCT scans...'
+                        : '${result!.qrScanCount}/${EligibilityResult.requiredQrScans} unique in-person scans',
+                    met: isLoading ? null : result!.hasEnoughQrScans,
                   ),
                 ],
               ),
@@ -703,9 +635,9 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                         const SizedBox(height: 12),
                         _buildStakeInfoRow(
                           theme,
-                          LucideIcons.dollarSign,
+                          LucideIcons.coins,
                           'Contribution',
-                          '\$100 annual contribution',
+                          '\$100 USD equivalent in \$DIASPORA',
                         ),
                         const SizedBox(height: 12),
                         _buildStakeInfoRow(
@@ -732,202 +664,13 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                     ),
                   ),
 
-                // After staking: card form with button integrated
+                // After staking: $DIASPORA payment card
                 if (_hasStakedDSP)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: AppTheme.cardDecoration(context),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header with staked badge
-                        Row(
-                          children: [
-                            Icon(
-                              LucideIcons.creditCard,
-                              size: 18,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Payment',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.checkCircle,
-                                    size: 12,
-                                    color: Colors.green.shade700,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '1,000 DSP Staked',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.green.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Loading state while fetching PaymentIntent
-                        if (_isLoadingIntent)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        else ...[
-                          // Compact Stripe CardField (no country dropdown)
-                          // CardField is not supported on web
-                          if (kIsWeb)
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(LucideIcons.smartphone, size: 18, color: theme.hintColor),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Card payment is available on the mobile app. Please use the Diaspora Nearby app to complete your membership.',
-                                      style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            CardField(
-                              enablePostalCode: false,
-                              cursorColor: const Color(0xFF7CAE7A),
-                              onCardChanged: (details) {
-                                final complete = details?.complete ?? false;
-                                debugPrint('▶ [CardField] complete=$complete');
-                                if (complete != _isCardComplete) {
-                                  setState(() => _isCardComplete = complete);
-                                }
-                              },
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: theme.colorScheme.surface,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.outline.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.outline.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFF7CAE7A),
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                          const SizedBox(height: 16),
-
-                          // Pay button integrated in form
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: (thresholdMet && !_isProcessingPayment)
-                                  ? _confirmPayment
-                                  : null,
-                              icon: _isProcessingPayment
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Icon(
-                                      thresholdMet
-                                          ? LucideIcons.creditCard
-                                          : LucideIcons.users,
-                                      size: 16,
-                                    ),
-                              label: Text(
-                                _isProcessingPayment
-                                    ? 'Processing Payment...'
-                                    : thresholdMet
-                                    ? 'Pay \$100 to Join Now'
-                                    : '${NumberFormat('#,###').format(_stakerCount)} / 10,000 Members Staked',
-                              ),
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.all(16),
-                                backgroundColor: const Color(0xFF7CAE7A),
-                                disabledBackgroundColor: const Color(
-                                  0xFF7CAE7A,
-                                ).withValues(alpha: 0.4),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                LucideIcons.lock,
-                                size: 12,
-                                color: theme.hintColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Secure payment powered by Stripe',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: theme.hintColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
+                  _DiasporaPaymentCard(
+                    userId: widget.userId,
+                    onPaid: () {
+                      if (mounted) setState(() {});
+                    },
                   ),
           ],
         ),
@@ -1496,6 +1239,32 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
         children: [
           // â”€â”€â”€ Pending Proxy Requests (for this user as proxy) â”€â”€â”€
           _buildPendingProxyRequests(context),
+
+          // â”€â”€â”€ Fund Transparency Link ───
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.3),
+              ),
+              color: theme.colorScheme.primary.withValues(alpha: 0.04),
+            ),
+            child: ListTile(
+              leading: Icon(LucideIcons.eye, color: theme.colorScheme.primary),
+              title: const Text(
+                'Fund Transparency',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text(
+                'Live treasury \$DIASPORA balance, DSP promissory locked, and full on-chain ledger of every contribution and auto-disbursement.',
+                style: TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(LucideIcons.chevronRight, size: 18),
+              onTap: () => context.push('/dsp/emergency-fund/transparency'),
+            ),
+          ),
+
           // â”€â”€â”€ Support Request Types â”€â”€â”€
           Text(
             'Request Support',
@@ -3378,4 +3147,109 @@ class _SetupCoverageDialogState extends State<_SetupCoverageDialog> {
       ],
     );
   }
+}
+
+// =====================================================================
+// $DIASPORA Payment Card — replaces Stripe card form
+// =====================================================================
+class _DiasporaPaymentCard extends ConsumerStatefulWidget {
+  final String userId;
+  final VoidCallback onPaid;
+  const _DiasporaPaymentCard({required this.userId, required this.onPaid});
+  @override
+  ConsumerState<_DiasporaPaymentCard> createState() => _DiasporaPaymentCardState();
+}
+
+class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
+  Map<String, dynamic>? _quote;
+  bool _loadingQuote = true;
+  bool _paying = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuote();
+  }
+
+  Future<void> _loadQuote() async {
+    try {
+      final q = await ref.read(emergencyFundServiceProvider).quoteDiasporaContribution();
+      if (mounted) setState(() { _quote = q; _loadingQuote = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = '$e'; _loadingQuote = false; });
+    }
+  }
+
+  Future<void> _pay() async {
+    setState(() { _paying = true; _error = null; });
+    try {
+      await ref.read(emergencyFundServiceProvider).payContributionInDiaspora();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('🎉 Membership activated! \$DIASPORA contribution received.'),
+          backgroundColor: Color(0xFF7CAE7A),
+        ));
+        widget.onPaid();
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); });
+    } finally {
+      if (mounted) setState(() { _paying = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: AppTheme.cardDecoration(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(LucideIcons.coins, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            const Text('Pay in \$DIASPORA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          ]),
+          const SizedBox(height: 12),
+          if (_loadingQuote)
+            const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+          else if (_quote != null) ...[
+            _row(theme, 'You pay', '${_quote!['amountDiaspora']} \$DIASPORA'),
+            const SizedBox(height: 6),
+            _row(theme, 'USD equivalent', '\$${_quote!['usd']}'),
+            const SizedBox(height: 6),
+            _row(theme, 'Rate', '1 \$DIASPORA ≈ \$${_quote!['pricePerToken']}'),
+          ],
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: (_paying || _loadingQuote) ? null : _pay,
+              icon: _paying
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(LucideIcons.zap, size: 16),
+              label: Text(_paying ? 'Processing on-chain...' : 'Pay & Activate Membership'),
+              style: FilledButton.styleFrom(padding: const EdgeInsets.all(16), backgroundColor: const Color(0xFF7CAE7A)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(LucideIcons.shieldCheck, size: 12, color: theme.hintColor),
+            const SizedBox(width: 4),
+            Text('On-chain transfer · Base L2', style: TextStyle(fontSize: 11, color: theme.hintColor)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(ThemeData theme, String l, String v) => Row(children: [
+    Text(l, style: TextStyle(fontSize: 12, color: theme.hintColor)),
+    const Spacer(),
+    Text(v, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+  ]);
 }

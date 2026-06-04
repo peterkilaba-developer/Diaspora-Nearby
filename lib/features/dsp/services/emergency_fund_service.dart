@@ -27,20 +27,16 @@ final emergencyFundServiceProvider = Provider<EmergencyFundService>((ref) {
 
 class EligibilityResult {
   final bool isProfileComplete;
-  final bool hasEnoughFamily;
-  final bool hasEnoughFriends;
-  final int familyCount;
-  final int friendCount;
+  final bool hasEnoughQrScans;
+  final int qrScanCount;
+  static const int requiredQrScans = 10;
 
-  bool get isEligible =>
-      isProfileComplete && hasEnoughFamily && hasEnoughFriends;
+  bool get isEligible => isProfileComplete && hasEnoughQrScans;
 
   EligibilityResult({
     required this.isProfileComplete,
-    required this.hasEnoughFamily,
-    required this.hasEnoughFriends,
-    required this.familyCount,
-    required this.friendCount,
+    required this.hasEnoughQrScans,
+    required this.qrScanCount,
   });
 }
 
@@ -89,10 +85,8 @@ class EmergencyFundService {
     if (bypassForTesting) {
       return EligibilityResult(
         isProfileComplete: true,
-        hasEnoughFamily: true,
-        hasEnoughFriends: true,
-        familyCount: 1,
-        friendCount: 1,
+        hasEnoughQrScans: true,
+        qrScanCount: 10,
       );
     }
 
@@ -100,36 +94,44 @@ class EmergencyFundService {
     final profile = await _profileRepo.getUserProfile(userId);
     final isProfileComplete = profile?.isComplete ?? false;
 
-    // 2. Relationships Check (1 Family, 1 Friend)
-    final relationshipsSnap = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('relationships')
-        .where('status', isEqualTo: 'active')
-        .get();
-
-    int familyCount = 0;
-    int friendCount = 0;
-
-    for (var doc in relationshipsSnap.docs) {
-      final type = doc.data()['type'] as String? ?? '';
-      if (_familyTypes.contains(type.toLowerCase())) {
-        familyCount++;
-      } else if (type.toLowerCase() == 'friend') {
-        friendCount++;
+    // 2. In-person QR scan check — read PoCT trust data
+    int qrScanCount = 0;
+    try {
+      final trustDoc = await _firestore
+          .collection('trust_scores')
+          .doc(userId)
+          .get();
+      if (trustDoc.exists) {
+        qrScanCount = (trustDoc.data()?['uniqueQrCount'] as num?)?.toInt() ?? 0;
       }
-    }
-
-    final hasEnoughFamily = familyCount >= 1;
-    final hasEnoughFriends = friendCount >= 1;
+    } catch (_) {}
 
     return EligibilityResult(
       isProfileComplete: isProfileComplete,
-      hasEnoughFamily: hasEnoughFamily,
-      hasEnoughFriends: hasEnoughFriends,
-      familyCount: familyCount,
-      friendCount: friendCount,
+      hasEnoughQrScans: qrScanCount >= EligibilityResult.requiredQrScans,
+      qrScanCount: qrScanCount,
     );
+  }
+
+  // --- $DIASPORA Contribution ---
+
+  /// Quotes how many $DIASPORA tokens are required to cover the $100 contribution
+  /// at the current implied price. Returns `{ amountDiaspora, pricePerToken, usd }`.
+  Future<Map<String, dynamic>> quoteDiasporaContribution() async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('getEmergencyFundContributionQuote')
+        .call();
+    return Map<String, dynamic>.from(result.data as Map);
+  }
+
+  /// Pays the $100-equivalent contribution in $DIASPORA tokens.
+  /// Server-side: quotes price, transfers from user's smart wallet
+  /// to the fund treasury, activates membership, refunds DSP promissory.
+  Future<Map<String, dynamic>> payContributionInDiaspora() async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('payEmergencyFundInDiaspora')
+        .call();
+    return Map<String, dynamic>.from(result.data as Map);
   }
 
   // --- Membership ---

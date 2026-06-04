@@ -127,8 +127,8 @@ void main() {
 
       expect(result.isEligible, true);
       expect(result.isProfileComplete, true);
-      expect(result.hasEnoughFamily, true);
-      expect(result.hasEnoughFriends, true);
+      // hasEnoughFamily / hasEnoughFriends were removed from EligibilityResult
+      // when the eligibility model was simplified to QR scans + complete profile.
     });
 
     test('should return ineligible if points are insufficient', () async {

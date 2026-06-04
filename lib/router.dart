@@ -52,6 +52,7 @@ import 'features/home/screens/home_screen.dart';
 import 'features/dsp/screens/points_system_screen.dart';
 import 'features/dsp/screens/remittances_screen.dart';
 import 'features/dsp/screens/emergency_fund_screen.dart';
+import 'features/dsp/screens/emergency_fund_transparency_screen.dart';
 import 'features/dsp/screens/airline_portal_screen.dart';
 import 'features/dsp/screens/dfdi_screen.dart';
 import 'features/dsp/screens/diaspora_crypto_screen.dart';
@@ -840,6 +841,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/dsp/emergency-fund',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const EmergencyFundScreen(),
+      ),
+      GoRoute(
+        path: '/dsp/emergency-fund/transparency',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const EmergencyFundTransparencyScreen(),
       ),
       GoRoute(
         path: '/dsp/airline',
