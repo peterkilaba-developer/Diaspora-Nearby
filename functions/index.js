@@ -111,3 +111,23 @@ exports.getTokenTransfers = blockchain.getTokenTransfers;
 // Play Store (1)
 const playStore = require("./lib/play_store");
 exports.addPlayStoreTester = playStore.addPlayStoreTester;
+
+// Chambers (3) — restored from feature/develop-catchup-2026-06 (aaf6d9f);
+// these were deployed to prod but missing from main, so every deploy
+// offered to delete them.
+const chambers = require("./lib/chambers");
+exports.ensureSignupChamber = chambers.ensureSignupChamber;
+exports.joinChamber = chambers.joinChamber;
+exports.manageChamber = chambers.manageChamber;
+
+// Governance (2)
+const governance = require("./lib/governance");
+exports.nominateForGovernanceRole = governance.nominateForGovernanceRole;
+exports.evaluateGovernanceVote = governance.evaluateGovernanceVote;
+
+// DDI Loans (4)
+const ddi = require("./lib/ddi");
+exports.submitDdiLoanApplication = ddi.submitDdiLoanApplication;
+exports.joinDdiDiscussion = ddi.joinDdiDiscussion;
+exports.castDdiLoanVote = ddi.castDdiLoanVote;
+exports.resolveDdiLoanVoting = ddi.resolveDdiLoanVoting;
