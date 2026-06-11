@@ -23,6 +23,7 @@ import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW] Share reward toast
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
+import 'package:diaspora_nearby/features/chat/services/chamber_service.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
@@ -581,6 +582,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         createdCommunityIds = await ref
             .read(communityServiceProvider)
             .createCommunitiesAndChats(profile, onFirstMember: onFirstMember);
+        await ref.read(chamberServiceProvider).ensureSignupChamber();
       } catch (e) {
         // If this fails, we must NOT proceed.
         // We report error and let user retry (submit button will re-enable).

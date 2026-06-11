@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_local_service.dart';
+import 'package:diaspora_nearby/features/chat/services/chamber_service.dart';
 
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
@@ -1520,6 +1521,20 @@ class ChatRepository {
     if (chatData['isPublic'] != true) {
       throw Exception('Cannot join private group without invitation');
     }
+    // Chambers and DDI discussions are structural chats: membership is
+    // managed server-side via callables (hardened firestore rules block
+    // direct participant writes for them).
+    final metadata = chatData['metadata'];
+    if (metadata is Map && metadata['isChamber'] == true) {
+      await _ref.read(chamberServiceProvider).joinChamber(chatId);
+      await getChat(chatId, force: true);
+      return;
+    }
+    if (metadata is Map && metadata['isDdiDiscussion'] == true) {
+      await _ref.read(chamberServiceProvider).joinDdiDiscussion(chatId);
+      await getChat(chatId, force: true);
+      return;
+    }
 
     // Add to participants using Firestore arrayUnion
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -1593,6 +1608,23 @@ class ChatRepository {
     if (image != null) updates['photoUrl'] = image;
     if (description != null) updates['description'] = description;
     if (updates.isNotEmpty) await _chatsCol.doc(chatId).update(updates);
+  }
+
+  Future<void> manageChamber(
+    String chatId, {
+    String? description,
+    List<String> addMemberIds = const [],
+    List<String> removeMemberIds = const [],
+  }) async {
+    await _ref
+        .read(chamberServiceProvider)
+        .manageChamber(
+          chatId,
+          description: description,
+          addMemberIds: addMemberIds,
+          removeMemberIds: removeMemberIds,
+        );
+    await getChat(chatId, force: true);
   }
 
   Future<bool> addGroupMember(String chatId, String userId) async {
