@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 /// Provider for the SmartWalletService
 final smartWalletServiceProvider = Provider<SmartWalletService>((ref) {
@@ -17,7 +19,10 @@ final tokenBalanceProvider = FutureProvider<String>((ref) async {
   try {
     final callable = FirebaseFunctions.instanceFor(
       region: 'us-central1',
-    ).httpsCallable('getTokenBalance');
+    ).httpsCallable(
+      'getTokenBalance',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 8)),
+    );
     final result = await callable.call<Map<String, dynamic>>({});
     final data = result.data;
     final formatted = data['formatted'] as String? ?? '0';
@@ -96,7 +101,7 @@ final batchTokenBalancesProvider = FutureProvider<BatchTokenBalances>((
     final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable(
           'getBatchTokenBalances',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
         );
     final result = await callable.call<Map<String, dynamic>>({});
     final data = result.data;
@@ -187,7 +192,7 @@ final onChainTransfersProvider = FutureProvider<List<OnChainTransfer>>((
     final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable(
           'getTokenTransfers',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
         );
     final result = await callable.call<Map<String, dynamic>>({});
     final data = result.data;
@@ -230,6 +235,10 @@ final onChainTransfersProvider = FutureProvider<List<OnChainTransfer>>((
 final userWalletProvider = StreamProvider<SmartWalletData?>((ref) {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return Stream.value(null);
+  final cachedAddress = ref.watch(userProfileProvider).value?.walletAddress;
+  final cachedWallet = cachedAddress == null || cachedAddress.isEmpty
+      ? null
+      : SmartWalletData(address: cachedAddress);
 
   return FirebaseFirestore.instance
       .collection('users')
@@ -247,7 +256,9 @@ final userWalletProvider = StreamProvider<SmartWalletData?>((ref) {
               ? (data['walletGeneratedAt'] as Timestamp).toDate()
               : null,
         );
-      });
+      })
+      .onErrorReturn(cachedWallet)
+      .startWith(cachedWallet);
 });
 
 /// Represents the user's smart wallet details
@@ -301,7 +312,10 @@ class SmartWalletService {
     debugPrint('[SmartWallet] Getting/creating wallet for ${user.uid}');
 
     try {
-      final callable = _functions.httpsCallable('getOrCreateSmartWallet');
+      final callable = _functions.httpsCallable(
+        'getOrCreateSmartWallet',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 12)),
+      );
       final result = await callable.call<Map<String, dynamic>>({});
 
       final data = result.data;

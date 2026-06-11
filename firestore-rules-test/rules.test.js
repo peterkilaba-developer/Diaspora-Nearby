@@ -8,6 +8,8 @@ const {
 
 const PROJECT_ID = "diaspora-nearby-rules-test";
 
+jest.setTimeout(30000);
+
 let testEnv;
 
 beforeAll(async () => {
@@ -106,6 +108,8 @@ describe("Chamber chat posting (subtype == 'corridor_chamber')", () => {
 describe("Non-chamber chat posting (legacy rule)", () => {
   const chatId = "regular-chat";
   const uid = "user-1";
+  const legacyUid = "legacy-user";
+  const outsiderUid = "outsider";
 
   beforeEach(async () => {
     await seed(async (db) => {
@@ -123,6 +127,126 @@ describe("Non-chamber chat posting (legacy rule)", () => {
         senderId: uid,
         text: "hi",
       })
+    );
+  });
+
+  test("legacy userChat owner CAN post when participants is incomplete", async () => {
+    await seed(async (db) => {
+      await db.doc(`users/${legacyUid}/userChats/${chatId}`).set({
+        chatId,
+      });
+    });
+
+    const db = dbFor(legacyUid);
+    await assertSucceeds(
+      db.collection(`chats/${chatId}/messages`).add({
+        senderId: legacyUid,
+        text: "legacy direct chat",
+      })
+    );
+  });
+
+  test("legacy user CAN commit the complete message delivery batch", async () => {
+    await seed(async (db) => {
+      await db.doc(`users/${legacyUid}/userChats/${chatId}`).set({
+        chatId,
+      });
+    });
+
+    const db = dbFor(legacyUid);
+    const messageRef = db.collection(`chats/${chatId}/messages`).doc();
+    const lastMessage = {
+      id: messageRef.id,
+      senderId: legacyUid,
+      content: "batch message",
+      timestamp: 1,
+    };
+    const batch = db.batch();
+
+    batch.set(messageRef, {
+      senderId: legacyUid,
+      content: "batch message",
+      timestamp: 1,
+    });
+    batch.set(
+      db.doc(`chats/${chatId}`),
+      { lastMessage, updatedAt: 1 },
+      { merge: true }
+    );
+    batch.set(
+      db.doc(`users/${legacyUid}/userChats/${chatId}`),
+      { chatId, lastMessage, updatedAt: 1 },
+      { merge: true }
+    );
+
+    await assertSucceeds(batch.commit());
+  });
+
+  test("legacy sparse chat CAN commit when participants and subtype are missing", async () => {
+    await seed(async (db) => {
+      await db.doc(`chats/${chatId}`).set({
+        name: "Legacy direct chat",
+      });
+      await db.doc(`users/${legacyUid}/userChats/${chatId}`).set({
+        chatId,
+      });
+    });
+
+    const db = dbFor(legacyUid);
+    const messageRef = db.collection(`chats/${chatId}/messages`).doc();
+    const batch = db.batch();
+
+    batch.set(messageRef, {
+      senderId: legacyUid,
+      content: "sparse batch message",
+      timestamp: 1,
+    });
+    batch.set(
+      db.doc(`chats/${chatId}`),
+      {
+        lastMessage: {
+          id: messageRef.id,
+          senderId: legacyUid,
+          content: "sparse batch message",
+          timestamp: 1,
+        },
+        updatedAt: 1,
+      },
+      { merge: true }
+    );
+    batch.set(
+      db.doc(`users/${legacyUid}/userChats/${chatId}`),
+      { chatId, updatedAt: 1 },
+      { merge: true }
+    );
+
+    await assertSucceeds(batch.commit());
+  });
+
+  test("outsider without participant or userChat record CANNOT post", async () => {
+    const db = dbFor(outsiderUid);
+    await assertFails(
+      db.collection(`chats/${chatId}/messages`).add({
+        senderId: outsiderUid,
+        text: "no access",
+      })
+    );
+  });
+
+  test("outsider CANNOT spoof another chat's last message", async () => {
+    const db = dbFor(outsiderUid);
+    await assertFails(
+      db.doc(`chats/${chatId}`).set(
+        {
+          lastMessage: {
+            senderId: outsiderUid,
+            content: "spoofed",
+            timestamp: 1,
+          },
+          updatedAt: 1,
+        },
+        { merge: true }
+      )
     );
   });
 });

@@ -49,6 +49,8 @@ exports.checkProximityOnCreate = proximity.checkProximityOnCreate;
 
 // Proxy (2)
 exports.radioProxy = proxy.radioProxy;
+exports.reportRadioStationHealth = proxy.reportRadioStationHealth;
+exports.fetchRadioStations = proxy.fetchRadioStations;
 exports.placesProxy = proxy.placesProxy;
 
 // Chat (1)
@@ -91,6 +93,7 @@ exports.slashPromissoryForFraud = emergencyFund.slashPromissoryForFraud;
 exports.onGlobalDspMilestone = dsp.onGlobalDspMilestone;
 exports.executeTGE = dsp.executeTGE;
 exports.awardPoints = dsp.awardPoints;
+exports.backfillLifetimeEarnings = dsp.backfillLifetimeEarnings;
 exports.deductPoints = dsp.deductPoints;
 exports.initializeUserPoints = dsp.initializeUserPoints;
 exports.awardMessagePoints = dsp.awardMessagePoints;

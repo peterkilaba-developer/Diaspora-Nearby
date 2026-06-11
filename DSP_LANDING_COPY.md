@@ -25,10 +25,10 @@ Every time you share a resource, send a message to family back home, book a trip
 ### **The Race to Epoch 1: The Great Reset**
 We are currently in **Epoch 1: The Accumulation Phase**. 
 
-The Diaspora system is tracking every point earned globally. When the community reaches the **1 Million $DIASPORA Benchmark** with **100 Verified Humans**, we trigger **The Great Reset**. 
+The Diaspora system tracks every DSP point distributed globally. When distributed DSP crosses the **1 Million DSP Benchmark**, it triggers **The Great Reset**. Member count is shown as a network-growth benchmark, but it does not gate the TGE.
 
 *   **1:1 Conversion**: Your off-chain points are snapshotted and converted 1:1 into liquid $DIASPORA tokens on the Coinbase L2 Base Blockchain.
-*   **10x Scaling**: Each subsequent Epoch requires 10x more supply and 10x more users, making early participation the most valuable.
+*   **10x Scaling**: Each subsequent Epoch requires 10x more distributed DSP. Member growth is tracked for context, while earned activity drives the TGE.
 *   **Your Advantage**: Those who build their balance *before* the reset own the largest share of the network at the lowest "difficulty."
 
 **Don't wait for the token launch. Build the wealth that justifies it.**

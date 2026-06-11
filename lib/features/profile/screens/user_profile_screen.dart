@@ -326,6 +326,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
       ProfileData profileToSave = updatedProfile;
 
+      // Snapshot counts before any mutations for DSP reward detection.
+      // formPastCount = what the user submitted (original + manually added).
+      // originalPastCount = what was in Firestore before this save.
+      // The diff isolates explicit user additions from the auto-archive step below.
+      final originalPastCount = currentProfile.pastLocations?.length ?? 0;
+      final formPastCount = updatedProfile.pastLocations?.length ?? 0;
+      final hasManualPastLocationAddition = formPastCount > originalPastCount;
+
       // 1. Upload Image if changed
       if (newImage != null) {
         final url = await ref
@@ -372,8 +380,17 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
       if (profileToSave.pastLocations != null) {
         try {
+          // Only sync communities for past locations that are NEW to this save.
+          // Running ensureCommunitiesForLocationHierarchy for every existing
+          // past location on every save causes O(n) sequential CF round-trips.
+          final existingPastPlaceIds = currentProfile.pastLocations
+              ?.map((pl) => pl.location.placeId)
+              .toSet() ?? {};
+
           final commService = ref.read(communityServiceProvider);
           for (final pl in profileToSave.pastLocations!) {
+            final pid = pl.location.placeId;
+            if (pid.isNotEmpty && existingPastPlaceIds.contains(pid)) continue;
             if (pl.location.city == null) continue; // Skip incomplete locations
 
             // Ensure robust parsing before sync (Standard New User Method)
@@ -411,6 +428,22 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       // [NEW] Update Trust Score (Fire and forget or await)
       // Await is better here so user sees immediate feedback if we show trust score on profile
       await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
+
+      // DSP distribution for location-change events (once per user per event type).
+      // Run both checks in parallel so they don't compound save latency.
+      try {
+        final pointsService = ref.read(pointsServiceProvider);
+        final hostChanged =
+            profileToSave.hostLocation.placeId != currentProfile.hostLocation.placeId ||
+            profileToSave.hostLocation.formattedAddress != currentProfile.hostLocation.formattedAddress;
+
+        final dspFutures = <Future<void>>[];
+        if (hostChanged) dspFutures.add(pointsService.trackHostLocationMove(user.uid));
+        if (hasManualPastLocationAddition) dspFutures.add(pointsService.trackAlsoLivedInAdded(user.uid));
+        if (dspFutures.isNotEmpty) await Future.wait(dspFutures);
+      } catch (e) {
+        debugPrint('Location DSP reward failed: $e');
+      }
 
       debugPrint('UserProfileScreen: Profile saved to repository.'); // [DEBUG]
 

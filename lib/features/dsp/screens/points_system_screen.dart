@@ -304,6 +304,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         context,
                         userPoints,
                         trustData?.trustScore ?? 0.0,
+                        trustData?.uniqueQrCount ?? 0,
                       );
                     },
                   ),
@@ -323,7 +324,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   _buildPlatformStatusCard(context),
 
                   // Current Epoch Details
-                  _buildEpochDetailCard(context, userPoints),
+                  Builder(
+                    builder: (context) {
+                      final qr = trustDataAsync.value?.uniqueQrCount ?? 0;
+                      return _buildEpochDetailCard(context, userPoints, qr);
+                    },
+                  ),
 
                   // Recent Activity
                   _buildSectionHeader('LIVE ACTIVITY', 'Recent Transactions'),
@@ -408,6 +414,13 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               amount: '1,000 DSP',
               earned: lifetimeEarnings['welcome_bonus'] ?? 0,
             ),
+            _buildActivityCard(
+              context,
+              title: 'Complete Your Profile',
+              subtitle: 'Fill all 10 profile fields to unlock the genesis bonus',
+              amount: '10,000 DSP',
+              earned: lifetimeEarnings['profile_completion'] ?? 0,
+            ),
 
             const SizedBox(height: 24),
 
@@ -475,9 +488,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildActivityCard(
               context,
               title: 'Verified Solution Author',
-              subtitle: 'Your answer hits 10 unique verifiers (repeatable)',
-              amount: '1,000 DSP',
-              earned: lifetimeEarnings['verified_solution_milestone'] ?? 0,
+              subtitle: 'Someone marks your chat answer as a verified solution',
+              amount: '1,000 DSP per verification',
+              earned: (lifetimeEarnings['verified_solution_author_reward'] ?? 0) +
+                  (lifetimeEarnings['verified_solution_milestone'] ?? 0),
             ),
 
             const SizedBox(height: 24),
@@ -491,7 +505,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Vouch for Peer',
               subtitle: 'Vouch for someone\'s trustworthiness (+ 1,000 DSP staked)',
               amount: '1,000 DSP',
-              earned: lifetimeEarnings['vouch_reward'] ?? 0,
+              earned: (lifetimeEarnings['vouch_reward'] ?? 0) +
+                  (lifetimeEarnings['trust_vouch_reward'] ?? 0),
             ),
             _buildActivityCard(
               context,
@@ -499,6 +514,27 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               subtitle: 'Someone vouches for your trustworthiness',
               amount: '1,000 DSP',
               earned: lifetimeEarnings['vouched_by_peer'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Vouch Consensus — Agree',
+              subtitle: 'You agreed with the community on a vouch outcome',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['vouch_consensus_agree'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Trust Stake — Agreement Reward',
+              subtitle: 'Another full-trust rater agrees with your stake',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['trust_stake_agreement_reward'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Trust Stake — Refund',
+              subtitle: 'Your remaining stake returned when you exit full trust',
+              amount: 'Variable',
+              earned: lifetimeEarnings['trust_stake_refund'] ?? 0,
             ),
 
             const SizedBox(height: 24),
@@ -521,7 +557,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               subtitle: 'Host someone visiting your area',
               amount: '1,000 DSP',
               earned: (lifetimeEarnings['host_traveler_host_reward'] ?? 0) +
-                  (lifetimeEarnings['hosting_traveler_income'] ?? 0),
+                  (lifetimeEarnings['host_traveler_guest_reward'] ?? 0),
             ),
 
             const SizedBox(height: 24),
@@ -543,6 +579,48 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               subtitle: 'Earn per verified attendee at your event',
               amount: '1,000 DSP each',
               earned: lifetimeEarnings['event_hosting_per_attendee'] ?? 0,
+            ),
+
+            const SizedBox(height: 24),
+
+            // === SECTION: Groups & Moderation ===
+            _buildSubHeader('Groups & Moderation'),
+            const SizedBox(height: 8),
+
+            _buildActivityCard(
+              context,
+              title: 'Group Invite Accepted',
+              subtitle: 'Inviter rewarded when their invite is accepted',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['Group Invite Accepted'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Joined Group',
+              subtitle: 'You accepted a group invite',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['Joined Group'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Rejected Group Invite',
+              subtitle: 'Compensation if you decline a group invite',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['Rejected Group Invite'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Report a Message',
+              subtitle: 'Flag a message for community review',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['report_message'] ?? 0,
+            ),
+            _buildActivityCard(
+              context,
+              title: 'Report a Sender',
+              subtitle: 'Flag a sender for community review',
+              amount: '100 DSP',
+              earned: lifetimeEarnings['report_sender'] ?? 0,
             ),
 
             const SizedBox(height: 32),
@@ -918,6 +996,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     BuildContext context,
     UserPoints points,
     double trustScore,
+    int uniqueQrCount,
   ) {
     final epochService = ref.read(epochServiceProvider);
     final double efficiency = epochService.calculateEfficiency(trustScore);
@@ -925,10 +1004,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     final Color efficiencyColor = EpochService.getEfficiencyColor(trustScore);
 
     final int totalPoints = points.totalPoints;
-    final int nextMilestone = 10000; // Confirmed 10k Genesis Gate
-    final double progress = (totalPoints / nextMilestone).clamp(0.0, 1.0);
-    // Qualification is now strictly DSP based (10k), trust score determines efficiency %
-    final bool isQualified = totalPoints >= 10000;
+    // TGE gate is now 10 unique Identity QR exchanges — and only for the
+    // user's first TGE. After firstTgeReceivedAt is stamped, every TGE
+    // after that is automatic and the gate disappears.
+    const int qrGateThreshold = 10;
+    final bool isPostFirstTge =
+        points.firstTgeReceivedAt != null || points.tgeHistory.isNotEmpty;
+    final double progress = isPostFirstTge
+        ? 1.0
+        : (uniqueQrCount / qrGateThreshold).clamp(0.0, 1.0);
+    final bool isQualified = isPostFirstTge || uniqueQrCount >= qrGateThreshold;
 
     return Container(
       padding: AppTheme.cardPaddingEdgeInsets,
@@ -989,7 +1074,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${NumberFormat('#,###').format(totalPoints)} / 10,000 DSP',
+                isPostFirstTge
+                    ? 'Auto-included in every future TGE'
+                    : '$uniqueQrCount / $qrGateThreshold unique QR exchanges',
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(context).hintColor,
@@ -1006,7 +1093,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                 )
               else
                 Text(
-                  'Need ${NumberFormat('#,###').format(10000 - totalPoints)} more DSP',
+                  'Need ${qrGateThreshold - uniqueQrCount} more QR exchange${qrGateThreshold - uniqueQrCount == 1 ? '' : 's'}',
                   style: const TextStyle(fontSize: 11, color: Colors.orange),
                 ),
             ],
@@ -1260,7 +1347,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  Widget _buildEpochDetailCard(BuildContext context, UserPoints userPoints) {
+  Widget _buildEpochDetailCard(
+    BuildContext context,
+    UserPoints userPoints,
+    int uniqueQrCount,
+  ) {
     final globalSupplyAsync = ref.watch(globalSupplyProvider);
     final globalMembersAsync = ref.watch(globalMemberCountProvider);
     final epochService = ref.watch(epochServiceProvider);
@@ -1443,6 +1534,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     members,
                     userPoints,
                     epochService,
+                    uniqueQrCount,
                   ),
                 ],
               ),
@@ -1464,6 +1556,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     int currentMembers,
     UserPoints userPoints,
     EpochService epochService,
+    int uniqueQrCount,
   ) {
     final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
     final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
@@ -1500,12 +1593,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         );
 
         final bool isSupplyMet = currentSupply >= stepTarget;
-        final bool isMembersMet = currentMembers >= memberTarget;
-
-        final bool isCompleted = isSupplyMet && isMembersMet;
-        final bool isActive =
-            !isCompleted &&
-            (currentSupply >= stepStart || currentMembers >= memberStart);
+        final bool isCompleted = isSupplyMet;
+        final bool isActive = !isCompleted && currentSupply >= stepStart;
 
         double supplyProgress = 0.0;
         double memberProgress = 0.0;
@@ -1706,30 +1795,33 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                   },
                                 ),
                                 const SizedBox(height: 16),
-                                // Row 2: Balance Check (Remove Check Emoji)
+                                // Row 2: QR Gate (10 unique exchanges) — first
+                                // TGE only; auto-included after that.
                                 Builder(
                                   builder: (context) {
-                                    final epochDef = epochService.getEpoch(
-                                      epoch.level,
-                                    );
-                                    final currentBalance =
-                                        userPoints.availablePoints;
-                                    final requiredBalance =
-                                        epochDef.minDspRequired;
-
+                                    final isPostFirstTge =
+                                        userPoints.firstTgeReceivedAt != null ||
+                                        userPoints.tgeHistory.isNotEmpty;
+                                    final qrMet =
+                                        isPostFirstTge || uniqueQrCount >= 10;
+                                    final label = isPostFirstTge
+                                        ? 'Auto-included'
+                                        : '$uniqueQrCount / 10';
                                     return Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         const Text(
-                                          'DSP Balance',
+                                          'QR Exchanges',
                                           style: TextStyle(fontSize: 10),
                                         ),
                                         Text(
-                                          '${NumberFormat.compact().format(currentBalance)} / ${NumberFormat.compact().format(requiredBalance)} DSP',
-                                          style: const TextStyle(
+                                          label,
+                                          style: TextStyle(
                                             fontSize: 10,
-                                            color: AppTheme.accent,
+                                            color: qrMet
+                                                ? Colors.green
+                                                : Colors.orange,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
@@ -1776,9 +1868,15 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                   },
                                 ),
                                 const SizedBox(height: 16),
-                                // Row 4: Qualification Status
+                                // Row 4: Estimated payout — gated on QR
+                                // qualification (or post-first-TGE auto-qualify).
                                 Builder(
                                   builder: (context) {
+                                    final isPostFirstTge =
+                                        userPoints.firstTgeReceivedAt != null ||
+                                        userPoints.tgeHistory.isNotEmpty;
+                                    final qrMet =
+                                        isPostFirstTge || uniqueQrCount >= 10;
                                     final currentBalance =
                                         userPoints.availablePoints;
                                     double efficiency = 0.0;
@@ -1789,8 +1887,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                     }
                                     final double payout =
                                         currentBalance * efficiency;
-                                    final payoutStr =
-                                        '${NumberFormat('#,###').format(payout.round())} \$DIASPORA';
+                                    final payoutStr = qrMet
+                                        ? '${NumberFormat('#,###').format(payout.round())} \$DIASPORA'
+                                        : '— complete QR gate first';
 
                                     return Row(
                                       mainAxisAlignment:
@@ -1802,10 +1901,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                         ),
                                         Text(
                                           payoutStr,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
-                                            color: AppTheme.warning,
+                                            color: qrMet
+                                                ? AppTheme.warning
+                                                : Colors.grey,
                                           ),
                                         ),
                                       ],
@@ -1822,7 +1923,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                           ),
                         ] else
                           Text(
-                            'Unlocks at ${NumberFormat.compact().format(stepStart)} DSP',
+                            'Unlocks at ${NumberFormat.compact().format(stepStart)} DSP epoch supply',
                             style: const TextStyle(
                               fontSize: 10,
                               color: Colors.grey,
@@ -2501,9 +2602,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           ),
           const SizedBox(height: 12),
 
-          // 1.1 Global Treasury Card (Actual 10%)
+          // 1.1 Global Reserve (10% Tribute)
           _buildWalletDisplayCard(
-            title: 'Global Treasury',
+            title: 'Global Reserve',
             icon: LucideIcons.globe,
             color: AppTheme.accent,
             percentage: '10%',
@@ -2513,6 +2614,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             trustScore: (globalCommunity?.averagePoCT ?? 0).toDouble(),
             tgeEvent: globalTgeEvent,
+            epochLabel: 'Chambers operations · Charitable donations · Protocol upkeep',
             avatarWidget: CommunityChatUtils.getCommunityAvatar(
               context: context,
               type: globalCommunity?.type ?? 'global',

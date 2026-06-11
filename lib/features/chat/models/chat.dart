@@ -273,9 +273,12 @@ class Chat {
   /// Apply per-user preferences from userChats subcollection
   Chat withUserPreferences(Map<String, dynamic> userChatData) {
     return copyWith(
-      isPinned: userChatData['isPinned'] as bool? ?? false,
-      isPinnedBottom: userChatData['isPinnedBottom'] as bool? ?? false,
-      isMuted: userChatData['isMuted'] as bool? ?? false,
+      isPinned:
+          userChatData['isPinned'] == true || userChatData['pinned'] == true,
+      isPinnedBottom: userChatData['isPinnedBottom'] == true ||
+          userChatData['pinnedBottom'] == true,
+      isMuted:
+          userChatData['isMuted'] == true || userChatData['muted'] == true,
       unreadCount: userChatData['unreadCount'] as int? ?? 0,
     );
   }

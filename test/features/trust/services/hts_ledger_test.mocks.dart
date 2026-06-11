@@ -509,15 +509,6 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
-  _i3.Future<void> trackVouchReward(String? userId, String? vouchedUserId) =>
-      (super.noSuchMethod(
-            Invocation.method(#trackVouchReward, [userId, vouchedUserId]),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
   _i3.Future<void> trackVouchConsensusVote({
     required String? voucherId,
     required bool? isAgree,
@@ -775,15 +766,6 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
   _i3.Future<void> trackEmergencyContactAnnual(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#trackEmergencyContactAnnual, [userId]),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
-  _i3.Future<void> trackOrganizationVetting(String? userId) =>
-      (super.noSuchMethod(
-            Invocation.method(#trackOrganizationVetting, [userId]),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
@@ -1604,6 +1586,14 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
             returnValue: _i3.Stream<List<_i17.PointsTransaction>>.empty(),
           )
           as _i3.Stream<List<_i17.PointsTransaction>>);
+
+  @override
+  _i3.Future<int> getCompletedEconomicTransactionCount(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getCompletedEconomicTransactionCount, [userId]),
+            returnValue: _i3.Future<int>.value(0),
+          )
+          as _i3.Future<int>);
 
   @override
   _i3.Future<void> initializeUserPoints(String? userId) =>

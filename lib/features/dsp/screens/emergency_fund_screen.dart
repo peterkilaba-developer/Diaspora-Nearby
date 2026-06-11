@@ -22,7 +22,7 @@ import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart'
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
+import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
 
 class EmergencyFundScreen extends ConsumerStatefulWidget {
   const EmergencyFundScreen({super.key});
@@ -387,86 +387,6 @@ class _MembershipTab extends ConsumerStatefulWidget {
 }
 
 class _MembershipTabState extends ConsumerState<_MembershipTab> {
-  bool _hasStakedDSP = false;
-  // ignore: unused_field
-  int _stakerCount = 0;
-
-  // Inline card form state
-  String? _clientSecret;
-  bool _isCardComplete = false;
-  bool _isLoadingIntent = false;
-  CardFormEditController? _cardController;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStakerStatus();
-    if (!kIsWeb) {
-      _cardController = CardFormEditController();
-      _cardController!.addListener(_onCardChanged);
-    }
-  }
-
-  @override
-  void dispose() {
-    _cardController?.removeListener(_onCardChanged);
-    _cardController?.dispose();
-    super.dispose();
-  }
-
-  void _onCardChanged() {
-    final complete = _cardController?.details.complete ?? false;
-    if (complete != _isCardComplete) {
-      setState(() => _isCardComplete = complete);
-    }
-  }
-
-  Future<void> _loadStakerStatus() async {
-    final service = ref.read(emergencyFundServiceProvider);
-    final results = await Future.wait([
-      service.hasStaked(widget.userId),
-      service.getStakerCount(),
-    ]);
-    if (mounted) {
-      setState(() {
-        _hasStakedDSP = results[0] as bool;
-        _stakerCount = results[1] as int;
-      });
-      // Pre-fetch PaymentIntent if already staked
-      if (_hasStakedDSP && _clientSecret == null) {
-        _fetchPaymentIntent();
-      }
-    }
-  }
-
-  /// Fetch PaymentIntent for inline card form
-  Future<void> _fetchPaymentIntent() async {
-    if (_isLoadingIntent) return;
-    setState(() => _isLoadingIntent = true);
-    try {
-      final service = ref.read(emergencyFundServiceProvider);
-      debugPrint('▶ [EmergencyFund] Fetching PaymentIntent...');
-      final secret = await service.fetchPaymentIntentSecret();
-      debugPrint(
-        '✅ [EmergencyFund] PaymentIntent secret received: ${secret.substring(0, 20)}...',
-      );
-      if (mounted) {
-        setState(() {
-          _clientSecret = secret;
-          _isLoadingIntent = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ [EmergencyFund] PaymentIntent fetch error: $e');
-      if (mounted) {
-        setState(() => _isLoadingIntent = false);
-        debugPrint('❌ [EmergencyFund] Failed to fetch PaymentIntent: $e');
-      }
-    }
-  }
-
-  /// Confirm inline card payment
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<EmergencyFundMembership?>(
@@ -484,26 +404,10 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
           return _buildPendingProxyView(context, membership);
         }
 
-        // pending_payment = user staked but hasn't paid yet → show join flow
-        // with the card form visible
-        if (membership != null &&
-            membership.status == MembershipStatus.pending_payment) {
-          // Ensure staked state is reflected in UI
-          if (!_hasStakedDSP) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() => _hasStakedDSP = true);
-            });
-          }
-          return _buildJoinFlow(context);
-        }
-
-        // Not a member — show the new join flow
         return _buildJoinFlow(context);
       },
     );
   }
-
-  bool _isStaking = false;
 
   Widget _buildJoinFlow(BuildContext context) {
     final theme = Theme.of(context);
@@ -521,9 +425,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           decoration: AppTheme.cardDecoration(context).copyWith(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: 0.15),
-            ),
           ),
           child: Column(
             children: [
@@ -544,7 +445,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Fund Join Opens when 10,000 Members stake 1,000 DSP Promissory to Join',
+                'Join by contributing \$100 in \$DIASPORA directly to the fund treasury.',
                 style: TextStyle(
                   fontSize: 13,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -614,152 +515,15 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
 
         const SizedBox(height: 16),
 
-        // --- MIDDLE: stake info or card form ---
-        Column(
-          children: [
-            // Before staking: stake details
-                if (!_hasStakedDSP)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: AppTheme.cardDecoration(context),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Stake details (inline, no popup)
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.coins,
-                          'Amount',
-                          '1,000 DSP',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.coins,
-                          'Contribution',
-                          '\$100 USD equivalent in \$DIASPORA',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.refreshCw,
-                          'Refund',
-                          'DSP refunded after contribution',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.shieldCheck,
-                          'Purpose',
-                          'Secures your membership slot',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStakeInfoRow(
-                          theme,
-                          LucideIcons.award,
-                          'Benefit',
-                          '+10 PoCT when you contribute',
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // After staking: $DIASPORA payment card
-                if (_hasStakedDSP)
-                  _DiasporaPaymentCard(
-                    userId: widget.userId,
-                    onPaid: () {
-                      if (mounted) setState(() {});
-                    },
-                  ),
-          ],
+        // --- $DIASPORA payment card ---
+        _DiasporaPaymentCard(
+          userId: widget.userId,
+          onPaid: () {
+            if (mounted) setState(() {});
+          },
         ),
-
-        // --- STICKY BOTTOM: Stake button only (before staking) ---
-        if (!_hasStakedDSP) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _isStaking ? null : _stakeAndTransition,
-              icon: _isStaking
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(LucideIcons.coins, size: 16),
-              label: Text(
-                _isStaking ? 'Staking...' : 'Stake 1,000 DSP Promissory',
-              ),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                backgroundColor: theme.colorScheme.primary,
-              ),
-            ),
-          ),
-        ],
 
         const SizedBox(height: 8),
-      ],
-    );
-  }
-
-
-  /// One-tap stake: deducts DSP and transitions to card form
-  Future<void> _stakeAndTransition() async {
-    setState(() => _isStaking = true);
-    try {
-      await ref
-          .read(emergencyFundServiceProvider)
-          .stakePromissory(widget.userId);
-      if (mounted) {
-        setState(() {
-          _hasStakedDSP = true;
-          _stakerCount++;
-          _isStaking = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('1,000 DSP Promissory staked successfully!'),
-          ),
-        );
-        // Fetch PaymentIntent for inline card form
-        _fetchPaymentIntent();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isStaking = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error staking: $e')));
-      }
-    }
-  }
-
-  Widget _buildStakeInfoRow(
-    ThemeData theme,
-    IconData icon,
-    String label,
-    String value,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: TextStyle(fontSize: 12, color: theme.hintColor),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-        ),
       ],
     );
   }
@@ -1009,23 +773,9 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                 theme,
                 icon: LucideIcons.creditCard,
                 iconColor: const Color(0xFF7CAE7A),
-                title: 'Annual Contribution Paid',
+                title: 'Direct Contribution Sent',
                 subtitle:
-                    '\$${membership.annualContribution.toStringAsFixed(0)} • ${DateFormat.yMMMd().format(membership.joinedDate)}',
-              ),
-              _buildActivityItem(
-                theme,
-                icon: LucideIcons.coins,
-                iconColor: Colors.amber.shade700,
-                title: '1,000 DSP Staked',
-                subtitle: 'Promissory stake for membership',
-              ),
-              _buildActivityItem(
-                theme,
-                icon: LucideIcons.refreshCw,
-                iconColor: Colors.blue.shade600,
-                title: '1,000 DSP Unstaked',
-                subtitle: 'DSP returned after contribution confirmed',
+                    '\$${membership.annualContribution.toStringAsFixed(0)} in \$DIASPORA • ${DateFormat.yMMMd().format(membership.joinedDate)}',
                 isLast: true,
               ),
 
@@ -1245,9 +995,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.colorScheme.primary.withValues(alpha: 0.3),
-              ),
               color: theme.colorScheme.primary.withValues(alpha: 0.04),
             ),
             child: ListTile(
@@ -1257,7 +1004,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: const Text(
-                'Live treasury \$DIASPORA balance, DSP promissory locked, and full on-chain ledger of every contribution and auto-disbursement.',
+                'Live treasury \$DIASPORA balance and full on-chain ledger of every direct contribution and auto-disbursement.',
                 style: TextStyle(fontSize: 12),
               ),
               trailing: const Icon(LucideIcons.chevronRight, size: 18),
@@ -2382,6 +2129,53 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
     if (picked != null) setState(() => _incidentDate = picked);
   }
 
+  static const int _fundOpenThreshold = 10000;
+  static const double _contributionUsd = 100.0;
+  static const double _fallbackPricePerToken = 0.001223;
+  int get _requiredDiaspora =>
+      (_contributionUsd / _fallbackPricePerToken).ceil();
+
+  Future<void> _onSubmitTap() async {
+    final svc = ref.read(emergencyFundServiceProvider);
+    int activeMembers = 0;
+    try {
+      final agg = await FirebaseFirestore.instance
+          .collection('emergency_fund_memberships')
+          .where('status', isEqualTo: 'active')
+          .count()
+          .get();
+      activeMembers = agg.count ?? 0;
+    } catch (_) {}
+
+    final balanceStr = await ref.read(tokenBalanceProvider.future);
+    final balance = num.tryParse(balanceStr) ?? 0;
+    final membership = await svc.streamMembership(widget.userId).first;
+    final isActive = membership?.status == MembershipStatus.active;
+
+    final fundOpen = activeMembers >= _fundOpenThreshold;
+    final hasEnoughBalance = balance >= _requiredDiaspora;
+
+    // The submitter must themselves be an active (contributing) member,
+    // and the fund must have reached critical mass of contributors.
+    if (isActive && fundOpen) {
+      return _submit();
+    }
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => _SupportLockedDialog(
+        activeMembers: activeMembers,
+        threshold: _fundOpenThreshold,
+        balance: balance,
+        required: _requiredDiaspora,
+        fundOpen: fundOpen,
+        isActiveMember: isActive,
+        hasEnoughBalance: hasEnoughBalance,
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_incidentDate == null) {
@@ -2567,9 +2361,11 @@ class _SupportRequestFormState extends ConsumerState<_SupportRequestForm> {
                     width: double.infinity,
                     height: 48,
                     child: FilledButton(
-                      onPressed: _isLoading ? null : _submit,
+                      onPressed: _isLoading ? null : _onSubmitTap,
                       style: FilledButton.styleFrom(
-                        backgroundColor: _themeColor,
+                        backgroundColor: Colors.grey.shade400,
+                        disabledBackgroundColor: Colors.grey.shade400,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -3165,19 +2961,52 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
   bool _loadingQuote = true;
   bool _paying = false;
   String? _error;
+  String? _treasuryAddress;
 
   @override
   void initState() {
     super.initState();
     _loadQuote();
+    _loadTreasury();
   }
+
+  Future<void> _loadTreasury() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('system_stats')
+          .doc('emergency_fund')
+          .get();
+      final addr = doc.data()?['treasuryWallet'] as String?;
+      if (mounted && addr != null && addr.isNotEmpty) {
+        setState(() => _treasuryAddress = addr);
+      }
+    } catch (e) {
+      debugPrint('[EmergencyFund] treasury fetch failed: $e');
+    }
+  }
+
+  String _shortAddr(String s) =>
+      s.length > 16 ? '${s.substring(0, 8)}…${s.substring(s.length - 6)}' : s;
+
+  // Fallback rate if the price-oracle Cloud Function is unreachable.
+  // Matches the implied $DIASPORA price used on the marketing site.
+  static const double _fallbackPricePerToken = 0.001223;
+  static const double _contributionUsd = 100.0;
+
+  Map<String, dynamic> _fallbackQuote() => {
+    'amountDiaspora': (_contributionUsd / _fallbackPricePerToken).ceil(),
+    'usd': _contributionUsd,
+    'pricePerToken': _fallbackPricePerToken.toStringAsFixed(6),
+    'fallback': true,
+  };
 
   Future<void> _loadQuote() async {
     try {
       final q = await ref.read(emergencyFundServiceProvider).quoteDiasporaContribution();
       if (mounted) setState(() { _quote = q; _loadingQuote = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = '$e'; _loadingQuote = false; });
+      debugPrint('[EmergencyFund] quote failed, using fallback: $e');
+      if (mounted) setState(() { _quote = _fallbackQuote(); _loadingQuote = false; });
     }
   }
 
@@ -3209,33 +3038,31 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(LucideIcons.coins, size: 18, color: theme.colorScheme.primary),
+            Image.asset('assets/icons/logo-orange-transparent-32.png', width: 18, height: 18),
             const SizedBox(width: 8),
-            const Text('Pay in \$DIASPORA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const Text('Contribute in \$DIASPORA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ]),
           const SizedBox(height: 12),
           if (_loadingQuote)
             const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
           else if (_quote != null) ...[
-            _row(theme, 'You pay', '${_quote!['amountDiaspora']} \$DIASPORA'),
+            _row(theme, 'You contribute', '${_quote!['amountDiaspora']} \$DIASPORA'),
             const SizedBox(height: 6),
             _row(theme, 'USD equivalent', '\$${_quote!['usd']}'),
             const SizedBox(height: 6),
+            _buildBalanceRow(theme),
+            const SizedBox(height: 6),
             _row(theme, 'Rate', '1 \$DIASPORA ≈ \$${_quote!['pricePerToken']}'),
+            const SizedBox(height: 6),
+            _row(
+              theme,
+              'Treasury',
+              _treasuryAddress == null ? '—' : _shortAddr(_treasuryAddress!),
+            ),
           ],
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: (_paying || _loadingQuote) ? null : _pay,
-              icon: _paying
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(LucideIcons.zap, size: 16),
-              label: Text(_paying ? 'Processing on-chain...' : 'Pay & Activate Membership'),
-              style: FilledButton.styleFrom(padding: const EdgeInsets.all(16), backgroundColor: const Color(0xFF7CAE7A)),
-            ),
-          ),
+          _buildPayCta(theme),
           const SizedBox(height: 8),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(LucideIcons.shieldCheck, size: 12, color: theme.hintColor),
@@ -3252,4 +3079,266 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
     const Spacer(),
     Text(v, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
   ]);
+
+  num _requiredDiaspora() {
+    final raw = _quote?['amountDiaspora'];
+    if (raw is num) return raw;
+    return num.tryParse('$raw') ?? 0;
+  }
+
+  num _balanceNum(String s) => num.tryParse(s) ?? 0;
+
+  Widget _buildBalanceRow(ThemeData theme) {
+    final balanceAsync = ref.watch(tokenBalanceProvider);
+    final required = _requiredDiaspora();
+    return balanceAsync.when(
+      data: (b) {
+        final bal = _balanceNum(b);
+        final enough = bal >= required;
+        return Row(children: [
+          Text('Your balance', style: TextStyle(fontSize: 12, color: theme.hintColor)),
+          const Spacer(),
+          Text(
+            '$b \$DIASPORA',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: enough ? theme.colorScheme.onSurface : Colors.redAccent,
+            ),
+          ),
+        ]);
+      },
+      loading: () => Row(children: [
+        Text('Your balance', style: TextStyle(fontSize: 12, color: theme.hintColor)),
+        const Spacer(),
+        const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+      ]),
+      error: (_, _) => Row(children: [
+        Text('Your balance', style: TextStyle(fontSize: 12, color: theme.hintColor)),
+        const Spacer(),
+        const Text('—', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+
+  Widget _buildPayCta(ThemeData theme) {
+    final balanceAsync = ref.watch(tokenBalanceProvider);
+    final required = _requiredDiaspora();
+    final balanceReady = balanceAsync.hasValue;
+    final hasEnough = balanceReady && _balanceNum(balanceAsync.value!) >= required;
+    final canPay = !_paying && !_loadingQuote && balanceReady && hasEnough;
+    final label = _paying
+        ? 'Processing on-chain...'
+        : (balanceReady && !hasEnough)
+            ? 'Insufficient \$DIASPORA balance'
+            : 'Contribute & Activate Membership';
+    return Row(
+      children: [
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: canPay ? _pay : null,
+            icon: _paying
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Icon(
+                    hasEnough ? LucideIcons.zap : LucideIcons.alertCircle,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+            label: Text(label),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.all(16),
+              backgroundColor: const Color(0xFF7CAE7A),
+              disabledBackgroundColor: Colors.grey.shade400,
+              disabledForegroundColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _InterestHeartButton(userId: widget.userId, hasEnough: hasEnough),
+      ],
+    );
+  }
+}
+
+/// Heart toggle next to the contribute CTA. Tapping adds the user to the
+/// Emergency Fund interest list (visible on the transparency screen).
+/// When the user lacks enough $DIASPORA, tapping registers their interest
+/// and the heart fills + greys to indicate they're queued.
+class _InterestHeartButton extends ConsumerWidget {
+  final String userId;
+  final bool hasEnough;
+  const _InterestHeartButton({required this.userId, required this.hasEnough});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final service = ref.read(emergencyFundServiceProvider);
+    return StreamBuilder<bool>(
+      stream: service.streamMyInterest(userId),
+      builder: (context, snap) {
+        final interested = snap.data ?? false;
+        final filled = interested;
+        final color = interested
+            ? Colors.grey.shade500
+            : (hasEnough ? Colors.redAccent : Colors.redAccent.shade100);
+        return Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.grey.shade300),
+            color: interested ? Colors.grey.shade200 : Colors.transparent,
+          ),
+          child: IconButton(
+            tooltip: interested
+                ? 'You\'re on the interest list'
+                : 'I\'m interested in joining',
+            onPressed: interested
+                ? null
+                : () async {
+                    try {
+                      await service.expressInterest(userId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Added to the Emergency Fund interest list.'),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Could not register interest: $e')),
+                        );
+                      }
+                    }
+                  },
+            icon: Icon(
+              filled ? Icons.favorite : Icons.favorite_border,
+              color: color,
+              size: 22,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Shown when a user taps a Support card but the fund isn't open for
+/// requests yet (either the interested count is below the threshold,
+/// or their $DIASPORA balance is below what membership requires).
+class _SupportLockedDialog extends StatelessWidget {
+  final int activeMembers;
+  final int threshold;
+  final num balance;
+  final num required;
+  final bool fundOpen;
+  final bool isActiveMember;
+  final bool hasEnoughBalance;
+
+  const _SupportLockedDialog({
+    required this.activeMembers,
+    required this.threshold,
+    required this.balance,
+    required this.required,
+    required this.fundOpen,
+    required this.isActiveMember,
+    required this.hasEnoughBalance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+      title: Row(
+        children: [
+          Icon(LucideIcons.lock, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          const Text('Fund not open yet'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!fundOpen) ...[
+            _row(
+              theme,
+              icon: LucideIcons.shieldCheck,
+              label: 'Active members',
+              value: '$activeMembers / $threshold',
+              ok: false,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This is a self-funding mutual aid fund. Support opens once $threshold members have actually contributed — only then is there critical capital to support requests.',
+              style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (!isActiveMember) ...[
+            _row(
+              theme,
+              icon: LucideIcons.userCheck,
+              label: 'Your membership',
+              value: 'Not contributing',
+              ok: false,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Only members who have completed their annual contribution can request support.',
+              style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (!hasEnoughBalance) ...[
+            _row(
+              theme,
+              icon: LucideIcons.wallet,
+              label: 'Your \$DIASPORA balance',
+              value: '$balance / $required',
+              ok: false,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You need at least $required \$DIASPORA to contribute and become an active member.',
+              style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('OK'),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool ok,
+  }) {
+    final color = ok ? const Color(0xFF7CAE7A) : Colors.redAccent;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label, style: const TextStyle(fontSize: 13)),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
 }

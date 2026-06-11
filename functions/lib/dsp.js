@@ -136,19 +136,51 @@ async function performTGE(triggerSource) {
       continue;
     }
     
-    // TGE Anti-Sybil Gate: Must have performed at least one Identity QR Exchange
-    // We check both user_points (legacy counter) and trust_data (current UI flag)
-    let hasQr = (d.qrConnectionCount || 0) > 0;
-    if (!hasQr) {
-      const trustDoc = await db.collection("trust_data").doc(doc.id).get();
-      if (trustDoc.exists && trustDoc.data().identityQRExchange === true) {
-        hasQr = true;
-      }
-    }
-
-    if (!hasQr) {
+    // TGE participation gates:
+    //   Every TGE → current-location transparency must be active.
+    //   First TGE → additionally require a complete profile and >= 10 unique
+    //   Identity QR Exchanges.
+    const profileDoc = await db.collection("users").doc(doc.id).get();
+    const profile = profileDoc.exists ? profileDoc.data() : null;
+    const hasCurrentLocation = !!(profile && profile.currentLocation);
+    const locationTransparencyOn =
+      !!profile &&
+      profile.showCurrentLocationName !== false &&
+      hasCurrentLocation;
+    if (!locationTransparencyOn) {
       usersSkipped++;
       continue;
+    }
+
+    const hasFirstTge = !!d.firstTgeReceivedAt;
+    if (!hasFirstTge) {
+      const trustScoresDoc = await db.collection("trust_scores").doc(doc.id).get();
+      const uniqueQrCount = trustScoresDoc.exists
+        ? Number(trustScoresDoc.data().uniqueQrCount || 0)
+        : 0;
+      const requiredProfileFields = [
+        "bio",
+        "occupation",
+        "yearsInHostCountry",
+        "industry",
+        "profession",
+        "languages",
+        "meetingPreferences",
+        "availability",
+        "interests",
+        "servicesOffered",
+        "lookingFor",
+        "education",
+      ];
+      const isFilled = (value) =>
+        Array.isArray(value) ? value.length > 0 : value != null && String(value).trim().length > 0;
+      const isProfileComplete =
+        !!profile && requiredProfileFields.every((field) => isFilled(profile[field]));
+
+      if (!isProfileComplete || uniqueQrCount < 10) {
+        usersSkipped++;
+        continue;
+      }
     }
 
     const efficiency = calculateEfficiency(trustScore);
@@ -164,6 +196,7 @@ async function performTGE(triggerSource) {
       dsp: dspBalance,
       trustScore,
       efficiency,
+      alreadyHadFirstTge: hasFirstTge,
     });
   }
 
@@ -376,10 +409,31 @@ async function performTGE(triggerSource) {
   for (const snap of snapshotDetails) {
     if (snap.userId) {
       const userRef = db.collection("user_points").doc(snap.userId);
-      batch.set(userRef, {
+      // Stamp `firstTgeReceivedAt` if not present so subsequent TGEs for
+      // this user skip the 10-QR gate. Safe to write unconditionally —
+      // server-side functions may merge but we want the original timestamp
+      // preserved on later TGEs, so only set when missing.
+      const userPatch = {
         availablePoints: admin.firestore.FieldValue.increment(-snap.dsp),
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+        // Append the per-user TGE distribution record so the in-app
+        // "TGE Schedule" can show each event's actual $DIASPORA payout
+        // and on-chain efficiency. Without this, the user-facing schedule
+        // falls back to a 0 $DIASPORA placeholder.
+        tgeHistory: admin.firestore.FieldValue.arrayUnion({
+          epoch: epochBefore,
+          tgeNumber: eventBefore,
+          amount: snap.dsp * (snap.efficiency / 100),
+          efficiency: snap.efficiency / 100,
+          date: admin.firestore.Timestamp.now(),
+          txHash: receipt.hash,
+        }),
+      };
+      if (!snap.alreadyHadFirstTge) {
+        userPatch.firstTgeReceivedAt = admin.firestore.FieldValue.serverTimestamp();
+        userPatch.firstTgeEventId = tgeEventDocId;
+      }
+      batch.set(userRef, userPatch, { merge: true });
     } else if (snap.unitId) {
       const govRef = db.collection("governance").doc(snap.unitId);
       batch.set(govRef, {
@@ -524,6 +578,112 @@ exports.executeTGE = functions
   });
 
 // ══════════════════════════════════════════════════════════════════════
+// BACKFILL: reconstruct user_points.lifetimeEarnings from trust_data.
+//
+// Historical bug: the old `CROSS_USER_ACTIONS` allow-list in `awardPoints`
+// rejected friend_connection / identity_qr_exchange / verified_by_peer /
+// vouched_by_peer when the *other* party triggered the milestone, so
+// `lifetimeEarnings.<key>` was never incremented even though counts grew
+// in `trust_data`. This admin-only callable walks every user and writes
+// `lifetimeEarnings.<key> = uniqueCount * 1000` for the affected actions
+// IF the current value is below the reconstructed value (idempotent).
+//
+// It does NOT touch totalPoints / availablePoints — those balances would
+// also be wrong but we don't want to mint phantom DSP retroactively. The
+// goal here is purely UI restoration of the PoA "earned" counters.
+// ══════════════════════════════════════════════════════════════════════
+exports.backfillLifetimeEarnings = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+    }
+
+    // Admin gate — Firestore isAdmin flag OR Auth custom claim.
+    const callerId = context.auth.uid;
+    const callerDoc = await db.collection('users').doc(callerId).get();
+    let isCallerAdmin = callerDoc.exists && callerDoc.data().isAdmin === true;
+    if (!isCallerAdmin) {
+      try {
+        const rec = await admin.auth().getUser(callerId);
+        isCallerAdmin = rec.customClaims && rec.customClaims.admin === true;
+      } catch (_) {}
+    }
+    if (!isCallerAdmin) {
+      throw new functions.https.HttpsError('permission-denied', 'Admin only.');
+    }
+
+    const dryRun = data && data.dryRun === true;
+    const trustToAction = {
+      uniqueFamilyCount: 'family_connection',
+      uniqueFriendCount: 'friend_connection',
+      uniqueQrCount: 'identity_qr_exchange',
+      verifiedByCount: 'verified_by_peer',
+      uniqueVouchCount: 'vouched_by_peer',
+    };
+    const PER_UNIT = 1000;
+
+    let usersScanned = 0;
+    let usersUpdated = 0;
+    const perActionTotals = {};
+
+    // Walk user_points to ensure we touch every user with a wallet/balance.
+    const upSnap = await db.collection('user_points').get();
+    for (const upDoc of upSnap.docs) {
+      usersScanned++;
+      const userId = upDoc.id;
+      const up = upDoc.data() || {};
+      const lifetime = up.lifetimeEarnings || {};
+
+      const tdSnap = await db.collection('trust_data').doc(userId).get();
+      if (!tdSnap.exists) continue;
+      const td = tdSnap.data() || {};
+
+      const patch = {};
+      for (const [field, action] of Object.entries(trustToAction)) {
+        const count = Number(td[field] || 0);
+        if (count <= 0) continue;
+        const expected = count * PER_UNIT;
+        const current = Number(lifetime[action] || 0);
+        if (expected > current) {
+          patch[`lifetimeEarnings.${action}`] = expected;
+          perActionTotals[action] = (perActionTotals[action] || 0) + (expected - current);
+        }
+      }
+
+      // Welcome bonus: if user_points exists but lifetimeEarnings.welcome_bonus is missing.
+      if (!lifetime.welcome_bonus) {
+        patch['lifetimeEarnings.welcome_bonus'] = 1000;
+        perActionTotals.welcome_bonus = (perActionTotals.welcome_bonus || 0) + 1000;
+      }
+
+      // Sweep literal-dot garbage from the early script revision.
+      for (const key of Object.keys(up)) {
+        if (key.startsWith('lifetimeEarnings.')) {
+          patch[key] = admin.firestore.FieldValue.delete();
+        }
+      }
+
+      if (Object.keys(patch).length === 0) continue;
+      usersUpdated++;
+      if (!dryRun) {
+        patch.lastUpdated = admin.firestore.FieldValue.serverTimestamp();
+        // .update() interprets `lifetimeEarnings.<key>` as a nested-field
+        // path. .set({merge:true}) would store the dot as a literal.
+        await db.collection('user_points').doc(userId).update(patch);
+      }
+    }
+
+    return {
+      success: true,
+      dryRun,
+      usersScanned,
+      usersUpdated,
+      perActionTotals,
+    };
+  });
+
+// ══════════════════════════════════════════════════════════════════════
 // SECURE POINTS FUNCTIONS (Replaces client-side financial writes)
 // ══════════════════════════════════════════════════════════════════════
 // These Cloud Functions use the Admin SDK to bypass Firestore security
@@ -566,12 +726,23 @@ exports.awardPoints = functions
     'event_attendance', 'marketplace_listing', 'real_estate_listing',
     'flight_booking', 'car_rental', 'bereavement_contribution',
     'profile_completion', 'daily_streak',
+    'host_location_moved', 'also_lived_in_added',
   ];
 
-  // For cross-user awards (e.g. referral rewards), only allow trusted actions
+  // For cross-user awards (e.g. referral rewards, connection milestones),
+  // only allow trusted actions. These are all triggered by the *other*
+  // party's action on this user (e.g. when someone QR-scans the user, the
+  // scanner's session ends up calling awardPoints for the scannee).
   const CROSS_USER_ACTIONS = [
     'referral_signup', 'referral_reward_referrer', 'referral_reward_referee',
-    'trust_vouch_reward', 'family_connection',
+    'trust_vouch_reward', 'vouch_reward',
+    'family_connection', 'friend_connection',
+    'identity_qr_exchange',
+    'verified_by_peer', 'verifier_reward',
+    'vouched_by_peer',
+    'verified_solution_milestone', 'verified_solution_verifier_reward',
+    'host_traveler_host_reward', 'host_traveler_guest_reward',
+    'event_hosting_per_attendee', 'event_attendance',
   ];
 
   if (callerId !== userId && !CROSS_USER_ACTIONS.includes(action)) {
@@ -582,12 +753,20 @@ exports.awardPoints = functions
     const batch = db.batch();
     const userPointsRef = db.collection("user_points").doc(userId);
 
-    // Update user balance
+    // Update user balance. We use a NESTED-map increment under
+    // `lifetimeEarnings` rather than the dot-notation key
+    // `"lifetimeEarnings.<action>"` because `set({merge:true})` does not
+    // interpret dotted keys as nested-field paths — it stores the dot as
+    // part of a literal top-level field name. The nested-map form below
+    // produces a real `lifetimeEarnings.<action>` field that the app can
+    // read as `lifetimeEarnings['<action>']`.
     batch.set(userPointsRef, {
       totalPoints: admin.firestore.FieldValue.increment(points),
       availablePoints: admin.firestore.FieldValue.increment(points),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      [`lifetimeEarnings.${action}`]: admin.firestore.FieldValue.increment(points),
+      lifetimeEarnings: {
+        [action]: admin.firestore.FieldValue.increment(points),
+      },
     }, { merge: true });
 
     // Record transaction

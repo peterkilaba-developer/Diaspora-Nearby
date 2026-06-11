@@ -148,8 +148,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final userProfileAsync = ref.read(userProfileProvider);
 
-      final hasError = authState.hasError || userProfileAsync.hasError;
       final isAuthenticated = authState.value != null;
+      final canUseCachedSession =
+          isAuthenticated &&
+          ref
+              .read(sessionServiceProvider)
+              .isUserCached(authState.value!.uid);
 
       final isAuthRoute = state.matchedLocation.startsWith('/auth');
 
@@ -166,10 +170,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Allow error screen to render
       if (state.matchedLocation.startsWith('/error')) return null;
 
-      if (hasError) {
-        final error = authState.error ?? userProfileAsync.error;
-        debugPrint('Router: ══► HAS ERROR → /error');
+      // Authentication failures prevent the app from deciding which session
+      // to show and remain fatal. Profile refresh failures are recoverable:
+      // screens and guards below can use locally cached/session-backed data.
+      if (authState.hasError) {
+        final error = authState.error;
+        debugPrint('Router: ══► AUTH ERROR → /error');
         return '/error?message=${Uri.encodeComponent(error.toString())}';
+      }
+      if (userProfileAsync.hasError) {
+        debugPrint(
+          'Router: profile refresh failed; continuing with cached session: ${userProfileAsync.error}',
+        );
       }
 
       // [FIX] Wait for profile to load before making redirect decisions.
@@ -180,7 +192,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           state.matchedLocation == '/permissions';
 
       if (authState.isLoading ||
-          (shouldWaitForProfile && userProfileAsync.isLoading)) {
+          (shouldWaitForProfile &&
+              userProfileAsync.isLoading &&
+              !canUseCachedSession)) {
         debugPrint('Router: ══► LOADING → /splash');
         return '/splash';
       }

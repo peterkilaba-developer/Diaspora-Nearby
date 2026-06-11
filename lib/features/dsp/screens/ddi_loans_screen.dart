@@ -208,7 +208,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           const SizedBox(height: 14),
           Text(
             'Community-powered lending backed by \$DIASPORA tokens. '
-            'Loans cascade from local → country → continental → global treasury.',
+            'Loans cascade from local → country → continental community treasuries.',
             style: TextStyle(
               fontSize: 13,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxdart/rxdart.dart';
 import '../models/governance_unit.dart';
 import '../models/election_result.dart';
 import '../models/governance_roles.dart';
@@ -52,7 +53,7 @@ class GovernanceRepository {
       final data = doc.data()!;
       data['id'] ??= doc.id;
       return GovernanceUnit.fromJson(data);
-    });
+    }).onErrorReturn(null).startWith(null);
   }
 
   Future<void> updateSigners(String id, List<String> signerIds) async {

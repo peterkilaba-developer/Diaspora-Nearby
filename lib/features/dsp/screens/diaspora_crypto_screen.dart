@@ -835,7 +835,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Reach 10,000 DSP to qualify for TGE.',
+                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Complete 10 unique in-person Identity QR exchanges to qualify for your first TGE — every TGE after that is automatic.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -1048,10 +1048,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           child: _GovernanceUnitCard(
             unitId: 'global_community',
             communityId: 'global_community',
-            defaultTitle: 'Global Fund Reserve',
-            subtitle: 'Global Fund Reserve — 10% Tribute',
+            defaultTitle: 'Global Reserve',
+            subtitle:
+                'Global Reserve — 10% Tribute · Funds chambers operations, charitable donations, and protocol upkeep',
             icon: LucideIcons.globe,
-            governanceType: 'Global Council Multi-sig',
+            governanceType: 'Global Reserve',
           ),
         ),
 
@@ -1675,45 +1676,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             activities.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
             if (activities.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 32,
-                  horizontal: 16,
-                ),
-                decoration: AppTheme.cardDecoration(context),
-                child: Column(
-                  children: [
-                    Icon(
-                      LucideIcons.hexagon,
-                      size: 32,
-                      color: Colors.orange.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No on-chain activity yet',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '\$DIASPORA token transfers and TGE\ndistributions will appear here.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.4),
-                      ),
-                    ),
-                  ],
-                ),
-              );
+              return _buildNoOnChainActivityCard(context);
             }
 
             final displayCount = min(activities.length, 8);
@@ -1759,17 +1722,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               ],
             );
           },
-          loading: () => Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 32),
-            decoration: AppTheme.cardDecoration(context),
-            child: const Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+          loading: () => _buildNoOnChainActivityCard(
+            context,
+            subtitle: 'Checking the blockchain in the background...',
           ),
           error: (err, stack) => Container(
             width: double.infinity,
@@ -1794,6 +1749,49 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildNoOnChainActivityCard(
+    BuildContext context, {
+    String subtitle =
+        '\$DIASPORA token transfers and TGE\ndistributions will appear here.',
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      decoration: AppTheme.cardDecoration(context),
+      child: Column(
+        children: [
+          Icon(
+            LucideIcons.hexagon,
+            size: 32,
+            color: Colors.orange.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No on-chain activity yet',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2094,7 +2092,10 @@ class _GovernanceUnitCard extends ConsumerWidget {
     final bool showingDsp =
         !hasOnChain && walletAddr.isEmpty && firestoreBalance > 0;
     final bool isSystemReserve =
-        unitId == 'founders' || unitId == 'liquidity' || unitId == 'burn';
+        unitId == 'founders' ||
+        unitId == 'liquidity' ||
+        unitId == 'burn' ||
+        unitId == 'global_community';
 
     // Show loading state while governance unit hasn't loaded yet
     if (unitAsync.isLoading) {
@@ -2111,9 +2112,14 @@ class _GovernanceUnitCard extends ConsumerWidget {
             .replaceAll('Community', '')
             .replaceAll('Treasury', '')
             .trim();
-        final title = cleanName != null && cleanName.isNotEmpty
-            ? '$cleanName Community Treasury'
-            : defaultTitle;
+        // Global Reserve is not a community treasury — always use the
+        // defaultTitle ("Global Reserve") instead of appending "Community
+        // Treasury" to whatever the underlying community doc is named.
+        final title = unitId == 'global_community'
+            ? defaultTitle
+            : (cleanName != null && cleanName.isNotEmpty
+                ? '$cleanName Community Treasury'
+                : defaultTitle);
 
         return GestureDetector(
           onTap: () => Navigator.push(

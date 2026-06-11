@@ -4,7 +4,7 @@
   "private": true,
   "description": "Unit tests for firestore.rules (chamber chats, leadership requests, emergency fund ledger).",
   "scripts": {
-    "test": "npx firebase-tools emulators:exec --only firestore --project diaspora-nearby-rules-test \"jest --runInBand\""
+    "test": "npx firebase-tools --config ../firebase.json emulators:exec --only firestore --project diaspora-nearby-rules-test \"jest --runInBand\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",

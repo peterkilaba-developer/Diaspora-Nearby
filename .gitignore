@@ -136,3 +136,6 @@ app_deploy/
 
 # APK files
 *.apk
+
+# Local debug log
+log.txt

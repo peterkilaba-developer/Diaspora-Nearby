@@ -2611,7 +2611,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ?.uid;
             if (currentUserId == null) return;
 
-            final success = await ref
+            final result = await ref
                 .read(reportRepositoryProvider)
                 .reportMessage(
                   reporterId: currentUserId,
@@ -2620,8 +2620,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   reason: reason,
                 );
 
-            // [NEW] Award 100 DSP for reporting a message
-            if (success) {
+            // Award 100 DSP only on a genuinely new report (not duplicates).
+            if (result == ReportResult.success) {
               try {
                 await ref
                     .read(pointsServiceProvider)
@@ -2636,19 +2636,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             }
 
             if (context.mounted) {
-              if (success) {
-                showExplorationRewardToast(
-                  context,
-                  message: 'Report submitted. Thank you!',
-                  points: 100,
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to submit report. Please try again.'),
-                    backgroundColor: AppTheme.error,
-                  ),
-                );
+              switch (result) {
+                case ReportResult.success:
+                  showExplorationRewardToast(
+                    context,
+                    message: 'Report submitted. Thank you!',
+                    points: 100,
+                  );
+                  break;
+                case ReportResult.duplicate:
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You have already reported this message.'),
+                    ),
+                  );
+                  break;
+                case ReportResult.failed:
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to submit report. Please try again.'),
+                      backgroundColor: AppTheme.error,
+                    ),
+                  );
+                  break;
               }
             }
           } catch (e) {
@@ -2900,7 +2910,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ?.uid;
             if (currentUserId == null) return;
 
-            final success = await ref
+            final result = await ref
                 .read(reportRepositoryProvider)
                 .reportUser(
                   reporterId: currentUserId,
@@ -2908,8 +2918,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   reason: reason,
                 );
 
-            if (success) {
-              // Award 100 DSP for reporting a sender (new report only)
+            if (result == ReportResult.success) {
+              // Award 100 DSP only on a genuinely new report (not duplicates).
               try {
                 await ref
                     .read(pointsServiceProvider)
@@ -2929,11 +2939,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   points: 100,
                 );
               }
-            } else {
+            } else if (result == ReportResult.duplicate) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('You have already reported this user.'),
+                  ),
+                );
+              }
+            } else {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to submit report. Please try again.'),
+                    backgroundColor: AppTheme.error,
                   ),
                 );
               }

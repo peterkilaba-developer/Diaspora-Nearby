@@ -3102,15 +3102,6 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<void> trackVouchReward(String? userId, String? vouchedUserId) =>
-      (super.noSuchMethod(
-            Invocation.method(#trackVouchReward, [userId, vouchedUserId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
-
-  @override
   _i5.Future<void> trackVouchConsensusVote({
     required String? voucherId,
     required bool? isAgree,
@@ -3373,15 +3364,6 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
   _i5.Future<void> trackEmergencyContactAnnual(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#trackEmergencyContactAnnual, [userId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
-
-  @override
-  _i5.Future<void> trackOrganizationVetting(String? userId) =>
-      (super.noSuchMethod(
-            Invocation.method(#trackOrganizationVetting, [userId]),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
           )

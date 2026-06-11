@@ -102,8 +102,6 @@
                 <li><a href="#social">Community</a></li>
                 <li><a href="#economy">Economy</a></li>
                 <li><a href="#treasuries">Treasuries</a></li>
-                <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
-                <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
                 <li><a href="#get-app">Get App</a></li>
                 <li><a href="https://app.diasporanearby.com" class="nav-cta">Open App <i data-lucide="arrow-right"
                             style="width:16px;height:16px"></i></a></li>
@@ -124,22 +122,34 @@
                     into <span class="accent-orange">Revenue</span>.
                 </h1>
                 <p>
-                    Your community value is no longer invisible. In Diaspora Nearby, every connection you build and
-                    every trust you earn is minting your future liquid assets on the blockchain.
+                    A social &amp; economic platform for the global diaspora - discover and connect with people from your home country nearby, every connection you make earn diaspora social points that converts to real on-chain crypto for you and your communities. Your community participation is no longer invisible.
                 </p>
+
+                <!-- Hero Audio Player -->
+                <div class="hero-audio-player" style="margin: 24px auto; max-width: 480px; background: rgba(0, 0, 0, 0.05); padding: 12px 24px; border-radius: 100px; border: 1px solid var(--border);">
+                    <audio controls style="width: 100%; height: 36px; outline: none;">
+                        <source src="audio/Turning_diaspora_reputation_into_liquid_wealth.mp3" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
                 <div class="hero-signup-form" id="hero-signup">
                     <div class="platform-badge" id="hero-platform-badge">
                         <i data-lucide="smartphone" style="width:14px;height:14px"></i>
-                        <span id="hero-platform-text">Detecting your platform…</span>
+                        <span id="hero-platform-text">Available on Android and the web</span>
                     </div>
-                    <div class="form-row">
-                        <input type="email" id="hero-email" placeholder="your@email.com" autocomplete="email">
-                        <button class="btn btn-sage" id="hero-signup-btn" onclick="submitEarlyAccess('hero')">
-                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
-                            <span id="hero-btn-text">Get Early Access</span>
-                        </button>
+                    <div class="form-row" style="justify-content:center;">
+                        <a class="btn btn-sage" id="hero-signup-btn"
+                            href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
+                            target="_blank" rel="noopener" style="text-decoration:none;">
+                            <i data-lucide="external-link" style="width:16px;height:16px"></i>
+                            <span id="hero-btn-text">Get It on Google Play</span>
+                        </a>
                     </div>
-                    <div class="form-message" id="hero-signup-message"></div>
+                    <div class="form-message" id="hero-signup-message" style="font-size:13px;opacity:0.7;">
+                        On iPhone or desktop? <a href="https://app.diasporanearby.com"
+                            style="color:var(--sage);text-decoration:underline;">Open the web app</a>
+                    </div>
                 </div>
 
                 <!-- Epoch Progress Card -->
@@ -149,7 +159,7 @@
                             <i data-lucide="layers" style="width:16px;height:16px;color:var(--sage)"></i>
                             <span>Epoch 1 Progress</span>
                         </div>
-                        <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                        <a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank"
                             rel="noopener" class="epoch-verify-link">
                             <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on-chain
                         </a>
@@ -249,6 +259,33 @@
         </div>
     </section>
 
+    <!-- ═══ HOW IT WORKS ═══ -->
+    <section class="section" id="how-it-works">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="route" style="width:14px;height:14px"></i> How It Works</div>
+                <h2>From Connection to Liquid Asset in 3 Steps</h2>
+                <p>You don''t buy your way in — you earn your way in through real community participation.</p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="users-round"></i></div>
+                    <h3>1. Connect</h3>
+                    <p>Find diaspora members near you. Add family and friends, and verify peers through in-person QR exchanges. Every connection counts toward your trust score.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="coins"></i></div>
+                    <h3>2. Earn DSP</h3>
+                    <p>Every action — connections, vouches, events, transactions — mints Diaspora Social Points off-chain. Your community contribution becomes measurable value.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="zap"></i></div>
+                    <h3>3. Convert at TGE</h3>
+                    <p>At each Token Generation Event your DSP converts to liquid $DIASPORA on Base — at an efficiency rate set by your PoCT trust score. Real on-chain assets, earned not bought.</p>
+                </div>
+            </div>
+        </div>
+    </section>
     <!-- ═══ DSP vs $DIASPORA ═══ -->
     <section class="section" id="decoupling">
         <div class="container">
@@ -449,9 +486,10 @@
                         <i data-lucide="info"
                             style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
                         The 70% <strong style="color:var(--sage)">Community Treasuries</strong> allocation flows
-                        into 7 treasuries across the user's geographic hierarchy (Global Fund Reserve, Home
-                        Continent/Country/City,
-                        Host Continent/Country/City) — powering Diaspora Direct Investments and localized governance.
+                        into 7 treasuries: the <strong>Global Reserve</strong> (funds chambers operations,
+                        charitable donations, and protocol upkeep) and 6 treasuries across the user's geographic
+                        hierarchy (Home Continent/Country/City, Host Continent/Country/City) — powering Diaspora
+                        Direct Investments and localized governance.
                     </p>
                 </div>
             </div>
@@ -461,44 +499,426 @@
                 <h3 style="margin-bottom:8px;">The Great Reset: Token Generation Event</h3>
                 <p
                     style="color:var(--fg-muted); margin-bottom:24px; max-width:600px; margin-left:auto; margin-right:auto;">
-                    When the community reaches key milestones, all off-chain DSP points convert into liquid
-                    $DIASPORA tokens on the Coinbase L2 Base Blockchain at your PoCT efficiency rate. Each Epoch scales 10x.
+                    Each TGE is triggered when globally distributed DSP crosses the next supply milestone. Member
+                    counts show network growth but do not gate TGE. At the event, eligible off-chain DSP converts into
+                    liquid $DIASPORA on Base at each participant's PoCT efficiency rate.
                 </p>
                 <div class="epoch-grid">
                     <div class="epoch-card active">
                         <div class="epoch-number">1</div>
-                        <div class="epoch-label">Current Epoch</div>
+                        <div class="epoch-label">DSP Trigger: 1M</div>
                         <div class="epoch-value">100 Members</div>
                         <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1M $DIASPORA</div>
                         <a class="epoch-link"
-                            href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                            href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank"
                             rel="noopener">
                             <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on Basescan
                         </a>
                     </div>
                     <div class="epoch-card">
                         <div class="epoch-number">2</div>
-                        <div class="epoch-label">10x growth</div>
+                        <div class="epoch-label">DSP Trigger: 10M</div>
                         <div class="epoch-value">1,000 Members</div>
                         <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">10M $DIASPORA</div>
                     </div>
                     <div class="epoch-card">
                         <div class="epoch-number">3</div>
-                        <div class="epoch-label">10x growth</div>
+                        <div class="epoch-label">DSP Trigger: 100M</div>
                         <div class="epoch-value">10,000 Members</div>
                         <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">100M $DIASPORA</div>
                     </div>
                     <div class="epoch-card">
                         <div class="epoch-number">4</div>
-                        <div class="epoch-label">10x growth</div>
+                        <div class="epoch-label">DSP Trigger: 1B</div>
                         <div class="epoch-value">100,000 Members</div>
                         <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1B $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">5</div>
+                        <div class="epoch-label">DSP Trigger: 10B</div>
+                        <div class="epoch-value">1M Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">10B $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">6</div>
+                        <div class="epoch-label">DSP Trigger: 100B</div>
+                        <div class="epoch-value">10M Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">100B $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">7</div>
+                        <div class="epoch-label">DSP Trigger: 1T</div>
+                        <div class="epoch-value">100M Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1T $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">8</div>
+                        <div class="epoch-label">DSP Trigger: 10T</div>
+                        <div class="epoch-value">1B Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">10T $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">9</div>
+                        <div class="epoch-label">DSP Trigger: 100T</div>
+                        <div class="epoch-value">10B Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">100T $DIASPORA</div>
+                    </div>
+                    <div class="epoch-card">
+                        <div class="epoch-number">10</div>
+                        <div class="epoch-label">DSP Trigger: 1QD</div>
+                        <div class="epoch-value">100B Members</div>
+                        <div class="epoch-value" style="color:var(--orange);"><img src="icons/token-logo-transparent.png" alt="" style="width:13px;height:13px;border-radius:0;object-fit:contain;vertical-align:middle;margin-right:2px;">1QD $DIASPORA</div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
+    <!-- ═══ TRUST & IDENTITY ═══ -->
+    <section class="section" id="trust">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="shield" style="width:14px;height:14px"></i> Trust &
+                    Identity</div>
+                <h2>Your Reputation is Your Multiplier</h2>
+                <p>
+                    Proof of Community Trust (PoCT) — a multi-dimensional identity system where real humans validate
+                    each other through 7 genesis milestones and ongoing community participation.
+                    Your PoCT score determines your TGE conversion efficiency.
+                </p>
+            </div>
+
+            <!-- Genesis Milestones -->
+            <h3 style="margin-bottom:16px; color: var(--sage);" class="fade-in">
+                <i data-lucide="award"
+                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                7 Genesis Milestones — 70 PoCT Max
+            </h3>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="map-pin"></i></div>
+                    <h3>Current Location Transparency</h3>
+                    <p>Keep your current location visible to earn +10 PoCT. This must be enabled at the time of every
+                        TGE to participate. If disabled, the +10 PoCT is permanently forfeited.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="user-check"></i></div>
+                    <h3>Profile Completion</h3>
+                    <p>Fill every profile field to earn +10 PoCT and qualify for your first TGE. The milestone adapts
+                        as new profile fields are added.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="scan-line"></i></div>
+                    <h3>QR Identity Exchanges</h3>
+                    <p>10 unique in-person QR scans earn +10 PoCT and qualify you for your first TGE. Cryptographic
+                        proof of physical presence is the gold standard of trust.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="heart-handshake"></i></div>
+                    <h3>Family Connections</h3>
+                    <p>10 unique family connections earn +10 PoCT. Family ties are finite and identity-bound —
+                        impossible to game at scale.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="users"></i></div>
+                    <h3>Friend Connections</h3>
+                    <p>10 unique friend connections earn +10 PoCT. Building genuine peer relationships across the
+                        diaspora network.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="badge-check"></i></div>
+                    <h3>Vouched by Peers</h3>
+                    <p>10 unique <strong>full-trust</strong> vouches (slider 91–100) earn +10 PoCT. Each full-trust
+                        voucher stakes 1,000 DSP on your trustworthiness — ratings below 91 are a free signal that
+                        earn the rater their 1,000 DSP and end there, no stake locked.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="shield-check"></i></div>
+                    <h3>Verified by Peers</h3>
+                    <p>10 unique peer verifications earn +10 PoCT. Others confirm different facets of your identity —
+                        one field per verifier, bots can't fake diversity.</p>
+                </div>
+            </div>
+
+            <!-- Additional PoCT Sources -->
+            <h3 style="margin-top:40px; margin-bottom:16px; color: var(--sage);" class="fade-in">
+                <i data-lucide="plus-circle"
+                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                Beyond Genesis — Participation & Ongoing Trust
+            </h3>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="calendar-check"></i></div>
+                    <h3>Event Attendance</h3>
+                    <p>10 verified QR check-ins at physical community events earn +10 PoCT. Proof you show up
+                        and engage with your community in the real world.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="shield-alert"></i></div>
+                    <h3>Emergency Fund Contributor</h3>
+                    <p>Complete your annual contribution to the community emergency fund for +10 PoCT.
+                        You invest in collective protection — the community invests back in your trust.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="trending-up"></i></div>
+                    <h3>Ongoing Earners</h3>
+                    <p>+1 PoCT per 10 full-trust slider ratings, +1 PoCT per 100 days active, +1 PoCT per
+                        10 completed economic transactions. Trust grows organically with real activity.</p>
+                </div>
+            </div>
+
+            <!-- Trust Slider -->
+            <div class="economy-highlight fade-in" style="margin-top:32px;">
+                <h3 style="margin-bottom:12px;">
+                    <i data-lucide="sliders"
+                        style="width:18px;height:18px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                    The Trust Slider — Stake on the People You Believe In
+                </h3>
+                <p style="color:var(--fg-muted); max-width:680px; margin:0 auto 24px;">
+                    Long-press any message to rate the sender's trust on a 0–100 slider. In DM chats the slider
+                    appears once — a one-time trust signal. In community, event, group, and organization chats,
+                    ratings are continuous: your latest rating overwrites previous ones as trust evolves.
+                    Every first-time rating earns the rater <strong>1,000 DSP</strong>. What happens next depends
+                    on where the slider lands.
+                </p>
+
+                <!-- Two-mode explainer -->
+                <div class="card-grid fade-in" style="margin-top:24px;">
+                    <div class="card">
+                        <div class="card-icon sage"><i data-lucide="check-circle"></i></div>
+                        <h3>Score 0–90 — Basic Trust (Free Signal)</h3>
+                        <p>You're saying "this person seems okay" — a useful but soft signal. Earn your
+                            <strong>1,000 DSP</strong> and keep it. No collateral locked, no ongoing risk.
+                            Use this for people you've interacted with but don't yet vouch for personally.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon orange"><i data-lucide="lock"></i></div>
+                        <h3>Score 91–100 — Full Trust (Staked)</h3>
+                        <p>You're publicly betting on this person. Your 1,000 DSP is <strong>staked</strong> —
+                            locked as collateral, not spendable. You only get it back when you either slide your
+                            rating back below 91, or the stake plays out through community consensus.</p>
+                    </div>
+                </div>
+
+                <!-- Staker economics -->
+                <h3 style="margin-top:40px; margin-bottom:12px; color: var(--sage); text-align:center;">
+                    <i data-lucide="trending-up"
+                        style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                    Why Stake? Passive DSP From Being Right Early
+                </h3>
+                <p style="color:var(--fg-muted); max-width:680px; margin:0 auto 24px;">
+                    When you full-trust someone, every <em>future</em> rater on the same person moves your stake.
+                    If you correctly identified a high-trust person before the crowd, you earn DSP every time the
+                    community agrees with you. If you backed the wrong person, your stake bleeds out — and
+                    eventually your vouch is auto-removed. The slider becomes a prediction market on character.
+                </p>
+
+                <div class="card-grid fade-in" style="margin-top:16px;">
+                    <div class="card">
+                        <div class="card-icon sage"><i data-lucide="plus-circle"></i></div>
+                        <h3>Agreement: +100 DSP Each</h3>
+                        <p>Every other user who also full-trusts the same person sends <strong>+100 DSP</strong>
+                            to your wallet — fresh DSP, not from anyone's stake. Unlimited. The more right you
+                            were early, the more you earn as the crowd catches up.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"
+                            style="background: rgba(229, 147, 58, 0.12); color: var(--orange);">
+                            <i data-lucide="minus-circle"></i>
+                        </div>
+                        <h3>Disagreement: −100 From Stake</h3>
+                        <p>Every user who rates the same person <strong>below 91</strong> burns 100 DSP from
+                            <em>your</em> stake. Your reputation as a judge of character has a price.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"
+                            style="background: rgba(229, 147, 58, 0.12); color: var(--orange);">
+                            <i data-lucide="x-circle"></i>
+                        </div>
+                        <h3>Stake Hits Zero → Vouch Removed</h3>
+                        <p>If disagreements drain your stake to 0, the protocol automatically <strong>removes
+                            your full-trust vouch</strong>. The community has spoken: you were wrong about this
+                            person. The 1,000 DSP is gone.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon sage"><i data-lucide="rotate-ccw"></i></div>
+                        <h3>Exit Anytime — Stake Refunded</h3>
+                        <p>Change your mind? Slide your rating back below 91. Any DSP still left in your stake
+                            is <strong>refunded immediately</strong>. You're never trapped — but every day you
+                            stay staked, you're either earning or bleeding.</p>
+                    </div>
+                </div>
+
+                <!-- Strategic case -->
+                <div class="economy-highlight" style="margin-top:32px; padding:24px;">
+                    <h3 style="margin-bottom:12px; color: var(--sage);">
+                        <i data-lucide="compass"
+                            style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
+                        Why You Should Actually Use It
+                    </h3>
+                    <p style="color:var(--fg-muted); max-width:680px; margin:0 auto 12px;">
+                        Most "vouch" systems are theater — cheap to give, meaningless to receive. The Trust
+                        Slider is different because it costs you to be wrong. That's exactly what makes a
+                        full-trust rating worth something to the person receiving it, and what makes your
+                        PoCT score worth something to the wider economy.
+                    </p>
+                    <ul style="color:var(--fg-muted); max-width:680px; margin:0 auto; padding-left:20px;">
+                        <li style="margin-bottom:8px;"><strong>Find the high-trust people first.</strong> The
+                            earlier you full-trust someone who turns out to be widely respected, the more +100
+                            payments you collect as the crowd catches up. There's no cap.</li>
+                        <li style="margin-bottom:8px;"><strong>Associate with integrity.</strong> Your active
+                            stakes are public signal. Staking on credible people compounds your own
+                            reputation; staking on bad actors burns you publicly.</li>
+                        <li style="margin-bottom:8px;"><strong>It's the cheapest path to maximum TGE
+                            efficiency.</strong> Sustained full-trust ratings feed your PoCT score (+1 PoCT
+                            per 10 full-trust ratings, ongoing). Higher PoCT = higher $DIASPORA conversion at
+                            every Token Generation Event.</li>
+                        <li><strong>You're not trapped.</strong> Slide below 91 and the remaining stake comes
+                            home. The only way to actually lose your DSP is to keep doubling down on someone
+                            the community is steadily rejecting.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- TGE Efficiency Gates -->
+            <div class="tge-gates-card fade-in" style="margin-top:16px;">
+                <div class="tge-gates-header">
+                    <i data-lucide="shield-check" style="width:18px;height:18px;color:var(--orange)"></i>
+                    <h3>TGE Efficiency Gates</h3>
+                </div>
+                <p class="tge-gates-desc">Your PoCT (Proof of Community Trust) score determines how efficiently your DSP
+                    converts to $DIASPORA at the Token Generation Event.</p>
+                <table class="tge-table">
+                    <thead>
+                        <tr>
+                            <th>PoCT Score</th>
+                            <th>Efficiency</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>91 - 100</td>
+                            <td class="eff-green">100%</td>
+                            <td class="status-max">Maximum Yield</td>
+                        </tr>
+                        <tr>
+                            <td>81 - 90</td>
+                            <td class="eff-green">90%</td>
+                            <td class="status-vhigh">Very High Yield</td>
+                        </tr>
+                        <tr>
+                            <td>71 - 80</td>
+                            <td class="eff-green">80%</td>
+                            <td class="status-high">High Yield</td>
+                        </tr>
+                        <tr>
+                            <td>61 - 70</td>
+                            <td class="eff-green">70%</td>
+                            <td class="status-good">Good Yield</td>
+                        </tr>
+                        <tr>
+                            <td>51 - 60</td>
+                            <td class="eff-yellow">60%</td>
+                            <td class="status-std">Standard Yield</td>
+                        </tr>
+                        <tr>
+                            <td>41 - 50</td>
+                            <td class="eff-yellow">50%</td>
+                            <td class="status-basic">Basic Yield</td>
+                        </tr>
+                        <tr>
+                            <td>31 - 40</td>
+                            <td class="eff-orange">40%</td>
+                            <td class="status-low">Low Yield</td>
+                        </tr>
+                        <tr>
+                            <td>21 - 30</td>
+                            <td class="eff-orange">30%</td>
+                            <td class="status-vlow">Very Low Yield</td>
+                        </tr>
+                        <tr>
+                            <td>11 - 20</td>
+                            <td class="eff-red">20%</td>
+                            <td class="status-min">Minimal Yield</td>
+                        </tr>
+                        <tr>
+                            <td>1 - 10</td>
+                            <td class="eff-red">10%</td>
+                            <td class="status-entry">Entry Yield</td>
+                        </tr>
+                        <tr>
+                            <td>0</td>
+                            <td class="eff-dim">0%</td>
+                            <td class="status-none">No Yield</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ TRANSPARENCY ═══ -->
+    <section class="section" id="transparency">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="eye" style="width:14px;height:14px"></i> Transparency
+                </div>
+                <h2>Built in the Open</h2>
+                <p>
+                    $DIASPORA's value isn't speculative — it's anchored to real economic activity. The floor price is
+                    determined by actual Fiat GDP processed through the platform.
+                </p>
+            </div>
+            <div class="investor-grid fade-in">
+                <div class="investor-card">
+                    <div class="metric">Base</div>
+                    <div class="metric-label">Blockchain (Coinbase L2)</div>
+                </div>
+                <div class="investor-card">
+                    <div class="metric">$0</div>
+                    <div class="metric-label">Transaction Fees</div>
+                </div>
+                <div class="investor-card">
+                    <div class="metric">10x</div>
+                    <div class="metric-label">Epoch Growth Model</div>
+                </div>
+                <div class="investor-card">
+                    <div class="metric">10%</div>
+                    <div class="metric-label">Fixed Burn Rate (of match)</div>
+                </div>
+            </div>
+            <div class="economy-highlight fade-in" style="margin-top:24px;">
+                <div class="economy-formula">
+                    Floor Price = Total Fiat GDP ÷ Circulating Supply
+                </div>
+                <p style="font-size:14px; color:var(--fg-muted);">
+                    Every flight booked, product sold, and service hired adds real fiat value to the GDP floor.
+                    More activity = higher floor price. The community controls the value.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ MID CTA ═══ -->
+    <section class="section" id="mid-cta" style="padding: 32px 0;">
+        <div class="container">
+            <div class="install-section fade-in" style="text-align:center; padding: 40px 24px;">
+                <h2 style="font-size:clamp(1.25rem,3vw,1.75rem); margin-bottom:8px;">Start Earning Before TGE.</h2>
+                <p style="color:var(--fg-muted); margin-bottom:24px; max-width:540px; margin-left:auto; margin-right:auto;">
+                    Epoch 1 is live with a 1,000,000 $DIASPORA pre-mint. Every day you wait is DSP someone else is earning.
+                </p>
+                <div class="signup-form" style="max-width:480px; margin: 0 auto;">
+                    <div class="form-row" style="justify-content:center;">
+                        <a class="btn btn-sage" href="https://app.diasporanearby.com" style="text-decoration:none;">
+                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                            <span>Open the App</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
     <!-- ═══ COMMUNITY TREASURIES ═══ -->
     <section class="section" id="treasuries">
         <div class="container">
@@ -548,7 +968,7 @@
             <div class="treasury-hierarchy fade-in">
                 <div style="text-align:center; margin-bottom: 12px;">
                     <div class="hier-node global" style="display:inline-flex;">
-                        <i data-lucide="globe"></i> Global Fund Reserve
+                        <i data-lucide="globe"></i> Global Reserve
                         <span class="hier-label">1 unit</span>
                     </div>
                 </div>
@@ -717,6 +1137,110 @@
         </div>
     </section>
 
+    <!-- ═══ GOVERNANCE ═══ -->
+    <section class="section" id="governance">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="gavel" style="width:14px;height:14px"></i>
+                    Self-Governance</div>
+                <h2>Your Community, Your Rules</h2>
+                <p>
+                    Diaspora Nearby gives every community true democratic power. No central authority dictates how
+                    treasury funds are used — the community decides through transparent voting.
+                </p>
+            </div>
+            <div class="card-grid fade-in">
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="landmark"></i></div>
+                    <h3>Elected Leadership Council</h3>
+                    <p>Each community elects 4 leadership roles: President, Treasurer, Secretary, and Council Member.
+                        Qualified candidates self-nominate, and the community votes them into office.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="vote"></i></div>
+                    <h3>Yay / Nay / Abstain Voting</h3>
+                    <p>Every vote is a clear Yay, Nay, or Abstain. Candidates need over 50% favorable rate to win.
+                        If a leader drops below 50%, they are automatically voted out — real accountability.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="eye"></i></div>
+                    <h3>Transparent Elections</h3>
+                    <p>All vote counts, candidacies, and election results are visible to community members in real
+                        time. System messages announce candidacies in community chat.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon sage"><i data-lucide="shield-check"></i></div>
+                    <h3>Merit-Based Eligibility</h3>
+                    <p>Only members who meet all three criteria can run for leadership: <strong>100+ days</strong>
+                        active on the platform, <strong>admin of a 100+ member group chat</strong>, and a
+                        <strong>PoCT score of 90+</strong>. Qualified candidates are auto-populated.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ═══ BILATERAL CHAMBERS OF COMMERCE ═══ -->
+    <section class="section chamber-section" id="chambers">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label orange"><i data-lucide="handshake" style="width:14px;height:14px"></i>
+                    Chambers of Commerce</div>
+                <h2>The First Contact for Trade Back Home</h2>
+                <p>
+                    Every cross-border diaspora corridor has an official public Chamber of Commerce connecting the
+                    host country's chamber with the home country's Diaspora Chamber of Commerce. Representatives have
+                    lived in the countries they support, bringing firsthand understanding of both business cultures.
+                </p>
+            </div>
+
+            <div class="chamber-showcase fade-in">
+                <div class="chamber-identity">
+                    <div class="chamber-avatar" role="img" aria-label="Tanzania and United States flags">
+                        <span class="flag-half home"><img src="icons/flag-tz.svg" alt=""></span>
+                        <span class="flag-half host"><img src="icons/flag-us.svg" alt=""></span>
+                    </div>
+                    <div>
+                        <div class="chamber-name">TZ - US Chamber of Commerce</div>
+                        <div class="chamber-status"><i data-lucide="badge-check"></i> Official public corridor chamber</div>
+                    </div>
+                </div>
+                <div class="chamber-corridor" aria-label="Home country connected to host country">
+                    <span>Home Country</span>
+                    <i data-lucide="arrow-left-right"></i>
+                    <span>Host Country</span>
+                </div>
+            </div>
+
+            <div class="card-grid fade-in chamber-cards">
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="flag"></i></div>
+                    <h3>One Official Corridor</h3>
+                    <p>A single chamber represents each home-and-host country pairing, giving the corridor a clear public business identity.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="briefcase"></i></div>
+                    <h3>Lived-Experience Reps</h3>
+                    <p>Representatives who have lived in the countries they support bridge both business cultures and trade networks.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i data-lucide="globe"></i></div>
+                    <h3>Native & B2B Access</h3>
+                    <p>Individuals and businesses can join bilateral chambers to find trusted suppliers and launch cross-border partnerships.</p>
+                </div>
+            </div>
+
+            <div class="chamber-cta fade-in">
+                <p>Live abroad. Stay connected to opportunity at home. Help commerce move through trusted diaspora relationships.</p>
+                <a href="https://app.diasporanearby.com" class="btn btn-sage">
+                    <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
+                    Join Your Chamber
+                </a>
+            </div>
+        </div>
+    </section>
+
     <!-- ═══ ZERO-FEE VALUE TRANSFER ═══ -->
     <section class="section" id="value-transfer">
         <div class="container">
@@ -775,6 +1299,70 @@
         </div>
     </section>
 
+    <!-- ═══ ECOSYSTEM ═══ -->
+    <section class="section" id="ecosystem">
+        <div class="container">
+            <div class="section-header fade-in">
+                <div class="section-label sage"><i data-lucide="layers" style="width:14px;height:14px"></i> Diaspora
+                    Ecosystem</div>
+                <h2>More than a Token — A Utility Engine</h2>
+                <p>
+                    $DIASPORA isn't for "diamond hands" — it's for <strong>active hands</strong>. A complete economy for
+                    global trade, travel, real estate, and community services.
+                </p>
+            </div>
+            <div class="utility-grid fade-in">
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="plane" style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Flights & Hotels</h3>
+                    <p>Book flights and hotels worldwide via Amadeus. Every booking earns DSP and contributes to
+                        your community's GDP.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="home" style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Peer Stays</h3>
+                    <p>Stay with diaspora hosts worldwide. Travel within the trust network — community-vetted
+                        accommodation with no middlemen or platform fees.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="car" style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Car Rentals</h3>
+                    <p>Rent cars from community members wherever you travel. Peer-to-peer vehicle sharing within the
+                        diaspora trust network — no rental agencies.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="shopping-cart"
+                            style="width:36px;height:36px;color:var(--sage)"></i></div>
+                    <h3>Marketplace</h3>
+                    <p>Buy, sell, and hire within the diaspora economy. Products, services, and jobs — all zero-fee. No
+                        listing costs, no commissions.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="building" style="width:36px;height:36px;color:var(--orange)"></i>
+                    </div>
+                    <h3>Real Estate</h3>
+                    <p>GPS-precision land surveys, property listings, and diaspora direct investment (DDI) projects back
+                        home. Build wealth across borders.</p>
+                </div>
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="landmark" style="width:36px;height:36px;color:var(--orange)"></i>
+                    </div>
+                    <h3>Organizations</h3>
+                    <p>Register and manage diaspora businesses and community organizations. Build the infrastructure for
+                        collective economic power.</p>
+                </div>
+
+                <div class="utility-card">
+                    <div class="icon"><i data-lucide="wallet" style="width:36px;height:36px;color:var(--orange)"></i>
+                    </div>
+                    <h3>Smart Wallet</h3>
+                    <p>Non-custodial Smart Wallet, auto-created from your phone number. Gasless transactions
+                        powered by Account Abstraction on Base. No seed phrases, no MetaMask — just tap and send.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- ═══ COMMUNITY EMERGENCY FUND ═══ -->
     <section class="section" id="emergency-fund">
         <div class="container">
@@ -797,10 +1385,10 @@
                     How It Works
                 </h3>
                 <p style="color:var(--fg-muted); max-width:600px; margin:0 auto;">
-                    Members stake 1,000 DSP as a promissory to join, then contribute $100 annually. Your DSP is
-                    refunded once your contribution is confirmed. The fund opens for membership when 10,000 members
-                    stake their commitment. Disbursements are reviewed by elected community leadership — not a
-                    corporate entity.
+                    Members contribute $100 in $DIASPORA annually, sent directly to the fund treasury on-chain and
+                    fully transparent. This is a self-funding mutual aid fund — support requests open once 10,000
+                    members have actually contributed, so there is critical capital to disburse. Decisions are
+                    reviewed by elected community leadership, not a corporate entity.
                 </p>
             </div>
 
@@ -877,341 +1465,6 @@
         </div>
     </section>
 
-    <!-- ═══ ECOSYSTEM ═══ -->
-    <section class="section" id="ecosystem">
-        <div class="container">
-            <div class="section-header fade-in">
-                <div class="section-label sage"><i data-lucide="layers" style="width:14px;height:14px"></i> Diaspora
-                    Ecosystem</div>
-                <h2>More than a Token — A Utility Engine</h2>
-                <p>
-                    $DIASPORA isn't for "diamond hands" — it's for <strong>active hands</strong>. A complete economy for
-                    global trade, travel, real estate, and community services.
-                </p>
-            </div>
-            <div class="utility-grid fade-in">
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="plane" style="width:36px;height:36px;color:var(--sage)"></i></div>
-                    <h3>Flights & Hotels</h3>
-                    <p>Book flights and hotels worldwide via Amadeus. Every booking earns DSP and contributes to
-                        your community's GDP.</p>
-                </div>
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="home" style="width:36px;height:36px;color:var(--sage)"></i></div>
-                    <h3>Peer Stays</h3>
-                    <p>Stay with diaspora hosts worldwide. Travel within the trust network — community-vetted
-                        accommodation with no middlemen or platform fees.</p>
-                </div>
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="car" style="width:36px;height:36px;color:var(--sage)"></i></div>
-                    <h3>Car Rentals</h3>
-                    <p>Rent cars from community members wherever you travel. Peer-to-peer vehicle sharing within the
-                        diaspora trust network — no rental agencies.</p>
-                </div>
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="shopping-cart"
-                            style="width:36px;height:36px;color:var(--sage)"></i></div>
-                    <h3>Marketplace</h3>
-                    <p>Buy, sell, and hire within the diaspora economy. Products, services, and jobs — all zero-fee. No
-                        listing costs, no commissions.</p>
-                </div>
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="building" style="width:36px;height:36px;color:var(--orange)"></i>
-                    </div>
-                    <h3>Real Estate</h3>
-                    <p>GPS-precision land surveys, property listings, and diaspora direct investment (DDI) projects back
-                        home. Build wealth across borders.</p>
-                </div>
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="landmark" style="width:36px;height:36px;color:var(--orange)"></i>
-                    </div>
-                    <h3>Organizations</h3>
-                    <p>Register and manage diaspora businesses and community organizations. Build the infrastructure for
-                        collective economic power.</p>
-                </div>
-
-                <div class="utility-card">
-                    <div class="icon"><i data-lucide="wallet" style="width:36px;height:36px;color:var(--orange)"></i>
-                    </div>
-                    <h3>Smart Wallet</h3>
-                    <p>Non-custodial Smart Wallet, auto-created from your phone number. Gasless transactions
-                        powered by Account Abstraction on Base. No seed phrases, no MetaMask — just tap and send.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══ TRUST & IDENTITY ═══ -->
-    <section class="section" id="trust">
-        <div class="container">
-            <div class="section-header fade-in">
-                <div class="section-label sage"><i data-lucide="shield" style="width:14px;height:14px"></i> Trust &
-                    Identity</div>
-                <h2>Your Reputation is Your Multiplier</h2>
-                <p>
-                    Proof of Community Trust (PoCT) — a multi-dimensional identity system where real humans validate
-                    each other through 6 genesis milestones, transparency signals, and community participation.
-                    Your PoCT score determines your TGE conversion efficiency.
-                </p>
-            </div>
-
-            <!-- Genesis Milestones -->
-            <h3 style="margin-bottom:16px; color: var(--sage);" class="fade-in">
-                <i data-lucide="award"
-                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
-                6 Genesis Milestones — 60 PoCT Max
-            </h3>
-            <div class="card-grid fade-in">
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="heart-handshake"></i></div>
-                    <h3>Family Connections</h3>
-                    <p>10 unique family connections earn +10 PoCT. Family ties are finite and identity-bound —
-                        impossible to game at scale.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="users"></i></div>
-                    <h3>Friend Connections</h3>
-                    <p>10 unique friend connections earn +10 PoCT. Building genuine peer relationships across the
-                        diaspora network.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="scan-line"></i></div>
-                    <h3>QR Identity Exchanges</h3>
-                    <p>10 unique in-person QR scans earn +10 PoCT. Cryptographic proof of physical presence —
-                        the gold standard of trust.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="shield-check"></i></div>
-                    <h3>Verified by Peers</h3>
-                    <p>10 unique peer verifications earn +10 PoCT. Others confirm different facets of your identity —
-                        one field per verifier, bots can't fake diversity.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="badge-check"></i></div>
-                    <h3>Vouched by Peers</h3>
-                    <p>10 unique peer vouches earn +10 PoCT. Each voucher stakes 1,000 DSP on your trustworthiness —
-                        skin in the game prevents hollow endorsements.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="user-check"></i></div>
-                    <h3>Profile Completion</h3>
-                    <p>Fill every profile field to earn +10 PoCT. The foundation of your digital identity and trust
-                        score. Dynamic — adapts as new fields are added.</p>
-                </div>
-            </div>
-
-            <!-- Additional PoCT Sources -->
-            <h3 style="margin-top:40px; margin-bottom:16px; color: var(--sage);" class="fade-in">
-                <i data-lucide="plus-circle"
-                    style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
-                Beyond Genesis — Transparency, Participation & Ongoing Trust
-            </h3>
-            <div class="card-grid fade-in">
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="map-pin"></i></div>
-                    <h3>City Visibility</h3>
-                    <p>Enable public display of your current city to earn +10 PoCT. Shows you have nothing to hide —
-                        a transparency signal that builds community confidence.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="calendar-check"></i></div>
-                    <h3>Event Attendance</h3>
-                    <p>10 verified QR check-ins at physical community events earn +10 PoCT. Proof you show up
-                        and engage with your community in the real world.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="shield-alert"></i></div>
-                    <h3>Emergency Fund Contributor</h3>
-                    <p>Complete your annual contribution to the community emergency fund for +10 PoCT.
-                        You invest in collective protection — the community invests back in your trust.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="trending-up"></i></div>
-                    <h3>Ongoing Earners</h3>
-                    <p>+1 PoCT per 10 full-trust slider ratings, +1 PoCT per 100 days active, +1 PoCT per
-                        10 completed economic transactions. Trust grows organically with real activity.</p>
-                </div>
-            </div>
-
-            <!-- Trust Slider -->
-            <div class="economy-highlight fade-in" style="margin-top:32px;">
-                <h3 style="margin-bottom:12px;">
-                    <i data-lucide="sliders"
-                        style="width:18px;height:18px;display:inline;vertical-align:middle;margin-right:6px"></i>
-                    The Trust Slider
-                </h3>
-                <p style="color:var(--fg-muted); max-width:600px; margin:0 auto 16px;">
-                    Long-press any message to rate the sender's trust on a 0-100 slider. In DM chats, the slider
-                    appears once — a one-time trust signal. In community, event, group, and organization chats,
-                    ratings are continuous — your latest rating overwrites previous ones as trust evolves.
-                    Full-trust ratings (&gt;90) require staking 1,000 DSP as skin in the game.
-                </p>
-            </div>
-
-            <!-- TGE Efficiency Gates -->
-            <div class="tge-gates-card fade-in" style="margin-top:16px;">
-                <div class="tge-gates-header">
-                    <i data-lucide="shield-check" style="width:18px;height:18px;color:var(--orange)"></i>
-                    <h3>TGE Efficiency Gates</h3>
-                </div>
-                <p class="tge-gates-desc">Your PoCT (Proof of Community Trust) score determines how efficiently your DSP
-                    converts to $DIASPORA at the Token Generation Event.</p>
-                <table class="tge-table">
-                    <thead>
-                        <tr>
-                            <th>PoCT Score</th>
-                            <th>Efficiency</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>91 - 100</td>
-                            <td class="eff-green">100%</td>
-                            <td class="status-max">Maximum Yield</td>
-                        </tr>
-                        <tr>
-                            <td>81 - 90</td>
-                            <td class="eff-green">90%</td>
-                            <td class="status-vhigh">Very High Yield</td>
-                        </tr>
-                        <tr>
-                            <td>71 - 80</td>
-                            <td class="eff-green">80%</td>
-                            <td class="status-high">High Yield</td>
-                        </tr>
-                        <tr>
-                            <td>61 - 70</td>
-                            <td class="eff-green">70%</td>
-                            <td class="status-good">Good Yield</td>
-                        </tr>
-                        <tr>
-                            <td>51 - 60</td>
-                            <td class="eff-yellow">60%</td>
-                            <td class="status-std">Standard Yield</td>
-                        </tr>
-                        <tr>
-                            <td>41 - 50</td>
-                            <td class="eff-yellow">50%</td>
-                            <td class="status-basic">Basic Yield</td>
-                        </tr>
-                        <tr>
-                            <td>31 - 40</td>
-                            <td class="eff-orange">40%</td>
-                            <td class="status-low">Low Yield</td>
-                        </tr>
-                        <tr>
-                            <td>21 - 30</td>
-                            <td class="eff-orange">30%</td>
-                            <td class="status-vlow">Very Low Yield</td>
-                        </tr>
-                        <tr>
-                            <td>11 - 20</td>
-                            <td class="eff-red">20%</td>
-                            <td class="status-min">Minimal Yield</td>
-                        </tr>
-                        <tr>
-                            <td>1 - 10</td>
-                            <td class="eff-red">10%</td>
-                            <td class="status-entry">Entry Yield</td>
-                        </tr>
-                        <tr>
-                            <td>0</td>
-                            <td class="eff-dim">0%</td>
-                            <td class="status-none">No Yield</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══ GOVERNANCE ═══ -->
-    <section class="section" id="governance">
-        <div class="container">
-            <div class="section-header fade-in">
-                <div class="section-label sage"><i data-lucide="gavel" style="width:14px;height:14px"></i>
-                    Self-Governance</div>
-                <h2>Your Community, Your Rules</h2>
-                <p>
-                    Diaspora Nearby gives every community true democratic power. No central authority dictates how
-                    treasury funds are used — the community decides through transparent voting.
-                </p>
-            </div>
-            <div class="card-grid fade-in">
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="landmark"></i></div>
-                    <h3>Elected Leadership Council</h3>
-                    <p>Each community elects 4 leadership roles: President, Treasurer, Secretary, and Council Member.
-                        Qualified candidates self-nominate, and the community votes them into office.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="vote"></i></div>
-                    <h3>Yay / Nay / Abstain Voting</h3>
-                    <p>Every vote is a clear Yay, Nay, or Abstain. Candidates need over 50% favorable rate to win.
-                        If a leader drops below 50%, they are automatically voted out — real accountability.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="eye"></i></div>
-                    <h3>Transparent Elections</h3>
-                    <p>All vote counts, candidacies, and election results are visible to community members in real
-                        time. System messages announce candidacies in community chat.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon sage"><i data-lucide="shield-check"></i></div>
-                    <h3>Merit-Based Eligibility</h3>
-                    <p>Only members who meet all three criteria can run for leadership: <strong>100+ days</strong>
-                        active on the platform, <strong>admin of a 100+ member group chat</strong>, and a
-                        <strong>PoCT score of 90+</strong>. Qualified candidates are auto-populated.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-
-    <!-- ═══ TRANSPARENCY ═══ -->
-    <section class="section" id="transparency">
-        <div class="container">
-            <div class="section-header fade-in">
-                <div class="section-label orange"><i data-lucide="eye" style="width:14px;height:14px"></i> Transparency
-                </div>
-                <h2>Built in the Open</h2>
-                <p>
-                    $DIASPORA's value isn't speculative — it's anchored to real economic activity. The floor price is
-                    determined by actual Fiat GDP processed through the platform.
-                </p>
-            </div>
-            <div class="investor-grid fade-in">
-                <div class="investor-card">
-                    <div class="metric">Base</div>
-                    <div class="metric-label">Blockchain (Coinbase L2)</div>
-                </div>
-                <div class="investor-card">
-                    <div class="metric">$0</div>
-                    <div class="metric-label">Transaction Fees</div>
-                </div>
-                <div class="investor-card">
-                    <div class="metric">10x</div>
-                    <div class="metric-label">Epoch Growth Model</div>
-                </div>
-                <div class="investor-card">
-                    <div class="metric">10%</div>
-                    <div class="metric-label">Fixed Burn Rate (of match)</div>
-                </div>
-            </div>
-            <div class="economy-highlight fade-in" style="margin-top:24px;">
-                <div class="economy-formula">
-                    Floor Price = Total Fiat GDP ÷ Circulating Supply
-                </div>
-                <p style="font-size:14px; color:var(--fg-muted);">
-                    Every flight booked, product sold, and service hired adds real fiat value to the GDP floor.
-                    More activity = higher floor price. The community controls the value.
-                </p>
-            </div>
-        </div>
-    </section>
-
     <!-- ═══ TEAM ═══ -->
     <section class="section" id="team">
         <div class="container">
@@ -1248,41 +1501,23 @@
                 <div class="get-app-icon">
                     <i data-lucide="smartphone" style="width:40px;height:40px;color:var(--sage)"></i>
                 </div>
-                <h2>Get Early Access</h2>
-                <p>We’re launching native apps for Android & iOS. Enter your email to get access — Android users will
-                    be redirected to install from Google Play.</p>
-
-                <div class="platform-detect-card" id="install-platform-card">
-                    <div class="platform-icon-row">
-                        <div class="platform-option" id="install-android-opt">
-                            <i data-lucide="smartphone" style="width:24px;height:24px"></i>
-                            <span>Android</span>
-                            <span class="platform-tag">Google Play</span>
-                        </div>
-                        <div class="platform-divider"></div>
-                        <div class="platform-option" id="install-ios-opt">
-                            <i data-lucide="tablet" style="width:24px;height:24px"></i>
-                            <span>iOS</span>
-                            <span class="platform-tag coming-soon">TestFlight</span>
-                        </div>
-                    </div>
-                    <div class="detected-platform-label" id="install-detected-label">
-                        <i data-lucide="check-circle" style="width:14px;height:14px"></i>
-                        <span id="install-detected-text">Detecting your device…</span>
-                    </div>
-                </div>
+                <h2>Get the App</h2>
+                <p>Install the native Android app from Google Play, or open Diaspora Nearby directly on the web.</p>
 
                 <div class="signup-form" style="margin-top: 24px;">
                     <div class="form-row" style="flex-direction: column;">
-                        <input type="email" id="install-email" placeholder="your@email.com" autocomplete="email"
-                            style="width: 100%;">
-                        <button class="btn btn-sage" id="install-signup-btn" onclick="submitEarlyAccess('install')"
-                            style="width: 100%; justify-content: center;">
-                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
-                            <span id="install-btn-text">Sign Up & Get the App</span>
-                        </button>
+                        <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
+                            target="_blank" rel="noopener" id="install-signup-btn" class="btn btn-sage"
+                            style="width: 100%; justify-content: center; text-decoration:none;">
+                            <i data-lucide="smartphone" style="width:18px;height:18px"></i>
+                            <span id="install-btn-text">Install on Google Play</span>
+                        </a>
+                        <a href="https://app.diasporanearby.com" class="btn btn-outline-small"
+                            style="width:100%;justify-content:center;text-decoration:none;">
+                            <i data-lucide="globe" style="width:16px;height:16px"></i>
+                            Open the Web App
+                        </a>
                     </div>
-                    <div class="form-message" id="install-signup-message"></div>
                 </div>
 
                 <!-- Direct Play Store button for Android users -->
@@ -1333,8 +1568,8 @@
                     The Great Reset Waits for No One.
                 </h2>
                 <p style="color:var(--fg-muted); max-width:500px; margin:0 auto 32px; font-size:16px;">
-                    Reach 10,000 DSP to qualify for TGE. Those who build before the reset own the largest share at
-                    the lowest difficulty.
+                    Complete your profile and 10 unique in-person Identity QR exchanges to qualify for your first TGE.
+                    Keep Current Location Transparency enabled at the time of every TGE to participate.
                 </p>
                 <a href="#get-app" class="btn btn-sage" style="font-size:18px; padding:16px 40px;">
                     Get Early Access <i data-lucide="arrow-right" style="width:18px;height:18px"></i>
@@ -1371,7 +1606,7 @@
                         <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
                         <li><a href="#decoupling">DSP vs $DIASPORA</a></li>
                         <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
-                        <li><a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                        <li><a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735"
                                 target="_blank" rel="noopener">Basescan <i data-lucide="external-link"
                                     style="width:10px;height:10px;display:inline;vertical-align:middle"></i></a></li>
                     </ul>

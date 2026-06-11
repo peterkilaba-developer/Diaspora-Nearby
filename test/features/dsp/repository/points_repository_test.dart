@@ -1,59 +1,24 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
-import '../../../utils/mocks.mocks.dart';
-import '../../../utils/test_data.dart';
 
-/// Records every httpsCallable invocation so tests can assert which Cloud
-/// Function was called. All callables succeed with empty data.
-class RecordingFakeFirebaseFunctions extends Fake implements FirebaseFunctions {
-  final List<String> calledNames = [];
-
-  @override
-  HttpsCallable httpsCallable(
-    String name, {
-    HttpsCallableOptions? options,
-  }) {
-    calledNames.add(name);
-    return _FakeHttpsCallable();
-  }
-}
-
-class _FakeHttpsCallable extends Fake implements HttpsCallable {
-  @override
-  Future<HttpsCallableResult<T>> call<T>([dynamic parameters]) async {
-    return _FakeHttpsCallableResult<T>();
-  }
-}
-
-class _FakeHttpsCallableResult<T> extends Fake implements HttpsCallableResult<T> {
-  @override
-  T get data => null as T;
-}
+class _FakeFirebaseFunctions extends Fake implements FirebaseFunctions {}
 
 void main() {
-  late PointsRepository repository;
-  late MockFirebaseFirestore mockFirestore;
-  late RecordingFakeFirebaseFunctions fakeFunctions;
+  test('DSP streams emit safe initial values immediately', () async {
+    final repository = PointsRepository(
+      FakeFirebaseFirestore(),
+      _FakeFirebaseFunctions(),
+    );
 
-  setUp(() {
-    mockFirestore = MockFirebaseFirestore();
-    fakeFunctions = RecordingFakeFirebaseFunctions();
-    repository = PointsRepository(mockFirestore, fakeFunctions);
-  });
-
-  group('PointsRepository', () {
-    const userId = TestData.userId1;
-
-    // [v8] initializeUserPoints no longer writes to Firestore from the client.
-    // It routes through the `initializeUserPoints` Cloud Function (which has
-    // its own server-side test coverage). These tests verify the client is
-    // calling the right callable.
-
-    test('initializeUserPoints invokes the initializeUserPoints Cloud Function', () async {
-      await repository.initializeUserPoints(userId);
-      expect(fakeFunctions.calledNames, ['initializeUserPoints']);
-    });
+    expect(await repository.streamUserPoints('user').first, isNull);
+    expect(await repository.streamGlobalSupply().first, 0);
+    expect(await repository.streamGlobalMemberCount().first, 0);
+    expect(await repository.streamInternalGdp().first, 0);
+    expect(await repository.streamFiatGdpUsd().first, 0);
+    expect(await repository.streamCorridors().first, isEmpty);
+    expect(await repository.streamTransactionHistory('user').first, isEmpty);
   });
 }

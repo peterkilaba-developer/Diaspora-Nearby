@@ -82,22 +82,26 @@ class ProfileRepository {
     }
 
     try {
-      // [FIX] Try server-first to avoid stale Firestore offline cache data.
-      // Falls back to cache automatically if offline.
+      // Read Firestore's local cache first so returning users do not wait on
+      // network/DNS before their profile can render. Fall back to the server
+      // when the cache is empty or unavailable.
       cf.DocumentSnapshot<Map<String, dynamic>> doc;
       try {
         doc = await _firestore
             .collection('users')
             .doc(uid)
-            .get(const cf.GetOptions(source: cf.Source.server))
-            .timeout(const Duration(seconds: 8));
+            .get(const cf.GetOptions(source: cf.Source.cache))
+            .timeout(const Duration(seconds: 2));
+        if (!doc.exists || doc.data() == null) {
+          throw StateError('Profile is not cached');
+        }
       } catch (_) {
-        // Server unavailable (offline), fall back to cache
+        // Cache miss: fetch a fresh profile from the server.
         doc = await _firestore
             .collection('users')
             .doc(uid)
-            .get(const cf.GetOptions(source: cf.Source.cache))
-            .timeout(const Duration(seconds: 5));
+            .get(const cf.GetOptions(source: cf.Source.server))
+            .timeout(const Duration(seconds: 8));
       }
       debugPrint('📋 [getUserProfile] READ for $uid → '
           'fromCache=${doc.metadata.isFromCache}, exists=${doc.exists}');
@@ -142,7 +146,14 @@ class ProfileRepository {
       return null;
     } catch (e) {
       debugPrint('Error getting user profile: $e');
-      rethrow; // [FIX] Rethrow to distinguish between "No Profile" and "Network Error"
+      // A profile refresh is not app-fatal. Returning null lets screens use
+      // their cached/session-backed state while Firestore reconnects.
+      final staleProfile = cached?.profile;
+      if (staleProfile != null && staleProfile.firstName.isNotEmpty) {
+        debugPrint('📋 [getUserProfile] USING STALE MEMORY CACHE for $uid');
+        return staleProfile;
+      }
+      return null;
     }
   }
 

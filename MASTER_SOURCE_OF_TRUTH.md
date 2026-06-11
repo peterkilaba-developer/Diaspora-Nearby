@@ -115,10 +115,10 @@ For every $1 earned by a user, the protocol mints $1 which is distributed as fol
 ## ⚡ 4. THE GREAT RESET: TOKEN GENERATION EVENT (TGE)
 TGE is the "Crystalization" event where off-chain $DIASPORA points become on-chain liquid currency.
 
-### 4.1 Dual-Trigger Evolution
-To ensure the network is robust, TGE only triggers when BOTH metrics are met:
-1. **Supply Milestone**: Cumulative $DIASPORA supply distributed reaches the Epoch's target (e.g., 1,000,000 $DIASPORA for Epoch 1).
-2. **User Milestone**: Required Verified Population reached (e.g., 100 Verified Humans for Epoch 1).
+### 4.1 Distributed DSP Trigger
+TGE triggers when cumulative distributed DSP crosses the next supply milestone
+(e.g., 1,000,000 DSP for Epoch 1). Verified population is tracked as an
+informational network-growth benchmark, but it does not gate TGE execution.
 
 ### 4.2 The 10-TGE Event Cycle
 Each Epoch consists of **10 TGE events**.
@@ -133,11 +133,11 @@ Each Epoch consists of **10 TGE events**.
 ---
 
 ## 📈 5. LONG-TERM SCALING: THE 10 EPOCHS
-The Diaspora economy grows by orders of magnitude (**10x Growth Model**). Each Epoch represents a 10x multiplier in both the verified human population and the corresponding $DIASPORA supply.
+The Diaspora economy grows by orders of magnitude (**10x Growth Model**). Each Epoch represents a 10x multiplier in the distributed-DSP trigger. Verified population benchmarks are displayed alongside supply to show network growth.
 
 ### 5.1 Epoch Scaling Overview
 
-| Epoch | Diaspora Population (Verified) | $DIASPORA Supply Target |
+| Epoch | Informational Verified Population | Distributed DSP Trigger |
 | :--- | :--- | :--- |
 | **1** | 100 | 1,000,000 |
 | **2** | 1,000 (10x) | 10,000,000 (10x) |

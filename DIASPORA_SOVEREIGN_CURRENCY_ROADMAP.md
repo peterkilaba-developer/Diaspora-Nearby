@@ -113,9 +113,9 @@ Send a message        →    +10 DSP (social activity, no fiat value tracked)
 - "Your progress toward the 10,000 DSP Gate"
 - Floor price indicator (based on accumulated Fiat GDP)
 
-**At TGE (Epoch 1 triggers when BOTH conditions are met)**:
-1. Cumulative DSP supply reaches 1,000,000
-2. 100 Verified Humans reached
+**At TGE (Epoch 1 triggers when cumulative distributed DSP reaches the milestone)**:
+1. Cumulative distributed DSP supply reaches 1,000,000
+2. Member count is recorded as an informational network-growth benchmark; it does not gate TGE
 3. Snapshot all DSP balances from Firebase
 4. Apply **decile scaling efficiency** (Trust Score → conversion rate)
 5. Mint $DIASPORA on Base at adjusted ratio
@@ -450,7 +450,7 @@ Public Price = Adjusted Price × 3.5 (Network Effect Multiplier)
 | CurrencyHelper (200+ country → USD static rates) | `marketplace/utils/currency_helper.dart` | ✅ Complete |
 | ValuationService (price formula: GDP/Supply/Velocity) | `dsp/services/valuation_service.dart` | ✅ Complete |
 | PointsService (earn/spend/transfer with 1% fee) | `dsp/services/points_service.dart` | ✅ Complete |
-| EpochService (10 epochs, dual-trigger TGE) | `dsp/services/epoch_service.dart` | ✅ Complete |
+| EpochService (10 epochs, distributed-DSP-triggered TGE) | `dsp/services/epoch_service.dart` | ✅ Complete |
 | TreasuryService (1:1 allocation, 10-slot model) | `dsp/services/treasury_service.dart` | ✅ Complete |
 | Marketplace `priceAmount` in local currency | `marketplace/models/listing_data.dart` | ✅ Complete |
 | Travel `pricePerUnit` in USD | `travel/models/peer_listing.dart` | ✅ Complete |

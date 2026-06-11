@@ -1,7 +1,7 @@
 /**
  * CORS Proxy modules: Radio Browser, Google Places.
  */
-const { functions } = require("./shared");
+const { functions, admin, db } = require("./shared");
 
 /**
  * ==================================================================
@@ -37,6 +37,76 @@ exports.radioProxy = functions.https.onRequest(async (req, res) => {
   } catch (error) {
     console.error('[RadioProxy] Error:', error);
     res.status(500).send(`Proxy Error: ${error.message}`);
+  }
+});
+
+/**
+ * Records playback reliability without exposing direct client writes to the
+ * shared radio_station_health collection.
+ */
+exports.reportRadioStationHealth = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'Sign in before reporting station health.',
+    );
+  }
+
+  const stationUuid = String(data.stationUuid || '').trim();
+  const outcome = data.outcome;
+  if (!stationUuid || stationUuid.length > 128 || !['success', 'failure'].includes(outcome)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'A valid station UUID and outcome are required.',
+    );
+  }
+
+  const countField = outcome === 'success' ? 'successCount' : 'failureCount';
+  await db.collection('radio_station_health').doc(stationUuid).set({
+    [countField]: admin.firestore.FieldValue.increment(1),
+    lastReported: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { success: true };
+});
+
+/**
+ * Authenticated callable proxy for the Radio Browser API. Keeping the upstream
+ * host fixed prevents callers from turning this into a general-purpose proxy.
+ */
+exports.fetchRadioStations = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'Sign in before loading radio stations.',
+    );
+  }
+
+  const endpoint = String(data.endpoint || '').trim();
+  if (!endpoint || endpoint.length > 500 || !/^[a-zA-Z0-9/?=&._%+-]+$/.test(endpoint)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'A valid radio endpoint is required.',
+    );
+  }
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  const finalPath = cleanEndpoint.startsWith('stations/') ?
+    cleanEndpoint :
+    `stations/${cleanEndpoint}`;
+
+  try {
+    const response = await fetch(`https://de1.api.radio-browser.info/json/${finalPath}`);
+    if (!response.ok) {
+      throw new Error(`Upstream returned ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('[FetchRadioStations] Error:', error);
+    throw new functions.https.HttpsError(
+      'unavailable',
+      'Radio stations are temporarily unavailable.',
+    );
   }
 });
 

@@ -6,6 +6,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 final homeRepositoryProvider = Provider((ref) {
   final auth = ref.watch(authRepositoryProvider);
@@ -68,10 +69,15 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
 
     debugPrint('[PERF] nearbyUsersProvider FETCHING (isGlobal=$isGlobal)');
     final repo = ref.read(homeRepositoryProvider);
-    final dmExclusion = await ref.watch(_dmExclusionProvider.future);
+    // Nearby data must not be blocked by a full chat-history scan. On a slow
+    // or reconnecting Firestore client that scan can take indefinitely.
+    final dmExclusion = await ref
+        .watch(_dmExclusionProvider.future)
+        .timeout(const Duration(seconds: 2), onTimeout: () => <String>{});
     final users = await repo.getNearbyUsers(
       isGlobal: isGlobal,
       dmExclusionIds: dmExclusion,
+      currentUserProfile: ref.read(userProfileProvider).value,
     );
 
     // Cache result
@@ -102,6 +108,7 @@ class HomeRepository {
   Future<List<ProfileData>> getNearbyUsers({
     bool isGlobal = false,
     Set<String> dmExclusionIds = const {},
+    ProfileData? currentUserProfile,
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -109,39 +116,45 @@ class HomeRepository {
 
       // [PERF] Use cache-first for current user doc — profile data doesn't
       // change frequently and cache-first avoids a network roundtrip.
-      DocumentSnapshot<Map<String, dynamic>> currentUserDoc;
-      try {
-        currentUserDoc = await _firestore
-            .collection('users')
-            .doc(currentUser.uid)
-            .get(const GetOptions(source: Source.cache))
-            .timeout(const Duration(seconds: 2));
-      } catch (_) {
-        // Cache miss — fall back to server
-        currentUserDoc = await _firestore
-            .collection('users')
-            .doc(currentUser.uid)
-            .get();
+      var profile = currentUserProfile;
+      if (profile == null) {
+        DocumentSnapshot<Map<String, dynamic>> currentUserDoc;
+        try {
+          currentUserDoc = await _firestore
+              .collection('users')
+              .doc(currentUser.uid)
+              .get(const GetOptions(source: Source.cache))
+              .timeout(const Duration(seconds: 2));
+          if (!currentUserDoc.exists) {
+            throw StateError('Current user profile is not cached');
+          }
+        } catch (_) {
+          currentUserDoc = await _firestore
+              .collection('users')
+              .doc(currentUser.uid)
+              .get()
+              .timeout(const Duration(seconds: 8));
+        }
+        if (!currentUserDoc.exists || currentUserDoc.data() == null) return [];
+        final data = Map<String, dynamic>.from(currentUserDoc.data()!);
+        data['uid'] = currentUser.uid;
+        profile = ProfileData.fromJson(data);
       }
-      if (!currentUserDoc.exists) return [];
 
-      final currentUserData = currentUserDoc.data()!;
-      final homeCountryCode = currentUserData['homeCountryCode'] as String?;
-      final blockedUsers =
-          currentUserData['blockedUsers'] as List<dynamic>? ?? [];
+      final homeCountryCode = profile.homeCountryCode;
+      final blockedUsers = profile.blockedUsers ?? [];
       final Set<String> blockedUserIds = blockedUsers
           .map((e) => e.toString())
           .toSet();
 
       // Location variables for distance calc
-      final currentUserProfile = ProfileData.fromJson(currentUserData);
       final myLat =
-          currentUserProfile.currentLocation?.geometry.location.lat ??
-          currentUserProfile.hostLocation.geometry?.location.lat ??
+          profile.currentLocation?.geometry.location.lat ??
+          profile.hostLocation.geometry?.location.lat ??
           0.0;
       final myLng =
-          currentUserProfile.currentLocation?.geometry.location.lng ??
-          currentUserProfile.hostLocation.geometry?.location.lng ??
+          profile.currentLocation?.geometry.location.lng ??
+          profile.hostLocation.geometry?.location.lng ??
           0.0;
 
       Query query = _firestore.collection('users');
@@ -152,7 +165,19 @@ class HomeRepository {
 
       // [PERF] Reduced from 1000 → 200. 1000 docs was causing massive
       // read costs and slow parsing on mobile. 200 is plenty for a feed.
-      final snapshot = await query.limit(200).get();
+      QuerySnapshot snapshot;
+      try {
+        snapshot = await query
+            .limit(200)
+            .get(const GetOptions(source: Source.cache))
+            .timeout(const Duration(seconds: 2));
+        if (snapshot.docs.isEmpty) throw StateError('Nearby cache is empty');
+      } catch (_) {
+        snapshot = await query
+            .limit(200)
+            .get()
+            .timeout(const Duration(seconds: 10));
+      }
 
       final users = snapshot.docs
           .where((doc) {

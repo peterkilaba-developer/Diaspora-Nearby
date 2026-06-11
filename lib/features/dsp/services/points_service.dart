@@ -165,31 +165,6 @@ class PointsService {
     await _trustService.updateTrustForUser(userId);
   }
 
-  // [UPDATED v9] Vouch Reward: 1,000 DSP + 1,000 DSP staked (10x scale).
-  // Staking locks 1,000 DSP. Unstake ONLY by reducing trust < 91 and withdrawing.
-  // Community consensus votes: +100 agree, -100 disagree (tracked separately).
-  Future<void> trackVouchReward(String userId, String vouchedUserId) async {
-    try {
-      // Award 1,000 DSP base reward
-      await _addPoints(
-        userId,
-        1000,
-        'vouch_reward',
-        metadata: {'vouchedUserId': vouchedUserId},
-      );
-
-      // Stake 1,000 DSP (locked until trust < 91)
-      await _repository.addStagedPoints(
-        userId,
-        1000, // 1,000 DSP staked for vouching
-        'vouch_stake_locked',
-        metadata: {'vouchedUserId': vouchedUserId},
-      );
-    } catch (e) {
-      debugPrint('Error tracking vouch reward: $e');
-    }
-  }
-
   // [UPDATED v9] Vouch Consensus Vote: +100 (agree) or -100 (disagree) to voucher (10x scale).
   // Called by community members voting on whether the vouch is trustworthy.
   Future<void> trackVouchConsensusVote({
@@ -544,13 +519,6 @@ class PointsService {
     debugPrint('DSP: trackEmergencyContactAnnual is deprecated');
   }
 
-  // [DEPRECATED] Organization Vetting removed from PoA. No longer awards DSP.
-  Future<void> trackOrganizationVetting(String userId) async {
-    debugPrint(
-      'DSP: trackOrganizationVetting is deprecated and no longer awards DSP',
-    );
-  }
-
   Future<void> trackIdentityQRExchange(
     String userId,
     String otherUid, {
@@ -744,6 +712,27 @@ class PointsService {
     } catch (e) {
       debugPrint('DSP: Error tracking event attendance: $e');
     }
+  }
+
+  /// Awards 1,000 DSP + full community treasury distribution the first time
+  /// a user changes their host location. Once per user lifetime.
+  /// Calls the repository directly to skip the redundant getUserPoints
+  /// re-read and _checkAndResetDaily overhead inside _addPoints (irrelevant
+  /// for once-per-lifetime events). Errors propagate to the caller.
+  Future<void> trackHostLocationMove(String userId) async {
+    final userPoints = await _repository.getUserPoints(userId);
+    if (userPoints == null) return;
+    if ((userPoints.lifetimeEarnings['host_location_moved'] ?? 0) > 0) return;
+    await _repository.addPoints(userId, 1000, 'host_location_moved');
+  }
+
+  /// Awards 1,000 DSP + full community treasury distribution the first time
+  /// a user manually adds an "also lived in" past location. Once per user lifetime.
+  Future<void> trackAlsoLivedInAdded(String userId) async {
+    final userPoints = await _repository.getUserPoints(userId);
+    if (userPoints == null) return;
+    if ((userPoints.lifetimeEarnings['also_lived_in_added'] ?? 0) > 0) return;
+    await _repository.addPoints(userId, 1000, 'also_lived_in_added');
   }
 
   // Legacy/Helper methods for manual awards (e.g. from GroupInfoScreen)

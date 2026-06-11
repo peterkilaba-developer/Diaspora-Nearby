@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -43,6 +44,18 @@ class ShareInviteBody extends ConsumerStatefulWidget {
 
 class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
   bool _isGenerating = false;
+  // Cache the future so FutureBuilder doesn't reset on every rebuild.
+  // A new future is only created once we know the user uid, and again
+  // after generating a code so the freshly-created code is fetched.
+  Future<String?>? _codeFuture;
+  String? _lastUid;
+
+  void _initCodeFuture(String uid) {
+    if (_lastUid != uid || _codeFuture == null) {
+      _lastUid = uid;
+      _codeFuture = ref.read(pointsRepositoryProvider).getReferralCode(uid);
+    }
+  }
 
   Future<void> _generateCode(String userId) async {
     setState(() => _isGenerating = true);
@@ -56,8 +69,10 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
         await ref
             .read(pointsRepositoryProvider)
             .generateReferralCode(userId, firstName, countryCode);
-        ref.invalidate(pointsRepositoryProvider);
-        setState(() {});
+        // Force re-fetch after generation
+        setState(() {
+          _codeFuture = ref.read(pointsRepositoryProvider).getReferralCode(userId);
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -70,55 +85,42 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     }
   }
 
-  /// Get current TGE progress percentage string
-  String _getCurrentProgressPercent() {
-    final supplyAsync = ref.read(globalSupplyProvider);
-    final membersAsync = ref.read(globalMemberCountProvider);
-
-    final supply = supplyAsync.value ?? 0;
-    final members = membersAsync.value ?? 0;
-
-    final epochService = ref.read(epochServiceProvider);
-    final currentEpoch = epochService.getCurrentCommunityEpoch(supply, members);
-    final progress = currentEpoch.calculateProgress(supply, members);
-    return (progress * 100).toStringAsFixed(1);
-  }
-
-  /// Get formatted target label
-  String _getCurrentTargetLabel() {
-    final supplyAsync = ref.read(globalSupplyProvider);
-    final membersAsync = ref.read(globalMemberCountProvider);
-
-    final supply = supplyAsync.value ?? 0;
-    final members = membersAsync.value ?? 0;
-
-    final epochService = ref.read(epochServiceProvider);
-    final currentEpoch = epochService.getCurrentCommunityEpoch(supply, members);
-
-    final target = currentEpoch.dspTarget;
-    if (target >= 1000000000) return '${(target / 1000000000).round()} Billion';
-    if (target >= 1000000) return '${(target / 1000000).round()} Million';
-    return target.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authRepositoryProvider).currentUser;
     if (user == null) return const SizedBox.shrink();
 
-    final globalSupplyAsync = ref.watch(globalSupplyProvider);
-    final globalMemberCountAsync = ref.watch(globalMemberCountProvider);
-
-    final codeFuture = ref
-        .watch(pointsRepositoryProvider)
-        .getReferralCode(user.uid);
+    // Initialise once per uid; does not recreate on every build.
+    _initCodeFuture(user.uid);
 
     return FutureBuilder<String?>(
-      future: codeFuture,
+      future: _codeFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !_isGenerating) {
-          return const Center(child: CircularProgressIndicator());
+          return Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              title: const Text("Share to your Community"),
+              centerTitle: true,
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              leading: IconButton(
+                icon: const Icon(LucideIcons.x),
+                onPressed: () => context.pop(),
+              ),
+            ),
+            body: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading your invite code…', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            ),
+          );
         }
 
         final code = snapshot.data;
@@ -137,67 +139,77 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
           ),
           body: Container(
             decoration: AppTheme.pageDecoration(context),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight:
-                          constraints.maxHeight -
-                          MediaQuery.of(context).padding.top -
-                          kToolbarHeight -
-                          32,
-                    ),
-                    child: IntrinsicHeight(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppTheme.pageHorizontalPadding,
+                AppTheme.pageHorizontalPadding,
+                AppTheme.pageHorizontalPadding,
+                MediaQuery.of(context).padding.bottom + 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (snapshot.hasError)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildHeader(context),
-                          const SizedBox(height: 24),
-                          _buildTGEProgressPreview(
-                            context,
-                            globalSupplyAsync,
-                            globalMemberCountAsync,
-                          ),
-                          const SizedBox(height: 32),
-
-                          if (code != null)
-                            _buildCodeCard(context, code)
-                          else
-                            _buildGenerateCard(context, user.uid),
-
-                          const SizedBox(height: 32),
+                          const Icon(LucideIcons.wifiOff, size: 40, color: Colors.grey),
+                          const SizedBox(height: 12),
                           const Text(
-                            "Share via",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            'Could not load your invite code.',
                             textAlign: TextAlign.center,
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 24),
-
-                          if (code != null)
-                            _buildDirectShareButtons(context, code)
-                          else
-                            const Center(
-                              child: Text(
-                                "Generate a code to start sharing!",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ),
-
-                          SizedBox(
-                            height: MediaQuery.of(context).padding.bottom + 16,
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Check your connection and try again.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton(
+                            onPressed: () => setState(() {
+                              _codeFuture = ref
+                                  .read(pointsRepositoryProvider)
+                                  .getReferralCode(user.uid);
+                            }),
+                            child: const Text('Retry'),
                           ),
                         ],
                       ),
+                    )
+                  else if (code != null) ...[
+                    _buildReferralQR(context, code),
+                    const SizedBox(height: 20),
+                    _buildCodeCard(context, code),
+                  ] else
+                    _buildGenerateCard(context, user.uid),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Share via",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                );
-              },
+                  const SizedBox(height: 16),
+
+                  if (code != null)
+                    _buildDirectShareButtons(context, code)
+                  else if (!snapshot.hasError)
+                    const Center(
+                      child: Text(
+                        "Generate a code to start sharing!",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           ),
         );
@@ -222,9 +234,19 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     final logoFrame = await logoCodec.getNextFrame();
     final logoImg = logoFrame.image;
 
-    // Get live progress data
-    final percent = _getCurrentProgressPercent();
-    final targetLabel = _getCurrentTargetLabel();
+    // Get live progress data (inline — helper methods were removed)
+    final supply = ref.read(globalSupplyProvider).value ?? 0;
+    final members = ref.read(globalMemberCountProvider).value ?? 0;
+    final epochService = ref.read(epochServiceProvider);
+    final currentEpoch = epochService.getCurrentCommunityEpoch(supply, members);
+    final progress = currentEpoch.calculateProgress(supply, members);
+    final percent = (progress * 100).toStringAsFixed(1);
+    final rawTarget = currentEpoch.dspTarget;
+    final targetLabel = rawTarget >= 1000000000
+        ? '${(rawTarget / 1000000000).round()} Billion'
+        : rawTarget >= 1000000
+            ? '${(rawTarget / 1000000).round()} Million'
+            : rawTarget.toString();
     final progressFraction = double.tryParse(percent) ?? 0.0;
     final progressBarMaxW = w - 148; // card inner width minus padding
 
@@ -492,123 +514,67 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildReferralQR(BuildContext context, String code) {
+    final qrData = 'https://diasporanearby.com/invite?code=$code';
     return Column(
       children: [
-        Container(
-          width: 100,
-          height: 100,
-          padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-          decoration: BoxDecoration(
-            color: AppTheme.accent.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Image.asset('assets/icons/logo-transparent-64.png'),
-        ),
-        const SizedBox(height: 24),
         const Text(
-          'Share & Earn Together',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          'Show QR to Invite',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Invite your family and friends—whether back home or abroad—to connect on Diaspora Nearby. Every person you bring earns you both crypto tokens!',
-          style: TextStyle(
-            fontSize: 15,
-            color: AppTheme.accent,
-            fontWeight: FontWeight.w600,
-          ),
+        Text(
+          'New member scans this with their phone camera — referral code applies automatically.',
           textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: Theme.of(context).hintColor),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: QrImageView(
+            data: qrData,
+            version: QrVersions.auto,
+            size: 220,
+            backgroundColor: Colors.white,
+            eyeStyle: const QrEyeStyle(
+              eyeShape: QrEyeShape.square,
+              color: Color(0xFF151515),
+            ),
+            dataModuleStyle: const QrDataModuleStyle(
+              dataModuleShape: QrDataModuleShape.square,
+              color: Color(0xFF151515),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.qrCode, size: 14, color: AppTheme.accent),
+            SizedBox(width: 6),
+            Text(
+              'Counts toward your 10 QR milestone',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ],
-    );
-  }
-
-  Widget _buildTGEProgressPreview(
-    BuildContext context,
-    AsyncValue<int> globalSupplyAsync,
-    AsyncValue<int> globalMemberCountAsync,
-  ) {
-    return globalSupplyAsync.when(
-      data: (supply) {
-        return globalMemberCountAsync.when(
-          data: (members) {
-            final epochService = ref.read(epochServiceProvider);
-            final currentEpoch = epochService.getCurrentCommunityEpoch(
-              supply,
-              members,
-            );
-            final double progress = currentEpoch.calculateProgress(
-              supply,
-              members,
-            );
-
-            // Format large numbers for readability (e.g., 1M, 1B)
-            String formatTarget(int target) {
-              if (target >= 1000000000) {
-                return '${(target / 1000000000).round()} Billion';
-              }
-              if (target >= 1000000) {
-                return '${(target / 1000000).round()} Million';
-              }
-              return target.toString();
-            }
-
-            final String targetLabel = formatTarget(currentEpoch.dspTarget);
-            final String percent = (progress * 100).toStringAsFixed(1);
-
-            return Container(
-              padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
-              decoration: AppTheme.cardDecoration(context),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Global TGE Progress',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        '$percent%',
-                        style: const TextStyle(
-                          color: AppTheme.accent,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 8,
-                      backgroundColor: Colors.grey.withValues(alpha: 0.1),
-                      valueColor: const AlwaysStoppedAnimation(AppTheme.accent),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "The Race to $targetLabel is $percent% complete! Pulse TGE events occur as we grow.",
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          },
-          loading: () => const Center(child: LinearProgressIndicator()),
-          error: (_, _) => const SizedBox.shrink(),
-        );
-      },
-      loading: () => const Center(child: LinearProgressIndicator()),
-      error: (_, _) => const SizedBox.shrink(),
     );
   }
 

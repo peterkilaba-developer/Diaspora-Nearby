@@ -173,6 +173,41 @@ class PoctBreakdownModal extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
 
+                      _buildTransparencyRow(
+                        theme,
+                        icon: LucideIcons.mapPin,
+                        label: 'Current Location Transparency',
+                        achieved: trustScore >= 10,
+                        poct: 10,
+                      ),
+                      _buildMilestoneRow(
+                        theme,
+                        icon: LucideIcons.userCheck,
+                        label: 'Profile Completion',
+                        count:
+                            t?.awardedQualificationMilestones.contains(
+                                  'Profile',
+                                ) ==
+                                true
+                            ? 1
+                            : 0,
+                        milestone: 1,
+                        poct: 10,
+                        achieved:
+                            t?.awardedQualificationMilestones.contains(
+                              'Profile',
+                            ) ==
+                            true,
+                      ),
+                      _buildMilestoneRow(
+                        theme,
+                        icon: LucideIcons.qrCode,
+                        label: 'QR Identity Exchanges',
+                        count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
+                        milestone: 10,
+                        poct: 10,
+                        achieved: (t?.uniqueQrCount ?? 0) >= 10,
+                      ),
                       _buildMilestoneRow(
                         theme,
                         icon: LucideIcons.users,
@@ -193,25 +228,6 @@ class PoctBreakdownModal extends ConsumerWidget {
                       ),
                       _buildMilestoneRow(
                         theme,
-                        icon: LucideIcons.qrCode,
-                        label: 'QR Identity Exchanges',
-                        count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueQrCount ?? 0) >= 10,
-                      ),
-                      // [UPDATED v3] Split into separate Verified and Vouched
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.badgeCheck,
-                        label: 'Verified by Peers',
-                        count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
                         icon: LucideIcons.shieldCheck,
                         label: 'Vouched by Peers',
                         count: (t?.uniqueVouchCount ?? 0).clamp(0, 10),
@@ -221,35 +237,16 @@ class PoctBreakdownModal extends ConsumerWidget {
                       ),
                       _buildMilestoneRow(
                         theme,
-                        icon: LucideIcons.userCheck,
-                        label: 'Profile Completion',
-                        count: t?.isVerified == true ? 1 : 0,
-                        milestone: 1,
+                        icon: LucideIcons.badgeCheck,
+                        label: 'Verified by Peers',
+                        count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
+                        milestone: 10,
                         poct: 10,
-                        achieved: t?.isVerified == true,
+                        achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
                       ),
 
                       const SizedBox(height: 8),
                       _buildMilestoneSummary(theme, t),
-
-                      const SizedBox(height: 24),
-
-                      // === SECTION 2: Transparency Signals ===
-                      _buildSectionHeader(
-                        theme,
-                        'Transparency Signals',
-                        'One-time +10 PoCT for openness',
-                        LucideIcons.eye,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTransparencyRow(
-                        theme,
-                        icon: LucideIcons.mapPin,
-                        label: 'City Visibility Enabled',
-                        achieved: trustScore >= 10, // proxy: city visibility contributes
-                        poct: 10,
-                      ),
 
                       const SizedBox(height: 24),
 
@@ -530,14 +527,17 @@ class PoctBreakdownModal extends ConsumerWidget {
   }
 
   Widget _buildMilestoneSummary(ThemeData theme, TrustData? t) {
-    // [UPDATED v3] 6 genesis milestones × 10 = 60 max
+    // Seven genesis milestones × 10 = 70 max.
     int milestonePoCT = 0;
+    if ((t?.trustScore ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueFamilyCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueFriendCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueQrCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueVerificationCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueVouchCount ?? 0) >= 10) milestonePoCT += 10;
-    if (t?.isVerified == true) milestonePoCT += 10;
+    if (t?.awardedQualificationMilestones.contains('Profile') == true) {
+      milestonePoCT += 10;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -557,7 +557,7 @@ class PoctBreakdownModal extends ConsumerWidget {
             ),
           ),
           Text(
-            '+$milestonePoCT / 60',
+            '+$milestonePoCT / 70',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -951,10 +951,7 @@ class PoctBreakdownModal extends ConsumerWidget {
               children: [
                 const Text(
                   'Completed Transactions',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 const SizedBox(height: 2),
                 Text(

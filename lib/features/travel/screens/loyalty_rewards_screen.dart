@@ -44,7 +44,8 @@ class LoyaltyRewardsScreen extends ConsumerWidget {
             final carBookings = earnings['travel_booking_car_rental'] ?? 0;
             final reviews = earnings['travel_review'] ?? 0;
             final saves = earnings['travel_save'] ?? 0;
-            final hosting = earnings['hosting_traveler_income'] ?? 0;
+            final hosting = (earnings['host_traveler_host_reward'] ?? 0) +
+                (earnings['host_traveler_guest_reward'] ?? 0);
 
             final totalTravelDSP =
                 flightBookings +

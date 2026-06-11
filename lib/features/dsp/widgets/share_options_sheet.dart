@@ -279,10 +279,6 @@ class ShareOptionsSheet extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: AppTheme.cardDecoration(context).copyWith(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.accent.withValues(alpha: 0.3),
-            width: 1,
-          ),
           boxShadow: [
             BoxShadow(
               color: AppTheme.accent.withValues(alpha: 0.05),

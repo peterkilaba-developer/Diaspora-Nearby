@@ -190,6 +190,20 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
         ),
       ),
       data: (chats) {
+        // Pre-warm partner profiles so DM cards render with names on first paint.
+        // keepAlive() on chatPartnerProvider ensures these are fetched only once
+        // per app session, not re-fetched on every tab switch.
+        final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
+        if (currentUid != null) {
+          for (final chat in chats) {
+            if (chat.isDirect) {
+              final otherId = chat.getOtherParticipantId(currentUid);
+              if (otherId != null && otherId.isNotEmpty) {
+                ref.read(chatPartnerProvider(otherId));
+              }
+            }
+          }
+        }
 
         final filteredChats = searchQuery.isEmpty
             ? chats

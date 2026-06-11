@@ -64,7 +64,9 @@ class CommunityRepository {
               })
               .whereType<Community>()
               .toList(),
-        );
+        )
+        .onErrorReturn(const <Community>[])
+        .startWith(const <Community>[]);
   }
 
   Stream<Community?> watchCommunity(String communityId) {
@@ -96,7 +98,7 @@ class CommunityRepository {
           return null;
         }
       },
-    ).asBroadcastStream();
+    ).onErrorReturn(null).startWith(null).asBroadcastStream();
   }
 
   Stream<Community?> watchHomeCountryCommunity(String countryCode) {
