@@ -279,8 +279,11 @@ async function handleProximityMatch({
     const pushes = [];
     if (!moverQuiet) {
         pushes.push(sendPushToUser(moverId, {
-            title: `${otherName} is nearby in ${moverCity}`,
-            body: `Fellow ${moverCountry === otherCountry ? moverCountry : otherCountry} community member · ${distStr}. Tap to say hi.`,
+            // Name the OTHER person's city, not the recipient's — when the
+            // recipient is travelling, their own city would wrongly imply
+            // that's where the match is.
+            title: `${otherName} from ${otherCountry} is nearby in ${other.city}`,
+            body: `${distStr}. Tap to say hi.`,
             type: "nearby_compatriot",
             targetUserId: other.id,
             city: moverCity,
@@ -294,8 +297,8 @@ async function handleProximityMatch({
 
     if (!otherQuiet) {
         pushes.push(sendPushToUser(other.id, {
-            title: `${moverName} is nearby in ${other.city}`,
-            body: `Fellow ${otherCountry === moverCountry ? otherCountry : moverCountry} community member · ${distStr}. Tap to say hi.`,
+            title: `${moverName} from ${moverCountry} is nearby in ${moverCity}`,
+            body: `${distStr}. Tap to say hi.`,
             type: "nearby_compatriot",
             targetUserId: moverId,
             city: other.city,
