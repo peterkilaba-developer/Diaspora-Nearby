@@ -97,14 +97,16 @@ class ValuationService {
     // --- Factor 1: Network Effect ---
     // Logarithmic growth — slow at first, increasingly valuable with each
     // order-of-magnitude increase in users.
-    final double networkMultiplier =
-        totalUsers > 0 ? log(max(totalUsers, 1).toDouble()) / (ln10 * 10) : 0.0;
+    final double networkMultiplier = totalUsers > 0
+        ? log(max(totalUsers, 1).toDouble()) / (ln10 * 10)
+        : 0.0;
 
     // --- Factor 2: Deflation Ratio ---
     // Rewards burn activity. As more DSP is burned, scarcity increases.
     // Capped at 0.5 to prevent a single large burn from dominating.
-    final double rawDeflation =
-        totalMinted > 0 ? totalBurned / totalMinted.toDouble() : 0.0;
+    final double rawDeflation = totalMinted > 0
+        ? totalBurned / totalMinted.toDouble()
+        : 0.0;
     final double deflationRatio = min(rawDeflation, 0.5);
 
     // --- Factor 3: Epoch Scarcity ---
@@ -115,8 +117,9 @@ class ValuationService {
     // --- Factor 4: Fiat GDP Boost ---
     // Real economic activity (marketplace, travel, remittances) adds a
     // bonus. Logarithmic scale prevents extreme spikes.
-    final double fiatGdpBoost =
-        fiatGdpUsd > 0 ? 1.0 + log(max(fiatGdpUsd, 1.0)) / (ln10 * 10) : 1.0;
+    final double fiatGdpBoost = fiatGdpUsd > 0
+        ? 1.0 + log(max(fiatGdpUsd, 1.0)) / (ln10 * 10)
+        : 1.0;
 
     // --- Composite ---
     final double impliedValue =

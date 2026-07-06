@@ -17,12 +17,11 @@ final tokenBalanceProvider = FutureProvider<String>((ref) async {
   if (user == null) return '0';
 
   try {
-    final callable = FirebaseFunctions.instanceFor(
-      region: 'us-central1',
-    ).httpsCallable(
-      'getTokenBalance',
-      options: HttpsCallableOptions(timeout: const Duration(seconds: 8)),
-    );
+    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable(
+          'getTokenBalance',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 8)),
+        );
     final result = await callable.call<Map<String, dynamic>>({});
     final data = result.data;
     final formatted = data['formatted'] as String? ?? '0';

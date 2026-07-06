@@ -27,7 +27,7 @@ void main() {
           'amount': 100.0,
           'efficiency': 1.0,
           'date': now.toIso8601String(),
-        }
+        },
       ],
     };
 

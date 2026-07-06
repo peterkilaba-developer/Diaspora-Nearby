@@ -3,7 +3,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
-import 'package:diaspora_nearby/features/shared/models/location.dart' as loc_model;
+import 'package:diaspora_nearby/features/shared/models/location.dart'
+    as loc_model;
 
 /// Service to update user's current location in Firestore.
 /// Uses native geocoding for reliable reverse geocoding.
@@ -122,10 +123,7 @@ class LocationUpdateService {
       // Determine whether to auto-enable city visibility for the +10 PoCT.
       // We award it the moment we have the user's current location — but
       // never re-enable it if they've already forfeited the +10 by hiding.
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(userId)
-          .get();
+      final userDoc = await _firestore.collection('users').doc(userId).get();
       final userData = userDoc.data() ?? {};
       final forfeited = userData['cityVisibilityForfeited'] == true;
       final hasExplicitChoice = userData.containsKey('showCurrentLocationName');
@@ -185,7 +183,9 @@ class LocationUpdateService {
 
       await _firestore.collection('users').doc(userId).update(updates);
     } catch (e) {
-      debugPrint('LocationUpdateService: Failed to fallback to host location: $e');
+      debugPrint(
+        'LocationUpdateService: Failed to fallback to host location: $e',
+      );
     }
   }
 }

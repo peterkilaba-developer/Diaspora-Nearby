@@ -359,9 +359,7 @@ class PushNotificationService {
       // Show local notification if notification data exists OR if it's a data-only message we recognize
       String? title = notification?.title;
       String? body = notification?.body;
-      String? imageUrl = kIsWeb
-          ? null
-          : notification?.android?.imageUrl;
+      String? imageUrl = kIsWeb ? null : notification?.android?.imageUrl;
 
       // Centralized logic to match ChatCard display exactly
       String? msgType = data['type'];
@@ -481,9 +479,7 @@ class PushNotificationService {
   /// Register FCM token and save to Firestore
   Future<void> registerFCMToken(String userId) async {
     try {
-      final token = await _fcm.getToken(
-        vapidKey: kIsWeb ? _webVapidKey : null,
-      );
+      final token = await _fcm.getToken(vapidKey: kIsWeb ? _webVapidKey : null);
       if (token != null) {
         debugPrint(
           'PushNotificationService: Obtained FCM token, saving to Firestore...',

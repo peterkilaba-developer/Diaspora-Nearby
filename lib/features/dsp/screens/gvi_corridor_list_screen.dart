@@ -10,27 +10,26 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 /// Streams every corridor chamber, ordered by cumulative GDP descending.
 /// Returns the raw doc data so the UI can pull host/home country codes,
 /// chamber id (for navigation), and the GDP/tx counters.
-final _chamberCorridorsProvider =
-    StreamProvider<List<Map<String, dynamic>>>((ref) {
+final _chamberCorridorsProvider = StreamProvider<List<Map<String, dynamic>>>((
+  ref,
+) {
   return FirebaseFirestore.instance
       .collection('organizations')
       .where('kind', isEqualTo: 'corridor_chamber')
       .snapshots()
       .map((snap) {
-    final list = snap.docs
-        .map((d) {
+        final list = snap.docs.map((d) {
           final data = d.data();
           data['id'] = d.id;
           return data;
-        })
-        .toList();
-    list.sort((a, b) {
-      final ag = (a['gdpTotal'] as num? ?? 0).toDouble();
-      final bg = (b['gdpTotal'] as num? ?? 0).toDouble();
-      return bg.compareTo(ag);
-    });
-    return list;
-  });
+        }).toList();
+        list.sort((a, b) {
+          final ag = (a['gdpTotal'] as num? ?? 0).toDouble();
+          final bg = (b['gdpTotal'] as num? ?? 0).toDouble();
+          return bg.compareTo(ag);
+        });
+        return list;
+      });
 });
 
 /// Bilateral corridor browser. Each row is one chamber-of-commerce
@@ -118,13 +117,14 @@ class _GviCorridorListScreenState extends ConsumerState<GviCorridorListScreen> {
                 final filtered = chambers.where((c) {
                   if (_searchQuery.isEmpty) return true;
                   final q = _searchQuery.toLowerCase();
-                  final host =
-                      (c['hostCountryCode'] as String? ?? '').toLowerCase();
-                  final home =
-                      (c['homeCountryCode'] as String? ?? '').toLowerCase();
-                  final name =
-                      (c['name'] as String? ?? '').toLowerCase();
-                  return host.contains(q) || home.contains(q) || name.contains(q);
+                  final host = (c['hostCountryCode'] as String? ?? '')
+                      .toLowerCase();
+                  final home = (c['homeCountryCode'] as String? ?? '')
+                      .toLowerCase();
+                  final name = (c['name'] as String? ?? '').toLowerCase();
+                  return host.contains(q) ||
+                      home.contains(q) ||
+                      name.contains(q);
                 }).toList();
 
                 if (filtered.isEmpty) {
@@ -137,8 +137,10 @@ class _GviCorridorListScreenState extends ConsumerState<GviCorridorListScreen> {
                     bottom: 32 + MediaQuery.of(context).padding.bottom,
                   ),
                   itemCount: filtered.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
-                  itemBuilder: (context, index) => _CorridorRow(data: filtered[index]),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) =>
+                      _CorridorRow(data: filtered[index]),
                 );
               },
             ),
@@ -227,10 +229,7 @@ class _CorridorRow extends StatelessWidget {
       ),
       subtitle: Text(
         '$members members · $txCount tx',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.blueGrey.withAlpha(204),
-        ),
+        style: TextStyle(fontSize: 12, color: Colors.blueGrey.withAlpha(204)),
       ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -254,7 +253,9 @@ class _CorridorRow extends StatelessWidget {
           ),
         ],
       ),
-      onTap: orgId.isNotEmpty ? () => context.push('/organization/$orgId') : null,
+      onTap: orgId.isNotEmpty
+          ? () => context.push('/organization/$orgId')
+          : null,
     );
   }
 }

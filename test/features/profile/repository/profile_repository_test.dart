@@ -27,7 +27,10 @@ void main() {
 
     final repository = ProfileRepository(firestore, SessionService(prefs));
 
-    await expectLater(repository.getUserProfile('timeout-user'), completion(isNull));
+    await expectLater(
+      repository.getUserProfile('timeout-user'),
+      completion(isNull),
+    );
     verify(userDoc.get(any)).called(2);
   });
 }

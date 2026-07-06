@@ -213,66 +213,66 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           child: Column(
             children: [
               _buildHero(country),
-            const SizedBox(height: 24),
-            // Token Transactions
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.pageHorizontalPadding,
+              const SizedBox(height: 24),
+              // Token Transactions
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.pageHorizontalPadding,
+                ),
+                child: _buildTokenTransactionsSection(context, userId),
               ),
-              child: _buildTokenTransactionsSection(context, userId),
-            ),
-            // Learn More link to website
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () => launchUrl(
-                      Uri.parse('https://diasporanearby.com/#economy'),
-                      mode: LaunchMode.externalApplication,
-                    ),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accent.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppTheme.accent.withValues(alpha: 0.2),
+              // Learn More link to website
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () => launchUrl(
+                        Uri.parse('https://diasporanearby.com/#economy'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accent.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.accent.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              LucideIcons.bookOpen,
+                              size: 16,
+                              color: AppTheme.accent,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Learn More About \$DIASPORA Economy',
+                              style: TextStyle(
+                                color: AppTheme.accent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(
+                              LucideIcons.externalLink,
+                              size: 12,
+                              color: AppTheme.accent,
+                            ),
+                          ],
                         ),
                       ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            LucideIcons.bookOpen,
-                            size: 16,
-                            color: AppTheme.accent,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Learn More About \$DIASPORA Economy',
-                            style: TextStyle(
-                              color: AppTheme.accent,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Icon(
-                            LucideIcons.externalLink,
-                            size: 12,
-                            color: AppTheme.accent,
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
-            ),
             ],
           ),
         ),
@@ -489,66 +489,66 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            // Economy dashboard flush to top
-            _buildEconomyDashboard(country),
-            const SizedBox(height: 24),
-            // Bilateral corridors + treasuries
-            Padding(
-              padding: AppTheme.pagePaddingEdgeInsets,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildBilateralMatrix(profile),
-                  const SizedBox(height: 24),
-                  _buildCommunityTreasuries(profile),
-                  const SizedBox(height: 24),
-                  // Learn More link
-                  GestureDetector(
-                    onTap: () => launchUrl(
-                      Uri.parse('https://diasporanearby.com/#decoupling'),
-                      mode: LaunchMode.externalApplication,
-                    ),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accent.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppTheme.accent.withValues(alpha: 0.2),
+              // Economy dashboard flush to top
+              _buildEconomyDashboard(country),
+              const SizedBox(height: 24),
+              // Bilateral corridors + treasuries
+              Padding(
+                padding: AppTheme.pagePaddingEdgeInsets,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildBilateralMatrix(profile),
+                    const SizedBox(height: 24),
+                    _buildCommunityTreasuries(profile),
+                    const SizedBox(height: 24),
+                    // Learn More link
+                    GestureDetector(
+                      onTap: () => launchUrl(
+                        Uri.parse('https://diasporanearby.com/#decoupling'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accent.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.accent.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              LucideIcons.bookOpen,
+                              size: 16,
+                              color: AppTheme.accent,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Full Tokenomics & Governance',
+                              style: TextStyle(
+                                color: AppTheme.accent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(
+                              LucideIcons.externalLink,
+                              size: 12,
+                              color: AppTheme.accent,
+                            ),
+                          ],
                         ),
                       ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            LucideIcons.bookOpen,
-                            size: 16,
-                            color: AppTheme.accent,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Full Tokenomics & Governance',
-                            style: TextStyle(
-                              color: AppTheme.accent,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Icon(
-                            LucideIcons.externalLink,
-                            size: 12,
-                            color: AppTheme.accent,
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                  const SizedBox(height: 100),
-                ],
+                    const SizedBox(height: 100),
+                  ],
+                ),
               ),
-            ),
             ],
           ),
         ),
@@ -2118,8 +2118,8 @@ class _GovernanceUnitCard extends ConsumerWidget {
         final title = unitId == 'global_community'
             ? defaultTitle
             : (cleanName != null && cleanName.isNotEmpty
-                ? '$cleanName Community Treasury'
-                : defaultTitle);
+                  ? '$cleanName Community Treasury'
+                  : defaultTitle);
 
         return GestureDetector(
           onTap: () => Navigator.push(

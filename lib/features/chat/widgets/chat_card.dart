@@ -244,7 +244,9 @@ class ChatCard extends ConsumerWidget {
           final isSent = lastMessage.senderId == currentUserId;
           final direction = isSent ? 'Sent' : 'Received';
           final assetLabel = isTokenTransfer ? r'$DIASPORA' : 'DSP';
-          final assetColor = isTokenTransfer ? AppTheme.tokenColor : AppTheme.dspColor;
+          final assetColor = isTokenTransfer
+              ? AppTheme.tokenColor
+              : AppTheme.dspColor;
 
           // Build a rich Row widget directly for transfers
           return Row(

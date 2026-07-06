@@ -1571,11 +1571,11 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
               style: TextStyle(fontSize: 11, color: Colors.orange[400]),
             )
           : (_showCurrentLocationName
-              ? Text(
-                  '+10 PoCT for transparency (forfeited permanently if hidden)',
-                  style: TextStyle(fontSize: 11, color: Colors.green[400]),
-                )
-              : null),
+                ? Text(
+                    '+10 PoCT for transparency (forfeited permanently if hidden)',
+                    style: TextStyle(fontSize: 11, color: Colors.green[400]),
+                  )
+                : null),
       value: _showCurrentLocationName,
       onChanged: (v) {
         if (v) {
@@ -1650,9 +1650,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: acknowledged
-                  ? () => Navigator.pop(ctx, true)
-                  : null,
+              onPressed: acknowledged ? () => Navigator.pop(ctx, true) : null,
               child: const Text('Hide & Forfeit +10 PoCT'),
             ),
           ],

@@ -93,7 +93,8 @@ class AuthController extends Notifier<bool> {
           .collection('users')
           .doc(user.uid)
           .get();
-      final profileExists = userDoc.exists &&
+      final profileExists =
+          userDoc.exists &&
           userDoc.data() != null &&
           userDoc.data()!.containsKey('firstName') &&
           (userDoc.data()!['firstName'] as String?)?.isNotEmpty == true;

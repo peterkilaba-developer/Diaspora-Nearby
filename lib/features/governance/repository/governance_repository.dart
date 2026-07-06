@@ -12,8 +12,8 @@ final governanceRepositoryProvider = Provider((ref) => GovernanceRepository());
 /// ref.watch(treasuryTokenBalanceProvider) can chain properly.
 final governanceUnitStreamProvider =
     StreamProvider.family<GovernanceUnit?, String>((ref, id) {
-  return ref.watch(governanceRepositoryProvider).watchGovernanceUnit(id);
-});
+      return ref.watch(governanceRepositoryProvider).watchGovernanceUnit(id);
+    });
 
 class GovernanceRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -48,12 +48,18 @@ class GovernanceRepository {
   }
 
   Stream<GovernanceUnit?> watchGovernanceUnit(String id) {
-    return _firestore.collection('governance').doc(id).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      final data = doc.data()!;
-      data['id'] ??= doc.id;
-      return GovernanceUnit.fromJson(data);
-    }).onErrorReturn(null).startWith(null);
+    return _firestore
+        .collection('governance')
+        .doc(id)
+        .snapshots()
+        .map((doc) {
+          if (!doc.exists) return null;
+          final data = doc.data()!;
+          data['id'] ??= doc.id;
+          return GovernanceUnit.fromJson(data);
+        })
+        .onErrorReturn(null)
+        .startWith(null);
   }
 
   Future<void> updateSigners(String id, List<String> signerIds) async {

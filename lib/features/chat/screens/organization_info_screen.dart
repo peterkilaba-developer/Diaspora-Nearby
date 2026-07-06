@@ -237,18 +237,12 @@ class _OrganizationInfoScreenState
                 Positioned(
                   left: 0,
                   bottom: 0,
-                  child: Text(
-                    hostFlag,
-                    style: const TextStyle(fontSize: 60),
-                  ),
+                  child: Text(hostFlag, style: const TextStyle(fontSize: 60)),
                 ),
                 Positioned(
                   right: 0,
                   top: 0,
-                  child: Text(
-                    homeFlag,
-                    style: const TextStyle(fontSize: 44),
-                  ),
+                  child: Text(homeFlag, style: const TextStyle(fontSize: 44)),
                 ),
               ],
             ),
@@ -261,9 +255,7 @@ class _OrganizationInfoScreenState
       radius: 48,
       backgroundImage: (logo != null && logo.isNotEmpty)
           ? CachedNetworkImageProvider(logo)
-          : (fallback != null
-              ? CachedNetworkImageProvider(fallback)
-              : null),
+          : (fallback != null ? CachedNetworkImageProvider(fallback) : null),
       child: ((logo == null || logo.isEmpty) && fallback == null)
           ? const Icon(LucideIcons.building2, size: 48)
           : null,
@@ -372,15 +364,18 @@ class _OrganizationInfoScreenState
                               icon: const Icon(LucideIcons.shieldCheck),
                               label: const Text('Chamber Member'),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                             )
                           : OutlinedButton.icon(
-                              onPressed:
-                                  _isFollowLoading ? null : _toggleFollow,
+                              onPressed: _isFollowLoading
+                                  ? null
+                                  : _toggleFollow,
                               icon: _isFollowLoading
                                   ? const SizedBox(
                                       width: 16,
@@ -395,10 +390,14 @@ class _OrganizationInfoScreenState
                                           : LucideIcons.plus,
                                     ),
                               label: Text(
-                                _isFollowing ? 'Following' : 'Follow Organization',
+                                _isFollowing
+                                    ? 'Following'
+                                    : 'Follow Organization',
                               ),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),

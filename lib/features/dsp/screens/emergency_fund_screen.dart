@@ -127,14 +127,22 @@ class _OverviewTab extends StatelessWidget {
         // Concise support areas — icon + title only
         Text(
           'What We Cover',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildCoverageRow(context, LucideIcons.stethoscope, 'Medical Emergency'),
+        _buildCoverageRow(
+          context,
+          LucideIcons.stethoscope,
+          'Medical Emergency',
+        ),
         _buildCoverageRow(context, LucideIcons.gavel, 'Legal Aid'),
-        _buildCoverageRow(context, LucideIcons.heartHandshake, 'Bereavement Support'),
+        _buildCoverageRow(
+          context,
+          LucideIcons.heartHandshake,
+          'Bereavement Support',
+        ),
         _buildCoverageRow(context, LucideIcons.plane, 'Repatriation'),
 
         const SizedBox(height: 24),
@@ -142,14 +150,26 @@ class _OverviewTab extends StatelessWidget {
         // How it works — condensed to 3 short steps
         Text(
           'How It Works',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        _buildStepRow(context, '1', 'Submit a Support Request via the Support tab'),
-        _buildStepRow(context, '2', 'Provide documentation to your Community Secretary'),
-        _buildStepRow(context, '3', 'Leadership reviews — once approved, \$DIASPORA is auto-disbursed on-chain to the recipient'),
+        _buildStepRow(
+          context,
+          '1',
+          'Submit a Support Request via the Support tab',
+        ),
+        _buildStepRow(
+          context,
+          '2',
+          'Provide documentation to your Community Secretary',
+        ),
+        _buildStepRow(
+          context,
+          '3',
+          'Leadership reviews — once approved, \$DIASPORA is auto-disbursed on-chain to the recipient',
+        ),
 
         const SizedBox(height: 24),
 
@@ -164,7 +184,11 @@ class _OverviewTab extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(LucideIcons.alertTriangle, size: 16, color: Colors.orange),
+              const Icon(
+                LucideIcons.alertTriangle,
+                size: 16,
+                color: Colors.orange,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -172,7 +196,9 @@ class _OverviewTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ),
@@ -265,7 +291,11 @@ class _OverviewTab extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _buildStatBadge(context, '\$100 in \$DIASPORA', 'Contribution'),
+                child: _buildStatBadge(
+                  context,
+                  '\$100 in \$DIASPORA',
+                  'Contribution',
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(child: _buildStatBadge(context, 'Global', 'Coverage')),
@@ -299,7 +329,9 @@ class _OverviewTab extends StatelessWidget {
             label,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
               fontSize: 10,
             ),
           ),
@@ -319,7 +351,11 @@ class _OverviewTab extends StatelessWidget {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 18),
+            child: Icon(
+              icon,
+              color: Theme.of(context).colorScheme.primary,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           Text(
@@ -360,7 +396,9 @@ class _OverviewTab extends StatelessWidget {
               text,
               style: TextStyle(
                 fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.8),
                 height: 1.4,
               ),
             ),
@@ -423,9 +461,9 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
         // --- HEADER ---
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          decoration: AppTheme.cardDecoration(context).copyWith(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          decoration: AppTheme.cardDecoration(
+            context,
+          ).copyWith(borderRadius: BorderRadius.circular(20)),
           child: Column(
             children: [
               Icon(
@@ -538,17 +576,21 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
     final Color statusColor = met == null
         ? theme.hintColor
         : met
-            ? const Color(0xFF7CAE7A)
-            : Colors.redAccent;
+        ? const Color(0xFF7CAE7A)
+        : Colors.redAccent;
     final IconData statusIcon = met == null
         ? LucideIcons.loader
         : met
-            ? LucideIcons.checkCircle
-            : LucideIcons.xCircle;
+        ? LucideIcons.checkCircle
+        : LucideIcons.xCircle;
 
     return Row(
       children: [
-        Icon(icon, size: 16, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+        Icon(
+          icon,
+          size: 16,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -2953,7 +2995,8 @@ class _DiasporaPaymentCard extends ConsumerStatefulWidget {
   final VoidCallback onPaid;
   const _DiasporaPaymentCard({required this.userId, required this.onPaid});
   @override
-  ConsumerState<_DiasporaPaymentCard> createState() => _DiasporaPaymentCardState();
+  ConsumerState<_DiasporaPaymentCard> createState() =>
+      _DiasporaPaymentCardState();
 }
 
 class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
@@ -3002,29 +3045,52 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
 
   Future<void> _loadQuote() async {
     try {
-      final q = await ref.read(emergencyFundServiceProvider).quoteDiasporaContribution();
-      if (mounted) setState(() { _quote = q; _loadingQuote = false; });
+      final q = await ref
+          .read(emergencyFundServiceProvider)
+          .quoteDiasporaContribution();
+      if (mounted)
+        setState(() {
+          _quote = q;
+          _loadingQuote = false;
+        });
     } catch (e) {
       debugPrint('[EmergencyFund] quote failed, using fallback: $e');
-      if (mounted) setState(() { _quote = _fallbackQuote(); _loadingQuote = false; });
+      if (mounted)
+        setState(() {
+          _quote = _fallbackQuote();
+          _loadingQuote = false;
+        });
     }
   }
 
   Future<void> _pay() async {
-    setState(() { _paying = true; _error = null; });
+    setState(() {
+      _paying = true;
+      _error = null;
+    });
     try {
       await ref.read(emergencyFundServiceProvider).payContributionInDiaspora();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('🎉 Membership activated! \$DIASPORA contribution received.'),
-          backgroundColor: Color(0xFF7CAE7A),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '🎉 Membership activated! \$DIASPORA contribution received.',
+            ),
+            backgroundColor: Color(0xFF7CAE7A),
+          ),
+        );
         widget.onPaid();
       }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); });
+      if (mounted)
+        setState(() {
+          _error = e.toString();
+        });
     } finally {
-      if (mounted) setState(() { _paying = false; });
+      if (mounted)
+        setState(() {
+          _paying = false;
+        });
     }
   }
 
@@ -3037,16 +3103,32 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Image.asset('assets/icons/logo-orange-transparent-32.png', width: 18, height: 18),
-            const SizedBox(width: 8),
-            const Text('Contribute in \$DIASPORA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          ]),
+          Row(
+            children: [
+              Image.asset(
+                'assets/icons/logo-orange-transparent-32.png',
+                width: 18,
+                height: 18,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Contribute in \$DIASPORA',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (_loadingQuote)
-            const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
           else if (_quote != null) ...[
-            _row(theme, 'You contribute', '${_quote!['amountDiaspora']} \$DIASPORA'),
+            _row(
+              theme,
+              'You contribute',
+              '${_quote!['amountDiaspora']} \$DIASPORA',
+            ),
             const SizedBox(height: 6),
             _row(theme, 'USD equivalent', '\$${_quote!['usd']}'),
             const SizedBox(height: 6),
@@ -3060,25 +3142,43 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
               _treasuryAddress == null ? '—' : _shortAddr(_treasuryAddress!),
             ),
           ],
-          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12))),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
           const SizedBox(height: 16),
           _buildPayCta(theme),
           const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(LucideIcons.shieldCheck, size: 12, color: theme.hintColor),
-            const SizedBox(width: 4),
-            Text('On-chain transfer · Base L2', style: TextStyle(fontSize: 11, color: theme.hintColor)),
-          ]),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(LucideIcons.shieldCheck, size: 12, color: theme.hintColor),
+              const SizedBox(width: 4),
+              Text(
+                'On-chain transfer · Base L2',
+                style: TextStyle(fontSize: 11, color: theme.hintColor),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _row(ThemeData theme, String l, String v) => Row(children: [
-    Text(l, style: TextStyle(fontSize: 12, color: theme.hintColor)),
-    const Spacer(),
-    Text(v, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-  ]);
+  Widget _row(ThemeData theme, String l, String v) => Row(
+    children: [
+      Text(l, style: TextStyle(fontSize: 12, color: theme.hintColor)),
+      const Spacer(),
+      Text(
+        v,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+    ],
+  );
 
   num _requiredDiaspora() {
     final raw = _quote?['amountDiaspora'];
@@ -3095,29 +3195,51 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
       data: (b) {
         final bal = _balanceNum(b);
         final enough = bal >= required;
-        return Row(children: [
-          Text('Your balance', style: TextStyle(fontSize: 12, color: theme.hintColor)),
-          const Spacer(),
-          Text(
-            '$b \$DIASPORA',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: enough ? theme.colorScheme.onSurface : Colors.redAccent,
+        return Row(
+          children: [
+            Text(
+              'Your balance',
+              style: TextStyle(fontSize: 12, color: theme.hintColor),
             ),
-          ),
-        ]);
+            const Spacer(),
+            Text(
+              '$b \$DIASPORA',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: enough ? theme.colorScheme.onSurface : Colors.redAccent,
+              ),
+            ),
+          ],
+        );
       },
-      loading: () => Row(children: [
-        Text('Your balance', style: TextStyle(fontSize: 12, color: theme.hintColor)),
-        const Spacer(),
-        const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-      ]),
-      error: (_, _) => Row(children: [
-        Text('Your balance', style: TextStyle(fontSize: 12, color: theme.hintColor)),
-        const Spacer(),
-        const Text('—', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-      ]),
+      loading: () => Row(
+        children: [
+          Text(
+            'Your balance',
+            style: TextStyle(fontSize: 12, color: theme.hintColor),
+          ),
+          const Spacer(),
+          const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ],
+      ),
+      error: (_, _) => Row(
+        children: [
+          Text(
+            'Your balance',
+            style: TextStyle(fontSize: 12, color: theme.hintColor),
+          ),
+          const Spacer(),
+          const Text(
+            '—',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3125,20 +3247,28 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
     final balanceAsync = ref.watch(tokenBalanceProvider);
     final required = _requiredDiaspora();
     final balanceReady = balanceAsync.hasValue;
-    final hasEnough = balanceReady && _balanceNum(balanceAsync.value!) >= required;
+    final hasEnough =
+        balanceReady && _balanceNum(balanceAsync.value!) >= required;
     final canPay = !_paying && !_loadingQuote && balanceReady && hasEnough;
     final label = _paying
         ? 'Processing on-chain...'
         : (balanceReady && !hasEnough)
-            ? 'Insufficient \$DIASPORA balance'
-            : 'Contribute & Activate Membership';
+        ? 'Insufficient \$DIASPORA balance'
+        : 'Contribute & Activate Membership';
     return Row(
       children: [
         Expanded(
           child: FilledButton.icon(
             onPressed: canPay ? _pay : null,
             icon: _paying
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : Icon(
                     hasEnough ? LucideIcons.zap : LucideIcons.alertCircle,
                     size: 16,
@@ -3198,14 +3328,18 @@ class _InterestHeartButton extends ConsumerWidget {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Added to the Emergency Fund interest list.'),
+                            content: Text(
+                              'Added to the Emergency Fund interest list.',
+                            ),
                           ),
                         );
                       }
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Could not register interest: $e')),
+                          SnackBar(
+                            content: Text('Could not register interest: $e'),
+                          ),
                         );
                       }
                     }
@@ -3271,7 +3405,11 @@ class _SupportLockedDialog extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'This is a self-funding mutual aid fund. Support opens once $threshold members have actually contributed — only then is there critical capital to support requests.',
-              style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.hintColor,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -3286,7 +3424,11 @@ class _SupportLockedDialog extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Only members who have completed their annual contribution can request support.',
-              style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.hintColor,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 12),
           ],
@@ -3301,7 +3443,11 @@ class _SupportLockedDialog extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'You need at least $required \$DIASPORA to contribute and become an active member.',
-              style: TextStyle(fontSize: 13, color: theme.hintColor, height: 1.4),
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.hintColor,
+                height: 1.4,
+              ),
             ),
           ],
         ],
@@ -3327,9 +3473,7 @@ class _SupportLockedDialog extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(label, style: const TextStyle(fontSize: 13)),
-        ),
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
         Text(
           value,
           style: TextStyle(

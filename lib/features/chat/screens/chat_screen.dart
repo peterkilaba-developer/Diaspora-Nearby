@@ -748,7 +748,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendLocationMessage(MessageLocation location, String? caption) async {
+  Future<void> _sendLocationMessage(
+    MessageLocation location,
+    String? caption,
+  ) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -1297,10 +1300,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   final host = chat?.hostCountryCode;
                   final home = chat?.homeCountryCode;
                   if (host != null && home != null) {
-                    final hostFlag =
-                        country_data.getCountryByCode(host)?.flag;
-                    final homeFlag =
-                        country_data.getCountryByCode(home)?.flag;
+                    final hostFlag = country_data.getCountryByCode(host)?.flag;
+                    final homeFlag = country_data.getCountryByCode(home)?.flag;
                     if (hostFlag != null && homeFlag != null) {
                       communityAvatar = SizedBox(
                         width: 36,
@@ -1743,11 +1744,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 );
               }
 
-
               // Corridor chamber: followers can read but not post.
               // Substitute the input with an upgrade banner when accessLevel
               // is anything other than 'member' on the user's userChats doc.
-              final isChamberChat = chat != null &&
+              final isChamberChat =
+                  chat != null &&
                   chat.type == 'organization' &&
                   chat.id.startsWith('org_chamber_');
               if (isChamberChat) {
@@ -2654,7 +2655,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 case ReportResult.failed:
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Failed to submit report. Please try again.'),
+                      content: Text(
+                        'Failed to submit report. Please try again.',
+                      ),
                       backgroundColor: AppTheme.error,
                     ),
                   );

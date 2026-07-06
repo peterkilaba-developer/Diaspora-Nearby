@@ -28,11 +28,10 @@ class AppBootstrap {
     debugPrint('▶ AppBootstrap: [2/4] Firebase initialized ✓');
 
     // 3. [PERF] Audio & Storage are independent — run in parallel
-    debugPrint('▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...');
-    await Future.wait([
-      _initAudio(),
-      _initStorage(),
-    ]);
+    debugPrint(
+      '▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...',
+    );
+    await Future.wait([_initAudio(), _initStorage()]);
     debugPrint('▶ AppBootstrap: [3/4] Audio + Storage initialized ✓');
 
     // 4. Feature Services (may depend on storage)
@@ -90,7 +89,8 @@ class AppBootstrap {
           // Tokens are fetched lazily by the SDK once activation completes.
           unawaited(
             activation.catchError(
-              (Object e) => debugPrint('AppBootstrap: App Check Init Error: $e'),
+              (Object e) =>
+                  debugPrint('AppBootstrap: App Check Init Error: $e'),
             ),
           );
         } else {

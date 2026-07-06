@@ -31,8 +31,7 @@ class RadioStation {
 
   /// Returns the best URL for streaming: prefers the pre-resolved direct
   /// stream URL (skips playlist/redirect resolution), falls back to raw url.
-  String get streamUrl =>
-      urlResolved.isNotEmpty ? urlResolved : url;
+  String get streamUrl => urlResolved.isNotEmpty ? urlResolved : url;
 
   RadioStation({
     required this.stationuuid,

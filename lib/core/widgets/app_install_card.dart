@@ -99,19 +99,18 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
       }
 
       // 2. Write tester signup to Firestore
-      final userId =
-          ref.read(authRepositoryProvider).currentUser?.uid ?? '';
+      final userId = ref.read(authRepositoryProvider).currentUser?.uid ?? '';
 
       await FirebaseFirestore.instance
           .collection('app_testers')
           .doc(email)
           .set({
-        'email': email,
-        'platform': _detectedPlatform,
-        'userId': userId,
-        'signedUpAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
-      });
+            'email': email,
+            'platform': _detectedPlatform,
+            'userId': userId,
+            'signedUpAt': FieldValue.serverTimestamp(),
+            'status': 'pending',
+          });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_testerSignedUpKey, true);
@@ -125,8 +124,11 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
           SnackBar(
             content: Row(
               children: [
-                const Icon(LucideIcons.checkCircle,
-                    color: Colors.white, size: 18),
+                const Icon(
+                  LucideIcons.checkCircle,
+                  color: Colors.white,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Text('Signed up! We\'ll send an invite to $email'),
               ],
@@ -168,8 +170,7 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
             ),
             child: const Row(
               children: [
-                Icon(LucideIcons.download,
-                    color: Colors.white, size: 18),
+                Icon(LucideIcons.download, color: Colors.white, size: 18),
                 SizedBox(width: 8),
                 Text(
                   'Get Diaspora Nearby on Your Device',
@@ -248,8 +249,11 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
               ),
               const SizedBox(height: 6),
               _iosStep('1', 'Tap the Share button', LucideIcons.share2),
-              _iosStep('2', 'Scroll down & tap "Add to Home Screen"',
-                  LucideIcons.plusSquare),
+              _iosStep(
+                '2',
+                'Scroll down & tap "Add to Home Screen"',
+                LucideIcons.plusSquare,
+              ),
               _iosStep('3', 'Tap "Add" to confirm', LucideIcons.check),
             ],
           ),
@@ -264,15 +268,19 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
     final platformHint = _isIOS
         ? 'Get early access to the iOS app via TestFlight'
         : _detectedPlatform == 'android'
-            ? 'Get early access to the Android app via Google Play'
-            : 'Get early access to the native app before public launch';
+        ? 'Get early access to the Android app via Google Play'
+        : 'Get early access to the native app before public launch';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(LucideIcons.smartphone, size: 16, color: Colors.deepPurple),
+            const Icon(
+              LucideIcons.smartphone,
+              size: 16,
+              color: Colors.deepPurple,
+            ),
             const SizedBox(width: 6),
             Text(
               'Become a Native App Tester',
@@ -299,14 +307,11 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.3),
-              ),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
             ),
             child: const Row(
               children: [
-                Icon(LucideIcons.checkCircle,
-                    size: 18, color: AppTheme.accent),
+                Icon(LucideIcons.checkCircle, size: 18, color: AppTheme.accent),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -385,11 +390,11 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
                     )
                   : const Icon(LucideIcons.download, size: 14),
               label: Text(
-                _submitting
-                    ? 'Setting Up...'
-                    : 'Install PWA & Sign Me Up',
+                _submitting ? 'Setting Up...' : 'Install PWA & Sign Me Up',
                 style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
               onPressed: _submitting ? null : _installAndSignUp,
             ),

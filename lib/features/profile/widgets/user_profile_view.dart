@@ -18,7 +18,6 @@ import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 
-
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -338,9 +337,9 @@ class UserProfileView extends ConsumerWidget {
                                             final daysActive = DateTime.now()
                                                 .difference(signupDate)
                                                 .inDays;
-                                            final formattedDate =
-                                                DateFormat('MMM d, yyyy')
-                                                    .format(signupDate);
+                                            final formattedDate = DateFormat(
+                                              'MMM d, yyyy',
+                                            ).format(signupDate);
                                             return Row(
                                               children: [
                                                 Text(
@@ -1299,9 +1298,6 @@ class UserProfileView extends ConsumerWidget {
       ),
     );
   }
-
-
-
 
   // ignore: unused_element
   Widget _buildQRConnectionSection(BuildContext context, WidgetRef ref) {
@@ -2415,7 +2411,9 @@ class UserProfileView extends ConsumerWidget {
     }
 
     return FutureBuilder<Map<String, Map<String, dynamic>>>(
-      future: ref.read(trustRepositoryProvider).getQrExchangeRecords(profileUid),
+      future: ref
+          .read(trustRepositoryProvider)
+          .getQrExchangeRecords(profileUid),
       builder: (context, snapshot) {
         final records = snapshot.data ?? {};
 
@@ -2441,19 +2439,24 @@ class UserProfileView extends ConsumerWidget {
                               user: userProfile,
                               searchQuery: '',
                               onNameTap: () => context.push('/profile/$uid'),
-                              onChatTap: () => context.push('/chat/direct/$uid'),
+                              onChatTap: () =>
+                                  context.push('/chat/direct/$uid'),
                               isStatic: false,
                             ),
                             if (exchangeData != null)
                               Padding(
                                 padding: const EdgeInsets.only(
-                                  left: 12, right: 12, bottom: 8,
+                                  left: 12,
+                                  right: 12,
+                                  bottom: 8,
                                 ),
                                 child: Row(
                                   children: [
                                     // Location
-                                    if (exchangeData['locationAddress'] != null &&
-                                        exchangeData['locationAddress'] != 'Location Unavailable') ...[
+                                    if (exchangeData['locationAddress'] !=
+                                            null &&
+                                        exchangeData['locationAddress'] !=
+                                            'Location Unavailable') ...[
                                       const Icon(
                                         LucideIcons.mapPin,
                                         size: 12,
@@ -2462,7 +2465,8 @@ class UserProfileView extends ConsumerWidget {
                                       const SizedBox(width: 4),
                                       Flexible(
                                         child: Text(
-                                          exchangeData['locationAddress'] as String,
+                                          exchangeData['locationAddress']
+                                              as String,
                                           style: const TextStyle(
                                             fontSize: 11,
                                             color: Colors.grey,
@@ -2482,7 +2486,9 @@ class UserProfileView extends ConsumerWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        _formatExchangeTimestamp(exchangeData['timestamp']),
+                                        _formatExchangeTimestamp(
+                                          exchangeData['timestamp'],
+                                        ),
                                         style: const TextStyle(
                                           fontSize: 11,
                                           color: Colors.grey,

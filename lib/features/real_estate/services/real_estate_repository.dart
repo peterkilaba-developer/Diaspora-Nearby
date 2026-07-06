@@ -66,7 +66,10 @@ class RealEstateRepository {
       debugPrint('getMyListings error: $e');
       // Fallback without orderBy (missing index)
       try {
-        final snap = await _col.where('ownerId', isEqualTo: uid).limit(100).get();
+        final snap = await _col
+            .where('ownerId', isEqualTo: uid)
+            .limit(100)
+            .get();
         var list = snap.docs
             .map(
               (d) => RealEstateListing.fromJson(

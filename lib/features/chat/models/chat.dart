@@ -275,10 +275,10 @@ class Chat {
     return copyWith(
       isPinned:
           userChatData['isPinned'] == true || userChatData['pinned'] == true,
-      isPinnedBottom: userChatData['isPinnedBottom'] == true ||
+      isPinnedBottom:
+          userChatData['isPinnedBottom'] == true ||
           userChatData['pinnedBottom'] == true,
-      isMuted:
-          userChatData['isMuted'] == true || userChatData['muted'] == true,
+      isMuted: userChatData['isMuted'] == true || userChatData['muted'] == true,
       unreadCount: userChatData['unreadCount'] as int? ?? 0,
     );
   }

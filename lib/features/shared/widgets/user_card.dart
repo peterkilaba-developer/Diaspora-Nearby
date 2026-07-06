@@ -295,7 +295,10 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
       final theirLng =
           widget.user.currentLocation?.geometry.location.lng ??
           widget.user.hostLocation.geometry?.location.lng;
-      if (myLat != null && myLng != null && theirLat != null && theirLng != null) {
+      if (myLat != null &&
+          myLng != null &&
+          theirLat != null &&
+          theirLng != null) {
         distance = calculateDistance(myLat, myLng, theirLat, theirLng);
       }
     }

@@ -288,7 +288,10 @@ class CommunityRepository {
     // This might be heavy, but let's just fetch from firestore for now as it's rarely used
     // Or implement syncAllCommunities()
     try {
-      final snapshot = await _firestore.collection('communities').limit(500).get();
+      final snapshot = await _firestore
+          .collection('communities')
+          .limit(500)
+          .get();
       final list = snapshot.docs
           .map((doc) => Community.fromJson({...doc.data(), 'id': doc.id}))
           .toList();
@@ -310,7 +313,10 @@ class CommunityRepository {
       // Children of Continent are Countries
       // Note: We'd need to filter by continent in Firestore which requires a field
       // For now, fetch all countries and filter in Dart if continent mapping is available
-      final snapshot = await query.where('type', isEqualTo: 'country').limit(200).get();
+      final snapshot = await query
+          .where('type', isEqualTo: 'country')
+          .limit(200)
+          .get();
       // Filter by continent (Logic would use LocationUtils mapping)
       return snapshot.docs
           .map(

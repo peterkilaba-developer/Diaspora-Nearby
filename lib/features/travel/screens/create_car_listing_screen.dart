@@ -65,9 +65,18 @@ class _CreateCarListingScreenState
   String? _vehicleBatteryKWh;
 
   static const _allFeatures = [
-    'AC', 'GPS', 'Bluetooth', 'USB Charging', 'Backup Camera',
-    'Dashcam', 'Roof Rack', 'Child Seat', 'Spare Tire',
-    'First Aid Kit', 'Toll Pass', 'Ski Rack',
+    'AC',
+    'GPS',
+    'Bluetooth',
+    'USB Charging',
+    'Backup Camera',
+    'Dashcam',
+    'Roof Rack',
+    'Child Seat',
+    'Spare Tire',
+    'First Aid Kit',
+    'Toll Pass',
+    'Ski Rack',
   ];
 
   @override
@@ -169,10 +178,12 @@ class _CreateCarListingScreenState
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_vehicleMake == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Please select a vehicle make'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a vehicle make'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
@@ -208,7 +219,8 @@ class _CreateCarListingScreenState
         model: _vehicleModel,
         year: _vehicleYear != null ? int.tryParse(_vehicleYear!) : null,
         vin: _vehicleVinController.text.trim().isNotEmpty
-            ? _vehicleVinController.text.trim().toUpperCase() : null,
+            ? _vehicleVinController.text.trim().toUpperCase()
+            : null,
         transmission: _transmission,
         seats: _seats,
         fuelType: _fuelType,
@@ -221,7 +233,8 @@ class _CreateCarListingScreenState
         engineHP: _vehicleHP,
         engineLabel: _vehicleEngineLabel,
         mileage: _vehicleMileageController.text.trim().isNotEmpty
-            ? int.tryParse(_vehicleMileageController.text.trim()) : null,
+            ? int.tryParse(_vehicleMileageController.text.trim())
+            : null,
         vehicleType: _vehicleType,
         abs: _vehicleAbs,
         airbagLocations: _vehicleAirbagLocations,
@@ -237,10 +250,12 @@ class _CreateCarListingScreenState
         await repo.updateListing(widget.existing!.id, listing.toJson());
         if (mounted) {
           Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Listing updated!'),
-            behavior: SnackBarBehavior.floating,
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Listing updated!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
       } else {
         final newId = await repo.createListing(listing);
@@ -248,22 +263,29 @@ class _CreateCarListingScreenState
         if (mounted) {
           Navigator.pop(context, true);
           if (created != null) {
-            Navigator.push(context, MaterialPageRoute(
-              builder: (_) => PeerListingDetailScreen(listing: created),
-            ));
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PeerListingDetailScreen(listing: created),
+              ),
+            );
           }
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Car listed for rental!'),
-            behavior: SnackBarBehavior.floating,
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Car listed for rental!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -282,10 +304,12 @@ class _CreateCarListingScreenState
       if (!mounted) return;
 
       if (!result.isValid) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(result.errorMessage ?? 'Could not decode VIN'),
-          backgroundColor: AppTheme.error,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Could not decode VIN'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
         return;
       }
 
@@ -364,12 +388,14 @@ class _CreateCarListingScreenState
         if (result.abs != null) filled.add('ABS');
         if (result.airbagLocations != null) filled.add('Airbags');
 
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Auto-filled ${filled.length} fields: ${filled.join(', ')}',
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Auto-filled ${filled.length} fields: ${filled.join(', ')}',
+            ),
+            backgroundColor: AppTheme.accent,
           ),
-          backgroundColor: AppTheme.accent,
-        ));
+        );
       }
     } finally {
       if (mounted) setState(() => _vinLookupLoading = false);
@@ -383,10 +409,12 @@ class _CreateCarListingScreenState
 
     _vehicleVinController.text = result.vin;
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('VIN captured via ${result.source}: ${result.vin}'),
-      backgroundColor: AppTheme.accent,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('VIN captured via ${result.source}: ${result.vin}'),
+        backgroundColor: AppTheme.accent,
+      ),
+    );
 
     // Auto-trigger lookup
     _lookupVin();
@@ -424,7 +452,9 @@ class _CreateCarListingScreenState
             Expanded(
               child: ListView(
                 padding: EdgeInsets.only(
-                  left: 8, right: 8, top: 8,
+                  left: 8,
+                  right: 8,
+                  top: 8,
                   bottom: MediaQuery.of(context).padding.bottom + 100,
                 ),
                 children: [
@@ -442,13 +472,18 @@ class _CreateCarListingScreenState
                   _buildSearchableDropdown(
                     label: 'Make',
                     value: _vehicleMake,
-                    items: _vehicleMake != null &&
-                        !VehicleData.brands.any(
-                            (b) => b.toLowerCase() == _vehicleMake!.toLowerCase())
+                    items:
+                        _vehicleMake != null &&
+                            !VehicleData.brands.any(
+                              (b) =>
+                                  b.toLowerCase() ==
+                                  _vehicleMake!.toLowerCase(),
+                            )
                         ? [_vehicleMake!, ...VehicleData.brands]
                         : VehicleData.brands,
                     hint: 'Select brand',
-                    theme: theme, isDark: isDark,
+                    theme: theme,
+                    isDark: isDark,
                     onChanged: (v) => setState(() {
                       _vehicleMake = v;
                       _vehicleModel = null;
@@ -462,45 +497,55 @@ class _CreateCarListingScreenState
                     value: _vehicleModel,
                     items: models,
                     hint: _vehicleMake == null
-                        ? 'Select make first' : 'Select model',
-                    theme: theme, isDark: isDark,
+                        ? 'Select make first'
+                        : 'Select model',
+                    theme: theme,
+                    isDark: isDark,
                     enabled: _vehicleMake != null,
                     onChanged: (v) => setState(() => _vehicleModel = v),
                   ),
                   const SizedBox(height: 12),
 
                   // Year & Mileage row
-                  Row(children: [
-                    Expanded(
-                      child: _buildSearchableDropdown(
-                        label: 'Year',
-                        value: _vehicleYear,
-                        items: VehicleData.years,
-                        hint: 'Year',
-                        theme: theme, isDark: isDark,
-                        onChanged: (v) => setState(() => _vehicleYear = v),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSearchableDropdown(
+                          label: 'Year',
+                          value: _vehicleYear,
+                          items: VehicleData.years,
+                          hint: 'Year',
+                          theme: theme,
+                          isDark: isDark,
+                          onChanged: (v) => setState(() => _vehicleYear = v),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Mileage', style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w500,
-                            color: theme.hintColor,
-                          )),
-                          const SizedBox(height: 4),
-                          _buildTextField(
-                            controller: _vehicleMileageController,
-                            hint: 'Mileage (km)',
-                            keyboardType: TextInputType.number,
-                            theme: theme, isDark: isDark,
-                          ),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mileage',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _buildTextField(
+                              controller: _vehicleMileageController,
+                              hint: 'Mileage (km)',
+                              keyboardType: TextInputType.number,
+                              theme: theme,
+                              isDark: isDark,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ]),
+                    ],
+                  ),
                   const SizedBox(height: 16),
 
                   // Auto-generated title preview
@@ -508,25 +553,35 @@ class _CreateCarListingScreenState
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accent.withValues(
-                          alpha: isDark ? 0.08 : 0.05),
+                          alpha: isDark ? 0.08 : 0.05,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Listing Title', style: TextStyle(
-                            fontSize: 10, fontWeight: FontWeight.w600,
-                            color: AppTheme.accent, letterSpacing: 0.5,
-                          )),
+                          const Text(
+                            'Listing Title',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.accent,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                           const SizedBox(height: 4),
-                          Text(_generateTitle(),
+                          Text(
+                            _generateTitle(),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                               color: theme.colorScheme.onSurface,
                             ),
                           ),
@@ -537,110 +592,199 @@ class _CreateCarListingScreenState
                   ],
 
                   // Transmission
-                  _buildChipRow('Transmission', theme,
-                    ['Automatic', 'Manual', 'CVT'], _transmission, isDark,
-                    (v) => setState(() => _transmission = v)),
+                  _buildChipRow(
+                    'Transmission',
+                    theme,
+                    ['Automatic', 'Manual', 'CVT'],
+                    _transmission,
+                    isDark,
+                    (v) => setState(() => _transmission = v),
+                  ),
                   const SizedBox(height: 16),
 
                   // Fuel type
-                  _buildChipRow('Fuel Type', theme,
+                  _buildChipRow(
+                    'Fuel Type',
+                    theme,
                     ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'LPG'],
-                    _fuelType, isDark,
-                    (v) => setState(() => _fuelType = v)),
+                    _fuelType,
+                    isDark,
+                    (v) => setState(() => _fuelType = v),
+                  ),
                   const SizedBox(height: 16),
 
                   // Body type
                   if (_vehicleBodyType != null) ...[
-                    _buildChipRow('Body Type', theme,
-                      ['Sedan', 'SUV', 'Hatchback', 'Coupe', 'Pickup',
-                       'Van', 'Wagon', 'Convertible', 'Crossover'],
-                      _vehicleBodyType, isDark,
-                      (v) => setState(() => _vehicleBodyType = v)),
+                    _buildChipRow(
+                      'Body Type',
+                      theme,
+                      [
+                        'Sedan',
+                        'SUV',
+                        'Hatchback',
+                        'Coupe',
+                        'Pickup',
+                        'Van',
+                        'Wagon',
+                        'Convertible',
+                        'Crossover',
+                      ],
+                      _vehicleBodyType,
+                      isDark,
+                      (v) => setState(() => _vehicleBodyType = v),
+                    ),
                     const SizedBox(height: 16),
                   ],
 
                   // Drivetrain
-                  _buildChipRow('Drivetrain', theme,
-                    ['FWD', 'RWD', 'AWD', '4WD'], _drivetrain, isDark,
-                    (v) => setState(() => _drivetrain = v)),
+                  _buildChipRow(
+                    'Drivetrain',
+                    theme,
+                    ['FWD', 'RWD', 'AWD', '4WD'],
+                    _drivetrain,
+                    isDark,
+                    (v) => setState(() => _drivetrain = v),
+                  ),
                   const SizedBox(height: 16),
 
                   // VIN-decoded specs chips
-                  if (_vehicleEngineSize != null || _vehicleHP != null ||
+                  if (_vehicleEngineSize != null ||
+                      _vehicleHP != null ||
                       _vehicleDoors != null ||
                       _vehiclePlantCountry != null) ...[
-                    Text('Specs from VIN', style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w500,
-                      color: theme.hintColor)),
+                    Text(
+                      'Specs from VIN',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: theme.hintColor,
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Wrap(spacing: 8, runSpacing: 6, children: [
-                      if (_vehicleEngineSize != null)
-                        _infoChip(LucideIcons.gauge,
-                          _vehicleEngineSize!, isDark),
-                      if (_vehicleHP != null)
-                        _infoChip(LucideIcons.zap,
-                          '$_vehicleHP hp', isDark),
-                      if (_vehicleDoors != null)
-                        _infoChip(LucideIcons.doorOpen,
-                          '$_vehicleDoors doors', isDark),
-                      if (_vehiclePlantCountry != null)
-                        _infoChip(LucideIcons.factory,
-                          _vehiclePlantCountry!, isDark),
-                    ]),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        if (_vehicleEngineSize != null)
+                          _infoChip(
+                            LucideIcons.gauge,
+                            _vehicleEngineSize!,
+                            isDark,
+                          ),
+                        if (_vehicleHP != null)
+                          _infoChip(LucideIcons.zap, '$_vehicleHP hp', isDark),
+                        if (_vehicleDoors != null)
+                          _infoChip(
+                            LucideIcons.doorOpen,
+                            '$_vehicleDoors doors',
+                            isDark,
+                          ),
+                        if (_vehiclePlantCountry != null)
+                          _infoChip(
+                            LucideIcons.factory,
+                            _vehiclePlantCountry!,
+                            isDark,
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 16),
                   ],
 
                   // ── VIN-decoded extended info ──
-                  if (_vehicleTrim != null || _vehicleSeries != null ||
-                      _vehicleAbs != null || _vehicleAirbagLocations != null ||
-                      _vehicleGvwr != null || _vehicleType != null ||
+                  if (_vehicleTrim != null ||
+                      _vehicleSeries != null ||
+                      _vehicleAbs != null ||
+                      _vehicleAirbagLocations != null ||
+                      _vehicleGvwr != null ||
+                      _vehicleType != null ||
                       _vehicleElectrificationType != null ||
                       _vehicleBatteryKWh != null ||
                       _vehiclePlantCity != null) ...[
-                    Text('VIN Details', style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w500,
-                      color: theme.hintColor)),
+                    Text(
+                      'VIN Details',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: theme.hintColor,
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Wrap(spacing: 8, runSpacing: 6, children: [
-                      if (_vehicleTrim != null)
-                        _infoChip(LucideIcons.star,
-                          'Trim: $_vehicleTrim', isDark),
-                      if (_vehicleSeries != null)
-                        _infoChip(LucideIcons.layers,
-                          'Series: $_vehicleSeries', isDark),
-                      if (_vehicleType != null)
-                        _infoChip(LucideIcons.car,
-                          '$_vehicleType', isDark),
-                      if (_vehicleAbs != null)
-                        _infoChip(LucideIcons.shieldCheck,
-                          'ABS: $_vehicleAbs', isDark),
-                      if (_vehicleAirbagLocations != null)
-                        _infoChip(LucideIcons.shieldAlert,
-                          'Airbags: $_vehicleAirbagLocations', isDark),
-                      if (_vehicleGvwr != null)
-                        _infoChip(LucideIcons.scale,
-                          'GVWR: $_vehicleGvwr', isDark),
-                      if (_vehicleElectrificationType != null)
-                        _infoChip(LucideIcons.batteryCharging,
-                          '$_vehicleElectrificationType', isDark),
-                      if (_vehicleBatteryKWh != null)
-                        _infoChip(LucideIcons.battery,
-                          '$_vehicleBatteryKWh kWh', isDark),
-                      if (_vehiclePlantCity != null && _vehiclePlantCountry != null)
-                        _infoChip(LucideIcons.mapPin,
-                          'Made in $_vehiclePlantCity, $_vehiclePlantCountry', isDark)
-                      else if (_vehiclePlantCity != null)
-                        _infoChip(LucideIcons.mapPin,
-                          'Made in $_vehiclePlantCity', isDark),
-                    ]),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        if (_vehicleTrim != null)
+                          _infoChip(
+                            LucideIcons.star,
+                            'Trim: $_vehicleTrim',
+                            isDark,
+                          ),
+                        if (_vehicleSeries != null)
+                          _infoChip(
+                            LucideIcons.layers,
+                            'Series: $_vehicleSeries',
+                            isDark,
+                          ),
+                        if (_vehicleType != null)
+                          _infoChip(LucideIcons.car, '$_vehicleType', isDark),
+                        if (_vehicleAbs != null)
+                          _infoChip(
+                            LucideIcons.shieldCheck,
+                            'ABS: $_vehicleAbs',
+                            isDark,
+                          ),
+                        if (_vehicleAirbagLocations != null)
+                          _infoChip(
+                            LucideIcons.shieldAlert,
+                            'Airbags: $_vehicleAirbagLocations',
+                            isDark,
+                          ),
+                        if (_vehicleGvwr != null)
+                          _infoChip(
+                            LucideIcons.scale,
+                            'GVWR: $_vehicleGvwr',
+                            isDark,
+                          ),
+                        if (_vehicleElectrificationType != null)
+                          _infoChip(
+                            LucideIcons.batteryCharging,
+                            '$_vehicleElectrificationType',
+                            isDark,
+                          ),
+                        if (_vehicleBatteryKWh != null)
+                          _infoChip(
+                            LucideIcons.battery,
+                            '$_vehicleBatteryKWh kWh',
+                            isDark,
+                          ),
+                        if (_vehiclePlantCity != null &&
+                            _vehiclePlantCountry != null)
+                          _infoChip(
+                            LucideIcons.mapPin,
+                            'Made in $_vehiclePlantCity, $_vehiclePlantCountry',
+                            isDark,
+                          )
+                        else if (_vehiclePlantCity != null)
+                          _infoChip(
+                            LucideIcons.mapPin,
+                            'Made in $_vehiclePlantCity',
+                            isDark,
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 16),
                   ],
 
                   // Seats stepper
                   _buildSectionLabel('Seats', theme),
                   const SizedBox(height: 8),
-                  _buildStepper(theme, _seats, 1, 15,
-                    (v) => setState(() => _seats = v)),
+                  _buildStepper(
+                    theme,
+                    _seats,
+                    1,
+                    15,
+                    (v) => setState(() => _seats = v),
+                  ),
                   const SizedBox(height: 20),
 
                   // ── Rental Details ──
@@ -652,9 +796,13 @@ class _CreateCarListingScreenState
                     controller: _priceC,
                     hint: 'Price per day',
                     keyboardType: TextInputType.number,
-                    theme: theme, isDark: isDark,
-                    prefix: Icon(LucideIcons.dollarSign, size: 16,
-                      color: theme.hintColor),
+                    theme: theme,
+                    isDark: isDark,
+                    prefix: Icon(
+                      LucideIcons.dollarSign,
+                      size: 16,
+                      color: theme.hintColor,
+                    ),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'Price required';
                       if (double.tryParse(v) == null) return 'Invalid';
@@ -666,10 +814,12 @@ class _CreateCarListingScreenState
                   // Description
                   _buildTextField(
                     controller: _descC,
-                    hint: 'Describe your car — condition, any rules, '
+                    hint:
+                        'Describe your car — condition, any rules, '
                         'delivery options...',
                     maxLines: 3,
-                    theme: theme, isDark: isDark,
+                    theme: theme,
+                    isDark: isDark,
                   ),
                   const SizedBox(height: 20),
 
@@ -677,45 +827,66 @@ class _CreateCarListingScreenState
                   _buildSectionLabel('Pick-up Location', theme),
                   const SizedBox(height: 8),
                   _buildTextField(
-                    controller: _cityC, hint: 'City',
-                    theme: theme, isDark: isDark,
-                    prefix: Icon(LucideIcons.mapPin, size: 16,
-                      color: theme.hintColor),
+                    controller: _cityC,
+                    hint: 'City',
+                    theme: theme,
+                    isDark: isDark,
+                    prefix: Icon(
+                      LucideIcons.mapPin,
+                      size: 16,
+                      color: theme.hintColor,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  Builder(builder: (context) {
-                    final profile = ref.read(userProfileProvider).value;
-                    final cc = profile?.hostCountryCode ?? '';
-                    final hasState =
-                        country_data.hasStateLevelHierarchyFromData(cc);
-                    final stateTerm = country_data.getStateTerminology(cc);
-                    if (hasState) {
-                      return Row(children: [
-                        Expanded(child: _buildTextField(
-                          controller: _subLocalityC,
-                          hint: 'Neighborhood / Area',
-                          theme: theme, isDark: isDark,
-                        )),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildTextField(
-                          controller: _stateC, hint: stateTerm,
-                          theme: theme, isDark: isDark,
-                        )),
-                      ]);
-                    }
-                    return _buildTextField(
-                      controller: _subLocalityC,
-                      hint: 'Neighborhood / Area',
-                      theme: theme, isDark: isDark,
-                    );
-                  }),
+                  Builder(
+                    builder: (context) {
+                      final profile = ref.read(userProfileProvider).value;
+                      final cc = profile?.hostCountryCode ?? '';
+                      final hasState = country_data
+                          .hasStateLevelHierarchyFromData(cc);
+                      final stateTerm = country_data.getStateTerminology(cc);
+                      if (hasState) {
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _subLocalityC,
+                                hint: 'Neighborhood / Area',
+                                theme: theme,
+                                isDark: isDark,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _stateC,
+                                hint: stateTerm,
+                                theme: theme,
+                                isDark: isDark,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      return _buildTextField(
+                        controller: _subLocalityC,
+                        hint: 'Neighborhood / Area',
+                        theme: theme,
+                        isDark: isDark,
+                      );
+                    },
+                  ),
                   const SizedBox(height: 12),
                   _buildTextField(
                     controller: _addressC,
                     hint: 'Pick-up address (optional)',
-                    theme: theme, isDark: isDark,
-                    prefix: Icon(LucideIcons.home, size: 16,
-                      color: theme.hintColor),
+                    theme: theme,
+                    isDark: isDark,
+                    prefix: Icon(
+                      LucideIcons.home,
+                      size: 16,
+                      color: theme.hintColor,
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -723,7 +894,8 @@ class _CreateCarListingScreenState
                   _buildSectionLabel('Features', theme),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8, runSpacing: 8,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: _allFeatures.map((f) {
                       final sel = _selectedFeatures.contains(f);
                       return FilterChip(
@@ -736,23 +908,25 @@ class _CreateCarListingScreenState
                             _selectedFeatures.remove(f);
                           }
                         }),
-                        selectedColor:
-                            AppTheme.accent.withValues(alpha: 0.15),
-                        backgroundColor:
-                            AppTheme.elevationColor(context, 2),
+                        selectedColor: AppTheme.accent.withValues(alpha: 0.15),
+                        backgroundColor: AppTheme.elevationColor(context, 2),
                         checkmarkColor: AppTheme.accent,
                         labelStyle: TextStyle(
                           fontSize: 12,
-                          color: sel ? AppTheme.accent
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
+                          color: sel
+                              ? AppTheme.accent
+                              : theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
+                                ),
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                         side: BorderSide(
                           color: sel
                               ? AppTheme.accent.withValues(alpha: 0.3)
-                              : Colors.transparent),
+                              : Colors.transparent,
+                        ),
                       );
                     }).toList(),
                   ),
@@ -788,7 +962,8 @@ class _CreateCarListingScreenState
               ),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.25)),
+                color: AppTheme.accent.withValues(alpha: 0.25),
+              ),
             ),
             child: Row(
               children: [
@@ -798,29 +973,38 @@ class _CreateCarListingScreenState
                     color: AppTheme.accent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(LucideIcons.focus, size: 20,
-                    color: AppTheme.accent),
+                  child: const Icon(
+                    LucideIcons.focus,
+                    size: 20,
+                    color: AppTheme.accent,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Scan VIN Number', style: GoogleFonts.outfit(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: AppTheme.accent,
-                      )),
+                      Text(
+                        'Scan VIN Number',
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.accent,
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         'Scan barcode on door panel or photo of paperwork',
-                        style: TextStyle(fontSize: 11,
-                          color: theme.hintColor),
+                        style: TextStyle(fontSize: 11, color: theme.hintColor),
                       ),
                     ],
                   ),
                 ),
-                Icon(LucideIcons.chevronRight, size: 18,
-                  color: AppTheme.accent.withValues(alpha: 0.6)),
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 18,
+                  color: AppTheme.accent.withValues(alpha: 0.6),
+                ),
               ],
             ),
           ),
@@ -828,9 +1012,14 @@ class _CreateCarListingScreenState
         const SizedBox(height: 10),
 
         // VIN text field + lookup button
-        Text('VIN Lookup', style: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w500,
-          color: theme.hintColor)),
+        Text(
+          'VIN Lookup',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -839,9 +1028,13 @@ class _CreateCarListingScreenState
               child: _buildTextField(
                 controller: _vehicleVinController,
                 hint: 'Enter 17-character VIN',
-                theme: theme, isDark: isDark,
-                prefix: Icon(LucideIcons.fingerprint, size: 16,
-                  color: theme.hintColor),
+                theme: theme,
+                isDark: isDark,
+                prefix: Icon(
+                  LucideIcons.fingerprint,
+                  size: 16,
+                  color: theme.hintColor,
+                ),
                 maxLength: 17,
               ),
             ),
@@ -849,24 +1042,34 @@ class _CreateCarListingScreenState
             SizedBox(
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: _vinLookupLoading ||
+                onPressed:
+                    _vinLookupLoading ||
                         _vehicleVinController.text.trim().length != 17
-                    ? null : () => _lookupVin(),
+                    ? null
+                    : () => _lookupVin(),
                 icon: _vinLookupLoading
-                    ? const SizedBox(width: 14, height: 14,
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : const Icon(LucideIcons.search, size: 16),
                 label: Text(
                   _vinLookupLoading ? 'Looking up...' : 'Lookup',
                   style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.w600, fontSize: 12),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accent,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
@@ -875,11 +1078,14 @@ class _CreateCarListingScreenState
           ],
         ),
         const SizedBox(height: 4),
-        Text('Enter VIN to auto-fill vehicle details', style: TextStyle(
-          fontSize: 11,
-          color: theme.hintColor.withValues(alpha: 0.6),
-          fontStyle: FontStyle.italic,
-        )),
+        Text(
+          'Enter VIN to auto-fill vehicle details',
+          style: TextStyle(
+            fontSize: 11,
+            color: theme.hintColor.withValues(alpha: 0.6),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
       ],
     );
   }
@@ -888,13 +1094,16 @@ class _CreateCarListingScreenState
   Widget _buildBottomBar(ThemeData theme, bool isDark) {
     return Container(
       padding: EdgeInsets.only(
-        left: 16, right: 16, top: 12,
+        left: 16,
+        right: 16,
+        top: 12,
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
-        border: Border(top: BorderSide(
-          color: theme.dividerColor.withValues(alpha: 0.1))),
+        border: Border(
+          top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1)),
+        ),
       ),
       child: SizedBox(
         width: double.infinity,
@@ -905,19 +1114,27 @@ class _CreateCarListingScreenState
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+              borderRadius: BorderRadius.circular(14),
+            ),
             elevation: 0,
           ),
           child: _isSaving
-              ? const SizedBox(width: 20, height: 20,
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
               : Text(
                   widget.existing != null
                       ? 'Update Listing'
                       : 'Publish Rental Listing',
                   style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.bold),
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
         ),
       ),
@@ -927,10 +1144,15 @@ class _CreateCarListingScreenState
   // ─── Reusable widgets ─────────────────────────────────────────────
 
   Widget _buildSectionLabel(String text, ThemeData theme) {
-    return Text(text.toUpperCase(), style: const TextStyle(
-      fontSize: 11, fontWeight: FontWeight.w700,
-      color: AppTheme.accent, letterSpacing: 1.2,
-    ));
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppTheme.accent,
+        letterSpacing: 1.2,
+      ),
+    );
   }
 
   Widget _buildTextField({
@@ -954,11 +1176,14 @@ class _CreateCarListingScreenState
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: prefix != null
-            ? Padding(padding: const EdgeInsets.only(left: 12, right: 8),
-                child: prefix)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 12, right: 8),
+                child: prefix,
+              )
             : null,
         prefixIconConstraints: prefix != null
-            ? const BoxConstraints(minWidth: 0, minHeight: 0) : null,
+            ? const BoxConstraints(minWidth: 0, minHeight: 0)
+            : null,
         counterText: '',
         filled: true,
         fillColor: AppTheme.elevationColor(context, 2),
@@ -967,7 +1192,9 @@ class _CreateCarListingScreenState
           borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16, vertical: 14),
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }
@@ -985,40 +1212,51 @@ class _CreateCarListingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w500,
-          color: theme.hintColor)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 4),
         GestureDetector(
-          onTap: enabled ? () => _showSearchSheet(
-            items: items,
-            title: label,
-            current: value,
-            onSelected: onChanged,
-          ) : null,
+          onTap: enabled
+              ? () => _showSearchSheet(
+                  items: items,
+                  title: label,
+                  current: value,
+                  onSelected: onChanged,
+                )
+              : null,
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
               color: AppTheme.elevationColor(context, 2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(children: [
-              Expanded(
-                child: Text(
-                  value ?? hint,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: value != null
-                        ? theme.colorScheme.onSurface
-                        : theme.hintColor.withValues(alpha: 0.5),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value ?? hint,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: value != null
+                          ? theme.colorScheme.onSurface
+                          : theme.hintColor.withValues(alpha: 0.5),
+                    ),
                   ),
                 ),
-              ),
-              Icon(LucideIcons.chevronDown, size: 16,
-                color: enabled ? theme.hintColor : theme.disabledColor),
-            ]),
+                Icon(
+                  LucideIcons.chevronDown,
+                  size: 16,
+                  color: enabled ? theme.hintColor : theme.disabledColor,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -1037,104 +1275,139 @@ class _CreateCarListingScreenState
       isScrollControlled: true,
       backgroundColor: AppTheme.elevationColor(context, 3),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setSheetState) {
-          final query = controller.text.toLowerCase();
-          final filtered = items.where(
-            (i) => i.toLowerCase().contains(query)).toList();
-          return DraggableScrollableSheet(
-            initialChildSize: 0.6,
-            maxChildSize: 0.85,
-            minChildSize: 0.3,
-            expand: false,
-            builder: (_, scrollCtrl) => Column(children: [
-              const SizedBox(height: 8),
-              Container(width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(ctx).hintColor.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2))),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Search $title...',
-                    prefixIcon: const Icon(LucideIcons.search, size: 18),
-                    filled: true,
-                    fillColor: AppTheme.elevationColor(ctx, 1),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none),
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final query = controller.text.toLowerCase();
+            final filtered = items
+                .where((i) => i.toLowerCase().contains(query))
+                .toList();
+            return DraggableScrollableSheet(
+              initialChildSize: 0.6,
+              maxChildSize: 0.85,
+              minChildSize: 0.3,
+              expand: false,
+              builder: (_, scrollCtrl) => Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).hintColor.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  onChanged: (_) => setSheetState(() {}),
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollCtrl,
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) {
-                    final item = filtered[i];
-                    final sel = item == current;
-                    return ListTile(
-                      dense: true,
-                      title: Text(item, style: TextStyle(
-                        fontWeight: sel
-                            ? FontWeight.w600 : FontWeight.normal,
-                        color: sel ? AppTheme.accent : null)),
-                      trailing: sel
-                          ? const Icon(LucideIcons.check, size: 16,
-                              color: AppTheme.accent) : null,
-                      onTap: () {
-                        onSelected(item);
-                        Navigator.pop(ctx);
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Search $title...',
+                        prefixIcon: const Icon(LucideIcons.search, size: 18),
+                        filled: true,
+                        fillColor: AppTheme.elevationColor(ctx, 1),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (_) => setSheetState(() {}),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollCtrl,
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final item = filtered[i];
+                        final sel = item == current;
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            item,
+                            style: TextStyle(
+                              fontWeight: sel
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: sel ? AppTheme.accent : null,
+                            ),
+                          ),
+                          trailing: sel
+                              ? const Icon(
+                                  LucideIcons.check,
+                                  size: 16,
+                                  color: AppTheme.accent,
+                                )
+                              : null,
+                          onTap: () {
+                            onSelected(item);
+                            Navigator.pop(ctx);
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-          );
-        });
+            );
+          },
+        );
       },
     );
   }
 
-  Widget _buildChipRow(String label, ThemeData theme,
-      List<String> options, String? selected, bool isDark,
-      ValueChanged<String> onTap) {
+  Widget _buildChipRow(
+    String label,
+    ThemeData theme,
+    List<String> options,
+    String? selected,
+    bool isDark,
+    ValueChanged<String> onTap,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w500,
-          color: theme.hintColor)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.hintColor,
+          ),
+        ),
         const SizedBox(height: 6),
         Wrap(
-          spacing: 8, runSpacing: 6,
+          spacing: 8,
+          runSpacing: 6,
           children: options.map((o) {
             final sel = selected == o;
             return GestureDetector(
               onTap: () => onTap(o),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: sel
-                      ? AppTheme.accent.withValues(
-                          alpha: isDark ? 0.25 : 0.12)
+                      ? AppTheme.accent.withValues(alpha: isDark ? 0.25 : 0.12)
                       : isDark
-                          ? Colors.white.withValues(alpha: 0.04)
-                          : Colors.black.withValues(alpha: 0.03),
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(o, style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
-                  color: sel ? AppTheme.accent : theme.hintColor,
-                )),
+                child: Text(
+                  o,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                    color: sel ? AppTheme.accent : theme.hintColor,
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -1152,26 +1425,37 @@ class _CreateCarListingScreenState
             ? Colors.white.withValues(alpha: 0.06)
             : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.accent.withValues(alpha: 0.15)),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.15)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: AppTheme.accent),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(label,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: const TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w600,
-              color: AppTheme.accent)),
-        ),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.accent),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.accent,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildStepper(ThemeData theme, int value, int min, int max,
-      ValueChanged<int> onChanged) {
+  Widget _buildStepper(
+    ThemeData theme,
+    int value,
+    int min,
+    int max,
+    ValueChanged<int> onChanged,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
@@ -1181,16 +1465,25 @@ class _CreateCarListingScreenState
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _stepperBtn(LucideIcons.minus,
-            value > min ? () => onChanged(value - 1) : null),
+          _stepperBtn(
+            LucideIcons.minus,
+            value > min ? () => onChanged(value - 1) : null,
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text('$value', style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface)),
+            child: Text(
+              '$value',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
           ),
-          _stepperBtn(LucideIcons.plus,
-            value < max ? () => onChanged(value + 1) : null),
+          _stepperBtn(
+            LucideIcons.plus,
+            value < max ? () => onChanged(value + 1) : null,
+          ),
         ],
       ),
     );
@@ -1201,17 +1494,21 @@ class _CreateCarListingScreenState
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 32, height: 32,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: enabled
               ? AppTheme.accent.withValues(alpha: 0.12)
               : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 16,
-          color: enabled ? AppTheme.accent
-              : Theme.of(context).colorScheme.onSurface
-                  .withValues(alpha: 0.2)),
+        child: Icon(
+          icon,
+          size: 16,
+          color: enabled
+              ? AppTheme.accent
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+        ),
       ),
     );
   }

@@ -71,7 +71,9 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
 
           return ListView.builder(
             padding: EdgeInsets.fromLTRB(
-              16, 16, 16,
+              16,
+              16,
+              16,
               16 + MediaQuery.of(context).padding.bottom,
             ),
             itemCount: history.length,

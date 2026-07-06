@@ -37,9 +37,11 @@ void main() {
     repository = PointsRepository(MockFirebaseFirestore(), fakeFunctions);
   });
 
-  test('syncTreasuryBalances client uses the syncTreasuryBalances callable',
-      () async {
-    await repository.syncTreasuryBalances();
-    expect(fakeFunctions.calledNames, ['syncTreasuryBalances']);
-  });
+  test(
+    'syncTreasuryBalances client uses the syncTreasuryBalances callable',
+    () async {
+      await repository.syncTreasuryBalances();
+      expect(fakeFunctions.calledNames, ['syncTreasuryBalances']);
+    },
+  );
 }
