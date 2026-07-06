@@ -384,7 +384,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           }
         }
 
-        if (context.mounted) {
+        if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => BookingConfirmationScreen(

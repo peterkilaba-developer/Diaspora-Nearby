@@ -201,6 +201,9 @@ class PwaInstallSheet extends StatelessWidget {
                                 final prefs =
                                     await SharedPreferences.getInstance();
                                 await prefs.setBool(_prefKey, true);
+                              }
+
+                              if (context.mounted) {
                                 Navigator.of(context).pop();
 
                                 if (accepted) {

@@ -1,3 +1,5 @@
+// ignore_for_file: subtype_of_sealed_class, must_be_immutable
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/core/services/proximity_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';

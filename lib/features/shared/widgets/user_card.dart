@@ -833,26 +833,24 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        if (currentCityDisplay != null) ...[
-                                          const _MovingLogo(),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              currentCityDisplay,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    fontSize: 12,
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                                    decoration:
-                                                        TextDecoration.none,
-                                                  ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                        const _MovingLogo(),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            currentCityDisplay,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  fontSize: 12,
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                  decoration:
+                                                      TextDecoration.none,
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                        ],
+                                        ),
                                       ],
                                     ),
                                   ),

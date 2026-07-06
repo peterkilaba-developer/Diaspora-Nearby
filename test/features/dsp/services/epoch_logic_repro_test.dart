@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 

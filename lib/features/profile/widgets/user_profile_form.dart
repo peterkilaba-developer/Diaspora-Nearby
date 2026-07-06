@@ -1605,8 +1605,8 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-          title: Row(
-            children: const [
+          title: const Row(
+            children: [
               Icon(Icons.warning_amber_rounded, color: Colors.orange),
               SizedBox(width: 8),
               Expanded(child: Text('Hide City — Permanent Loss')),

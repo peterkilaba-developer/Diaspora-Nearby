@@ -452,10 +452,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                 currentProfile.hostLocation.formattedAddress;
 
         final dspFutures = <Future<void>>[];
-        if (hostChanged)
+        if (hostChanged) {
           dspFutures.add(pointsService.trackHostLocationMove(user.uid));
-        if (hasManualPastLocationAddition)
+        }
+        if (hasManualPastLocationAddition) {
           dspFutures.add(pointsService.trackAlsoLivedInAdded(user.uid));
+        }
         if (dspFutures.isNotEmpty) await Future.wait(dspFutures);
       } catch (e) {
         debugPrint('Location DSP reward failed: $e');

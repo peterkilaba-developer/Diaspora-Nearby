@@ -80,17 +80,19 @@ class _LocationMessageContentState extends State<LocationMessageContent>
           '[LocationMsg] Bad response: ${response.statusCode} '
           'content-type: ${response.headers['content-type']}',
         );
-        if (mounted)
+        if (mounted) {
           setState(() {
             _error = true;
           });
+        }
       }
     } catch (e) {
       debugPrint('[LocationMsg] Fetch error: $e');
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = true;
         });
+      }
     }
   }
 

@@ -10,6 +10,8 @@ import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.da
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:image_picker/image_picker.dart';
 
+// ignore_for_file: avoid_print
+
 // Must generate nice mocks (returns defaults for unstubbed methods)
 @GenerateNiceMocks([
   MockSpec<FirebaseStorage>(),
@@ -43,7 +45,6 @@ class FakeUploadTask extends Fake implements UploadTask {
   }
 
   // Make the task awaitable
-  @override
   Future<TaskSnapshot> get future => Future.value(_snapshot);
 }
 
