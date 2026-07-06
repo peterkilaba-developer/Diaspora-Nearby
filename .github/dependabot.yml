@@ -1,0 +1,67 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Chicago
+    labels:
+      - dependencies
+      - github-actions
+
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:15"
+      timezone: America/Chicago
+    labels:
+      - dependencies
+      - dart
+
+  - package-ecosystem: npm
+    directory: /functions
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:30"
+      timezone: America/Chicago
+    labels:
+      - dependencies
+      - functions
+
+  - package-ecosystem: npm
+    directory: /blockchain
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:45"
+      timezone: America/Chicago
+    labels:
+      - dependencies
+      - blockchain
+
+  - package-ecosystem: npm
+    directory: /firestore-rules-test
+    schedule:
+      interval: weekly
+      day: monday
+      time: "10:00"
+      timezone: America/Chicago
+    labels:
+      - dependencies
+      - firestore
+
+  - package-ecosystem: npm
+    directory: /tools/admin-scripts
+    schedule:
+      interval: weekly
+      day: monday
+      time: "10:15"
+      timezone: America/Chicago
+    labels:
+      - dependencies
+      - admin-tools

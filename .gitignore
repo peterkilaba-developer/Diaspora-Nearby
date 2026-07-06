@@ -70,6 +70,17 @@ google-services.json
 GoogleService-Info.plist
 *firebase-config.json
 pub_cache/
+temp_cache/
+
+# Local credentials, certificates, and signing material
+service-account-key*.json
+*service-account*.json
+upload_certificate.pem
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+android/signing_*.txt
 
 # Node modules
 node_modules/
@@ -103,6 +114,9 @@ blockchain/cache/
 blockchain/artifacts/
 blockchain/typechain/
 blockchain/typechain-types/
+blockchain/deploy-output.txt
+blockchain/signature-output.txt
+blockchain/sig.txt
 
 # Firebase deploy caches (regenerated on every deploy)
 .firebase/
