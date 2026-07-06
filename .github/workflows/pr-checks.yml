@@ -38,8 +38,8 @@ jobs:
       - name: Check branch name
         run: |
           BRANCH_NAME="${{ github.head_ref }}"
-          if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix|release)/.+ ]] && [[ "$BRANCH_NAME" != "dev" ]] && [[ "$BRANCH_NAME" != "staging" ]]; then
-            echo "Branch name must follow feature/*, bugfix/*, hotfix/*, release/*, dev, or staging."
+          if [[ ! "$BRANCH_NAME" =~ ^(feature|bugfix|hotfix|release|dependabot)/.+ ]] && [[ "$BRANCH_NAME" != "dev" ]] && [[ "$BRANCH_NAME" != "staging" ]]; then
+            echo "Branch name must follow feature/*, bugfix/*, hotfix/*, release/*, dependabot/*, dev, or staging."
             echo "Current branch: $BRANCH_NAME"
             exit 1
           fi
@@ -52,6 +52,12 @@ jobs:
 
           if [[ "$SOURCE_BRANCH" =~ ^(feature|bugfix)/.+ ]] && [ "$TARGET_BRANCH" != "dev" ]; then
             echo "Feature and bugfix branches must target dev."
+            echo "Current target: $TARGET_BRANCH"
+            exit 1
+          fi
+
+          if [[ "$SOURCE_BRANCH" =~ ^dependabot/.+ ]] && [ "$TARGET_BRANCH" != "dev" ]; then
+            echo "Dependabot branches must target dev."
             echo "Current target: $TARGET_BRANCH"
             exit 1
           fi
