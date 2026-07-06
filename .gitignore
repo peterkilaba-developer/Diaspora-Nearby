@@ -117,6 +117,7 @@ blockchain/typechain-types/
 blockchain/deploy-output.txt
 blockchain/signature-output.txt
 blockchain/sig.txt
+blockchain/compile_error.txt
 
 # Firebase deploy caches (regenerated on every deploy)
 .firebase/
