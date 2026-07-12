@@ -14,7 +14,7 @@ Cover these topics:
 
 1. Finding diaspora members nearby and building real relationships.
 2. Chat, voice notes, media, community groups, events, organizations, radio, travel, hosting, marketplace, real estate, and bilateral Chambers of Commerce.
-3. Proof of Identity, Proof of Activity, and Proof of Community Trust.
+3. Proof of Identity, Proof of Social Activities, and Proof of Community Trust.
 4. The seven genesis milestones, in order: Current Location Transparency, Profile Completion, QR Identity Exchanges, Family Connections, Friend Connections, Vouched by Peers, and Verified by Peers.
 5. The difference between off-chain **DSP** and on-chain **$DIASPORA**.
 6. How globally distributed DSP supply milestones trigger Token Generation Events. Member counts are informational and do not trigger or gate TGE.
@@ -24,7 +24,7 @@ Cover these topics:
 
 Be accurate about rollout status. Distinguish current platform capabilities, features being rolled out, and long-term vision. Do not present DSP as already tradeable money or promise financial returns. DSP is an off-chain participation claim ticket that may convert into on-chain $DIASPORA at TGE according to eligibility and trust efficiency.
 
-Discuss privacy and safety honestly. Location enables nearby discovery, and Current Location Transparency is required at the time of every TGE. Turning it off permanently forfeits its ten PoCT reward and blocks TGE participation while off. Re-enabling it restores TGE eligibility but does not restore the forfeited PoCT.
+Discuss privacy and safety honestly. Location enables nearby discovery, and Current Location Transparency is required at the time of every TGE. Turning it off permanently forfeits its ten P.o.C.T reward and blocks TGE participation while off. Re-enabling it restores TGE eligibility but does not restore the forfeited P.o.C.T.
 
 End with an inviting call to action: visit the website, open the web app, or install the Android app; enable Current Location Transparency; complete a profile; meet ten unique people for Identity QR exchanges; find your people nearby; and begin building the trusted economic network the diaspora deserves.
 

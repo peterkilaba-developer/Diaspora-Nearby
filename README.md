@@ -9,7 +9,7 @@ Diaspora Nearby is a Flutter and Firebase app for helping diaspora communities c
 - Events and Organizations: discover diaspora-led events and organizations.
 - Background Notifications: receive nearby-community notifications.
 - Global Search: search communities and users across supported regions.
-- DSP Economy: earn Diaspora Social Points through activity and trust signals.
+- DSP Economy: earn Diaspora Social Points through P.o.S.A activity and P.o.C.T trust signals.
 - National Pride: contribute to country-level leaderboards and treasury mechanics.
 
 ## Technical Stack
