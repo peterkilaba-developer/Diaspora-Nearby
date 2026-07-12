@@ -12,6 +12,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:diaspora_nearby/firebase_options.dart';
+import 'package:diaspora_nearby/config/app_environment.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -135,9 +136,18 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 void main() async {
-  runZonedGuarded<Future<void>>(
+  await runDiasporaApp();
+}
+
+Future<void> runDiasporaApp({AppEnvironment? environment}) async {
+  if (environment != null) {
+    AppEnvironmentConfig.configure(environment);
+  }
+
+  return runZonedGuarded<Future<void>>(
     () async {
       // [NEW] Centralized Initialization
+      AppEnvironmentConfig.logStartup();
       await AppBootstrap.init();
 
       // Fonts are not currently bundled as app assets, so runtime fetching must
@@ -238,16 +248,24 @@ class _MyAppState extends ConsumerState<MyApp> {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Diaspora Nearby',
+      title: AppEnvironmentConfig.appTitle,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        return ConfettiOverlay(
+        final app = ConfettiOverlay(
           key: confettiOverlayKey,
           child: child ?? const SizedBox(),
+        );
+        if (AppEnvironmentConfig.isProduction) {
+          return app;
+        }
+        return Banner(
+          message: AppEnvironmentConfig.bannerLabel,
+          location: BannerLocation.topStart,
+          child: app,
         );
       },
     );
