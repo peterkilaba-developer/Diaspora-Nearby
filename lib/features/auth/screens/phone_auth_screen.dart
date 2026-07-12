@@ -161,10 +161,17 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     if (_phoneController.text.trim().isEmpty) return;
 
     // Combine dial code + user-entered digits, then run through libphonenumber
-    // to strip national trunk prefixes (e.g. TZ "0712..." → "+255712...") and
-    // validate against country metadata.
-    final combined =
-        '${_selectedCountry.dialCode}${_phoneController.text.trim().replaceAll(RegExp(r'\D'), '')}';
+    // to validate against country metadata.
+    // Strip any leading trunk prefix "0" first — many countries (TZ, NG, KE,
+    // GH, ZA, UK, DE, …) use a leading 0 in national format (e.g. 0712345678)
+    // which must NOT appear in E.164.  phone_numbers_parser only removes the
+    // trunk prefix when the input has no leading "+", but we are about to
+    // prepend the dial code ourselves, so we must strip it here instead.
+    final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+    final digitsWithoutTrunk = digits.startsWith('0')
+        ? digits.substring(1)
+        : digits;
+    final combined = '${_selectedCountry.dialCode}$digitsWithoutTrunk';
     final normalized = normalizePhone(
       rawInput: combined,
       isoCountryCode: _selectedCountry.code,
