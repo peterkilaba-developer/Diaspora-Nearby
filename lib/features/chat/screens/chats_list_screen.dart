@@ -26,6 +26,14 @@ final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   return chatRepo.subscribeToUserChats();
 });
 
+final discoverableChatsProvider = FutureProvider.family<List<Chat>, String>((
+  ref,
+  query,
+) {
+  final chatRepo = ref.watch(chatRepositoryProvider);
+  return chatRepo.searchDiscoverableChats(query);
+});
+
 class ChatsListScreen extends ConsumerStatefulWidget {
   const ChatsListScreen({super.key});
 
@@ -73,20 +81,15 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     // GLOBAL SEARCH MODE
     if (chatsMode == ViewMode.global) {
       // Show all or filtered based on query
+      final discoverableAsync = ref.watch(
+        discoverableChatsProvider(searchQuery),
+      );
 
-      return FutureBuilder<List<Chat>>(
-        future: ref
-            .read(chatRepositoryProvider)
-            .searchDiscoverableChats(searchQuery),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SkeletonList(skeleton: ChatCardSkeleton());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Error searching chats'));
-          }
-
-          final allResults = snapshot.data ?? [];
+      return discoverableAsync.when(
+        loading: () => const SkeletonList(skeleton: ChatCardSkeleton()),
+        error: (error, stack) =>
+            const Center(child: Text('Error searching chats')),
+        data: (allResults) {
           // Filter to show ONLY Organization and Event chats in Global mode
           final results = allResults
               .where(

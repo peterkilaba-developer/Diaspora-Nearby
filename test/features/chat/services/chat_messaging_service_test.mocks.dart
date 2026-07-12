@@ -3554,6 +3554,24 @@ class MockPointsService extends _i1.Mock implements _i13.PointsService {
           as _i5.Future<void>);
 
   @override
+  _i5.Future<void> trackHostLocationMove(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackHostLocationMove, [userId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackAlsoLivedInAdded(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackAlsoLivedInAdded, [userId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   _i5.Future<void> awardPoints({
     required String? userId,
     required int? amount,

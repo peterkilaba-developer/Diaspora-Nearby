@@ -356,11 +356,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     subtitle: 'Register a business in this community',
                     onTap: onCreateCommunityOrg,
                   ),
-                  // Diaspora Direct Investments: for communities with treasuries (city, country, continent, global)
-                  if (community?.type == 'city' ||
-                      community?.type == 'country' ||
-                      community?.type == 'continent' ||
-                      community?.type == 'global')
+                  // Diaspora Direct Investments: limited to home and host communities
+                  if (community?.locationType == 'host' ||
+                      community?.locationType == 'home')
                     AppBottomSheetItem(
                       icon: LucideIcons.landmark,
                       iconColor: Colors.orange,
@@ -370,7 +368,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                         width: 22,
                         height: 22,
                       ),
-                      title: 'Diaspora Direct Investments Loans',
+                      title: community?.locationType == 'host'
+                          ? 'Host Town DDI'
+                          : 'Home Country DDI',
                       subtitle: 'Apply for community-backed investment loans',
                       onTap: onDDILoans,
                     ),
