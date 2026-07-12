@@ -195,7 +195,7 @@ class EpochService {
     // Milestone = 10% of dspTarget
     final int step = (epoch.dspTarget / 10).round();
 
-    // Use dual logic to determine how many we have completed
+    // TGE completion is determined by distributed DSP milestones.
     final int completedSteps = getCompletedTgeEvents(
       cumulativeEarnings,
       memberCount,
@@ -216,8 +216,8 @@ class EpochService {
     final int dspRange = (epoch.dspTarget - prevDspTarget).clamp(1, 1 << 31);
     final int dspStep = (dspRange / 10).round();
 
-    int completedSteps =
-        ((cumulativeEarnings - prevDspTarget) / dspStep).floor();
+    int completedSteps = ((cumulativeEarnings - prevDspTarget) / dspStep)
+        .floor();
 
     if (completedSteps > 10) completedSteps = 10;
     if (completedSteps < 0) completedSteps = 0;
@@ -249,11 +249,8 @@ class CommunityEpochDefinition {
     required this.memberTarget,
   });
 
-  // Helper to calculate progress (0.0 to 1.0)
-  // Progress is MAX of DSP progress or Member progress
+  // TGE progress is based on distributed DSP. Member growth is informational.
   double calculateProgress(int currentDsp, int currentMembers) {
-    final dspProgress = (currentDsp / dspTarget).clamp(0.0, 1.0);
-    final memberProgress = (currentMembers / memberTarget).clamp(0.0, 1.0);
-    return (dspProgress > memberProgress) ? dspProgress : memberProgress;
+    return (currentDsp / dspTarget).clamp(0.0, 1.0);
   }
 }

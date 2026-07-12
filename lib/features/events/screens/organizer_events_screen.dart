@@ -46,9 +46,9 @@ class OrganizerEventsList extends ConsumerWidget {
         myEvents.sort((a, b) => b.startDate.compareTo(a.startDate));
 
         return ListView.separated(
-          padding: padding.add(EdgeInsets.only(
-            bottom: MediaQuery.of(context).padding.bottom,
-          )),
+          padding: padding.add(
+            EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+          ),
           itemCount: myEvents.length,
           separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) {

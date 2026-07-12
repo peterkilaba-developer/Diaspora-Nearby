@@ -36,7 +36,7 @@ class MessageInput extends ConsumerStatefulWidget {
   final Future<MessageLocation?> Function()?
   onPickLocation; // [NEW] Returns location data
   final Function(MessageLocation, String? caption)?
-    onSendLocation; // [UPDATED] Sends location data with optional caption
+  onSendLocation; // [UPDATED] Sends location data with optional caption
   final Function(int, String, String?) onSendDSP;
   final Function(List<XFile>, String type, String caption)? onMediaSelected;
   final Message? replyingTo;
@@ -1075,10 +1075,13 @@ class _MessageInputState extends ConsumerState<MessageInput>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (isToken ? AppTheme.tokenColor : theme.colorScheme.primaryContainer).withValues(alpha: 0.3),
+        color:
+            (isToken ? AppTheme.tokenColor : theme.colorScheme.primaryContainer)
+                .withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (isToken ? AppTheme.tokenColor : theme.colorScheme.primary).withValues(alpha: 0.3),
+          color: (isToken ? AppTheme.tokenColor : theme.colorScheme.primary)
+              .withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -1100,7 +1103,11 @@ class _MessageInputState extends ConsumerState<MessageInput>
                 color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.coins, color: Colors.white, size: 16),
+              child: const Icon(
+                LucideIcons.coins,
+                color: Colors.white,
+                size: 16,
+              ),
             ),
           const SizedBox(width: 12),
           Expanded(
@@ -1112,14 +1119,18 @@ class _MessageInputState extends ConsumerState<MessageInput>
                     Text(
                       'Sending $_pendingDSPAmount ',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: isToken ? AppTheme.tokenColor : AppTheme.dspColor,
+                        color: isToken
+                            ? AppTheme.tokenColor
+                            : AppTheme.dspColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       isToken ? r'$DIASPORA' : 'DSP',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: isToken ? AppTheme.tokenColor : AppTheme.dspColor,
+                        color: isToken
+                            ? AppTheme.tokenColor
+                            : AppTheme.dspColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1509,8 +1520,8 @@ class _AttachmentPickerModalState
     final activeColor = isFiat
         ? AppTheme.fiatColor
         : isToken
-            ? AppTheme.tokenColor
-            : AppTheme.dspColor;
+        ? AppTheme.tokenColor
+        : AppTheme.dspColor;
 
     // Reactive Balance Fetching
     final authState = ref.watch(authStateProvider);
@@ -1524,11 +1535,10 @@ class _AttachmentPickerModalState
 
     // Fetch real on-chain $DIASPORA balance
     final tokenBalanceAsync = ref.watch(tokenBalanceProvider);
-    final tokenBalance = int.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0;
+    final tokenBalance =
+        int.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0;
 
-    final currentBalance = isPoints
-        ? pointsBalance
-        : tokenBalance;
+    final currentBalance = isPoints ? pointsBalance : tokenBalance;
     final isLoadingBalance = isPoints
         ? pointsAsync.isLoading
         : tokenBalanceAsync.isLoading;
@@ -1617,9 +1627,12 @@ class _AttachmentPickerModalState
 
               // ─── TRANSACTION HISTORY (above toggle, scrollable) ───
               if (hasSelection && !isFiat)
-                _buildWiredTransactionHistory(theme, activeColor, authUser?.uid),
-              if (hasSelection && !isFiat)
-                const SizedBox(height: 12),
+                _buildWiredTransactionHistory(
+                  theme,
+                  activeColor,
+                  authUser?.uid,
+                ),
+              if (hasSelection && !isFiat) const SizedBox(height: 12),
 
               // ─── THREE-WAY TOGGLE (always visible) ───
               Container(
@@ -1695,23 +1708,22 @@ class _AttachmentPickerModalState
                                       'Balance',
                                       style: theme.textTheme.labelSmall
                                           ?.copyWith(
-                                        color: theme
-                                            .colorScheme.onSurfaceVariant,
-                                        fontSize: 10,
-                                      ),
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            fontSize: 10,
+                                          ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      isLoadingBalance
-                                          ? '...'
-                                          : '$remaining',
+                                      isLoadingBalance ? '...' : '$remaining',
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: isError
-                                            ? theme.colorScheme.error
-                                            : theme.colorScheme.onSurface,
-                                      ),
+                                            fontWeight: FontWeight.bold,
+                                            color: isError
+                                                ? theme.colorScheme.error
+                                                : theme.colorScheme.onSurface,
+                                          ),
                                       textAlign: TextAlign.center,
                                     ),
                                     const SizedBox(height: 2),
@@ -1719,9 +1731,9 @@ class _AttachmentPickerModalState
                                       isPoints ? 'DSP' : r'$DIASPORA',
                                       style: theme.textTheme.labelSmall
                                           ?.copyWith(
-                                        fontSize: 8,
-                                        color: activeColor,
-                                      ),
+                                            fontSize: 8,
+                                            color: activeColor,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -1742,21 +1754,22 @@ class _AttachmentPickerModalState
                                     textAlign: TextAlign.center,
                                     style: theme.textTheme.headlineSmall
                                         ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: activeColor,
-                                    ),
+                                          fontWeight: FontWeight.bold,
+                                          color: activeColor,
+                                        ),
                                     decoration: InputDecoration(
                                       hintText: '0',
                                       hintStyle: TextStyle(
                                         color: theme
-                                            .colorScheme.onSurfaceVariant
+                                            .colorScheme
+                                            .onSurfaceVariant
                                             .withValues(alpha: 0.3),
                                       ),
                                       border: InputBorder.none,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
+                                            vertical: 8,
+                                          ),
                                       isDense: true,
                                     ),
                                   ),
@@ -1768,20 +1781,19 @@ class _AttachmentPickerModalState
                                 flex: 2,
                                 child: Center(
                                   child: Material(
-                                    color: (isZero ||
-                                            isError ||
-                                            isLoadingBalance)
+                                    color:
+                                        (isZero || isError || isLoadingBalance)
                                         ? theme.disabledColor
                                         : activeColor,
                                     shape: const CircleBorder(),
                                     child: InkWell(
-                                      onTap: (isZero ||
+                                      onTap:
+                                          (isZero ||
                                               isError ||
                                               isLoadingBalance)
                                           ? null
-                                          : () => _handlePickDSP(
-                                                currentBalance,
-                                              ),
+                                          : () =>
+                                                _handlePickDSP(currentBalance),
                                       customBorder: const CircleBorder(),
                                       child: Container(
                                         width: 48,
@@ -1826,7 +1838,11 @@ class _AttachmentPickerModalState
                   ),
                   const SizedBox(height: 12),
                   // Transaction history (or card input placeholder)
-                  _buildFiatTransactionHistory(theme, activeColor, authUser?.uid),
+                  _buildFiatTransactionHistory(
+                    theme,
+                    activeColor,
+                    authUser?.uid,
+                  ),
                   const SizedBox(height: 12),
                   // Fiat amount input
                   _buildFiatInputContainer(
@@ -1836,7 +1852,6 @@ class _AttachmentPickerModalState
                     activeColor,
                   ),
                 ],
-
               ],
             ],
           ),
@@ -1859,9 +1874,7 @@ class _AttachmentPickerModalState
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected
-                ? theme.colorScheme.surface
-                : Colors.transparent,
+            color: isSelected ? theme.colorScheme.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             boxShadow: isSelected
                 ? [
@@ -1898,9 +1911,7 @@ class _AttachmentPickerModalState
         final walletAddress = recipient?.walletAddress;
         final displayAddress = walletAddress != null
             ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}'
-            : (recipientAsync.isLoading
-                  ? 'Loading...'
-                  : 'No address linked');
+            : (recipientAsync.isLoading ? 'Loading...' : 'No address linked');
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -1908,9 +1919,7 @@ class _AttachmentPickerModalState
           decoration: BoxDecoration(
             color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.orange.withValues(alpha: 0.5),
-            ),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
@@ -2085,8 +2094,9 @@ class _AttachmentPickerModalState
                     ),
                     child: TextField(
                       controller: _fiatAmountController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -2095,8 +2105,9 @@ class _AttachmentPickerModalState
                       decoration: InputDecoration(
                         hintText: '0.00',
                         hintStyle: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.3),
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -2111,9 +2122,7 @@ class _AttachmentPickerModalState
                   flex: 2,
                   child: Center(
                     child: Material(
-                      color: isFiatZero
-                          ? theme.disabledColor
-                          : activeColor,
+                      color: isFiatZero ? theme.disabledColor : activeColor,
                       shape: const CircleBorder(),
                       child: InkWell(
                         onTap: isFiatZero
@@ -2297,13 +2306,19 @@ class _AttachmentPickerModalState
   }
 
   // ─── Fiat transaction history (with credit card empty state) ───
-  Widget _buildFiatTransactionHistory(ThemeData theme, Color activeColor, String? currentUserId) {
+  Widget _buildFiatTransactionHistory(
+    ThemeData theme,
+    Color activeColor,
+    String? currentUserId,
+  ) {
     if (currentUserId == null || widget.recipientUserId == null) {
       return const SizedBox.shrink();
     }
 
     final recipientId = widget.recipientUserId!;
-    final transactionsAsync = ref.watch(userTransactionsProvider(currentUserId));
+    final transactionsAsync = ref.watch(
+      userTransactionsProvider(currentUserId),
+    );
 
     return Container(
       width: double.infinity,
@@ -2340,7 +2355,8 @@ class _AttachmentPickerModalState
                   final meta = tx.metadata ?? {};
                   final toUser = meta['toUserId'] as String?;
                   final fromUser = meta['fromUserId'] as String?;
-                  final involvesRecipient = toUser == recipientId || fromUser == recipientId;
+                  final involvesRecipient =
+                      toUser == recipientId || fromUser == recipientId;
                   if (!involvesRecipient) return false;
                   return action.contains('fiat');
                 }).toList();
@@ -2416,7 +2432,9 @@ class _AttachmentPickerModalState
                       Text(
                         'No fiat transfers with this user yet',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
                           fontSize: 11,
                         ),
                       ),
@@ -2430,9 +2448,13 @@ class _AttachmentPickerModalState
                   itemBuilder: (context, index) {
                     final tx = filtered[index];
                     final isSent = tx.points < 0;
-                    final color = isSent ? activeColor.withValues(alpha: 0.7) : activeColor;
+                    final color = isSent
+                        ? activeColor.withValues(alpha: 0.7)
+                        : activeColor;
                     final sign = isSent ? '' : '+';
-                    final icon = isSent ? LucideIcons.arrowUpRight : LucideIcons.arrowDownLeft;
+                    final icon = isSent
+                        ? LucideIcons.arrowUpRight
+                        : LucideIcons.arrowDownLeft;
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -2493,14 +2515,20 @@ class _AttachmentPickerModalState
   }
 
   // ─── Wired transaction history section (DSP/Token) ───
-  Widget _buildWiredTransactionHistory(ThemeData theme, Color activeColor, String? currentUserId) {
+  Widget _buildWiredTransactionHistory(
+    ThemeData theme,
+    Color activeColor,
+    String? currentUserId,
+  ) {
     if (currentUserId == null || widget.recipientUserId == null) {
       return const SizedBox.shrink();
     }
 
     final isPoints = _selectedAssetType == 'points';
     final recipientId = widget.recipientUserId!;
-    final transactionsAsync = ref.watch(userTransactionsProvider(currentUserId));
+    final transactionsAsync = ref.watch(
+      userTransactionsProvider(currentUserId),
+    );
 
     return Container(
       width: double.infinity,
@@ -2539,7 +2567,8 @@ class _AttachmentPickerModalState
                   final fromUser = meta['fromUserId'] as String?;
 
                   // Check if this transaction involves the recipient
-                  final involvesRecipient = toUser == recipientId || fromUser == recipientId;
+                  final involvesRecipient =
+                      toUser == recipientId || fromUser == recipientId;
                   if (!involvesRecipient) return false;
 
                   if (isPoints) {
@@ -2558,13 +2587,17 @@ class _AttachmentPickerModalState
                       Icon(
                         LucideIcons.receipt,
                         size: 24,
-                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.3,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'No ${isPoints ? 'DSP' : r'$DIASPORA'} transfers with this user yet',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
                           fontSize: 11,
                         ),
                       ),
@@ -2578,16 +2611,20 @@ class _AttachmentPickerModalState
                   itemBuilder: (context, index) {
                     final tx = filtered[index];
                     final isSent = tx.points < 0;
-                    final color = isSent ? activeColor.withValues(alpha: 0.7) : activeColor;
-                    final icon = isSent ? LucideIcons.arrowUpRight : LucideIcons.arrowDownLeft;
+                    final color = isSent
+                        ? activeColor.withValues(alpha: 0.7)
+                        : activeColor;
+                    final icon = isSent
+                        ? LucideIcons.arrowUpRight
+                        : LucideIcons.arrowDownLeft;
                     final txHash = tx.metadata?['txHash'] as String?;
 
                     return GestureDetector(
                       onTap: txHash != null
                           ? () => launchUrl(
-                                Uri.parse('https://basescan.org/tx/$txHash'),
-                                mode: LaunchMode.externalApplication,
-                              )
+                              Uri.parse('https://basescan.org/tx/$txHash'),
+                              mode: LaunchMode.externalApplication,
+                            )
                           : null,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),

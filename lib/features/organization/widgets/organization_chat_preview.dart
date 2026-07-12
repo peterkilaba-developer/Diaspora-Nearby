@@ -13,10 +13,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class OrganizationChatPreview extends ConsumerStatefulWidget {
   final String chatId;
   final String title;
+  final bool canViewMessages;
 
   const OrganizationChatPreview({
     super.key,
     required this.chatId,
+    required this.canViewMessages,
     this.title = 'Community Chat',
   });
 
@@ -139,19 +141,20 @@ class _OrganizationChatPreviewState
               widget.title,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            FutureBuilder<bool>(
-              future: _canPost(ref),
-              builder: (context, snapshot) {
-                if (snapshot.data == true) {
-                  return IconButton(
-                    onPressed: _showSendMessageDialog,
-                    icon: const Icon(LucideIcons.edit),
-                    tooltip: 'Write Message',
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
+            if (widget.canViewMessages)
+              FutureBuilder<bool>(
+                future: _canPost(ref),
+                builder: (context, snapshot) {
+                  if (snapshot.data == true) {
+                    return IconButton(
+                      onPressed: _showSendMessageDialog,
+                      icon: const Icon(LucideIcons.edit),
+                      tooltip: 'Write Message',
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
           ],
         ),
         const SizedBox(height: 8),
@@ -162,42 +165,51 @@ class _OrganizationChatPreviewState
             borderRadius: BorderRadius.circular(12),
             color: Colors.grey.withValues(alpha: 0.05),
           ),
-          child: StreamBuilder<List<Message>>(
-            stream: ref
-                .read(chatRepositoryProvider)
-                .subscribeToMessages(widget.chatId),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
+          child: widget.canViewMessages
+              ? StreamBuilder<List<Message>>(
+                  stream: ref
+                      .read(chatRepositoryProvider)
+                      .subscribeToMessages(widget.chatId),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Center(
+                        child: Text('Messages are temporarily unavailable.'),
+                      );
+                    }
 
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-              final messages = snapshot.data!;
-              if (messages.isEmpty) {
-                return const Center(
-                  child: Text('No messages yet. Be the first to say hello!'),
-                );
-              }
+                    final messages = snapshot.data!;
+                    if (messages.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'No messages yet. Be the first to say hello!',
+                        ),
+                      );
+                    }
 
-              return ListView.builder(
-                padding: const EdgeInsets.all(12),
-                reverse: true, // Show newest at bottom (standard chat) or top?
-                // Usually chat lists are reverse: true invalidating standard list assumptions.
-                // But `subscribeToMessages` returns simpler list sorted by timestamp desc (newest first).
-                // If we want "Feed style" (newest at top), we use standard ListView.
-                // If we want "Chat style" (newest at bottom), we use reverse: true.
-                // Let's stick to standard Feed style for a "Preview" widget, showing newest at top.
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  final msg = messages[index];
-                  return _buildMessageTile(msg);
-                },
-              );
-            },
-          ),
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      reverse: true,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = messages[index];
+                        return _buildMessageTile(msg);
+                      },
+                    );
+                  },
+                )
+              : const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Follow or join this organization to view its messages.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
         ),
       ],
     );
@@ -222,8 +234,16 @@ class _OrganizationChatPreviewState
           .get();
       if (!chatDoc.exists) return false;
       final data = chatDoc.data() ?? {};
+      final userChatDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUserId)
+          .collection('userChats')
+          .doc(widget.chatId)
+          .get();
+
       final participants = List<String>.from(data['participants'] ?? []);
-      final isParticipant = participants.contains(currentUserId);
+      final isParticipant =
+          participants.contains(currentUserId) || userChatDoc.exists;
       if (!isParticipant) return false;
 
       // Chamber-of-commerce chats require member-level access to post.
@@ -231,12 +251,6 @@ class _OrganizationChatPreviewState
       final isChamberChat = data['subtype'] == 'corridor_chamber';
       if (!isChamberChat) return true;
 
-      final userChatDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserId)
-          .collection('userChats')
-          .doc(widget.chatId)
-          .get();
       final accessLevel = userChatDoc.data()?['accessLevel'] as String?;
       return accessLevel == 'member';
     } catch (e) {

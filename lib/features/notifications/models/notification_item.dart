@@ -107,7 +107,7 @@ enum NotificationType {
   /// A peer gave the user full trust (staked 100 DSP)
   trustFullTrustReceived,
 
-  /// User reached a PoCT milestone (10, 100, 1K, etc.)
+  /// User reached a P.o.C.T milestone (10, 100, 1K, etc.)
   trustMilestone,
 
   // ── Community ───────────────────────────────────────────────────────

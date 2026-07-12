@@ -26,7 +26,7 @@
     - [x] Implement "Trust-Anchored Decay" logic.
     - [x] Implement "Bereavement Fund" protocol.
     - [x] Implement "Vouching" visualization.
-    - [x] Enforce PoCT Eligibility (10k DSP, Complete Profile, 50 Trust Score).
+    - [x] Enforce P.o.C.T Eligibility (10k DSP, Complete Profile, 50 Trust Score).
     - [x] Refine Bereavement Fund (Rebranding, Verified Proxies, Strict Joining).
 - [x] **DSP UI/UX Refinement**
     - [x] Update `DiasporaCryptoScreen` with latest landing page copy.
@@ -85,4 +85,4 @@
 - [x] Refactor `GovernanceService.getCandidates` to filter by registered candidates (Paid Sinks).
 - [x] Implement "Run for Council" UI in `LeaderSelectionScreen` with commitment prompt.
 - [x] Verify **Internal GDP** and **Corridor** data population in `DiasporaCryptoScreen`.
-- [x] Implement **Utility Burn** (1% for <100 PoCT users) in transfer logic (Backend check).
+- [x] Implement **Utility Burn** (1% for <100 P.o.C.T users) in transfer logic (Backend check).

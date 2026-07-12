@@ -129,7 +129,9 @@ class _HostingRequestDetailScreenState
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        20, 20, 20,
+        20,
+        20,
+        20,
         20 + MediaQuery.of(context).padding.bottom,
       ),
       child: Column(

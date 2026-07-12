@@ -18,16 +18,17 @@ final _allPendingRequestsProvider =
           .where('status', isEqualTo: ChamberLeadershipRequest.statusPending)
           .snapshots()
           .map(
-            (snap) => snap.docs
-                .map(
-                  (d) => ChamberLeadershipRequest.fromJson(d.id, d.data()),
-                )
-                .toList()
-              ..sort((a, b) {
-                final at = a.createdAt?.millisecondsSinceEpoch ?? 0;
-                final bt = b.createdAt?.millisecondsSinceEpoch ?? 0;
-                return bt.compareTo(at); // newest first
-              }),
+            (snap) =>
+                snap.docs
+                    .map(
+                      (d) => ChamberLeadershipRequest.fromJson(d.id, d.data()),
+                    )
+                    .toList()
+                  ..sort((a, b) {
+                    final at = a.createdAt?.millisecondsSinceEpoch ?? 0;
+                    final bt = b.createdAt?.millisecondsSinceEpoch ?? 0;
+                    return bt.compareTo(at); // newest first
+                  }),
           );
     });
 
@@ -63,8 +64,7 @@ class AdminChamberRequestsScreen extends ConsumerWidget {
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: requests.length,
-            itemBuilder: (context, i) =>
-                _RequestCard(request: requests[i]),
+            itemBuilder: (context, i) => _RequestCard(request: requests[i]),
           );
         },
       ),
@@ -168,9 +168,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
             'decidedAt': FieldValue.serverTimestamp(),
           });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Request rejected.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Request rejected.')));
       }
     } catch (e) {
       if (mounted) {
@@ -236,9 +236,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: theme.dividerColor.withValues(alpha: 0.4),
-        ),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.4)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -264,14 +262,14 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                     if (p.profileImage.isNotEmpty) {
                       return CircleAvatar(
                         radius: 20,
-                        backgroundImage:
-                            CachedNetworkImageProvider(p.profileImage),
+                        backgroundImage: CachedNetworkImageProvider(
+                          p.profileImage,
+                        ),
                       );
                     }
                     return CircleAvatar(
                       radius: 20,
-                      backgroundColor:
-                          AppTheme.accent.withValues(alpha: 0.2),
+                      backgroundColor: AppTheme.accent.withValues(alpha: 0.2),
                       child: Text(
                         p.firstName.isNotEmpty
                             ? p.firstName[0].toUpperCase()
@@ -307,8 +305,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                         'wants ${ChamberRoles.displayName(req.role)}',
                         style: TextStyle(
                           fontSize: 13,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -344,8 +343,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.4),
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.4,
+                  ),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -363,8 +363,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                       _relativeTime(req.createdAt!),
                       style: TextStyle(
                         fontSize: 12,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                       ),
                     ),
                   ),
@@ -411,10 +412,13 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
 
 /// Single-shot fetch of a chamber doc by id (used to show the chamber name
 /// on each card without re-querying every rebuild).
-final _chamberDocProvider = FutureProvider.family<
-    DocumentSnapshot<Map<String, dynamic>>?, String>((ref, orgId) async {
-  return FirebaseFirestore.instance
-      .collection('organizations')
-      .doc(orgId)
-      .get();
-});
+final _chamberDocProvider =
+    FutureProvider.family<DocumentSnapshot<Map<String, dynamic>>?, String>((
+      ref,
+      orgId,
+    ) async {
+      return FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+    });

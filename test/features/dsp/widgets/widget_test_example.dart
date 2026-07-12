@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Example widget test demonstrating best practices
-/// 
+///
 /// This is a template - actual widget tests should be created
 /// for specific widgets in your app.
 
@@ -13,11 +13,7 @@ void main() {
       // Build the widget
       await tester.pumpWidget(
         const ProviderScope(
-          child: MaterialApp(
-            home: Scaffold(
-              body: Text('Hello Test'),
-            ),
-          ),
+          child: MaterialApp(home: Scaffold(body: Text('Hello Test'))),
         ),
       );
 
@@ -76,18 +72,12 @@ void main() {
     /// Helper to create a testable widget wrapped with providers
     Widget createTestWidget(Widget child) {
       return ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(
-            body: child,
-          ),
-        ),
+        child: MaterialApp(home: Scaffold(body: child)),
       );
     }
 
     testWidgets('Helper creates proper widget tree', (tester) async {
-      await tester.pumpWidget(
-        createTestWidget(const Text('Test Widget')),
-      );
+      await tester.pumpWidget(createTestWidget(const Text('Test Widget')));
 
       expect(find.text('Test Widget'), findsOneWidget);
     });

@@ -42,7 +42,9 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
   @override
   void initState() {
     super.initState();
-    _isScanning = kIsWeb ? false : !widget.isCreator; // Creator shows code by default
+    _isScanning = kIsWeb
+        ? false
+        : !widget.isCreator; // Creator shows code by default
 
     if (widget.isCreator) {
       _generateCode();

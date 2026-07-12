@@ -23,7 +23,9 @@ class LegalContentScreen extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          16, 16, 16,
+          16,
+          16,
+          16,
           16 + MediaQuery.of(context).padding.bottom,
         ),
         child: SelectableText(

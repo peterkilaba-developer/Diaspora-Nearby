@@ -1,59 +1,46 @@
 #!/bin/sh
-# =============================================================================
-# Git Pre-Commit Hook — Diaspora Nearby
+# Diaspora Nearby pre-commit hook.
 #
-# Automatically runs dart fix, dart format, and dart analyze on staged Dart
-# files before every commit. Blocks the commit if there are analyzer errors.
+# Install manually with:
+#   cp scripts/pre-commit .git/hooks/pre-commit
 #
-# This runs ONLY on files you're committing, so it's fast.
-# =============================================================================
+# The hook checks staged Dart files under lib/ and blocks commits when analysis
+# fails. It intentionally does not run on every generated or platform file.
 
 echo ""
-echo "🔍 Pre-commit: Running code quality checks..."
+echo "Pre-commit: running code quality checks..."
 echo ""
 
-# Get list of staged .dart files in lib/
 STAGED_DART=$(git diff --cached --name-only --diff-filter=ACM | grep '\.dart$' | grep '^lib/' || true)
 
 if [ -z "$STAGED_DART" ]; then
-    echo "✓ No Dart files staged in lib/ — skipping checks."
-    exit 0
+  echo "No staged Dart files under lib/; skipping Dart checks."
+  exit 0
 fi
 
 FILE_COUNT=$(echo "$STAGED_DART" | wc -l | tr -d ' ')
-echo "Checking $FILE_COUNT staged Dart file(s)..."
-echo ""
+echo "Checking $FILE_COUNT staged Dart file(s)."
 
-# ── Step 1: Auto-fix ────────────────────────────────────────────────────────
 echo "[1/3] dart fix --apply"
 dart fix --apply > /dev/null 2>&1
-echo "  ✓ Auto-fixes applied"
 
-# ── Step 2: Format staged files ─────────────────────────────────────────────
-echo "[2/3] dart format (staged files)"
+echo "[2/3] dart format staged files"
 echo "$STAGED_DART" | xargs dart format > /dev/null 2>&1
-
-# Re-stage any files that were modified by fix/format
 echo "$STAGED_DART" | xargs git add 2>/dev/null
-echo "  ✓ Formatted and re-staged"
 
-# ── Step 3: Analyze ─────────────────────────────────────────────────────────
 echo "[3/3] dart analyze lib/"
 ANALYZE_OUTPUT=$(dart analyze lib/ 2>&1)
 ANALYZE_EXIT=$?
 
 if [ $ANALYZE_EXIT -ne 0 ]; then
-    echo ""
-    echo "$ANALYZE_OUTPUT"
-    echo ""
-    echo "❌ Commit blocked — fix analyzer issues first."
-    echo "   Run: .\\scripts\\fix_and_analyze.ps1"
-    echo ""
-    exit 1
+  echo ""
+  echo "$ANALYZE_OUTPUT"
+  echo ""
+  echo "Commit blocked: fix analyzer issues first."
+  echo "You can run: ./scripts/fix_and_analyze.ps1"
+  exit 1
 fi
 
-echo "  ✓ Zero analyzer issues"
 echo ""
-echo "✅ All checks passed — committing."
-echo ""
+echo "Pre-commit checks passed."
 exit 0

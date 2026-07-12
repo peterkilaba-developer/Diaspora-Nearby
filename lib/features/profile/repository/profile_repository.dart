@@ -65,55 +65,70 @@ class ProfileRepository {
   Future<ProfileData?> getUserProfile(String uid) async {
     // [PERF] Check in-memory cache first
     final cached = _profileCache[uid];
-    if (cached != null && DateTime.now().difference(cached.fetchedAt) < _cacheTtl) {
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) < _cacheTtl) {
       final p = cached.profile;
       // [FIX] Don't serve bare/FCM-only docs from cache — they have empty
       // firstName and should be re-fetched from Firestore to get real data.
       if (p != null && p.firstName.isEmpty) {
-        debugPrint('📋 [getUserProfile] CACHE SKIP for bare/FCM-only doc (firstName empty) → re-fetching');
+        debugPrint(
+          '📋 [getUserProfile] CACHE SKIP for bare/FCM-only doc (firstName empty) → re-fetching',
+        );
         _profileCache.remove(uid);
       } else {
-        debugPrint('📋 [getUserProfile] CACHE HIT for $uid → '
-            'firstName="${p?.firstName}", lastName="${p?.lastName}", '
-            'profileImage="${p?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
-            'homeCity="${p?.homeLocation.city}"');
+        debugPrint(
+          '📋 [getUserProfile] CACHE HIT for $uid → '
+          'firstName="${p?.firstName}", lastName="${p?.lastName}", '
+          'profileImage="${p?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
+          'homeCity="${p?.homeLocation.city}"',
+        );
         return p;
       }
     }
 
     try {
-      // [FIX] Try server-first to avoid stale Firestore offline cache data.
-      // Falls back to cache automatically if offline.
+      // Read Firestore's local cache first so returning users do not wait on
+      // network/DNS before their profile can render. Fall back to the server
+      // when the cache is empty or unavailable.
       cf.DocumentSnapshot<Map<String, dynamic>> doc;
       try {
         doc = await _firestore
             .collection('users')
             .doc(uid)
-            .get(const cf.GetOptions(source: cf.Source.server))
-            .timeout(const Duration(seconds: 8));
+            .get(const cf.GetOptions(source: cf.Source.cache))
+            .timeout(const Duration(seconds: 2));
+        if (!doc.exists || doc.data() == null) {
+          throw StateError('Profile is not cached');
+        }
       } catch (_) {
-        // Server unavailable (offline), fall back to cache
+        // Cache miss: fetch a fresh profile from the server.
         doc = await _firestore
             .collection('users')
             .doc(uid)
-            .get(const cf.GetOptions(source: cf.Source.cache))
-            .timeout(const Duration(seconds: 5));
+            .get(const cf.GetOptions(source: cf.Source.server))
+            .timeout(const Duration(seconds: 8));
       }
-      debugPrint('📋 [getUserProfile] READ for $uid → '
-          'fromCache=${doc.metadata.isFromCache}, exists=${doc.exists}');
+      debugPrint(
+        '📋 [getUserProfile] READ for $uid → '
+        'fromCache=${doc.metadata.isFromCache}, exists=${doc.exists}',
+      );
       if (doc.exists && doc.data() != null) {
         try {
           final data = doc.data()!;
-          debugPrint('📋 [getUserProfile] FIRESTORE DATA for $uid → '
-              'firstName="${data['firstName']}", lastName="${data['lastName']}", '
-              'profilePhoto="${data['profilePhoto'] != null ? "SET" : "NULL"}", '
-              'homeLocation="${data['homeLocation'] != null ? "SET" : "NULL"}", '
-              'keys=${data.keys.length}');
+          debugPrint(
+            '📋 [getUserProfile] FIRESTORE DATA for $uid → '
+            'firstName="${data['firstName']}", lastName="${data['lastName']}", '
+            'profilePhoto="${data['profilePhoto'] != null ? "SET" : "NULL"}", '
+            'homeLocation="${data['homeLocation'] != null ? "SET" : "NULL"}", '
+            'keys=${data.keys.length}',
+          );
           // Ensure UID is set in the model
           data['uid'] = uid;
           final profile = ProfileData.fromJson(data);
-          debugPrint('📋 [getUserProfile] PARSED for $uid → '
-              'firstName="${profile.firstName}", homeCity="${profile.homeLocation.city}"');
+          debugPrint(
+            '📋 [getUserProfile] PARSED for $uid → '
+            'firstName="${profile.firstName}", homeCity="${profile.homeLocation.city}"',
+          );
           // [PERF] Cache the result — but NOT bare/FCM-only docs (firstName empty).
           // These incomplete docs are created by PushNotificationService's
           // _saveTokenToFirestore() before profile setup completes. Caching them
@@ -123,16 +138,22 @@ class ProfileRepository {
           if (profile.firstName.isNotEmpty) {
             _profileCache[uid] = _CachedProfile(profile, DateTime.now());
           } else {
-            debugPrint('📋 [getUserProfile] SKIPPING CACHE for bare/FCM-only doc (firstName empty)');
+            debugPrint(
+              '📋 [getUserProfile] SKIPPING CACHE for bare/FCM-only doc (firstName empty)',
+            );
           }
           return profile;
         } catch (e, stackTrace) {
-          debugPrint('╔═══════════════════════════════════════════════════════');
+          debugPrint(
+            '╔═══════════════════════════════════════════════════════',
+          );
           debugPrint('║ ⚠ PROFILE PARSE ERROR for $uid');
           debugPrint('║ Error: $e');
           debugPrint('║ Fields present: ${doc.data()!.keys.toList()}');
           debugPrint('║ Stack: $stackTrace');
-          debugPrint('╚═══════════════════════════════════════════════════════');
+          debugPrint(
+            '╚═══════════════════════════════════════════════════════',
+          );
           return null;
         }
       }
@@ -142,7 +163,14 @@ class ProfileRepository {
       return null;
     } catch (e) {
       debugPrint('Error getting user profile: $e');
-      rethrow; // [FIX] Rethrow to distinguish between "No Profile" and "Network Error"
+      // A profile refresh is not app-fatal. Returning null lets screens use
+      // their cached/session-backed state while Firestore reconnects.
+      final staleProfile = cached?.profile;
+      if (staleProfile != null && staleProfile.firstName.isNotEmpty) {
+        debugPrint('📋 [getUserProfile] USING STALE MEMORY CACHE for $uid');
+        return staleProfile;
+      }
+      return null;
     }
   }
 
@@ -281,7 +309,9 @@ class ProfileRepository {
             .get(const cf.GetOptions(source: cf.Source.cache))
             .timeout(const Duration(seconds: 3));
       }
-      debugPrint('📋 [profileExists] for $uid → fromCache=${doc.metadata.isFromCache}, exists=${doc.exists}');
+      debugPrint(
+        '📋 [profileExists] for $uid → fromCache=${doc.metadata.isFromCache}, exists=${doc.exists}',
+      );
       // [FIX] Don't just check doc.exists — the FCM token save creates a bare
       // user doc (with only fcmToken + notificationsEnabled) before profile
       // setup completes. Check for 'firstName' which is only written during
@@ -289,9 +319,12 @@ class ProfileRepository {
       if (!doc.exists) return false;
       final data = doc.data();
       if (data == null) return false;
-      final hasFirstName = data.containsKey('firstName') && 
-             (data['firstName'] as String?)?.isNotEmpty == true;
-      debugPrint('📋 [profileExists] for $uid → hasFirstName=$hasFirstName, keys=${data.keys.length}');
+      final hasFirstName =
+          data.containsKey('firstName') &&
+          (data['firstName'] as String?)?.isNotEmpty == true;
+      debugPrint(
+        '📋 [profileExists] for $uid → hasFirstName=$hasFirstName, keys=${data.keys.length}',
+      );
       return hasFirstName;
     } catch (e) {
       debugPrint('Error checking profile existence: $e');

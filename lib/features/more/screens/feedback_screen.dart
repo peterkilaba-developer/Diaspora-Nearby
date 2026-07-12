@@ -92,7 +92,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       body: SingleChildScrollView(
         child: Padding(
           padding: EdgeInsets.fromLTRB(
-            16, 16, 16,
+            16,
+            16,
+            16,
             16 + MediaQuery.of(context).padding.bottom,
           ),
           child: Column(

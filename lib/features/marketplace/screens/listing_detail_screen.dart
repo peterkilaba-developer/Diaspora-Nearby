@@ -766,14 +766,17 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
       // Safety & EV specs
       final safetySpecs = <Widget>[
-        if (v['abs'] != null)
-          _detailItem('ABS', v['abs'].toString(), isDark),
+        if (v['abs'] != null) _detailItem('ABS', v['abs'].toString(), isDark),
         if (v['airbagLocations'] != null)
           _detailItem('Airbags', v['airbagLocations'].toString(), isDark),
         if (v['gvwr'] != null)
           _detailItem('GVWR', v['gvwr'].toString(), isDark),
         if (v['electrificationType'] != null)
-          _detailItem('Electrification', v['electrificationType'].toString(), isDark),
+          _detailItem(
+            'Electrification',
+            v['electrificationType'].toString(),
+            isDark,
+          ),
         if (v['batteryKWh'] != null)
           _detailItem('Battery', '${v['batteryKWh']} kWh', isDark),
       ];
@@ -792,9 +795,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         ],
         // Plant origin badge
         if ((v['plantCountry'] != null &&
-            v['plantCountry'].toString().isNotEmpty) ||
+                v['plantCountry'].toString().isNotEmpty) ||
             (v['plantCity'] != null &&
-            v['plantCity'].toString().isNotEmpty)) ...[
+                v['plantCity'].toString().isNotEmpty)) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -815,12 +818,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 Icon(LucideIcons.factory, size: 13, color: theme.hintColor),
                 const SizedBox(width: 6),
                 Text(
-                  'Made in ${[
-                    if (v['plantCity'] != null && v['plantCity'].toString().isNotEmpty)
-                      v['plantCity'].toString(),
-                    if (v['plantCountry'] != null && v['plantCountry'].toString().isNotEmpty)
-                      v['plantCountry'].toString(),
-                  ].join(', ')}',
+                  'Made in ${[if (v['plantCity'] != null && v['plantCity'].toString().isNotEmpty) v['plantCity'].toString(), if (v['plantCountry'] != null && v['plantCountry'].toString().isNotEmpty) v['plantCountry'].toString()].join(', ')}',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,

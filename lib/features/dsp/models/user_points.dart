@@ -62,7 +62,7 @@ class UserPoints {
   final List<String> completedExplorationActions; // [FIX] Added missing field
   final String? walletAddress; // [NEW] User's Crypto Wallet Address
   final DateTime? lastCheckInDate; // [NEW]
-  final int? trustScore; // [NEW] Proof of Community Trust (PoCT)
+  final int? trustScore; // [NEW] Proof of Community Trust (P.o.C.T)
   final String? homeCountryCode; // [NEW] For community aggregation
   final Map<String, int>
   lifetimeEarnings; // [NEW] Track total DSP earned per activity
@@ -71,6 +71,8 @@ class UserPoints {
   final int verifiedCount; // [NEW] Track number of verified peers
   final int familyConnectionCount; // [NEW] Track number of family connections
   final int qrConnectionCount; // [NEW] Track number of QR connections
+  final DateTime? firstTgeReceivedAt; // Set by the TGE oracle after the
+  // user's first TGE distribution. Subsequent TGEs skip the 10-QR gate.
 
   UserPoints({
     required this.userId,
@@ -93,6 +95,7 @@ class UserPoints {
     this.verifiedCount = 0,
     this.familyConnectionCount = 0,
     this.qrConnectionCount = 0,
+    this.firstTgeReceivedAt,
   });
 
   int get totalDsp => totalPoints;
@@ -140,6 +143,7 @@ class UserPoints {
       familyConnectionCount: (map['familyConnectionCount'] as num? ?? 0)
           .toInt(),
       qrConnectionCount: (map['qrConnectionCount'] as num? ?? 0).toInt(),
+      firstTgeReceivedAt: _parseDateTime(map['firstTgeReceivedAt']),
     );
   }
 
@@ -165,6 +169,7 @@ class UserPoints {
       'verifiedCount': verifiedCount,
       'familyConnectionCount': familyConnectionCount,
       'qrConnectionCount': qrConnectionCount,
+      'firstTgeReceivedAt': firstTgeReceivedAt?.toIso8601String(),
     };
   }
 
@@ -189,6 +194,7 @@ class UserPoints {
     int? verifiedCount,
     int? familyConnectionCount,
     int? qrConnectionCount,
+    DateTime? firstTgeReceivedAt,
   }) {
     return UserPoints(
       userId: userId ?? this.userId,
@@ -214,6 +220,7 @@ class UserPoints {
       familyConnectionCount:
           familyConnectionCount ?? this.familyConnectionCount,
       qrConnectionCount: qrConnectionCount ?? this.qrConnectionCount,
+      firstTgeReceivedAt: firstTgeReceivedAt ?? this.firstTgeReceivedAt,
     );
   }
 

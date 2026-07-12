@@ -2,64 +2,150 @@ name: CI
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [dev, staging, production, main]
   pull_request:
-    branches: [ develop, main ]
+    branches: [dev, staging, production, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  analyze:
-    name: Code Analysis
+  repo-hygiene:
+    name: Repository Hygiene
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check repository hygiene
+        run: node scripts/check-repo-hygiene.js
+
+  flutter:
+    name: Flutter
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: "3.41.4"
+          channel: stable
           cache: true
-      
-      - name: Get dependencies
+
+      - name: Install dependencies
         run: flutter pub get
-      
-      - name: Run analyzer
-        run: flutter analyze
-  
-  test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-      
-      - name: Get dependencies
-        run: flutter pub get
-      
-      - name: Run tests
-        run: flutter test
-  
-  format:
-    name: Code Formatting
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-      
+
       - name: Check formatting
-        run: dart format --set-exit-if-changed .
+        run: dart format --set-exit-if-changed lib test integration_test scripts
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  functions:
+    name: Firebase Functions
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "21"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  firestore-rules:
+    name: Firestore Rules
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firestore-rules-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: firestore-rules-test/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test rules
+        run: npm test
+
+  blockchain:
+    name: Blockchain Contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: blockchain
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: blockchain/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Test
+        run: npm test
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

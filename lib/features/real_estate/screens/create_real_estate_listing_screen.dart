@@ -81,7 +81,8 @@ class _CreateRealEstateListingScreenState
   LandSurveyResult? _surveyResult;
   String? _surveyCountry;
   String? _surveyCountryCode;
-  int _aerialViewMode = 0; // 0 = Property aerial, 1 = Location map, 2 = Neighborhood aerial
+  int _aerialViewMode =
+      0; // 0 = Property aerial, 1 = Location map, 2 = Neighborhood aerial
 
   // Photos
   final List<XFile> _selectedImages = [];
@@ -403,8 +404,12 @@ class _CreateRealEstateListingScreenState
         photos: allPhotos,
         price: double.tryParse(_priceC.text.trim()) ?? 0,
         city: _cityC.text.trim(),
-        country: _surveyCountry ?? widget.existing?.country ?? profile.homeCountry,
-        countryCode: _surveyCountryCode ?? widget.existing?.countryCode ?? profile.homeCountryCode,
+        country:
+            _surveyCountry ?? widget.existing?.country ?? profile.homeCountry,
+        countryCode:
+            _surveyCountryCode ??
+            widget.existing?.countryCode ??
+            profile.homeCountryCode,
         address: _addressC.text.trim(),
         locality: _cityC.text.trim(),
         subLocality: _subLocalityC.text.trim(),
@@ -414,11 +419,15 @@ class _CreateRealEstateListingScreenState
         lat: _surveyResult?.centerLat ?? widget.existing?.lat,
         lng: _surveyResult?.centerLng ?? widget.existing?.lng,
         // GPS Survey data
-        boundaryPoints: _surveyResult?.boundaryPoints ?? widget.existing?.boundaryPoints,
+        boundaryPoints:
+            _surveyResult?.boundaryPoints ?? widget.existing?.boundaryPoints,
         centerLat: _surveyResult?.centerLat ?? widget.existing?.centerLat,
         centerLng: _surveyResult?.centerLng ?? widget.existing?.centerLng,
-        calculatedAreaSqm: _surveyResult?.areaSqm ?? widget.existing?.calculatedAreaSqm,
-        locationVerified: _surveyResult != null || (widget.existing?.locationVerified ?? false),
+        calculatedAreaSqm:
+            _surveyResult?.areaSqm ?? widget.existing?.calculatedAreaSqm,
+        locationVerified:
+            _surveyResult != null ||
+            (widget.existing?.locationVerified ?? false),
         // Common
         size: double.tryParse(_sizeC.text.trim()),
         sizeUnit: _sizeUnit,
@@ -590,19 +599,16 @@ class _CreateRealEstateListingScreenState
                           onPressed: () async {
                             final result =
                                 await Navigator.push<LandSurveyResult>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LandSurveyScreen(),
-                              ),
-                            );
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const LandSurveyScreen(),
+                                  ),
+                                );
                             if (result != null) {
                               _applySurveyResult(result);
                             }
                           },
-                          icon: const Icon(
-                            LucideIcons.rotateCcw,
-                            size: 16,
-                          ),
+                          icon: const Icon(LucideIcons.rotateCcw, size: 16),
                           label: const Text('Redo GPS Survey'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.accent,
@@ -1875,8 +1881,8 @@ class _CreateRealEstateListingScreenState
                         _aerialViewMode == 0
                             ? _buildSatelliteUrl(r)
                             : _aerialViewMode == 1
-                                ? _buildMapUrl(r)
-                                : _buildNeighborhoodUrl(r),
+                            ? _buildMapUrl(r)
+                            : _buildNeighborhoodUrl(r),
                         width: double.infinity,
                         height: 200,
                         fit: BoxFit.cover,

@@ -74,7 +74,8 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
   String? _geocodedCountry;
   String? _geocodedCountryCode;
   String? _geocodedSubLocality;
-  int _aerialViewMode = 0; // 0 = Property aerial, 1 = Location map, 2 = Neighborhood aerial
+  int _aerialViewMode =
+      0; // 0 = Property aerial, 1 = Location map, 2 = Neighborhood aerial
 
   // GPS averaging state
   int _sampleCount = 0;
@@ -83,6 +84,7 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
 
   /// Duration to collect GPS samples (seconds)
   static const _gpsSampleDuration = 5;
+
   /// Max acceptable accuracy for a sample (meters)
   static const _maxAcceptableAccuracy = 20.0;
 
@@ -150,24 +152,29 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
     try {
       final completer = Completer<void>();
 
-      _gpsSubscription = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 0,
-        ),
-      ).listen((pos) {
-        if (pos.accuracy <= _maxAcceptableAccuracy) {
-          samples.add(pos);
-        }
-        setState(() {
-          _sampleCount = samples.length;
-          if (_liveBestAccuracy == null || pos.accuracy < _liveBestAccuracy!) {
-            _liveBestAccuracy = pos.accuracy;
-          }
-        });
-      }, onError: (e) {
-        if (!completer.isCompleted) completer.completeError(e);
-      });
+      _gpsSubscription =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.best,
+              distanceFilter: 0,
+            ),
+          ).listen(
+            (pos) {
+              if (pos.accuracy <= _maxAcceptableAccuracy) {
+                samples.add(pos);
+              }
+              setState(() {
+                _sampleCount = samples.length;
+                if (_liveBestAccuracy == null ||
+                    pos.accuracy < _liveBestAccuracy!) {
+                  _liveBestAccuracy = pos.accuracy;
+                }
+              });
+            },
+            onError: (e) {
+              if (!completer.isCompleted) completer.completeError(e);
+            },
+          );
 
       // Collect for the sampling duration
       await Future.delayed(const Duration(seconds: _gpsSampleDuration));
@@ -378,7 +385,10 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isReady = _boundaryPoints.length >= 4 && _centerPoint != null && !_isGeocodingCenter;
+    final isReady =
+        _boundaryPoints.length >= 4 &&
+        _centerPoint != null &&
+        !_isGeocodingCenter;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -520,7 +530,9 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                         'Detecting location from survey points...',
                         style: TextStyle(
                           fontSize: 13,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                       ),
                     ],
@@ -612,7 +624,7 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                 Expanded(
                   child: Text(
                     'Fraud prevention: Only GPS-verified locations can be listed. '
-                    'Misrepresenting location results in 10 PoCT deduction per violation.',
+                    'Misrepresenting location results in 10 P.o.C.T deduction per violation.',
                     style: TextStyle(
                       fontSize: 11,
                       color: theme.colorScheme.error.withValues(alpha: 0.9),
@@ -761,8 +773,8 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                       color: _pointAccuracies[i] <= 5
                           ? Colors.green.withValues(alpha: 0.15)
                           : _pointAccuracies[i] <= 10
-                              ? Colors.orange.withValues(alpha: 0.12)
-                              : Colors.red.withValues(alpha: 0.1),
+                          ? Colors.orange.withValues(alpha: 0.12)
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -773,8 +785,8 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                         color: _pointAccuracies[i] <= 5
                             ? Colors.green.shade600
                             : _pointAccuracies[i] <= 10
-                                ? Colors.orange.shade600
-                                : Colors.red.shade500,
+                            ? Colors.orange.shade600
+                            : Colors.red.shade500,
                       ),
                     ),
                   ),
@@ -881,8 +893,8 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                               color: _liveBestAccuracy! <= 5
                                   ? Colors.greenAccent
                                   : _liveBestAccuracy! <= 10
-                                      ? Colors.yellowAccent
-                                      : Colors.white.withValues(alpha: 0.8),
+                                  ? Colors.yellowAccent
+                                  : Colors.white.withValues(alpha: 0.8),
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1034,8 +1046,8 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                       _aerialViewMode == 0
                           ? satelliteUrl
                           : _aerialViewMode == 1
-                              ? mapUrl
-                              : neighborhoodUrl,
+                          ? mapUrl
+                          : neighborhoodUrl,
                       width: double.infinity,
                       height: 220,
                       fit: BoxFit.cover,

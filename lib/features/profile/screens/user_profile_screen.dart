@@ -213,15 +213,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     }
 
     try {
-      debugPrint('🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading)');
+      debugPrint(
+        '🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading)',
+      );
       final profile = await ref
           .read(profileRepositoryProvider)
           .getUserProfile(widget.userId);
-      debugPrint('🔍 [ProfileScreen] _refreshProfile result → '
-          'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
-          'profileImage="${profile?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
-          'homeCity="${profile?.homeLocation.city}", '
-          'hostCity="${profile?.hostLocation.city}"');
+      debugPrint(
+        '🔍 [ProfileScreen] _refreshProfile result → '
+        'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
+        'profileImage="${profile?.profileImage.isNotEmpty == true ? "SET" : "EMPTY"}", '
+        'homeCity="${profile?.homeLocation.city}", '
+        'hostCity="${profile?.hostLocation.city}"',
+      );
       if (mounted) {
         setState(() {
           _profile = profile;
@@ -235,7 +239,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         // overwrite it with an error — the profile was just saved successfully
         // and only the background refresh failed (timeout / network).
         if (_profile != null && !showLoading) {
-          debugPrint('📋 [ProfileScreen] Background refresh failed but using existing profile data');
+          debugPrint(
+            '📋 [ProfileScreen] Background refresh failed but using existing profile data',
+          );
           setState(() => _isLoadingProfile = false);
         } else {
           setState(() {
@@ -254,7 +260,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     if (user == null || user.uid != widget.userId) return;
 
     try {
-      debugPrint('🔄 [Profile] Triggering background trust recalculation for ${user.uid}');
+      debugPrint(
+        '🔄 [Profile] Triggering background trust recalculation for ${user.uid}',
+      );
       await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
       debugPrint('✅ [Profile] Trust recalculation complete');
     } catch (e) {
@@ -326,6 +334,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
       ProfileData profileToSave = updatedProfile;
 
+      // Snapshot counts before any mutations for DSP reward detection.
+      // formPastCount = what the user submitted (original + manually added).
+      // originalPastCount = what was in Firestore before this save.
+      // The diff isolates explicit user additions from the auto-archive step below.
+      final originalPastCount = currentProfile.pastLocations?.length ?? 0;
+      final formPastCount = updatedProfile.pastLocations?.length ?? 0;
+      final hasManualPastLocationAddition = formPastCount > originalPastCount;
+
       // 1. Upload Image if changed
       if (newImage != null) {
         final url = await ref
@@ -361,10 +377,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
           // CRITICAL: Use the robust "New User" logic to create/join communities and sync chats.
           // This handles Global, Home, and Host hierarchies appropriately.
-          await ref.read(communityServiceProvider).createCommunitiesAndChats(
-            profileToSave,
-            onFirstMember: onFirstMember,
-          );
+          await ref
+              .read(communityServiceProvider)
+              .createCommunitiesAndChats(
+                profileToSave,
+                onFirstMember: onFirstMember,
+              );
         } catch (e) {
           debugPrint('Error syncing host communities: $e');
         }
@@ -372,8 +390,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
       if (profileToSave.pastLocations != null) {
         try {
+          // Only sync communities for past locations that are NEW to this save.
+          // Running ensureCommunitiesForLocationHierarchy for every existing
+          // past location on every save causes O(n) sequential CF round-trips.
+          final existingPastPlaceIds =
+              currentProfile.pastLocations
+                  ?.map((pl) => pl.location.placeId)
+                  .toSet() ??
+              {};
+
           final commService = ref.read(communityServiceProvider);
           for (final pl in profileToSave.pastLocations!) {
+            final pid = pl.location.placeId;
+            if (pid.isNotEmpty && existingPastPlaceIds.contains(pid)) continue;
             if (pl.location.city == null) continue; // Skip incomplete locations
 
             // Ensure robust parsing before sync (Standard New User Method)
@@ -412,6 +441,28 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       // Await is better here so user sees immediate feedback if we show trust score on profile
       await ref.read(trustServiceProvider).updateTrustForUser(user.uid);
 
+      // DSP distribution for location-change events (once per user per event type).
+      // Run both checks in parallel so they don't compound save latency.
+      try {
+        final pointsService = ref.read(pointsServiceProvider);
+        final hostChanged =
+            profileToSave.hostLocation.placeId !=
+                currentProfile.hostLocation.placeId ||
+            profileToSave.hostLocation.formattedAddress !=
+                currentProfile.hostLocation.formattedAddress;
+
+        final dspFutures = <Future<void>>[];
+        if (hostChanged) {
+          dspFutures.add(pointsService.trackHostLocationMove(user.uid));
+        }
+        if (hasManualPastLocationAddition) {
+          dspFutures.add(pointsService.trackAlsoLivedInAdded(user.uid));
+        }
+        if (dspFutures.isNotEmpty) await Future.wait(dspFutures);
+      } catch (e) {
+        debugPrint('Location DSP reward failed: $e');
+      }
+
       debugPrint('UserProfileScreen: Profile saved to repository.'); // [DEBUG]
 
       if (mounted) {
@@ -422,7 +473,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
         // Update global provider safely
         ref.read(userProfileProvider.notifier).updateProfile(profileToSave);
-        _refreshProfile(showLoading: false); // [FIX] Don't show loading spinner or error on post-save refresh
+        _refreshProfile(
+          showLoading: false,
+        ); // [FIX] Don't show loading spinner or error on post-save refresh
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
@@ -491,7 +544,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                               final user = ref
                                   .read(authRepositoryProvider)
                                   .currentUser;
-                              String shareUrl = 'https://diasporanearby.com/invite';
+                              String shareUrl =
+                                  'https://diasporanearby.com/invite';
 
                               if (user != null) {
                                 try {

@@ -140,6 +140,10 @@ class ProfileData {
 
   // Privacy
   final bool? showCurrentLocationName;
+  // Once true, the +10 City Visibility P.o.C.T is permanently forfeited and
+  // cannot be re-earned by toggling visibility back on. Set when the user
+  // confirms the hide-city action.
+  final bool? cityVisibilityForfeited;
 
   // [NEW] QR Connection info for verification
   final QRConnectionInfo? firstQrConnection;
@@ -200,6 +204,7 @@ class ProfileData {
     this.blockedUsers,
     this.createdAt,
     this.showCurrentLocationName,
+    this.cityVisibilityForfeited,
 
     this.firstQrConnection,
     this.walletAddress,
@@ -310,6 +315,7 @@ class ProfileData {
     String? city,
     String? country,
     bool? showCurrentLocationName,
+    bool? cityVisibilityForfeited,
 
     QRConnectionInfo? firstQrConnection,
     String? walletAddress,
@@ -368,6 +374,8 @@ class ProfileData {
       distance: distance ?? this.distance,
       showCurrentLocationName:
           showCurrentLocationName ?? this.showCurrentLocationName,
+      cityVisibilityForfeited:
+          cityVisibilityForfeited ?? this.cityVisibilityForfeited,
       firstQrConnection: firstQrConnection ?? this.firstQrConnection,
       walletAddress: walletAddress ?? this.walletAddress,
     );

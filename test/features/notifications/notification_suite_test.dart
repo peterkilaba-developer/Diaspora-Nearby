@@ -1,20 +1,23 @@
+// ignore_for_file: subtype_of_sealed_class, must_be_immutable
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/core/services/proximity_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart'; 
+import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
-import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart'; 
+import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
 
 // Manual Fakes to bypass build_runner dependency issues
 
 // ==========================================
 // Fake Notifications
 // ==========================================
-class FakeLocalNotifications extends Mock implements FlutterLocalNotificationsPlugin {
+class FakeLocalNotifications extends Mock
+    implements FlutterLocalNotificationsPlugin {
   bool showCalled = false;
   int? lastId;
   String? lastTitle;
@@ -42,9 +45,12 @@ class FakeLocalNotifications extends Mock implements FlutterLocalNotificationsPl
   }) async => true;
 }
 
-class FakeAndroidNotifications extends Fake implements AndroidFlutterLocalNotificationsPlugin {
+class FakeAndroidNotifications extends Fake
+    implements AndroidFlutterLocalNotificationsPlugin {
   @override
-  Future<void> createNotificationChannel(AndroidNotificationChannel channel) async {}
+  Future<void> createNotificationChannel(
+    AndroidNotificationChannel channel,
+  ) async {}
 }
 
 // ==========================================
@@ -78,7 +84,8 @@ class FakeFirestore extends Fake implements FirebaseFirestore {
   }
 }
 
-class FakeCollectionReference extends Fake implements CollectionReference<Map<String, dynamic>> {
+class FakeCollectionReference extends Fake
+    implements CollectionReference<Map<String, dynamic>> {
   final Map<String, FakeDocumentReference> docs = {};
   FakeQuery? queryToReturn;
 
@@ -89,23 +96,40 @@ class FakeCollectionReference extends Fake implements CollectionReference<Map<St
   }
 
   @override
-  Query<Map<String, dynamic>> where(Object field, {Object? isEqualTo, Object? isNotEqualTo, Object? isLessThan, Object? isLessThanOrEqualTo, Object? isGreaterThan, Object? isGreaterThanOrEqualTo, Object? arrayContains, Iterable<Object?>? arrayContainsAny, Iterable<Object?>? whereIn, Iterable<Object?>? whereNotIn, bool? isNull}) {
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) {
     // Return a fake query that we can control
     return queryToReturn ?? FakeQuery();
   }
 }
 
-class FakeDocumentReference extends Fake implements DocumentReference<Map<String, dynamic>> {
+class FakeDocumentReference extends Fake
+    implements DocumentReference<Map<String, dynamic>> {
   Map<String, dynamic>? dataToReturn;
   bool existsToReturn = true;
 
   @override
-  Future<DocumentSnapshot<Map<String, dynamic>>> get([GetOptions? options]) async {
+  Future<DocumentSnapshot<Map<String, dynamic>>> get([
+    GetOptions? options,
+  ]) async {
     return FakeDocumentSnapshot(dataToReturn, existsToReturn);
   }
 }
 
-class FakeDocumentSnapshot extends Fake implements DocumentSnapshot<Map<String, dynamic>> {
+class FakeDocumentSnapshot extends Fake
+    implements DocumentSnapshot<Map<String, dynamic>> {
   final Map<String, dynamic>? _data;
   final bool _exists;
 
@@ -130,7 +154,8 @@ class FakeQuery extends Fake implements Query<Map<String, dynamic>> {
   }
 }
 
-class FakeQuerySnapshot extends Fake implements QuerySnapshot<Map<String, dynamic>> {
+class FakeQuerySnapshot extends Fake
+    implements QuerySnapshot<Map<String, dynamic>> {
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs;
   FakeQuerySnapshot(this._docs);
 
@@ -138,7 +163,8 @@ class FakeQuerySnapshot extends Fake implements QuerySnapshot<Map<String, dynami
   List<QueryDocumentSnapshot<Map<String, dynamic>>> get docs => _docs;
 }
 
-class FakeQueryDocumentSnapshot extends Fake implements QueryDocumentSnapshot<Map<String, dynamic>> {
+class FakeQueryDocumentSnapshot extends Fake
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {
   final Map<String, dynamic> _data;
   final String _id;
 
@@ -176,8 +202,6 @@ class FakeUser extends Fake implements User {
   String get uid => _uid;
 }
 
-
-
 // ==========================================
 // Fake Points Service
 // ==========================================
@@ -201,7 +225,7 @@ void main() {
     fakeFirestore = FakeFirestore();
     fakeNotifications = FakeLocalNotifications();
     fakePrefs = FakeSharedPreferences();
-    
+
     proximityService = ProximityService();
   });
 
@@ -212,7 +236,10 @@ void main() {
 
     test('should NOT notify if cooldown is active', () async {
       // Arrange
-      await fakePrefs.setInt('last_proximity_notification_time', DateTime.now().millisecondsSinceEpoch);
+      await fakePrefs.setInt(
+        'last_proximity_notification_time',
+        DateTime.now().millisecondsSinceEpoch,
+      );
 
       // Act
       await proximityService.checkAndNotify(userId);
@@ -224,15 +251,16 @@ void main() {
     test('should notify if user is nearby and cooldown passed', () async {
       // Arrange
       // 1. Cooldown passed (0)
-      
+
       // 2. Setup Me
-      final myDoc = fakeFirestore.usersCollection.doc(userId) as FakeDocumentReference;
+      final myDoc =
+          fakeFirestore.usersCollection.doc(userId) as FakeDocumentReference;
       myDoc.dataToReturn = {
         'homeCountryCode': homeCountryCode,
         'currentLocation': {
           'geometry': {
-            'location': {'lat': 51.5074, 'lng': -0.1278} // London
-          }
+            'location': {'lat': 51.5074, 'lng': -0.1278}, // London
+          },
         },
       };
 
@@ -242,14 +270,13 @@ void main() {
         'homeCountry': 'Ghana',
         'currentLocation': {
           'geometry': {
-            'location': {'lat': 51.5074, 'lng': -0.1278} // London
-          }
+            'location': {'lat': 51.5074, 'lng': -0.1278}, // London
+          },
         },
       });
-      
+
       final fakeQuery = FakeQuery()..docsToReturn = [compatriotDoc];
       fakeFirestore.usersCollection.queryToReturn = fakeQuery;
-
 
       // Act
       await proximityService.checkAndNotify(userId);
@@ -262,13 +289,14 @@ void main() {
     test('should NOT notify if compatriot is too far', () async {
       // Arrange
       // Me
-      final myDoc = fakeFirestore.usersCollection.doc(userId) as FakeDocumentReference;
+      final myDoc =
+          fakeFirestore.usersCollection.doc(userId) as FakeDocumentReference;
       myDoc.dataToReturn = {
         'homeCountryCode': homeCountryCode,
         'currentLocation': {
           'geometry': {
-            'location': {'lat': 51.5074, 'lng': -0.1278} // London
-          }
+            'location': {'lat': 51.5074, 'lng': -0.1278}, // London
+          },
         },
       };
 
@@ -278,11 +306,11 @@ void main() {
         'homeCountry': 'Ghana',
         'currentLocation': {
           'geometry': {
-            'location': {'lat': 53.4808, 'lng': -2.2426} 
-          }
+            'location': {'lat': 53.4808, 'lng': -2.2426},
+          },
         },
       });
-      
+
       final fakeQuery = FakeQuery()..docsToReturn = [compatriotDoc];
       fakeFirestore.usersCollection.queryToReturn = fakeQuery;
 
@@ -301,7 +329,7 @@ void main() {
       fakeAuth = FakeAuth(FakeUser('sender_123'));
       fakeStorage = FakeFirebaseStorage();
       fakePointsService = FakePointsService();
-      
+
       final chatService = ChatMessagingService(
         firestore: fakeFirestore,
         auth: fakeAuth,
@@ -310,11 +338,10 @@ void main() {
       );
 
       // Mock Sender Profile (needed for sendTextMessage)
-      final senderDoc = fakeFirestore.usersCollection.doc('sender_123') as FakeDocumentReference;
-      senderDoc.dataToReturn = {
-        'firstName': 'Sender',
-        'lastName': 'Man',
-      };
+      final senderDoc =
+          fakeFirestore.usersCollection.doc('sender_123')
+              as FakeDocumentReference;
+      senderDoc.dataToReturn = {'firstName': 'Sender', 'lastName': 'Man'};
 
       // chatId and mentionedUserId would be used in a full integration test
 

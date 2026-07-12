@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_local_service.dart';
+import 'package:diaspora_nearby/features/chat/services/chamber_service.dart';
 
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
@@ -102,62 +103,97 @@ class ChatRepository {
 
     debugPrint('🔄 Starting Firestore real-time chat sync for $uid');
 
-    // One-time initial sync to populate cache
-    _syncUserChats(uid).then((_) {
-      // Emit initial state after sync completes (sorted)
-      _chatsController.add(_sortedChatsList());
-    });
+    // Listen for changes to the user's chat list. The initial snapshot is
+    // served from Firestore's local cache, so the first emission must not
+    // wait on the network: chats are hydrated cache-first and emitted
+    // immediately, then refreshed from the server in the background.
+    _realtimeSubscription = _userChatsCol(uid).snapshots().listen(
+      (snapshot) async {
+        // Handle removals and soft-deletes synchronously first
+        for (final change in snapshot.docChanges) {
+          final chatId = change.doc.id;
+          final data = change.doc.data() ?? {};
 
-    // Listen for changes to the user's chat list
-    _realtimeSubscription = _userChatsCol(uid).snapshots().listen((
-      snapshot,
-    ) async {
-      for (final change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.removed ||
+              data['isDeleted'] == true) {
+            _chatsCache.removeWhere((c) => c.id == chatId);
+            _localService.deleteChat(chatId); // fire-and-forget (no-op)
+          }
+        }
+
+        final toFetch = snapshot.docChanges.where((c) {
+          if (c.type == DocumentChangeType.removed) return false;
+          return (c.doc.data()?['isDeleted']) != true;
+        }).toList();
+        if (toFetch.isEmpty) {
+          if (!_chatsController.isClosed) {
+            _chatsController.add(_sortedChatsList());
+          }
+          return;
+        }
+
+        // Fast pass: hydrate from the local cache and emit right away so
+        // the list renders without a network round trip after a restart.
+        await _applyChatChanges(toFetch, uid, preferCache: true);
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
+
+        // Server pass: refresh the same chats in the background. This
+        // catches chat-doc fields (name, photo, participants) that change
+        // without touching the userChats index, and runs delivery receipts
+        // against fresh data.
+        await _applyChatChanges(toFetch, uid, preferCache: false);
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Error listening to chats for $uid: $error');
+        if (!_chatsController.isClosed) {
+          _chatsController.addError(error, stackTrace);
+        }
+      },
+    );
+  }
+
+  /// Fetch the chat docs for a set of userChats changes in parallel and
+  /// upsert them into the in-memory cache. With [preferCache] the chat docs
+  /// are read from Firestore's local cache (falling back to the server on a
+  /// miss); delivery receipts are only issued on server-fresh data.
+  Future<void> _applyChatChanges(
+    List<DocumentChange<Map<String, dynamic>>> changes,
+    String uid, {
+    required bool preferCache,
+  }) async {
+    await Future.wait(
+      changes.map((change) async {
         final chatId = change.doc.id;
         final data = change.doc.data() ?? {};
-
-        if (change.type == DocumentChangeType.removed) {
-          _chatsCache.removeWhere((c) => c.id == chatId);
-          await _localService.deleteChat(chatId);
-          continue;
-        }
-
-        // Check soft delete
-        if (data['isDeleted'] == true) {
-          _chatsCache.removeWhere((c) => c.id == chatId);
-          await _localService.deleteChat(chatId);
-          continue;
-        }
-
         try {
-          // Fetch full chat document — skip redundant userChats re-read
-          // since we already have user preferences from the listener snapshot
-          final chat = await _fetchAndSaveChat(chatId, skipUserChatRead: true);
+          final chat = await _fetchAndSaveChat(
+            chatId,
+            skipUserChatRead: true,
+            preferCache: preferCache,
+          );
           if (chat != null) {
-            // Merge user preferences from the listener data (already available)
             final chatWithPrefs = chat.withUserPreferences(data);
-
-            // Delivery receipt logic
-            _handleDeliveryReceipt(chatWithPrefs, uid);
-
-            // Update in-memory cache
+            if (!preferCache) {
+              _handleDeliveryReceipt(chatWithPrefs, uid);
+            }
             final existingIdx = _chatsCache.indexWhere((c) => c.id == chatId);
             if (existingIdx >= 0) {
               _chatsCache[existingIdx] = chatWithPrefs;
             } else {
               _chatsCache.add(chatWithPrefs);
             }
-
-            await _localService.saveChat(chatWithPrefs);
+            _localService.saveChat(chatWithPrefs); // fire-and-forget (no-op)
           }
         } catch (e) {
           debugPrint('Error syncing chat $chatId: $e');
         }
-      }
-
-      // Emit updated list after processing all changes (sorted)
-      _chatsController.add(_sortedChatsList());
-    });
+      }),
+    );
   }
 
   /// Handle delivery receipt: mark incoming 'sent' messages as 'delivered'
@@ -183,59 +219,6 @@ class ChatRepository {
     }
   }
 
-  /// One-time sync of all user chats from Firestore
-  Future<void> _syncUserChats(String uid) async {
-    try {
-      final userChatsSnap = await _userChatsCol(uid).get();
-      if (userChatsSnap.docs.isEmpty) return;
-
-      // Separate deleted from active chats
-      final activeDocs = <({String chatId, Map<String, dynamic> data})>[];
-      for (final doc in userChatsSnap.docs) {
-        final data = doc.data();
-        if (data['isDeleted'] == true) {
-          _chatsCache.removeWhere((c) => c.id == doc.id);
-          _localService.deleteChat(doc.id); // fire-and-forget
-        } else {
-          activeDocs.add((chatId: doc.id, data: data));
-        }
-      }
-
-      if (activeDocs.isEmpty) return;
-
-      // [PERF] Fetch all chat documents in parallel instead of sequentially
-      final futures = activeDocs.map((item) async {
-        try {
-          final chatDoc = await _chatsCol.doc(item.chatId).get();
-          if (chatDoc.exists) {
-            var chat = Chat.fromFirestore(chatDoc);
-            chat = chat.withUserPreferences(item.data);
-            _localService.saveChat(chat); // fire-and-forget local save
-            return chat;
-          }
-        } catch (e) {
-          debugPrint('Error syncing chat ${item.chatId}: $e');
-        }
-        return null;
-      }).toList();
-
-      final results = await Future.wait(futures);
-
-      // Populate in-memory cache from parallel results
-      for (final chat in results) {
-        if (chat == null) continue;
-        final existingIdx = _chatsCache.indexWhere((c) => c.id == chat.id);
-        if (existingIdx >= 0) {
-          _chatsCache[existingIdx] = chat;
-        } else {
-          _chatsCache.add(chat);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error syncing chats: $e');
-    }
-  }
-
   Future<void> _cacheMessagesLocally(
     String chatId,
     List<Message> messages,
@@ -254,7 +237,11 @@ class ChatRepository {
     int clearedAt = 0;
     List<Message> lastMessages = [];
 
-    // 1. Emit cached messages immediately
+    // Always leave Riverpod's loading state immediately. Cached/remote
+    // messages replace this value as soon as they arrive.
+    controller.add(const []);
+
+    // 1. Emit cached messages when available
     () async {
       try {
         final messages = await _localService.getCachedMessages(chatId);
@@ -263,6 +250,7 @@ class ChatRepository {
         if (!controller.isClosed) controller.add(messages);
       } catch (e) {
         debugPrint('Error reading cached messages: $e');
+        if (!controller.isClosed) controller.addError(e);
       }
     }();
 
@@ -270,45 +258,57 @@ class ChatRepository {
     final clearedAtSub = _userChatsCol(currentUserId!)
         .doc(chatId)
         .snapshots()
-        .listen((snapshot) {
-          final data = snapshot.data();
-          clearedAt = (data?['clearedAt'] as int?) ?? 0;
+        .listen(
+          (snapshot) {
+            final data = snapshot.data();
+            clearedAt = (data?['clearedAt'] as int?) ?? 0;
 
-          if (lastMessages.isNotEmpty && !controller.isClosed) {
-            controller.add(
-              lastMessages.where((m) => m.timestamp > clearedAt).toList(),
-            );
-          }
-        });
+            if (lastMessages.isNotEmpty && !controller.isClosed) {
+              controller.add(
+                lastMessages.where((m) => m.timestamp > clearedAt).toList(),
+              );
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('Error listening to chat index for $chatId: $error');
+            if (!controller.isClosed) controller.addError(error, stackTrace);
+          },
+        );
 
     // 3. Listen to Firestore Messages subcollection
     final subscription = _messagesCol(chatId)
         .orderBy('timestamp', descending: true)
         .limit(100)
         .snapshots()
-        .listen((snapshot) {
-          final List<Message> messages = [];
+        .listen(
+          (snapshot) {
+            final List<Message> messages = [];
 
-          for (final doc in snapshot.docs) {
-            try {
-              messages.add(Message.fromFirestore(chatId, doc));
-            } catch (e) {
-              debugPrint('Error parsing message ${doc.id}: $e');
+            for (final doc in snapshot.docs) {
+              try {
+                messages.add(Message.fromFirestore(chatId, doc));
+              } catch (e) {
+                debugPrint('Error parsing message ${doc.id}: $e');
+              }
             }
-          }
 
-          // [PERF] Query already returns sorted by timestamp desc — skip redundant sort
-          lastMessages = messages;
+            // [PERF] Query already returns sorted by timestamp desc — skip redundant sort
+            lastMessages = messages;
 
-          if (!controller.isClosed) {
-            // [PERF] Only filter if clearedAt is actually set
-            final filtered = clearedAt > 0
-                ? messages.where((m) => m.timestamp > clearedAt).toList()
-                : messages;
-            controller.add(filtered);
-            _cacheMessagesLocally(chatId, messages);
-          }
-        });
+            if (!controller.isClosed) {
+              // [PERF] Only filter if clearedAt is actually set
+              final filtered = clearedAt > 0
+                  ? messages.where((m) => m.timestamp > clearedAt).toList()
+                  : messages;
+              controller.add(filtered);
+              _cacheMessagesLocally(chatId, messages);
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('Error listening to messages for $chatId: $error');
+            if (!controller.isClosed) controller.addError(error, stackTrace);
+          },
+        );
 
     controller.onCancel = () {
       clearedAtSub.cancel();
@@ -334,7 +334,8 @@ class ChatRepository {
         final data = doc.data();
         final type = data['type'] as String? ?? '';
         // Count from memberCount first, fallback to participants list length
-        final members = (data['memberCount'] as int?) ??
+        final members =
+            (data['memberCount'] as int?) ??
             (data['participants'] as List<dynamic>?)?.length ??
             0;
         if (type == 'group' && members >= minMembers) {
@@ -452,9 +453,29 @@ class ChatRepository {
     return await _fetchAndSaveChat(chatId);
   }
 
-  Future<Chat?> _fetchAndSaveChat(String chatId, {bool skipUserChatRead = false}) async {
+  Future<Chat?> _fetchAndSaveChat(
+    String chatId, {
+    bool skipUserChatRead = false,
+    bool preferCache = false,
+  }) async {
     try {
-      final chatDoc = await _chatsCol.doc(chatId).get();
+      // [PERF] Cache-first read for the realtime listener's fast pass —
+      // a default get() waits on the server even when the doc is cached.
+      DocumentSnapshot<Map<String, dynamic>> chatDoc;
+      if (preferCache) {
+        try {
+          chatDoc = await _chatsCol
+              .doc(chatId)
+              .get(const GetOptions(source: Source.cache));
+          if (!chatDoc.exists) {
+            throw StateError('Chat $chatId not cached');
+          }
+        } catch (_) {
+          chatDoc = await _chatsCol.doc(chatId).get();
+        }
+      } else {
+        chatDoc = await _chatsCol.doc(chatId).get();
+      }
       if (chatDoc.exists) {
         var chat = Chat.fromFirestore(chatDoc);
 
@@ -1081,8 +1102,10 @@ class ChatRepository {
     final participants = [currentUserId!, otherUserId];
 
     // Get sender data for the message
-    final userDoc =
-        await _firestore.collection('users').doc(currentUserId!).get();
+    final userDoc = await _firestore
+        .collection('users')
+        .doc(currentUserId!)
+        .get();
     final userData = userDoc.data();
     final firstName = userData?['firstName'] as String? ?? '';
     final lastName = userData?['lastName'] as String? ?? '';
@@ -1162,9 +1185,7 @@ class ChatRepository {
 
     await batch.commit();
 
-    debugPrint(
-      '✅ Created DM chat + first message: $chatId',
-    );
+    debugPrint('✅ Created DM chat + first message: $chatId');
 
     return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
   }
@@ -1500,6 +1521,20 @@ class ChatRepository {
     if (chatData['isPublic'] != true) {
       throw Exception('Cannot join private group without invitation');
     }
+    // Chambers and DDI discussions are structural chats: membership is
+    // managed server-side via callables (hardened firestore rules block
+    // direct participant writes for them).
+    final metadata = chatData['metadata'];
+    if (metadata is Map && metadata['isChamber'] == true) {
+      await _ref.read(chamberServiceProvider).joinChamber(chatId);
+      await getChat(chatId, force: true);
+      return;
+    }
+    if (metadata is Map && metadata['isDdiDiscussion'] == true) {
+      await _ref.read(chamberServiceProvider).joinDdiDiscussion(chatId);
+      await getChat(chatId, force: true);
+      return;
+    }
 
     // Add to participants using Firestore arrayUnion
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -1573,6 +1608,23 @@ class ChatRepository {
     if (image != null) updates['photoUrl'] = image;
     if (description != null) updates['description'] = description;
     if (updates.isNotEmpty) await _chatsCol.doc(chatId).update(updates);
+  }
+
+  Future<void> manageChamber(
+    String chatId, {
+    String? description,
+    List<String> addMemberIds = const [],
+    List<String> removeMemberIds = const [],
+  }) async {
+    await _ref
+        .read(chamberServiceProvider)
+        .manageChamber(
+          chatId,
+          description: description,
+          addMemberIds: addMemberIds,
+          removeMemberIds: removeMemberIds,
+        );
+    await getChat(chatId, force: true);
   }
 
   Future<bool> addGroupMember(String chatId, String userId) async {

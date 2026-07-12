@@ -66,7 +66,7 @@ class _ProfileVerificationModalState
           type = VerificationAlertType.conflict;
           title = 'Conflict of Interest';
         } else if (reason.contains('complete your profile') ||
-            reason.contains('PoCT score') ||
+            reason.contains('P.o.C.T score') ||
             reason.contains('acquired at least')) {
           type = VerificationAlertType.requirements;
           title = 'Requirements Not Met';
@@ -269,7 +269,9 @@ class _ProfileVerificationModalState
                     const SizedBox(height: 16),
                     Builder(
                       builder: (context) {
-                        final hasFields = _fieldVerifications.values.any((v) => v != null);
+                        final hasFields = _fieldVerifications.values.any(
+                          (v) => v != null,
+                        );
                         final buttonLabel = hasFields
                             ? 'Submit Verification (+1,000 DSP)'
                             : 'Verify at least one field';
@@ -279,9 +281,17 @@ class _ProfileVerificationModalState
                             onPressed: hasFields ? _submitVerification : null,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: hasFields ? AppTheme.accent : null,
-                              disabledBackgroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.12),
-                              disabledForegroundColor: theme.colorScheme.onSurface.withValues(alpha: 0.38),
+                              backgroundColor: hasFields
+                                  ? AppTheme.accent
+                                  : null,
+                              disabledBackgroundColor: theme
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.12),
+                              disabledForegroundColor: theme
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.38),
                             ),
                             child: Text(
                               buttonLabel,
@@ -504,8 +514,7 @@ class _ProfileVerificationModalState
         context,
         type: VerificationAlertType.error,
         title: 'Field Verification Required',
-        message:
-            'Please verify at least one profile field before submitting.',
+        message: 'Please verify at least one profile field before submitting.',
       );
       return;
     }

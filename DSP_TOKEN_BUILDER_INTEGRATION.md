@@ -14,7 +14,7 @@ This document provides the definitive technical specification for the **$DIASPOR
 | **Max Supply** | Dynamic (gated by 10 Epochs, each 10x the previous) |
 
 ## 2. Supply Allocation (The 7+3 Model)
-The total global supply is minted based on human activity validation (Proof of Activity). The following buckets are minted based on the **1:1 Expansion Rule** (For every 1 token a user earns, 1 token is matched for the system).
+The total global supply is minted based on human activity validation (Proof of Social Activities). The following buckets are minted based on the **1:1 Expansion Rule** (For every 1 token a user earns, 1 token is matched for the system).
 
 | Bucket | Allocation | Role |
 | :--- | :--- | :--- |
@@ -35,18 +35,18 @@ The smart contract mints and distributes supply based on the Diaspora Protocol's
 
 ## 4. TGE "Great Reset" Prerequisites
 Before executing a TGE, the following system-wide actions occur:
-1. **Dual Trigger**: Both the cumulative $DIASPORA supply target AND the population target for the current Epoch must be met.
+1. **DSP Supply Trigger**: The TGE fires when cumulative distributed DSP crosses the next supply milestone. Population targets are informational and do not gate execution.
 2. **Snapshot Generation**: A final immutable snapshot of Firebase is captured, providing a list of:
    - **Eligible Users**: Users with **>= 10,000 $DIASPORA** balance.
    - **Communities**: Community treasury balances (**>= 1,000,000 $DIASPORA** gate).
    - **System Wallets**: Founders/Team, Investors/Partners, and Burn addresses.
-3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA at a **1:1 ratio**, adjusted by the user's PoCT Decile Efficiency.
+3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA at a **1:1 ratio**, adjusted by the user's P.o.C.T Decile Efficiency.
 4. **Cleanup**: All off-chain $DIASPORA balances in the application are reset to **0**.
 
 ## 5. Economic Governance: 10-Epoch Scaling
-The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in both population and supply targets.
+The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in the distributed-DSP supply target. Population targets are retained as informational network-growth benchmarks.
 
-| Epoch | Population Target | Supply Target |
+| Epoch | Informational Population Benchmark | Distributed DSP Trigger |
 | :--- | :--- | :--- |
 | **1** | 100 | 1,000,000 |
 | **2** | 1,000 | 10,000,000 |
@@ -62,7 +62,7 @@ The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in b
 ## 6. Token Utility Sinks
 - **Community Penalties**: Spam, fraud, no-shows, and other bad behaviors result in DSP deductions.
 - **Protocol Burns**: 10% fixed expansion burn, unassigned slot burn, unclaimed TGE burn.
-- **PoCT Efficiency**: Low trust scores reduce TGE conversion rates, effectively burning unconverted DSP.
+- **P.o.C.T Efficiency**: Low trust scores reduce TGE conversion rates, effectively burning unconverted DSP.
 
 > **Note:** All economic activity fees (marketplace, events, travel, business) have been permanently removed. The economy is frictionless — DSP is only removed through penalties and protocol-level burns.
 

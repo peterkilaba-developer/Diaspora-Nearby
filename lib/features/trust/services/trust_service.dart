@@ -173,84 +173,26 @@ class TrustService {
         debugPrint('Error awarding verifier DSP: $e');
       }
 
-      // 6. Count unique verifiers for THIS specific message
-      //    Award 1,000 DSP at every 10 unique verifiers
-      //    PoCT is handled by the milestone system via verifiedSolutionsCount
+      // 7. Award 1,000 DSP to the solution author per verification.
+      //    Duplicate verifications by the same user are already blocked at
+      //    step 2, so every reward here corresponds to a unique verifier.
+      //    P.o.C.T is handled by the milestone system via verifiedSolutionsCount.
       try {
-        final messageVerifications = await FirebaseFirestore.instance
-            .collection('verified_solutions')
-            .where('messageId', isEqualTo: messageId)
-            .get();
-        final uniqueCount = messageVerifications.docs.length;
-
-        if (uniqueCount > 0 && uniqueCount % 10 == 0) {
-          // Award 1,000 DSP to the solution owner
-          await _ref
-              .read(pointsServiceProvider)
-              .awardPoints(
-                userId: senderId,
-                amount: 1000,
-                reason: 'verified_solution_milestone',
-              );
-
-          debugPrint(
-            'Verified solution milestone: $uniqueCount unique verifiers '
-            'for message $messageId — 1,000 DSP awarded to $senderId',
-          );
-        }
+        await _ref
+            .read(pointsServiceProvider)
+            .awardPoints(
+              userId: senderId,
+              amount: 1000,
+              reason: 'verified_solution_author_reward',
+            );
+        debugPrint('Verified solution: 1,000 DSP awarded to author $senderId');
       } catch (e) {
-        debugPrint('Error checking verified solution milestone: $e');
+        debugPrint('Error awarding author DSP: $e');
       }
 
       return true;
     } catch (e) {
       debugPrint('Error marking solution: $e');
-      return false;
-    }
-  }
-
-  /// [NEW] Vet an Organization (Organization Vetting: 1000 DSP)
-  Future<bool> vetOrganization({
-    required String vetterId,
-    required String orgId,
-    required String orgOwnerId,
-  }) async {
-    if (vetterId == orgOwnerId) return false;
-
-    // Prevent duplicate vetting
-    final id = '${vetterId}_${orgId}_vetting';
-    final doc = await FirebaseFirestore.instance
-        .collection('organization_vettings')
-        .doc(id)
-        .get();
-    if (doc.exists) return false;
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('organization_vettings')
-          .doc(id)
-          .set({
-            'vetterId': vetterId,
-            'orgId': orgId,
-            'timestamp': FieldValue.serverTimestamp(),
-          });
-
-      // Award DSP (Organization Vetting: 1000 DSP)
-      // Awarded to the VETTER for doing the work
-      try {
-        await _ref
-            .read(pointsServiceProvider)
-            .trackOrganizationVetting(vetterId);
-      } catch (e) {
-        debugPrint('Error awarding Org Vetting points: $e');
-      }
-
-      // Record Activity (Check-in / Physical Presence proxy?)
-      await recordActivity(vetterId, HTSActivityType.physicalPresence);
-
-      return true;
-    } catch (e) {
-      debugPrint('Error vetting organization: $e');
       return false;
     }
   }
@@ -387,9 +329,7 @@ class TrustService {
       'family=${familyIds.length}, friends=${friendIds.length}',
     );
     for (final r in relationships) {
-      debugPrint(
-        '   → rel: id=${r.id}, type=${r.type}, status=${r.status}',
-      );
+      debugPrint('   → rel: id=${r.id}, type=${r.type}, status=${r.status}');
     }
 
     // [UPDATED] QR is independent — QR connections can also be family, friend,
@@ -410,11 +350,7 @@ class TrustService {
 
     final uniqueVerificationIds = allVerifications
         .map((v) => v['fromUserId'] as String)
-        .where(
-          (id) =>
-              !familyIds.contains(id) &&
-              !uniqueVouchIds.contains(id),
-        )
+        .where((id) => !familyIds.contains(id) && !uniqueVouchIds.contains(id))
         .toSet();
 
     // Counts for Milestones
@@ -436,12 +372,12 @@ class TrustService {
       'ProfileComplete=$isProfileComplete',
     );
 
-      // --- Milestone Awards (1,000 DSP for Profile + 1,000 DSP per connection) ---
+    // --- Milestone Awards (1,000 DSP for Profile + 1,000 DSP per connection) ---
     final milestones = List<String>.from(
       trustDataOld?.awardedQualificationMilestones ?? [],
     );
 
-    // Create a writable copy of the ledger for tracking real-time DSP and PoCT levels
+    // Create a writable copy of the ledger for tracking real-time DSP and P.o.C.T levels
     final ledger = Map<String, int>.from(
       trustDataOld?.awardedHtsTracking ?? {},
     );
@@ -461,11 +397,7 @@ class TrustService {
         //    [UPDATED v9] Changed from 1,000 to 10,000 DSP
         final totalFields = profile.totalMilestoneFields;
         if (count >= totalFields && previouslyAwardedDspCount < totalFields) {
-          pointsService.awardManualPoints(
-            userId,
-            10000,
-            'profile_completion',
-          );
+          pointsService.awardManualPoints(userId, 10000, 'profile_completion');
           previouslyAwardedDspCount = totalFields;
           ledger['${milestone}_dsp_count'] = totalFields;
 
@@ -537,17 +469,20 @@ class TrustService {
         }
       }
 
-      // 3. PoCT: One-time +10 PoCT award when count reaches required threshold.
+      // 3. P.o.C.T: One-time +10 P.o.C.T award when count reaches required threshold.
       //    Awarded once per milestone. After threshold, only DSP is earned.
-      //    [UPDATED v3] 6 Genesis Milestones = 60 max PoCT
+      //    Seven Genesis Milestones = 70 max P.o.C.T, including active current
+      //    location transparency below.
       //    Profile requires ALL fields (totalMilestoneFields), others require 10.
-      final threshold = milestone == 'Profile' ? profile.totalMilestoneFields : 10;
+      final threshold = milestone == 'Profile'
+          ? profile.totalMilestoneFields
+          : 10;
       if (count >= threshold) {
         milestonePoCT += 10;
       }
     }
 
-    // [UPDATED v3] Vouch and Verified are now SEPARATE milestones
+    // Vouch and Verified are separate milestones.
     await checkAndAward('Family', uniqueFamilyCount);
     await checkAndAward('Friend', uniqueFriendCount);
     await checkAndAward('QR', uniqueQrCount);
@@ -556,47 +491,72 @@ class TrustService {
     await checkAndAward('Profile', profile.completedMilestoneFieldCount);
 
     // --- Programmatic HTS Engine (The Ledger) ---
-    // [UPDATED v3] Multiple ongoing PoCT earners:
-    // 1. Trust Slider: +1 PoCT per 10 unique full-trust voters (>90, staked 1,000 DSP)
-    // 2. Economic Transactions: +1 PoCT per 10 completed unique txns
-    // Penalties: -10 PoCT per 10 occurrences (milestone-based)
+    // [UPDATED v3] Multiple ongoing P.o.C.T earners:
+    // 1. Trust Slider: +1 P.o.C.T per 10 unique full-trust voters (>90, staked 1,000 DSP)
+    // 2. Economic Transactions: +1 P.o.C.T per 10 completed unique txns
+    // Penalties: -10 P.o.C.T per 10 occurrences (milestone-based)
 
     int htsPoctDelta = 0;
 
-    // GAINS: Trust Slider full-trust vouches (+1 PoCT per 10 unique full-trust voters)
-    final fullTrustVouchCount = ratingDetails
+    // GAINS/LOSSES: Trust Slider Net Vouches (+1 P.o.C.T per 10 net full-trust voters)
+    // Full Trust (>90) adds +1, No Trust (1-10) subtracts -1. They cancel each other out.
+    final fullTrustVoterIds = ratingDetails
         .where((r) => (r['score'] as num) > 90)
         .map((r) => r['fromUserId'] as String)
         .toSet()
-        .length;
-    htsPoctDelta += fullTrustVouchCount ~/ 10;
+        .toList();
+    final fullTrustVouchCount = fullTrustVoterIds.length;
 
-    // GAINS: Economic Transactions (+1 PoCT per 10 completed unique transactions)
+    final noTrustVoterIds = ratingDetails
+        .where((r) => (r['score'] as num) >= 1 && (r['score'] as num) <= 10)
+        .map((r) => r['fromUserId'] as String)
+        .toSet()
+        .toList();
+    final noTrustVouchCount = noTrustVoterIds.length;
+
+    final netVouches = fullTrustVouchCount - noTrustVouchCount;
+    htsPoctDelta += netVouches ~/ 10;
+
+    // GAINS: Economic Transactions (+1 P.o.C.T per 10 completed unique transactions)
     final economicTxCount = await _getCompletedEconomicTransactionCount(userId);
     htsPoctDelta += economicTxCount ~/ 10;
 
-    // LOSSES: -10 PoCT per 10 occurrences
+    // LOSSES: -10 P.o.C.T for every 10 occurrences (matches trust_data.dart docs).
+    // flaggedMessagesCount now increments by 1 per unique reporter (see
+    // ReportRepository), so the integer division yields the correct number
+    // of 10-flag milestones to apply. Read from trust_data — that's where
+    // incrementTrustMetric writes; profile.flaggedMessagesCount is unused
+    // legacy state and not the source of truth.
+    htsPoctDelta -= ((trustDataOld?.flaggedMessagesCount ?? 0) ~/ 10) * 10;
+    // The remaining counters still use -1 per 10 (legacy v8 penalties — most
+    // are dead but their stored counters may still nudge scores).
     htsPoctDelta -= (profile.blockedByCount ?? 0) ~/ 10;
-    htsPoctDelta -= (profile.flaggedMessagesCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.reportedFraudCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.fakeVerificationsCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.eventNoShowCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.rejectedFamilyConnectionsCount ?? 0) ~/ 10;
 
-    // --- Transparency: City Visibility (+10 PoCT one-time) ---
+    // --- Transparency: City Visibility (+10 P.o.C.T) ---
+    // Awarded automatically the moment we have the user's current location
+    // (location permission granted + position fetched). Permanently forfeited
+    // if the user ever toggles visibility off — re-enabling does NOT restore
+    // the +10, which is enforced by the cityVisibilityForfeited flag.
     double cityVisibilityPoCT = 0;
-    if (profile.showCurrentLocationName == true) {
+    final cityForfeited = profile.cityVisibilityForfeited == true;
+    final hasCurrentLocation = profile.currentLocation != null;
+    final visibilityOn = profile.showCurrentLocationName != false; // default-on
+    if (!cityForfeited && hasCurrentLocation && visibilityOn) {
       cityVisibilityPoCT = 10;
     }
 
-    // --- Community Participation: Event Attendance (+10 PoCT at 10 check-ins) ---
+    // --- Community Participation: Event Attendance (+10 P.o.C.T at 10 check-ins) ---
     double eventAttendancePoCT = 0;
     final checkInCount = trustDataOld?.verifiedCheckInCount ?? 0;
     if (checkInCount >= 10) {
       eventAttendancePoCT = 10;
     }
 
-    // --- Community Participation: Emergency Fund Contributor (+10 PoCT) ---
+    // --- Community Participation: Emergency Fund Contributor (+10 P.o.C.T) ---
     double emergencyFundPoCT = 0;
     final hasStaked = await _ref
         .read(emergencyFundServiceProvider)
@@ -619,15 +579,17 @@ class TrustService {
         .isAdminOfLargeGroupChat(userId);
 
     // --- Final Score Calculation ---
-    // [UPDATED v3] Genesis (60) + Transparency (10) + Participation (20) + Ongoing
-    double finalScore = milestonePoCT
-        + cityVisibilityPoCT
-        + eventAttendancePoCT
-        + emergencyFundPoCT
-        + htsPoctDelta
-        + seniorityScore;
+    // Genesis (70, including current-location transparency) + Participation
+    // (20) + Ongoing.
+    double finalScore =
+        milestonePoCT +
+        cityVisibilityPoCT +
+        eventAttendancePoCT +
+        emergencyFundPoCT +
+        htsPoctDelta +
+        seniorityScore;
 
-    // Ensure 0-100 (PoCT is usually 1-100, but can exceed in theoretical systems, we clamp for UI)
+    // Ensure 0-100 (P.o.C.T is usually 1-100, but can exceed in theoretical systems, we clamp for UI)
     if (finalScore > 100) finalScore = 100;
     if (finalScore < 0) finalScore = 0;
 
@@ -660,6 +622,8 @@ class TrustService {
       vouchCount: vouches.length,
       lastUpdated: DateTime.now(),
       vouchedBy: vouches.map((v) => v.fromUserId).toList(),
+      fullTrustVoterIds: fullTrustVoterIds,
+      noTrustVoterIds: noTrustVoterIds,
       reviewCount: ratingDetails.length,
       averageRating: ratingDetails.isEmpty
           ? 0.0
@@ -686,15 +650,17 @@ class TrustService {
       genesisFriendIds: friendIds.take(10).toList(),
       genesisQrIds: uniqueQrIds.take(10).toList(),
       genesisTrustIds: uniqueTrustIds.take(10).toList(),
+      genesisVerificationIds: uniqueVerificationIds.take(10).toList(),
+      genesisVouchIds: uniqueVouchIds.take(10).toList(),
       isCouncilEligible:
-          daysActive >= 100 &&
-          isAdminOfLargeGroup &&
-          finalScore >= 90,
+          daysActive >= 100 && isAdminOfLargeGroup && finalScore >= 90,
       awardedQualificationMilestones: milestones,
       awardedHtsTracking: ledger,
       referralCount: trustDataOld?.referralCount ?? 0,
       blockedByCount: profile.blockedByCount ?? 0,
-      flaggedMessagesCount: profile.flaggedMessagesCount ?? 0,
+      // Preserve trust_data's incremented value — `incrementTrustMetric`
+      // writes here, so reading from profile would clobber every increment.
+      flaggedMessagesCount: trustDataOld?.flaggedMessagesCount ?? 0,
       reportedFraudCount: trustDataOld?.reportedFraudCount ?? 0,
       fakeVerificationsCount: trustDataOld?.fakeVerificationsCount ?? 0,
       eventNoShowCount: trustDataOld?.eventNoShowCount ?? 0,
@@ -737,8 +703,6 @@ class TrustService {
     final pointsService = _ref.read(pointsServiceProvider);
     if (type == 'event') {
       await pointsService.trackVerifiedCheckIn(userId);
-    } else if (type == 'org') {
-      await pointsService.trackOrganizationVetting(userId);
     }
 
     // 4. Update Trust Data via Centralized HTS Engine
@@ -922,68 +886,11 @@ class TrustService {
     return scannerAward;
   }
 
-  /// Vouch for a user
-  Future<void> vouchForUser({
-    required String fromUserId,
-    required String toUserId,
-    required String relationship,
-    int stakeAmount = 0,
-  }) async {
-    // 1. Validation
-    if (fromUserId == toUserId) throw Exception("Cannot vouch for yourself");
-
-    final alreadyVouched = await _repository.hasVouched(fromUserId, toUserId);
-    if (alreadyVouched) {
-      throw Exception("You have already vouched for this user");
-    }
-
-    // 2. Create Vouch Record
-    final vouch = Vouch(
-      id: '${fromUserId}_${toUserId}_${DateTime.now().millisecondsSinceEpoch}',
-      fromUserId: fromUserId,
-      toUserId: toUserId,
-      relationship: relationship,
-      stakeAmount: stakeAmount,
-      createdAt: DateTime.now(),
-    );
-
-    await _repository.createVouch(vouch);
-
-    // [UPDATED v8] Deduct 1,000 DSP Collateral from the voucher
-    try {
-      final pointsService = _ref.read(pointsServiceProvider);
-      await pointsService.deductPoints(
-        userId: fromUserId,
-        amount: 1000,
-        reason: 'Vouch Collateral (Locked for Sybil Defense)',
-      );
-    } catch (e) {
-      debugPrint('Error deducting vouch collateral: $e');
-    }
-
-    // 3. Award Staged Vouch Reward
-    try {
-      final pointsService = _ref.read(pointsServiceProvider);
-      await pointsService.trackVouchReward(fromUserId, toUserId);
-    } catch (e) {
-      debugPrint('Error awarding vouch reward: $e');
-    }
-
-    // 4. Trigger Recalculation
-    await updateTrustForUser(toUserId);
-  }
-
-  /// Rate a user's trust (Slider Input) with Staking Economics.
+  /// Rate a user's trust (Slider Input).
   ///
-  /// Every first-time rating earns the rater 1,000 DSP (vouch reward).
-  /// If the score is > 90 (full trust), 1,000 DSP is staked (locked).
-  /// If the score is ≤ 90, the rater keeps the 1,000 DSP free.
-  ///
-  /// Staker economics (full trust only):
-  ///   - Each subsequent rater who also gives full trust: staker earns +100 DSP
-  ///   - Each subsequent rater who gives ≤90: -100 DSP burned from stake
-  ///   - Stake hits 0: full-trust vouch auto-removed
-  ///   - Slide back below 91: remaining stake refunded
+  /// DSP rewards and staking combat are now securely enforced via the backend
+  /// (Firebase Function 'onVouchWrite' trigger in dsp.js). The client simply
+  /// validates the input and persists the score.
   Future<void> rateUser({
     required String fromUserId,
     required String toUserId,
@@ -992,139 +899,61 @@ class TrustService {
     if (fromUserId == toUserId) throw Exception("Cannot rate yourself");
     if (score < 0 || score > 100) throw Exception("Score must be 0-100");
 
-    final pointsService = _ref.read(pointsServiceProvider);
     final existingDoc = await _repository.getTrustRatingDoc(
       fromUserId: fromUserId,
       toUserId: toUserId,
     );
-    final isFirstRating = existingDoc == null;
-    final wasFullTrust = existingDoc?['isFullTrust'] == true;
+
     final isNowFullTrust = score > 90;
+    final isNowNoTrust = score >= 1 && score <= 10;
+    final isNowStaked = isNowFullTrust || isNowNoTrust;
 
-    // --- Step 1: Award 1,000 DSP vouch reward on FIRST rating ---
-    // This is a one-time reward per user pair regardless of score.
-    if (isFirstRating) {
-      await pointsService.awardPoints(
-        userId: fromUserId,
-        amount: 1000,
-        reason: 'trust_vouch_reward',
-      );
-    }
+    // We let the backend handle the 1,000 DSP stake locks, refunds, and combats.
+    // We just write the core fields to Firestore, and the backend trigger will
+    // automatically adjust stakedAmount/remainingStake if necessary.
+    // However, to keep the UI snappy and avoid complete un-sync, we can write
+    // an optimistic stakedAmount if transitioning to staked for the first time.
+    final wasFullTrust = existingDoc?['isFullTrust'] == true;
+    final wasNoTrust =
+        existingDoc != null &&
+        existingDoc['score'] >= 1 &&
+        existingDoc['score'] <= 10;
+    final wasStaked = wasFullTrust || wasNoTrust;
 
-    // --- Step 2: Handle staking transitions ---
-    if (isNowFullTrust && !wasFullTrust) {
-      // ENTERING full-trust: stake 1,000 DSP.
-      // For first rating, this effectively locks the just-awarded vouch reward.
-      // For re-rating, this deducts from existing balance.
-      await pointsService.deductPoints(
-        userId: fromUserId,
-        amount: 1000,
-        reason: 'trust_stake_full_trust',
-      );
-      // Fetch rater's name for the notification
-      final fromProfile = await _ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(fromUserId);
-      await _repository.saveTrustRating(
-        fromUserId: fromUserId,
-        toUserId: toUserId,
-        score: score,
-        isFullTrust: true,
-        stakedAmount: 1000,
-        remainingStake: 1000,
-        fromUserName: fromProfile?.fullName,
-      );
-    } else if (!isNowFullTrust && wasFullTrust) {
-      // EXITING full-trust: refund remaining stake
-      final remaining = (existingDoc?['remainingStake'] as num?)?.toInt() ?? 0;
-      if (remaining > 0) {
-        await pointsService.awardPoints(
-          userId: fromUserId,
-          amount: remaining,
-          reason: 'trust_stake_refund',
-        );
-      }
-      await _repository.saveTrustRating(
-        fromUserId: fromUserId,
-        toUserId: toUserId,
-        score: score,
-        isFullTrust: false,
-        stakedAmount: 0,
-        remainingStake: 0,
-      );
+    int newStakedAmount = 0;
+    int newRemainingStake = 0;
+
+    if (isNowStaked && !wasStaked) {
+      // Optimistic lock
+      newStakedAmount = 1000;
+      newRemainingStake = 1000;
+    } else if (isNowStaked && wasStaked) {
+      // Maintain existing lock
+      newStakedAmount = (existingDoc?['stakedAmount'] as num?)?.toInt() ?? 1000;
+      newRemainingStake =
+          (existingDoc?['remainingStake'] as num?)?.toInt() ?? 1000;
     } else {
-      // Regular rating update (same zone, no staking change)
-      await _repository.saveTrustRating(
-        fromUserId: fromUserId,
-        toUserId: toUserId,
-        score: score,
-        isFullTrust: isNowFullTrust,
-        stakedAmount: isNowFullTrust
-            ? (existingDoc?['stakedAmount'] as num?)?.toInt() ?? 1000
-            : 0,
-        remainingStake: isNowFullTrust
-            ? (existingDoc?['remainingStake'] as num?)?.toInt() ?? 1000
-            : 0,
-      );
+      // Not staked (standard trust)
+      newStakedAmount = 0;
+      newRemainingStake = 0;
     }
 
-    // --- Step 3: Process staker economics for ALL existing stakers ---
-    await _processStakerEconomics(
+    // Fetch rater's name for notifications (only strictly needed if entering full trust, but good to have)
+    final fromProfile = await _ref
+        .read(profileRepositoryProvider)
+        .getUserProfile(fromUserId);
+
+    await _repository.saveTrustRating(
+      fromUserId: fromUserId,
       toUserId: toUserId,
-      newRaterIsFullTrust: isNowFullTrust,
-      newRaterId: fromUserId,
+      score: score,
+      isFullTrust: isNowFullTrust, // kept for backward compatibility queries
+      stakedAmount: newStakedAmount,
+      remainingStake: newRemainingStake,
+      fromUserName: fromProfile?.fullName,
     );
 
     await updateTrustForUser(toUserId);
-  }
-
-  /// Process staker economics when a new rating comes in.
-  ///
-  /// For each existing full-trust staker (excluding the new rater):
-  ///   - If new rater gave full trust (>90): staker earns +100 DSP
-  ///   - If new rater gave ≤90: staker loses -100 DSP from stake (burned)
-  ///   - If stake depletes to 0: auto-remove full-trust vouch
-  Future<void> _processStakerEconomics({
-    required String toUserId,
-    required bool newRaterIsFullTrust,
-    required String newRaterId,
-  }) async {
-    final pointsService = _ref.read(pointsServiceProvider);
-    final stakers = await _repository.getFullTrustStakersForUser(toUserId);
-
-    for (final staker in stakers) {
-      final stakerId = staker['fromUserId'] as String;
-      if (stakerId == newRaterId) continue; // Skip the new rater themselves
-
-      final remaining = (staker['remainingStake'] as num?)?.toInt() ?? 0;
-
-      if (newRaterIsFullTrust) {
-        // Agreement: staker earns +100 DSP (unlimited, not from stake)
-        await pointsService.awardPoints(
-          userId: stakerId,
-          amount: 100,
-          reason: 'trust_stake_agreement_reward',
-        );
-      } else {
-        // Disagreement: -100 DSP burned from stake
-        final newRemaining = remaining - 100;
-        if (newRemaining <= 0) {
-          // Stake depleted: auto-remove full-trust vouch
-          await _repository.updateStakerBalance(
-            fromUserId: stakerId,
-            toUserId: toUserId,
-            remainingStake: 0,
-            isFullTrust: false,
-          );
-        } else {
-          await _repository.updateStakerBalance(
-            fromUserId: stakerId,
-            toUserId: toUserId,
-            remainingStake: newRemaining,
-          );
-        }
-      }
-    }
   }
 
   Future<double?> getMyRating(String fromUserId, String toUserId) =>
@@ -1153,7 +982,7 @@ class TrustService {
     String fromUserId,
     String toUserId,
   ) async {
-    // [NEW] Base PoCT Conditions
+    // [NEW] Base P.o.C.T Conditions
     final baseError = await _checkBasePoCTEligibility(fromUserId);
     if (baseError != null) return baseError;
 
@@ -1210,7 +1039,7 @@ class TrustService {
     String fromUserId,
     String toUserId,
   ) async {
-    // [NEW] Base PoCT Conditions
+    // [NEW] Base P.o.C.T Conditions
     // 4. Check Vouch Eligibility (Must be Verified - via Profile or QR)
     final eligibilityError = await _checkBasePoCTEligibility(fromUserId);
     if (eligibilityError != null) return eligibilityError;
@@ -1256,7 +1085,7 @@ class TrustService {
     return null;
   }
 
-  /// Helper to enforce base PoCT conditions for any trust action.
+  /// Helper to enforce base P.o.C.T conditions for any trust action.
   Future<String?> _checkBasePoCTEligibility(String userId) async {
     final profileRepo = _ref.read(profileRepositoryProvider);
     final pointsRepo = _ref.read(pointsRepositoryProvider);
@@ -1268,7 +1097,7 @@ class TrustService {
       return "You must complete your profile before you can verify or vouch for others.";
     }
 
-    // 2. Check Verified Status (implied PoCT >= 30)
+    // 2. Check Verified Status (implied P.o.C.T >= 30)
     final trustData = await _repository.getTrustData(userId);
     if (trustData == null || !trustData.isVerified) {
       return "You must be a Verified User to perform this action.";
@@ -1284,7 +1113,9 @@ class TrustService {
     final reportRepo = _ref.read(reportRepositoryProvider);
     final reports = await reportRepo.getReportCount(userId);
     final blockedByCount = profile.blockedByCount ?? 0;
-    final flaggedMessagesCount = profile.flaggedMessagesCount ?? 0;
+    // `trustData` is non-null here — verified-status check above returned
+    // early if it was null.
+    final flaggedMessagesCount = trustData.flaggedMessagesCount;
 
     if (reports >= 5 || blockedByCount >= 5 || flaggedMessagesCount >= 5) {
       return "Your account is under restriction due to multiple negative community signals. You cannot verify or vouch for others.";
@@ -1312,7 +1143,7 @@ class TrustService {
   }
 
   // --- TGE Eligibility Checks ---
-  // PoCT is NOT a gate. It only affects DSP→$DIASPORA swap efficiency
+  // P.o.C.T is NOT a gate. It only affects DSP→$DIASPORA swap efficiency
   // via the decile scale in EpochService.calculateEfficiency().
 
   Future<bool> checkUserTgeEligibility(String userId, int epoch) async {
@@ -1372,27 +1203,12 @@ class TrustService {
   }
 
   /// [v3] Count completed economic transactions (DSP transfers, fiat, token)
-  /// for the ongoing PoCT earner: +1 PoCT per 10 completed transactions.
+  /// for the ongoing P.o.C.T earner: +1 P.o.C.T per 10 completed transactions.
   Future<int> _getCompletedEconomicTransactionCount(String userId) async {
     try {
-      final firestore = FirebaseFirestore.instance;
-      // Count completed P2P/B2B/C2B/B2C transactions (sent + received)
-      final sentQuery = await firestore
-          .collection('users')
-          .doc(userId)
-          .collection('transactions')
-          .where('type', whereIn: [
-            'dsp_transfer_sent',
-            'fiat_transfer_sent',
-            'token_transfer_sent',
-            'p2p_transfer',
-            'b2b_transfer',
-            'c2b_transfer',
-            'b2c_transfer',
-          ])
-          .count()
-          .get();
-      return sentQuery.count ?? 0;
+      return await _ref
+          .read(pointsRepositoryProvider)
+          .getCompletedEconomicTransactionCount(userId);
     } catch (e) {
       debugPrint('⚠️ [Trust] Error counting economic txns: $e');
       return 0;

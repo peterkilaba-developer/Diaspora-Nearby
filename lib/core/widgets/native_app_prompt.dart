@@ -40,7 +40,11 @@ class NativeAppPrompt {
           ),
           content: Row(
             children: [
-              const Icon(LucideIcons.smartphone, size: 18, color: Color(0xFF9CAF88)),
+              const Icon(
+                LucideIcons.smartphone,
+                size: 18,
+                color: Color(0xFF9CAF88),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -163,7 +167,11 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
             ),
             content: const Row(
               children: [
-                Icon(LucideIcons.checkCircle, size: 18, color: Color(0xFF9CAF88)),
+                Icon(
+                  LucideIcons.checkCircle,
+                  size: 18,
+                  color: Color(0xFF9CAF88),
+                ),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -182,10 +190,7 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
       if (mounted) {
         setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -277,7 +282,9 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                                 widget.description,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.7,
+                                  ),
                                   height: 1.4,
                                 ),
                               ),
@@ -300,8 +307,8 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                             _detectedPlatform == 'ios'
                                 ? LucideIcons.apple
                                 : _detectedPlatform == 'android'
-                                    ? LucideIcons.smartphone
-                                    : LucideIcons.monitor,
+                                ? LucideIcons.smartphone
+                                : LucideIcons.monitor,
                             size: 14,
                             color: theme.hintColor,
                           ),
@@ -310,8 +317,8 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                             _detectedPlatform == 'ios'
                                 ? 'iOS TestFlight invite'
                                 : _detectedPlatform == 'android'
-                                    ? 'Google Play beta invite'
-                                    : 'Download links coming soon',
+                                ? 'Google Play beta invite'
+                                : 'Download links coming soon',
                             style: TextStyle(
                               fontSize: 12,
                               color: theme.hintColor,
@@ -347,13 +354,17 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                          color: theme.colorScheme.outline.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                          color: theme.colorScheme.outline.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
@@ -390,10 +401,10 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                         _isSubmitting
                             ? 'Sending...'
                             : _detectedPlatform == 'ios'
-                                ? 'Send me the TestFlight Link'
-                                : _detectedPlatform == 'android'
-                                    ? 'Send me the Play Store Link'
-                                    : 'Send me the Download Link',
+                            ? 'Send me the TestFlight Link'
+                            : _detectedPlatform == 'android'
+                            ? 'Send me the Play Store Link'
+                            : 'Send me the Download Link',
                       ),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -411,10 +422,7 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: Text(
                       'Not now',
-                      style: TextStyle(
-                        color: theme.hintColor,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: theme.hintColor, fontSize: 13),
                     ),
                   ),
                 ],

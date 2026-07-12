@@ -429,7 +429,8 @@ class OrganizationRepository {
         'kind': 'corridor_chamber',
         'name': name,
         'businessName': name,
-        'description': 'Official public corridor chamber — $host (host) ↔ $home (home) diaspora.',
+        'description':
+            'Official public corridor chamber — $host (host) ↔ $home (home) diaspora.',
         'type': 'Chamber of Commerce',
         'phone': '',
         'website': '',
@@ -597,7 +598,8 @@ class OrganizationRepository {
   }) async {
     final orgRef = _firestore.collection('organizations').doc(orgId);
     final initialSnap = await orgRef.get();
-    if (!initialSnap.exists || initialSnap.data()?['kind'] != 'corridor_chamber') {
+    if (!initialSnap.exists ||
+        initialSnap.data()?['kind'] != 'corridor_chamber') {
       throw StateError('Not a chamber: $orgId');
     }
     final chatId = initialSnap.data()?['chatId'] as String? ?? 'org_$orgId';
@@ -614,8 +616,7 @@ class OrganizationRepository {
       tx.update(orgRef, {
         'members': FieldValue.arrayUnion([userId]),
         'followers': FieldValue.arrayUnion([userId]),
-        if (!alreadyMember)
-          'memberCount': FieldValue.increment(1),
+        if (!alreadyMember) 'memberCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       });
       tx.update(chatRef, {
@@ -676,10 +677,10 @@ class OrganizationRepository {
     required String businessOrgId,
     required String userId,
   }) async {
-    final chamberRef =
-        _firestore.collection('organizations').doc(chamberOrgId);
-    final businessRef =
-        _firestore.collection('organizations').doc(businessOrgId);
+    final chamberRef = _firestore.collection('organizations').doc(chamberOrgId);
+    final businessRef = _firestore
+        .collection('organizations')
+        .doc(businessOrgId);
 
     final businessSnap = await businessRef.get();
     if (!businessSnap.exists) throw StateError('Business not found.');
@@ -723,8 +724,10 @@ class OrganizationRepository {
     required String businessOrgId,
     required String userId,
   }) async {
-    final businessSnap =
-        await _firestore.collection('organizations').doc(businessOrgId).get();
+    final businessSnap = await _firestore
+        .collection('organizations')
+        .doc(businessOrgId)
+        .get();
     if (!businessSnap.exists) return;
     final business = businessSnap.data() ?? {};
     final admins = List<String>.from(business['admins'] ?? const <String>[]);
@@ -919,7 +922,10 @@ class OrganizationRepository {
     }
 
     // Load chamber + user in parallel for the pre-flight check.
-    final orgSnapFuture = _firestore.collection('organizations').doc(orgId).get();
+    final orgSnapFuture = _firestore
+        .collection('organizations')
+        .doc(orgId)
+        .get();
     final userSnapFuture = _firestore.collection('users').doc(userId).get();
     final orgSnap = await orgSnapFuture;
     final userSnap = await userSnapFuture;

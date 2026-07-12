@@ -106,6 +106,7 @@ ProfileData _$ProfileDataFromJson(Map<String, dynamic> json) => ProfileData(
       ? null
       : DateTime.parse(json['createdAt'] as String),
   showCurrentLocationName: json['showCurrentLocationName'] as bool?,
+  cityVisibilityForfeited: json['cityVisibilityForfeited'] as bool?,
   firstQrConnection: json['firstQrConnection'] == null
       ? null
       : QRConnectionInfo.fromJson(
@@ -164,6 +165,7 @@ Map<String, dynamic> _$ProfileDataToJson(ProfileData instance) =>
       'fcmToken': instance.fcmToken,
       'fcmTopics': instance.fcmTopics,
       'showCurrentLocationName': instance.showCurrentLocationName,
+      'cityVisibilityForfeited': instance.cityVisibilityForfeited,
       'firstQrConnection': instance.firstQrConnection?.toJson(),
       'walletAddress': instance.walletAddress,
       'distance': instance.distance,

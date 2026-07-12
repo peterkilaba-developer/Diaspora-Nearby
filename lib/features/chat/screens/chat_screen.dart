@@ -748,7 +748,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _sendLocationMessage(MessageLocation location, String? caption) async {
+  Future<void> _sendLocationMessage(
+    MessageLocation location,
+    String? caption,
+  ) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
 
@@ -1297,10 +1300,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   final host = chat?.hostCountryCode;
                   final home = chat?.homeCountryCode;
                   if (host != null && home != null) {
-                    final hostFlag =
-                        country_data.getCountryByCode(host)?.flag;
-                    final homeFlag =
-                        country_data.getCountryByCode(home)?.flag;
+                    final hostFlag = country_data.getCountryByCode(host)?.flag;
+                    final homeFlag = country_data.getCountryByCode(home)?.flag;
                     if (hostFlag != null && homeFlag != null) {
                       communityAvatar = SizedBox(
                         width: 36,
@@ -1743,11 +1744,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 );
               }
 
-
               // Corridor chamber: followers can read but not post.
               // Substitute the input with an upgrade banner when accessLevel
               // is anything other than 'member' on the user's userChats doc.
-              final isChamberChat = chat != null &&
+              final isChamberChat =
+                  chat != null &&
                   chat.type == 'organization' &&
                   chat.id.startsWith('org_chamber_');
               if (isChamberChat) {
@@ -2611,7 +2612,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ?.uid;
             if (currentUserId == null) return;
 
-            final success = await ref
+            final result = await ref
                 .read(reportRepositoryProvider)
                 .reportMessage(
                   reporterId: currentUserId,
@@ -2620,8 +2621,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   reason: reason,
                 );
 
-            // [NEW] Award 100 DSP for reporting a message
-            if (success) {
+            // Award 100 DSP only on a genuinely new report (not duplicates).
+            if (result == ReportResult.success) {
               try {
                 await ref
                     .read(pointsServiceProvider)
@@ -2636,19 +2637,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             }
 
             if (context.mounted) {
-              if (success) {
-                showExplorationRewardToast(
-                  context,
-                  message: 'Report submitted. Thank you!',
-                  points: 100,
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to submit report. Please try again.'),
-                    backgroundColor: AppTheme.error,
-                  ),
-                );
+              switch (result) {
+                case ReportResult.success:
+                  showExplorationRewardToast(
+                    context,
+                    message: 'Report submitted. Thank you!',
+                    points: 100,
+                  );
+                  break;
+                case ReportResult.duplicate:
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You have already reported this message.'),
+                    ),
+                  );
+                  break;
+                case ReportResult.failed:
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Failed to submit report. Please try again.',
+                      ),
+                      backgroundColor: AppTheme.error,
+                    ),
+                  );
+                  break;
               }
             }
           } catch (e) {
@@ -2900,7 +2913,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ?.uid;
             if (currentUserId == null) return;
 
-            final success = await ref
+            final result = await ref
                 .read(reportRepositoryProvider)
                 .reportUser(
                   reporterId: currentUserId,
@@ -2908,8 +2921,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   reason: reason,
                 );
 
-            if (success) {
-              // Award 100 DSP for reporting a sender (new report only)
+            if (result == ReportResult.success) {
+              // Award 100 DSP only on a genuinely new report (not duplicates).
               try {
                 await ref
                     .read(pointsServiceProvider)
@@ -2929,11 +2942,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   points: 100,
                 );
               }
-            } else {
+            } else if (result == ReportResult.duplicate) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('You have already reported this user.'),
+                  ),
+                );
+              }
+            } else {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to submit report. Please try again.'),
+                    backgroundColor: AppTheme.error,
                   ),
                 );
               }

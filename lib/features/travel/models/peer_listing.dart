@@ -384,7 +384,8 @@ class PeerListing {
       if (abs != null) 'abs': abs,
       if (airbagLocations != null) 'airbagLocations': airbagLocations,
       if (gvwr != null) 'gvwr': gvwr,
-      if (electrificationType != null) 'electrificationType': electrificationType,
+      if (electrificationType != null)
+        'electrificationType': electrificationType,
       if (batteryKWh != null) 'batteryKWh': batteryKWh,
       if (plantCountry != null) 'plantCountry': plantCountry,
       if (plantCity != null) 'plantCity': plantCity,

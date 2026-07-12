@@ -126,10 +126,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- PWA INSTALL + TESTER SIGNUP (web only) ---
-            if (kIsWeb) ...[
-              const AppInstallCard(),
-              const SizedBox(height: 16),
-            ],
+            if (kIsWeb) ...[const AppInstallCard(), const SizedBox(height: 16)],
 
             // ============================================
             // SECTION 1: SAFETY NET (Emergency Fund first)
@@ -196,32 +193,34 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                       onTap: () => context.push('/dsp/remittances'),
                       isComingSoon: true,
                     ),
-                   // DDI — Host Community Loans (Admin only)
-                   if (isAdmin)
-                     _buildRow(
-                       context,
-                       ref: ref,
-                       icon: LucideIcons.landmark,
-                       iconColor: AppTheme.accent,
-                       title: 'DDI Loans',
-                       subtitle: 'Host community business loans — funded by host treasury',
-                       explorationAction: ExplorationAction.economyDfdi,
-                       onTap: () => context.push('/dsp/dfdi'),
-                       isComingSoon: true,
-                     ),
-                   // DFDI — Home Country Large Projects (Admin only)
-                   if (isAdmin)
-                     _buildRow(
-                       context,
-                       ref: ref,
-                       icon: LucideIcons.trendingUp,
-                       iconColor: AppTheme.accent,
-                       title: 'DFDI Projects',
-                       subtitle: 'Home country direct investments — \$1M+ from home treasury',
-                       explorationAction: ExplorationAction.economyDfdi,
-                       onTap: () => context.push('/dsp/dfdi'),
-                       isComingSoon: true,
-                     ),
+                  // DDI — Host Community Loans (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.landmark,
+                      iconColor: AppTheme.accent,
+                      title: 'DDI Loans',
+                      subtitle:
+                          'Host community business loans — funded by host treasury',
+                      explorationAction: ExplorationAction.economyDfdi,
+                      onTap: () => context.push('/dsp/dfdi'),
+                      isComingSoon: true,
+                    ),
+                  // DFDI — Home Country Large Projects (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.trendingUp,
+                      iconColor: AppTheme.accent,
+                      title: 'DFDI Projects',
+                      subtitle:
+                          'Home country direct investments — \$1M+ from home treasury',
+                      explorationAction: ExplorationAction.economyDfdi,
+                      onTap: () => context.push('/dsp/dfdi'),
+                      isComingSoon: true,
+                    ),
                 ],
               ),
             ),
@@ -476,10 +475,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
   }
 
   // ─── Section card container ───
-  Widget _buildSectionContainer(
-    BuildContext context, {
-    required Widget child,
-  }) {
+  Widget _buildSectionContainer(BuildContext context, {required Widget child}) {
     final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
@@ -569,10 +565,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             if (isComingSoon)
               Container(
                 margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: theme.brightness == Brightness.dark
                       ? Colors.grey.shade800

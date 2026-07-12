@@ -384,7 +384,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           }
         }
 
-        if (context.mounted) {
+        if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => BookingConfirmationScreen(
@@ -1466,7 +1466,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             ],
           ),
           const SizedBox(height: 16),
-
 
           _buildContinueButton(
             onPressed: _isProcessing ? null : _goToReview,

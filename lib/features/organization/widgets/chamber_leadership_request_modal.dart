@@ -94,12 +94,14 @@ class _ChamberLeadershipRequestModalState
     });
 
     try {
-      await ref.read(organizationRepositoryProvider).requestChamberLeadership(
-        orgId: widget.orgId,
-        userId: uid,
-        role: _selectedRole!,
-        message: _messageController.text.trim(),
-      );
+      await ref
+          .read(organizationRepositoryProvider)
+          .requestChamberLeadership(
+            orgId: widget.orgId,
+            userId: uid,
+            role: _selectedRole!,
+            message: _messageController.text.trim(),
+          );
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,7 +143,8 @@ class _ChamberLeadershipRequestModalState
           left: 16,
           right: 16,
           top: 12,
-          bottom: MediaQuery.of(context).viewInsets.bottom +
+          bottom:
+              MediaQuery.of(context).viewInsets.bottom +
               MediaQuery.of(context).viewPadding.bottom +
               16,
         ),
@@ -164,7 +167,10 @@ class _ChamberLeadershipRequestModalState
               ),
               Row(
                 children: [
-                  const Icon(LucideIcons.heartHandshake, color: AppTheme.accent),
+                  const Icon(
+                    LucideIcons.heartHandshake,
+                    color: AppTheme.accent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

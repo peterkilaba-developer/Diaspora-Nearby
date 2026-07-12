@@ -1,6 +1,6 @@
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' show FieldValue, SetOptions;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show FieldValue, SetOptions;
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -101,7 +101,10 @@ void main() {
     fakeFirestore = FakeFirebaseFirestore();
     mockSessionService = MockSessionService();
 
-    pointsRepository = PointsRepository(fakeFirestore, FakeFirebaseFunctions(fakeFirestore));
+    pointsRepository = PointsRepository(
+      fakeFirestore,
+      FakeFirebaseFunctions(fakeFirestore),
+    );
     trustRepository = TrustRepository(fakeFirestore);
     profileRepository = ProfileRepository(fakeFirestore, mockSessionService);
 
@@ -121,7 +124,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   // Current TGE Model:
   //   Gate  = DSP-only (minDspRequired = 10,000)
-  //   PoCT  = Affects efficiency via decile scale, NOT a gate
+  //   P.o.C.T  = Affects efficiency via decile scale, NOT a gate
   //           efficiency = ceil(trustScore / 10) / 10
   //   Swap  = DSP balance × efficiency
   // ──────────────────────────────────────────────────────────────────────────
@@ -147,7 +150,7 @@ void main() {
   );
 
   group('TGE Eligibility (DSP-Only Gate, 10k minimum)', () {
-    test('User with >= 10k DSP is eligible regardless of PoCT', () async {
+    test('User with >= 10k DSP is eligible regardless of P.o.C.T', () async {
       final userId = 'user_dsp_pass';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
       // Seed a baseline user_points doc — the real client-side initializeUserPoints
@@ -166,7 +169,7 @@ void main() {
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Grant');
 
-      // Low PoCT should NOT block eligibility:
+      // Low P.o.C.T should NOT block eligibility:
       await trustRepository.saveTrustData(
         TrustData(uid: userId, trustScore: 5.0, lastUpdated: DateTime.now()),
       );
@@ -174,10 +177,14 @@ void main() {
       final trustService = container.read(trustServiceProvider);
       final isEligible = await trustService.checkUserTgeEligibility(userId, 1);
 
-      expect(isEligible, true, reason: 'DSP >= 10k → eligible (PoCT is not a gate)');
+      expect(
+        isEligible,
+        true,
+        reason: 'DSP >= 10k → eligible (P.o.C.T is not a gate)',
+      );
     });
 
-    test('User with < 10k DSP is NOT eligible even with max PoCT', () async {
+    test('User with < 10k DSP is NOT eligible even with max P.o.C.T', () async {
       final userId = 'user_dsp_fail';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
       // Seed a baseline user_points doc — the real client-side initializeUserPoints
@@ -227,27 +234,30 @@ void main() {
 
       final trustService = container.read(trustServiceProvider);
       for (int epoch = 1; epoch <= 10; epoch++) {
-        final isEligible = await trustService.checkUserTgeEligibility(userId, epoch);
+        final isEligible = await trustService.checkUserTgeEligibility(
+          userId,
+          epoch,
+        );
         expect(isEligible, true, reason: 'All epochs use same 10k gate');
       }
     });
   });
 
-  group('Decile PoCT Efficiency (swap rate, NOT a gate)', () {
+  group('Decile P.o.C.T Efficiency (swap rate, NOT a gate)', () {
     test('Efficiency scales with trust score decile', () {
       final epochService = EpochService();
 
       // Decile table: ceil(score/10) / 10
-      expect(epochService.calculateEfficiency(0), 0.0);   // D0: 0%
-      expect(epochService.calculateEfficiency(1), 0.1);   // D1: 10%
-      expect(epochService.calculateEfficiency(10), 0.1);  // D1: 10%
-      expect(epochService.calculateEfficiency(11), 0.2);  // D2: 20%
-      expect(epochService.calculateEfficiency(20), 0.2);  // D2: 20%
-      expect(epochService.calculateEfficiency(50), 0.5);  // D5: 50%
-      expect(epochService.calculateEfficiency(51), 0.6);  // D6: 60%
-      expect(epochService.calculateEfficiency(80), 0.8);  // D8: 80%
-      expect(epochService.calculateEfficiency(81), 0.9);  // D9: 90%
-      expect(epochService.calculateEfficiency(91), 1.0);  // D10: 100%
+      expect(epochService.calculateEfficiency(0), 0.0); // D0: 0%
+      expect(epochService.calculateEfficiency(1), 0.1); // D1: 10%
+      expect(epochService.calculateEfficiency(10), 0.1); // D1: 10%
+      expect(epochService.calculateEfficiency(11), 0.2); // D2: 20%
+      expect(epochService.calculateEfficiency(20), 0.2); // D2: 20%
+      expect(epochService.calculateEfficiency(50), 0.5); // D5: 50%
+      expect(epochService.calculateEfficiency(51), 0.6); // D6: 60%
+      expect(epochService.calculateEfficiency(80), 0.8); // D8: 80%
+      expect(epochService.calculateEfficiency(81), 0.9); // D9: 90%
+      expect(epochService.calculateEfficiency(91), 1.0); // D10: 100%
       expect(epochService.calculateEfficiency(100), 1.0); // D10: 100%
     });
 
@@ -287,43 +297,49 @@ void main() {
   });
 
   group('Treasury Distribution', () {
-    test('syncTreasuryBalances distributes correctly for a single user', () async {
-      final userId = 'user_treasury';
+    test(
+      'syncTreasuryBalances distributes correctly for a single user',
+      () async {
+        final userId = 'user_treasury';
 
-      await fakeFirestore.collection('users').doc(userId).set({
-        'communityMemberships': [
-          'global_community',
-          'home_continent_africa',
-          'home_country_tz',
-          'home_city_dar',
-          'host_continent_namerica',
-          'host_country_us',
-          'host_city_nyc',
-        ],
-      });
+        await fakeFirestore.collection('users').doc(userId).set({
+          'communityMemberships': [
+            'global_community',
+            'home_continent_africa',
+            'home_country_tz',
+            'home_city_dar',
+            'host_continent_namerica',
+            'host_country_us',
+            'host_city_nyc',
+          ],
+        });
 
-      // Seed baseline user_points (see TGE eligibility tests for context).
-      await fakeFirestore.collection('user_points').doc(userId).set({
-        'totalPoints': 0,
-        'availablePoints': 0,
-        'currentStreak': 0,
-        'dailyMessageCount': 0,
-        'signupDate': DateTime.now(),
-        'lastUpdated': DateTime.now(),
-      });
+        // Seed baseline user_points (see TGE eligibility tests for context).
+        await fakeFirestore.collection('user_points').doc(userId).set({
+          'totalPoints': 0,
+          'availablePoints': 0,
+          'currentStreak': 0,
+          'dailyMessageCount': 0,
+          'signupDate': DateTime.now(),
+          'lastUpdated': DateTime.now(),
+        });
 
-      final pointsService = container.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(userId, 10000, 'Initial Grant');
+        final pointsService = container.read(pointsServiceProvider);
+        await pointsService.awardManualPoints(userId, 10000, 'Initial Grant');
 
-      await pointsRepository.syncTreasuryBalances();
+        await pointsRepository.syncTreasuryBalances();
 
-      final treasuryStats = await fakeFirestore.collection('system_stats').doc('treasury').get();
-      final data = treasuryStats.data()!;
+        final treasuryStats = await fakeFirestore
+            .collection('system_stats')
+            .doc('treasury')
+            .get();
+        final data = treasuryStats.data()!;
 
-      // 10% each: founders, liquidity, burn
-      expect(data['foundersPoints'], greaterThan(0));
-      expect(data['liquidityPoints'], greaterThan(0));
-      expect(data['burnedPoints'], greaterThan(0));
-    });
+        // 10% each: founders, liquidity, burn
+        expect(data['foundersPoints'], greaterThan(0));
+        expect(data['liquidityPoints'], greaterThan(0));
+        expect(data['burnedPoints'], greaterThan(0));
+      },
+    );
   });
 }

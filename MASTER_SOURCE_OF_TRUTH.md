@@ -21,7 +21,44 @@ This document is the definitive, multi-dimensional guide to the **Diaspora Nearb
 
 ---
 
-## ⚙️ 2. THE THREE PROTOCOLS (PoI, PoA, PoCT)
+## ⚙️ 2. THE THREE PROTOCOLS (PoI, P.o.S.A, P.o.C.T)
+The economy is powered by three interlinking validation protocols.
+
+### 2.1 Mechanism 1: Proof of Identity (PoI)
+**Status**: The Gatekeeper.
+Before a user can extract value (TGE), they must prove their humanity and reach the **Genesis Gate of 10,000 $DIASPORA**.
+
+- **Level 1: Profile Completeness**: Filling out the core profile fields.
+- **Level 2: Social Entropy (Multi-User Verification)**:
+    - The system enforces a **"One field per verifier"** constraint.
+    - To be fully verified, exactly **10** unique peers must validate different facets of your life.
+    - *Why?* This prevents collusive bot-farms from "auto-verifying" each other. Algorithms cannot easily fake the messy, diverse validations of real humans.
+- **Level 3: Physical Presence (The QR Handshake)**:
+    - A cryptographic handshake performed via QR code when two users meet in person.
+# Diaspora Nearby: THE MASTER SOURCE OF TRUTH
+
+This document is the definitive, multi-dimensional guide to the **Diaspora Nearby** system. It translates a sophisticated codebase (Flutter/Firebase) into the human language of a global social and economic mission. It is the constitution for the **$DIASPORA** ecosystem. The token is always referred to as **$DIASPORA** (not $DSP).
+
+---
+
+## 🌎 1. EXECUTIVE VISION: THE DIASPORA REVOLUTION
+*By Peter Swai*
+
+**Diaspora Nearby** is not just an app; it is a **Reputation-to-Asset Engine**. It is designed to solve the fundamental isolation and economic fragmentation felt by the **Diaspora**.
+
+### 1.1 The Problem
+- **Digital Fragmentation**: Diaspora communities are scattered across disconnected Silos (WhatsApp groups, Facebook pages, Telegram).
+- **Economic Inefficiency**: Billions in remittances are sent home, but they rarely build sustainable community wealth or infrastructure.
+- **Trust Scarcity**: In a new host country, "who you are" is often lost, forcing you to start your social reputation from zero.
+
+### 1.2 The Solution: The Economic Bridge
+- **The Core Mission**: Fostering global connection while building the economic path for a "Return Home."
+- **Institutionalized Trust**: Verifying human identity through social connectivity and physical presence.
+- **Collective Wealth**: Community funds are used to fund large **Diaspora Direct Investments (DDI)** Projects.
+
+---
+
+## ⚙️ 2. THE THREE PROTOCOLS (PoI, P.o.S.A, P.o.C.T)
 The economy is powered by three interlinking validation protocols.
 
 ### 2.1 Mechanism 1: Proof of Identity (PoI)
@@ -37,45 +74,47 @@ Before a user can extract value (TGE), they must prove their humanity and reach 
     - A cryptographic handshake performed via QR code when two users meet in person.
     - This is the "Gold Standard" of identity, awarding the highest trust and point bonuses (10,000 $DIASPORA each).
 
-### 2.2 Mechanism 2: Proof of Activity (PoA)
+### 2.2 Mechanism 2: Proof of Social Activities (P.o.S.A)
 **Status**: The Engine.
 Users generate points by participating in the social and economic graph.
 
-| Activity Category | Action | Reward ($DIASPORA) | Logic |
+| Activity Category | Action | Reward (DSP) | Logic |
 | :--- | :--- | :--- | :--- |
 | **Growth** | New Signup | 1,000 | Baseline entry. |
 | **Viral** | Referral (Both) | 1,000 | Rewarding the expansion of the network. |
 | **Social** | Relationship Accepted | 1,000 | Validating the social graph. |
-| **Utility** | Daily Share (In/Out) | 100 | Maintaining daily engagement. |
 | **Chat** | New DM Conversation | 100 | Starting new connections. |
-| **Chat** | Community Post (1/day) | 100 | Community engagement. |
+| **Chat** | Community Post | 100 | Community engagement. |
 | **Chat** | Message Sent | 10 | Maintaining family ties. |
-| **Consistency**| Daily Check-in | 100 | Reward for daily app usage. |
+| **Utility** | In-App Share | 100 | Sharing diaspora content internally. |
+| **Utility** | Third-Party Share | 100 | Sharing content to external apps. |
+| **Utility** | Link Opened | 10 | When someone opens your shared link. |
+| **Utility** | Content Reactions | 10 | Micro-interactions on posts and messages. |
+| **Utility** | Profile Updates | 10 | Keeping bio and photos fresh. |
+| **Consistency**| Daily Check-in | 10 | Reward for daily app usage. |
 | **Exploration**| Explore Features | 10 | App discovery reward. |
-| **Travel** | Booking (Flight/Stay/Car) | 1,000 | Travel within the Diaspora economy. |
-| **Travel** | Travel Review | 100 | Contributing travel knowledge. |
-| **Travel** | Travel Save (Wishlist) | 10 | Engagement with travel features. |
+| **Travel/Event**| Create Local Event | 1,000 | Organizing a community event. |
+| **Travel/Event**| Booking (Flight/Stay/Car) | 1,000 | Travel within the Diaspora economy. |
+| **Travel/Event**| Travel Review | 100 | Contributing travel knowledge. |
+| **Travel/Event**| Travel Save (Wishlist) | 10 | Engagement with travel features. |
 | **Identity** | QR Exchange | 1,000 | In-person identity verification. |
 | **Streaks** | 10-Day Sharing Streak | +1,000 | Consistency bonus. |
 | **Streaks** | 100-Day Sharing Streak | +10,000 | Long-term commitment bonus. |
 
-### 2.3 Mechanism 3: Proof of Community Trust (PoCT)
+### 2.3 Mechanism 3: Proof of Community Trust (P.o.C.T)
 **Status**: The Filter.
 A user's **Trust Score (0-100)** is a mathematical representation of their community standing.
 
 - **The HTS Ledger (Human Trust System)**:
     - Points and Score are tracked in a verifiable ledger.
-    - **Genesis Milestones (One-Time +10 PoCT)**: Each of the 5 Genesis categories awards **+10 PoCT once** when reaching **10 unique users/fields** (Family, Friends, QR Exchange, Vouch/Verify, Profile). After the first 10, activities continue to earn $DIASPORA but **no more PoCT**. Max from Genesis Milestones = **50 PoCT** (5 × 10).
-    - **Connection DSP**: For connections (Family, Friends, QR, Trust), you earn 1,000 $DIASPORA **instantly** per connection, regardless of milestone status.
-    - **Profile Completion (The Genesis Exception)**: The only milestone that delays both $DIASPORA and PoCT. It pays nothing until fully complete (10 fields), then releases 10,000 $DIASPORA + 10 PoCT at once.
-    - **Trust Slider Staking (The Only Ongoing PoCT Earner)**: Users rate others via a 0-100 trust slider. Rating anyone earns **1,000 $DIASPORA** (vouch reward). Giving **full trust (>90)** locks that same 1,000 $DIASPORA as a stake — no additional cost. Every **10 unique full-trust voters** awards **+1 PoCT** to the trusted user. **Staker Economics**: For each subsequent rater who also gives full trust, the staker earns +10 $DIASPORA. For each rater who gives ≤90, 10 $DIASPORA is burned from the stake. If the stake reaches 0, the full-trust vouch is auto-removed. The staker can exit anytime by sliding below 91 to reclaim remaining balance. Rating ≤90 earns the 1,000 $DIASPORA free and clear.
-    - **HTS Penalties**: Penalties deduct **-1 PoCT per 10 occurrences** (e.g., blocked by 10 users = -1 PoCT). Referrals, events, and verified solutions earn $DIASPORA only, **not PoCT**.
-- **The Genesis Gate**:
-    - Every user must accrue a minimum of **10,000 $DIASPORA** to qualify for their first TGE conversion.
-- **The Decile Efficiency Gate**:
-    - Your score determines your **Swap Rate** at the Token Generation Event.
-    - *Formula*: `Efficiency = (Score / 10).ceil() / 10.0`
-    - A user with a score of 95 gets 100% (1:1), while a user with a score of 51 gets only 60% conversion.
+    - **Genesis Milestones (One-Time +10 P.o.C.T)**: Each of the 5 Genesis categories awards **+10 P.o.C.T once** when reaching **10 unique users/fields** (Family, Friends, QR Exchange, Vouch/Verify, Profile). After the first 10, activities continue to earn DSP but **no more P.o.C.T**. Max from Genesis Milestones = **50 P.o.C.T** (5 × 10).
+    - **Connection DSP**: For connections (Family, Friends, QR, Trust), you earn 1,000 DSP **instantly** per connection, regardless of milestone status.
+    - **Profile Completion (The Genesis Exception)**: The only milestone that delays both DSP and P.o.C.T. It pays nothing until fully complete (10 fields), then releases 10,000 DSP + 10 P.o.C.T at once.
+    - **Trust Slider Staking (The Two-Sided Prediction Market)**: Users rate others via a 1-100 trust slider. Rating anyone earns **1,000 DSP**.
+        - **No Trust (1-10)**: The 1,000 DSP is instantly locked as a **Stake against** the user.
+        - **Standard Trust (11-90)**: The 1,000 DSP is earned **free and clear** (no stake).
+        - **Full Trust (91-100)**: The 1,000 DSP is instantly locked as a **Stake for** the user.
+    - **P.o.C.T Impact**: P.o.C.T is calculated based on **Net Vouches** (Total Full Trust - Total No Trust). Every +10 Net = **+1 P.o.C.T**. Every -10 Net = **-1 P.o.C.T**.
 
 ---
 
@@ -83,7 +122,7 @@ A user's **Trust Score (0-100)** is a mathematical representation of their commu
 We utilize a **Constant-Earning, Variable-Scarcity** model.
 
 ### 3.1 The 1:1 Expansion Rule
-For every **1.0 $DIASPORA** earned by a user through PoA, the system mints an additional **1.0 $DIASPORA** in "Matching Supply" for treasuries.
+For every **1.0 DSP** earned by a user through P.o.S.A, the system mints an additional **1.0 DSP** in "Matching Supply" for treasuries.
 - **User Reward (50%)**: Direct liquidity for the contributor.
 - **System Match (50%)**: Collective wealth divided into 10 Slots.
 
@@ -113,12 +152,12 @@ For every $1 earned by a user, the protocol mints $1 which is distributed as fol
 ---
 
 ## ⚡ 4. THE GREAT RESET: TOKEN GENERATION EVENT (TGE)
-TGE is the "Crystalization" event where off-chain $DIASPORA points become on-chain liquid currency.
+TGE is the "Crystalization" event where off-chain DSP points become on-chain liquid $DIASPORA currency.
 
-### 4.1 Dual-Trigger Evolution
-To ensure the network is robust, TGE only triggers when BOTH metrics are met:
-1. **Supply Milestone**: Cumulative $DIASPORA supply distributed reaches the Epoch's target (e.g., 1,000,000 $DIASPORA for Epoch 1).
-2. **User Milestone**: Required Verified Population reached (e.g., 100 Verified Humans for Epoch 1).
+### 4.1 Distributed DSP Trigger
+TGE triggers when cumulative distributed DSP crosses the next supply milestone
+(e.g., 1,000,000 DSP for Epoch 1). Verified population is tracked as an
+informational network-growth benchmark, but it does not gate TGE execution.
 
 ### 4.2 The 10-TGE Event Cycle
 Each Epoch consists of **10 TGE events**.
@@ -133,11 +172,11 @@ Each Epoch consists of **10 TGE events**.
 ---
 
 ## 📈 5. LONG-TERM SCALING: THE 10 EPOCHS
-The Diaspora economy grows by orders of magnitude (**10x Growth Model**). Each Epoch represents a 10x multiplier in both the verified human population and the corresponding $DIASPORA supply.
+The Diaspora economy grows by orders of magnitude (**10x Growth Model**). Each Epoch represents a 10x multiplier in the distributed-DSP trigger. Verified population benchmarks are displayed alongside supply to show network growth.
 
 ### 5.1 Epoch Scaling Overview
 
-| Epoch | Diaspora Population (Verified) | $DIASPORA Supply Target |
+| Epoch | Informational Verified Population | Distributed DSP Trigger |
 | :--- | :--- | :--- |
 | **1** | 100 | 1,000,000 |
 | **2** | 1,000 (10x) | 10,000,000 (10x) |
@@ -215,7 +254,7 @@ This design decision reflects the principle that **spending money to spend more 
 - **10% Fixed Expansion Burn**: 10% of every 1:1 system match is permanently destroyed.
 - **Unassigned Slot Burn**: Community slots without members are burned.
 - **Unclaimed TGE Burn**: Tokens below gates (user < 10,000 or community < 1,000,000) are burned on-chain.
-- **PoCT Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
+- **P.o.C.T Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
 
 ---
 

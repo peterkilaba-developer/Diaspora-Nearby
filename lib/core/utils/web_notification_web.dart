@@ -1,7 +1,12 @@
 import 'package:web/web.dart' as web;
 
 /// Show a browser notification on web using the Notification API.
-void showWebNotification(String title, String body, {String? tag, String? icon}) {
+void showWebNotification(
+  String title,
+  String body, {
+  String? tag,
+  String? icon,
+}) {
   try {
     final options = web.NotificationOptions(
       body: body,

@@ -23,6 +23,10 @@ final chatPartnerProvider = FutureProvider.family<ProfileData?, String>((
   ref,
   userId,
 ) async {
+  // Keep resolved profiles alive for the app session — prevents re-fetching
+  // every time the user navigates away and back to the chats tab.
+  ref.keepAlive();
+
   if (userId.isEmpty) return null;
   // 1. Try fetching User Profile
   final profileRepo = ref.watch(profileRepositoryProvider);
@@ -240,7 +244,9 @@ class ChatCard extends ConsumerWidget {
           final isSent = lastMessage.senderId == currentUserId;
           final direction = isSent ? 'Sent' : 'Received';
           final assetLabel = isTokenTransfer ? r'$DIASPORA' : 'DSP';
-          final assetColor = isTokenTransfer ? AppTheme.tokenColor : AppTheme.dspColor;
+          final assetColor = isTokenTransfer
+              ? AppTheme.tokenColor
+              : AppTheme.dspColor;
 
           // Build a rich Row widget directly for transfers
           return Row(
@@ -453,25 +459,19 @@ class ChatCard extends ConsumerWidget {
         loading: () => CircleAvatar(
           radius: 28,
           backgroundColor: Colors.transparent,
-          child: Text(
-            chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
+          child: Icon(
+            LucideIcons.user,
+            size: 24,
+            color: theme.colorScheme.onPrimaryContainer,
           ),
         ),
         error: (_, _) => CircleAvatar(
           radius: 28,
           backgroundColor: Colors.transparent,
-          child: Text(
-            chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
+          child: Icon(
+            LucideIcons.user,
+            size: 24,
+            color: theme.colorScheme.onPrimaryContainer,
           ),
         ),
       );

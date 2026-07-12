@@ -17,7 +17,16 @@ service cloud.firestore {
     // Check if user is a participant of a chat (used by message subcollection rules)
     function isChatParticipant(chatId) {
       return isAuthenticated() &&
-        get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+        exists(/databases/$(database)/documents/chats/$(chatId)) &&
+        (
+          (
+            get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []) is list &&
+            get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []).hasAny([request.auth.uid])
+          )
+          // Legacy direct chats can have a valid per-user chat index while
+          // their shared participants array is missing or incomplete.
+          || exists(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId))
+        );
     }
     // Check if user is an admin of the organization (requires reading the org doc)
     function isOrgAdmin(orgId) {
@@ -27,14 +36,15 @@ service cloud.firestore {
     }
     // Is this chat doc a corridor-chamber chat?
     function isChamberChat(chatId) {
-      return get(/databases/$(database)/documents/chats/$(chatId)).data.subtype == 'corridor_chamber';
+      return exists(/databases/$(database)/documents/chats/$(chatId)) &&
+        get(/databases/$(database)/documents/chats/$(chatId)).data.get('subtype', '') == 'corridor_chamber';
     }
     // Does the current user hold full-member access to a chamber chat?
     // Followers have `accessLevel: 'follower'`; members have `accessLevel: 'member'`.
     function isChamberMember(chatId) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId)).data.accessLevel == 'member';
+        get(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId)).data.get('accessLevel', '') == 'member';
     }
 
     // --- Users Collection ---
@@ -93,12 +103,14 @@ service cloud.firestore {
       // Only participants can modify chat docs
       allow create: if isAuthenticated();
       // Allow existing participants/creator for any update,
-      // OR any auth user for join-related updates (adding to participants/memberCount)
+      // OR any auth user for join-related membership-count updates.
       allow update: if isAuthenticated() && (
-        resource.data.participants.hasAny([request.auth.uid])
-        || resource.data.createdBy == request.auth.uid
+        isChatParticipant(chatId)
+        || (
+          resource.data.get('createdBy', '') == request.auth.uid
+        )
         || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['participants', 'memberCount', 'updatedAt', 'lastMessage', 'adminIds'])
+             .hasOnly(['participants', 'memberCount', 'updatedAt'])
       );
       allow delete: if isAdmin();
 
@@ -413,6 +425,13 @@ service cloud.firestore {
       allow write: if false; // Cloud Functions only
     }
 
+    // Emergency Fund Interest List — public read for transparency,
+    // user can create/delete their own entry.
+    match /emergency_fund_interest/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isOwner(userId);
+    }
+
     // Trust Scores — users can read all, write their own (webhook uses admin SDK)
     match /trust_scores/{userId} {
       allow read: if isAuthenticated();
@@ -493,6 +512,15 @@ service cloud.firestore {
     }
 
     // --- Governance ---
+    // [SECURITY] The Global Fund Reserve is excluded from community governance.
+    // No one — including authenticated users — may create, update, vote on,
+    // or otherwise alter its governance unit. The on-chain wallet is owner-
+    // controlled off-chain.
+    match /governance/global_community {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // [SECURITY] Governance units should only be created/updated through controlled flows
     match /governance/{unitId} {
       allow read: if isAuthenticated();
@@ -506,8 +534,9 @@ service cloud.firestore {
 
     match /governance_votes/{voteId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && 
-         (request.resource.data.voterId == request.auth.uid || resource.data.voterId == request.auth.uid);
+      allow write: if isAuthenticated() &&
+         (request.resource.data.voterId == request.auth.uid || resource.data.voterId == request.auth.uid) &&
+         request.resource.data.unitId != 'global_community';
     }
 
     // Governance Election History
