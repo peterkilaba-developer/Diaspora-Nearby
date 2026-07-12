@@ -87,7 +87,7 @@ Future<void> syncTreasuryBalances()
   - User profile data for point awards
 
 - **Trust** (`lib/features/trust/`)
-  - Trust score calculation and PoCT milestones
+  - Trust score calculation and P.o.C.T milestones
 
 ### Required From Core
 
@@ -197,8 +197,8 @@ class TreasuryData {
 ## Notes
 
 - Treasury distribution follows the 1:1 Expansion + 10-Slot Rule
-- Epochs trigger when BOTH $DIASPORA supply and population targets are met
+- Epochs trigger when cumulative distributed DSP crosses the next supply milestone; population targets are informational
 - TGE milestones follow 10x exponential growth pattern
-- User TGE gate: 10,000 $DIASPORA minimum
+- User TGE gates: Current Location Transparency must be enabled at every TGE. The first TGE additionally requires a complete profile and 10 unique in-person Identity QR exchanges.
 - Community TGE gate: 1,000,000 $DIASPORA minimum
 - **All economic activities are fee-free** — only penalties and protocol burns remove $DIASPORA from circulation

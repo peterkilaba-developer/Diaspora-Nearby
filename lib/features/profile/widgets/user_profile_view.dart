@@ -18,7 +18,6 @@ import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 
-
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -238,7 +237,7 @@ class UserProfileView extends ConsumerWidget {
                               ),
                               child: Row(
                                 children: [
-                                  // PoCT Score Graph
+                                  // P.o.C.T Score Graph
                                   SizedBox(
                                     height: 52,
                                     width: 52,
@@ -311,7 +310,7 @@ class UserProfileView extends ConsumerWidget {
                                               MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
-                                              'PoCT Score',
+                                              'P.o.C.T Score',
                                               style: TextStyle(
                                                 color: trustColor,
                                                 fontSize: 16,
@@ -338,9 +337,9 @@ class UserProfileView extends ConsumerWidget {
                                             final daysActive = DateTime.now()
                                                 .difference(signupDate)
                                                 .inDays;
-                                            final formattedDate =
-                                                DateFormat('MMM d, yyyy')
-                                                    .format(signupDate);
+                                            final formattedDate = DateFormat(
+                                              'MMM d, yyyy',
+                                            ).format(signupDate);
                                             return Row(
                                               children: [
                                                 Text(
@@ -379,7 +378,7 @@ class UserProfileView extends ConsumerWidget {
                   _buildPoctSectionHeader(
                     context,
                     title: 'Genesis Milestones',
-                    subtitle: 'One-time +10 PoCT at first 10 unique',
+                    subtitle: 'One-time +10 P.o.C.T at first 10 unique',
                     icon: LucideIcons.trophy,
                   ),
                   const SizedBox(height: 12),
@@ -770,7 +769,7 @@ class UserProfileView extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   // ─────────────────────────────────────
-                  // 3️⃣ VERIFY / VOUCH (X/10)
+                  // 3️⃣ COMMUNITY VERIFICATIONS (X/10)
                   // ─────────────────────────────────────
                   if (profile.uid != null)
                     Consumer(
@@ -779,36 +778,35 @@ class UserProfileView extends ConsumerWidget {
                           userTrustProvider(profile.uid!),
                         );
                         final trust = trustAsync.value;
-                        final vouchVerifyCount =
-                            (trust?.uniqueVouchCount ?? 0) +
-                            (trust?.uniqueVerificationCount ?? 0);
-                        final capped = vouchVerifyCount > 10
+                        final verificationCount =
+                            trust?.uniqueVerificationCount ?? 0;
+                        final capped = verificationCount > 10
                             ? 10
-                            : vouchVerifyCount;
-                        final genesisTrustIds = trust?.genesisTrustIds ?? [];
+                            : verificationCount;
+                        final genesisVerificationIds =
+                            trust?.genesisVerificationIds ?? [];
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _buildMilestoneSubHeader(
                               context,
-                              title: 'Verify & Vouch',
+                              title: 'Community Verifications',
                               icon: LucideIcons.shieldCheck,
                               current: capped,
                               target: 10,
                             ),
                             const SizedBox(height: 8),
-                            // Show only genesis-qualifying trust user cards
-                            if (genesisTrustIds.isNotEmpty)
+                            if (genesisVerificationIds.isNotEmpty)
                               _buildMilestoneUserCards(
                                 context,
                                 ref,
-                                userIds: genesisTrustIds,
-                                emptyMessage: 'No verifications or vouches yet',
+                                userIds: genesisVerificationIds,
+                                emptyMessage: 'No verifications yet',
                               )
                             else
                               _buildEmptyMilestoneCard(
                                 context,
-                                'No verifications or vouches yet',
+                                'No verifications yet',
                                 LucideIcons.shieldCheck,
                               ),
                           ],
@@ -819,7 +817,51 @@ class UserProfileView extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   // ─────────────────────────────────────
-                  // 4️⃣ FRIENDS (X/10)
+                  // 4️⃣ COMMUNITY VOUCHES (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final vouchCount = trust?.uniqueVouchCount ?? 0;
+                        final capped = vouchCount > 10 ? 10 : vouchCount;
+                        final genesisVouchIds = trust?.genesisVouchIds ?? [];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'Community Vouches',
+                              icon: LucideIcons.award,
+                              current: capped,
+                              target: 10,
+                            ),
+                            const SizedBox(height: 8),
+                            if (genesisVouchIds.isNotEmpty)
+                              _buildMilestoneUserCards(
+                                context,
+                                ref,
+                                userIds: genesisVouchIds,
+                                emptyMessage: 'No vouches yet',
+                              )
+                            else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                'No vouches yet',
+                                LucideIcons.award,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 5️⃣ FRIENDS (X/10)
                   // ─────────────────────────────────────
                   if (profile.uid != null)
                     Consumer(
@@ -862,7 +904,7 @@ class UserProfileView extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   // ─────────────────────────────────────
-                  // 5️⃣ QR CONNECTIONS (X/10)
+                  // 6️⃣ QR CONNECTIONS (X/10)
                   // ─────────────────────────────────────
                   if (profile.uid != null)
                     Consumer(
@@ -905,6 +947,100 @@ class UserProfileView extends ConsumerWidget {
 
                   const SizedBox(height: 24),
 
+                  // ─────────────────────────────────────
+                  // 7️⃣ ACTIVE LOCATION TRANSPARENCY (1/1)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final cityForfeited =
+                            profile.cityVisibilityForfeited == true;
+                        final hasCurrentLocation =
+                            profile.currentLocation != null;
+                        final visibilityOn =
+                            profile.showCurrentLocationName != false;
+                        final isTransparent =
+                            !cityForfeited &&
+                            hasCurrentLocation &&
+                            visibilityOn;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'Location Transparency',
+                              icon: LucideIcons.mapPin,
+                              current: isTransparent ? 1 : 0,
+                              target: 1,
+                            ),
+                            const SizedBox(height: 8),
+                            if (isTransparent)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accent.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppTheme.accent.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      LucideIcons.checkCircle2,
+                                      color: AppTheme.accent,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Active Location Transparency',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: AppTheme.accent,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Earning +10 P.o.C.T for maintaining community transparency.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Theme.of(
+                                                context,
+                                              ).hintColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                cityForfeited
+                                    ? 'Transparency Permanently Forfeited'
+                                    : 'Location Transparency Inactive',
+                                LucideIcons.mapPinOff,
+                                iconColor: cityForfeited
+                                    ? AppTheme.error
+                                    : null,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 24),
+
                   // ══════════════════════════════════════════
                   // 🔄 TRUST SLIDER VOUCHES — Section Header
                   // ══════════════════════════════════════════
@@ -919,6 +1055,7 @@ class UserProfileView extends ConsumerWidget {
                             if (trust == null) return const SizedBox.shrink();
                             return _buildTrustSliderVouchesSection(
                               context,
+                              ref,
                               trust,
                             );
                           },
@@ -1299,9 +1436,6 @@ class UserProfileView extends ConsumerWidget {
       ),
     );
   }
-
-
-
 
   // ignore: unused_element
   Widget _buildQRConnectionSection(BuildContext context, WidgetRef ref) {
@@ -2120,7 +2254,7 @@ class UserProfileView extends ConsumerWidget {
     WidgetRef ref,
     RelationshipRequest req,
   ) async {
-    // Confirm rejection (warn about PoCT penalty if desired, or simpler)
+    // Confirm rejection (warn about P.o.C.T penalty if desired, or simpler)
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -2278,7 +2412,7 @@ class UserProfileView extends ConsumerWidget {
   }
 
   // ══════════════════════════════════════════════════════
-  //  PoCT SECTION BUILDERS
+  //  P.o.C.T SECTION BUILDERS
   // ══════════════════════════════════════════════════════
 
   /// Main section header — plain text, no card wrapper
@@ -2415,7 +2549,9 @@ class UserProfileView extends ConsumerWidget {
     }
 
     return FutureBuilder<Map<String, Map<String, dynamic>>>(
-      future: ref.read(trustRepositoryProvider).getQrExchangeRecords(profileUid),
+      future: ref
+          .read(trustRepositoryProvider)
+          .getQrExchangeRecords(profileUid),
       builder: (context, snapshot) {
         final records = snapshot.data ?? {};
 
@@ -2441,19 +2577,24 @@ class UserProfileView extends ConsumerWidget {
                               user: userProfile,
                               searchQuery: '',
                               onNameTap: () => context.push('/profile/$uid'),
-                              onChatTap: () => context.push('/chat/direct/$uid'),
+                              onChatTap: () =>
+                                  context.push('/chat/direct/$uid'),
                               isStatic: false,
                             ),
                             if (exchangeData != null)
                               Padding(
                                 padding: const EdgeInsets.only(
-                                  left: 12, right: 12, bottom: 8,
+                                  left: 12,
+                                  right: 12,
+                                  bottom: 8,
                                 ),
                                 child: Row(
                                   children: [
                                     // Location
-                                    if (exchangeData['locationAddress'] != null &&
-                                        exchangeData['locationAddress'] != 'Location Unavailable') ...[
+                                    if (exchangeData['locationAddress'] !=
+                                            null &&
+                                        exchangeData['locationAddress'] !=
+                                            'Location Unavailable') ...[
                                       const Icon(
                                         LucideIcons.mapPin,
                                         size: 12,
@@ -2462,7 +2603,8 @@ class UserProfileView extends ConsumerWidget {
                                       const SizedBox(width: 4),
                                       Flexible(
                                         child: Text(
-                                          exchangeData['locationAddress'] as String,
+                                          exchangeData['locationAddress']
+                                              as String,
                                           style: const TextStyle(
                                             fontSize: 11,
                                             color: Colors.grey,
@@ -2482,7 +2624,9 @@ class UserProfileView extends ConsumerWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        _formatExchangeTimestamp(exchangeData['timestamp']),
+                                        _formatExchangeTimestamp(
+                                          exchangeData['timestamp'],
+                                        ),
                                         style: const TextStyle(
                                           fontSize: 11,
                                           color: Colors.grey,
@@ -2599,8 +2743,9 @@ class UserProfileView extends ConsumerWidget {
   Widget _buildEmptyMilestoneCard(
     BuildContext context,
     String message,
-    IconData icon,
-  ) {
+    IconData icon, {
+    Color? iconColor,
+  }) {
     return Container(
       margin: const EdgeInsets.symmetric(
         horizontal: AppTheme.pageHorizontalPadding,
@@ -2615,9 +2760,9 @@ class UserProfileView extends ConsumerWidget {
           Icon(
             icon,
             size: 20,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.6),
+            color:
+                iconColor ??
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2637,16 +2782,72 @@ class UserProfileView extends ConsumerWidget {
     );
   }
 
+  /// Shows a bottom sheet with a list of users for a given trust metric.
+  void _showVotersSheet(
+    BuildContext context,
+    WidgetRef ref,
+    String title,
+    List<String> userIds,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: _buildMilestoneUserCards(
+                    context,
+                    ref,
+                    userIds: userIds,
+                    emptyMessage: 'No voters yet',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Trust Slider Vouches Stats section
   Widget _buildTrustSliderVouchesSection(
     BuildContext context,
+    WidgetRef ref,
     TrustData trust,
   ) {
     final totalRatings = trust.vouchedByCount;
     final avgRating = trust.averageRating;
-    // Full-trust voters: those who rated >90 (approximation from available data)
-    final fullTrustVoters = trust.vouchedBy.length; // Those in vouchedBy list
-    final poctFromVouches = (totalRatings ~/ 10); // +1 PoCT per 10 unique
+    final fullTrustVoterIds = trust.fullTrustVoterIds;
+    final noTrustVoterIds = trust.noTrustVoterIds;
+    final poctFromVouches = (totalRatings ~/ 10); // +1 P.o.C.T per 10 unique
     final nextMilestone = ((totalRatings ~/ 10) + 1) * 10;
     final progressToNext = totalRatings % 10;
 
@@ -2656,7 +2857,7 @@ class UserProfileView extends ConsumerWidget {
         _buildPoctSectionHeader(
           context,
           title: 'Continuous Trust Score',
-          subtitle: '+1 PoCT per 10 unique full-trust voters',
+          subtitle: '+1 P.o.C.T per 10 unique full-trust voters',
           icon: LucideIcons.barChart3,
         ),
         const SizedBox(height: 12),
@@ -2671,13 +2872,19 @@ class UserProfileView extends ConsumerWidget {
           ),
           child: Column(
             children: [
-              // Stats row
+              // Stats row 1: No Trust, Avg Rating, Full Trust
               Row(
                 children: [
                   _buildStatBadge(
                     context,
-                    label: 'Total Ratings',
-                    value: '$totalRatings',
+                    label: 'No Trust',
+                    value: '${noTrustVoterIds.length}',
+                    onTap: () => _showVotersSheet(
+                      context,
+                      ref,
+                      'No Trust Voters',
+                      noTrustVoterIds,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   _buildStatBadge(
@@ -2689,12 +2896,29 @@ class UserProfileView extends ConsumerWidget {
                   _buildStatBadge(
                     context,
                     label: 'Full Trust',
-                    value: '$fullTrustVoters',
+                    value: '${fullTrustVoterIds.length}',
+                    onTap: () => _showVotersSheet(
+                      context,
+                      ref,
+                      'Full Trust Voters',
+                      fullTrustVoterIds,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Stats row 2: Total Ratings (full width)
+              Row(
+                children: [
+                  _buildStatBadge(
+                    context,
+                    label: 'Total Ratings',
+                    value: '$totalRatings',
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              // PoCT earned + progress to next
+              // P.o.C.T earned + progress to next
               Row(
                 children: [
                   Expanded(
@@ -2702,7 +2926,7 @@ class UserProfileView extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'PoCT Earned: $poctFromVouches',
+                          'P.o.C.T Earned: $poctFromVouches',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onSurface,
                             fontSize: 12,
@@ -2752,32 +2976,40 @@ class UserProfileView extends ConsumerWidget {
     BuildContext context, {
     required String label,
     required String value,
+    VoidCallback? onTap,
   }) {
     final fg = Theme.of(context).colorScheme.onSurface;
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: fg.withValues(alpha: 0.06),
+      child: Material(
+        color: fg.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(6),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                color: fg,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.5),
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(color: fg.withValues(alpha: 0.5), fontSize: 10),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2786,7 +3018,7 @@ class UserProfileView extends ConsumerWidget {
   /// Seniority section — days active with progress to next award
   Widget _buildSenioritySection(BuildContext context, UserPoints userPoints) {
     final daysActive = DateTime.now().difference(userPoints.signupDate).inDays;
-    final poctFromSeniority = daysActive ~/ 100; // +1 PoCT per 100 days
+    final poctFromSeniority = daysActive ~/ 100; // +1 P.o.C.T per 100 days
     final progressDays = daysActive % 100;
     final nextMilestone = ((daysActive ~/ 100) + 1) * 100;
 
@@ -2796,7 +3028,7 @@ class UserProfileView extends ConsumerWidget {
         _buildPoctSectionHeader(
           context,
           title: 'Seniority',
-          subtitle: '+1 PoCT per 100 active days',
+          subtitle: '+1 P.o.C.T per 100 active days',
           icon: LucideIcons.clock,
         ),
         const SizedBox(height: 12),
@@ -2847,7 +3079,7 @@ class UserProfileView extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '+$poctFromSeniority PoCT',
+                      '+$poctFromSeniority P.o.C.T',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 11,
@@ -2930,7 +3162,7 @@ class UserProfileView extends ConsumerWidget {
       ),
     ];
 
-    // Total penalty: -10 PoCT per 10 of each type
+    // Total penalty: -10 P.o.C.T per 10 of each type
     final totalPenaltyPoCT = penalties.fold<int>(
       0,
       (acc, p) => acc + ((p.count ~/ 10) * 10),
@@ -2944,7 +3176,7 @@ class UserProfileView extends ConsumerWidget {
         _buildPoctSectionHeader(
           context,
           title: 'Penalties',
-          subtitle: '-10 PoCT per 10 infractions of each type',
+          subtitle: '-10 P.o.C.T per 10 infractions of each type',
           icon: LucideIcons.alertOctagon,
         ),
         const SizedBox(height: 12),
@@ -2995,7 +3227,7 @@ class UserProfileView extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '-${(p.count ~/ 10) * 10} PoCT',
+                                  '-${(p.count ~/ 10) * 10} P.o.C.T',
                                   style: TextStyle(
                                     color: AppTheme.error.withValues(
                                       alpha: 0.7,
@@ -3020,7 +3252,7 @@ class UserProfileView extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          '-$totalPenaltyPoCT PoCT',
+                          '-$totalPenaltyPoCT P.o.C.T',
                           style: const TextStyle(
                             color: AppTheme.error,
                             fontSize: 13,

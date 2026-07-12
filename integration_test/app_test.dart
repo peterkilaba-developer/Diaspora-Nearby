@@ -15,8 +15,7 @@ void main() {
       app.main();
       await tester.pumpAndSettle();
 
-      // Verify app launched (adjust based on your actual app)
-      // This is a placeholder - update to match your app's initial screen
+      // Verify the branded shell rendered.
       expect(find.text('Diaspora Nearby'), findsWidgets);
     });
   });

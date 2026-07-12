@@ -2,7 +2,11 @@
  * Shared utilities for Cloud Functions modules.
  * Provides admin SDK, Firestore DB, and shared helpers.
  */
-const functions = require("firebase-functions");
+// v1 API pinned explicitly: since firebase-functions v6 the bare
+// "firebase-functions" entry point serves the v2 API. All functions in
+// this codebase are 1st-gen; /v1 keeps their API and deployed identity
+// unchanged.
+const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 
 // Admin SDK is initialized by index.js before any module is loaded.

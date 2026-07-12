@@ -70,20 +70,24 @@ class _OrganizationDetailScreenState
         .collection('organizations')
         .doc(widget.orgId)
         .snapshots()
-        .listen((snap) {
-          if (!snap.exists || !mounted) return;
-          final data = snap.data();
-          if (data == null) return;
-          data['id'] = snap.id;
-          setState(() => _orgData = data);
-        }, onError: (e) {
-          debugPrint('Org doc subscription error: $e');
-        });
+        .listen(
+          (snap) {
+            if (!snap.exists || !mounted) return;
+            final data = snap.data();
+            if (data == null) return;
+            data['id'] = snap.id;
+            setState(() => _orgData = data);
+          },
+          onError: (e) {
+            debugPrint('Org doc subscription error: $e');
+          },
+        );
   }
 
   Future<void> _loadData({bool force = false}) async {
     if (!force && _orgData != null && _orgData!['id'] == widget.orgId) {
       setState(() => _isLoading = false);
+      _checkIfFollowing();
       return;
     }
 
@@ -296,6 +300,14 @@ class _OrganizationDetailScreenState
     final isAdmin =
         (_orgData!['admins'] as List?)?.contains(currentUserId) == true ||
         _orgData!['superAdminId'] == currentUserId;
+    final members = List<String>.from(_orgData!['members'] ?? []);
+    final followers = List<String>.from(_orgData!['followers'] ?? []);
+    final canViewOrgChat =
+        currentUserId != null &&
+        (isAdmin ||
+            _isFollowing ||
+            members.contains(currentUserId) ||
+            followers.contains(currentUserId));
 
     return Scaffold(
       body: CustomScrollView(
@@ -385,8 +397,9 @@ class _OrganizationDetailScreenState
                         child: _orgData!['kind'] == 'corridor_chamber'
                             ? _buildChamberJoinFollowButton()
                             : OutlinedButton.icon(
-                                onPressed:
-                                    _isFollowLoading ? null : _toggleFollow,
+                                onPressed: _isFollowLoading
+                                    ? null
+                                    : _toggleFollow,
                                 icon: _isFollowLoading
                                     ? const SizedBox(
                                         width: 16,
@@ -415,9 +428,11 @@ class _OrganizationDetailScreenState
                       // Message Button
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: _openChat,
+                          onPressed: canViewOrgChat ? _openChat : null,
                           icon: const Icon(LucideIcons.messageCircle),
-                          label: const Text('Message'),
+                          label: Text(
+                            canViewOrgChat ? 'Message' : 'Follow to Message',
+                          ),
                           style: FilledButton.styleFrom(
                             minimumSize: const Size(double.infinity, 54),
                             shape: RoundedRectangleBorder(
@@ -445,13 +460,14 @@ class _OrganizationDetailScreenState
                     const SizedBox(height: 24),
                   ],
 
-                  // [NEW] Congratulatory Message
-                  // Embedded Chat Preview (Visible to all if chatId exists)
+                  // Embedded chat preview. Protected messages are only
+                  // subscribed to after the user follows or joins.
                   if (_orgData!['chatId'] != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24.0),
                       child: OrganizationChatPreview(
                         chatId: _orgData!['chatId'],
+                        canViewMessages: canViewOrgChat,
                         title: 'Organization Board',
                       ),
                     ),
@@ -713,8 +729,9 @@ class _OrganizationDetailScreenState
       return Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
-          onPressed:
-              _chamberActionBusy ? null : () => _leaveChamber(currentUserId),
+          onPressed: _chamberActionBusy
+              ? null
+              : () => _leaveChamber(currentUserId),
           icon: const Icon(LucideIcons.logOut, size: 16),
           label: const Text('Leave chamber'),
           style: TextButton.styleFrom(foregroundColor: AppTheme.error),
@@ -725,8 +742,9 @@ class _OrganizationDetailScreenState
       return SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
-          onPressed:
-              _chamberActionBusy ? null : () => _joinChamber(currentUserId),
+          onPressed: _chamberActionBusy
+              ? null
+              : () => _joinChamber(currentUserId),
           icon: const Icon(LucideIcons.userPlus),
           label: const Text('Become Member'),
           style: FilledButton.styleFrom(
@@ -742,8 +760,9 @@ class _OrganizationDetailScreenState
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        onPressed:
-            _chamberActionBusy ? null : () => _followChamber(currentUserId),
+        onPressed: _chamberActionBusy
+            ? null
+            : () => _followChamber(currentUserId),
         icon: const Icon(LucideIcons.eye),
         label: const Text('Follow (read-only)'),
         style: OutlinedButton.styleFrom(
@@ -824,9 +843,7 @@ class _OrganizationDetailScreenState
       label: const Text('Join Chamber'),
       style: FilledButton.styleFrom(
         minimumSize: const Size(double.infinity, 54),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -840,9 +857,9 @@ class _OrganizationDetailScreenState
           .read(organizationRepositoryProvider)
           .joinChamber(orgId: widget.orgId, userId: uid);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Joined the chamber.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Joined the chamber.')));
       }
     } catch (e) {
       if (mounted) {
@@ -934,7 +951,8 @@ class _OrganizationDetailScreenState
     final admins = List<String>.from(
       (_orgData?['admins'] as List?) ?? const <dynamic>[],
     );
-    final isBusinessAdmin = currentUserId != null &&
+    final isBusinessAdmin =
+        currentUserId != null &&
         (admins.contains(currentUserId) ||
             _orgData?['superAdminId'] == currentUserId);
 
@@ -999,15 +1017,17 @@ class _OrganizationDetailScreenState
     );
     if (confirmed != true) return;
     try {
-      await ref.read(organizationRepositoryProvider).unlinkBusinessFromChamber(
+      await ref
+          .read(organizationRepositoryProvider)
+          .unlinkBusinessFromChamber(
             chamberOrgId: chamberId,
             businessOrgId: widget.orgId,
             userId: userId,
           );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Affiliation removed.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Affiliation removed.')));
       }
     } catch (e) {
       if (mounted) {
@@ -1028,8 +1048,7 @@ class _OrganizationDetailScreenState
     final members = List<String>.from(
       (_orgData?['members'] as List?) ?? const <dynamic>[],
     );
-    final isMember =
-        currentUserId != null && members.contains(currentUserId);
+    final isMember = currentUserId != null && members.contains(currentUserId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1129,10 +1148,7 @@ class _OrganizationDetailScreenState
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: Text(
                   'Pick a business to link',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
               ...eligible.map(
@@ -1157,9 +1173,9 @@ class _OrganizationDetailScreenState
         userId: currentUserId,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Business linked.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Business linked.')));
       }
     } catch (e) {
       if (mounted) {
@@ -1267,8 +1283,10 @@ class _OrganizationDetailScreenState
     final chamberHost = hostCC.toUpperCase();
 
     final inCorridor =
-        userHome == chamberHome && userHost == chamberHost &&
-        userHome.isNotEmpty && userHost.isNotEmpty;
+        userHome == chamberHome &&
+        userHost == chamberHost &&
+        userHome.isNotEmpty &&
+        userHost.isNotEmpty;
 
     if (!inCorridor) {
       return _noteCard(
@@ -1283,10 +1301,7 @@ class _OrganizationDetailScreenState
       (_orgData?['members'] as List?) ?? const <dynamic>[],
     );
     if (!members.contains(currentUserId)) {
-      return _noteCard(
-        theme,
-        'Join the chamber to request a leadership seat.',
-      );
+      return _noteCard(theme, 'Join the chamber to request a leadership seat.');
     }
 
     return _buildMyRequestStatusOrCta(
@@ -1607,18 +1622,12 @@ class _ChamberSeatRow extends ConsumerWidget {
       );
     }
 
-    final profileAsync = ref.watch(
-      userProfileByIdProvider(holderUid!),
-    );
+    final profileAsync = ref.watch(userProfileByIdProvider(holderUid!));
     return profileAsync.when(
-      loading: () => Text(
-        roleLabel,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-      error: (_, _) => Text(
-        roleLabel,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      loading: () =>
+          Text(roleLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+      error: (_, _) =>
+          Text(roleLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
       data: (profile) {
         final fullName = profile == null
             ? null
@@ -1630,8 +1639,9 @@ class _ChamberSeatRow extends ConsumerWidget {
                 padding: const EdgeInsets.only(right: 8),
                 child: CircleAvatar(
                   radius: 14,
-                  backgroundImage:
-                      CachedNetworkImageProvider(profile.profileImage),
+                  backgroundImage: CachedNetworkImageProvider(
+                    profile.profileImage,
+                  ),
                 ),
               )
             else
@@ -1733,18 +1743,12 @@ class _AffiliatedChamberTile extends ConsumerWidget {
                   Positioned(
                     left: 0,
                     bottom: 0,
-                    child: Text(
-                      hostFlag,
-                      style: const TextStyle(fontSize: 18),
-                    ),
+                    child: Text(hostFlag, style: const TextStyle(fontSize: 18)),
                   ),
                   Positioned(
                     right: 0,
                     top: 0,
-                    child: Text(
-                      homeFlag,
-                      style: const TextStyle(fontSize: 14),
-                    ),
+                    child: Text(homeFlag, style: const TextStyle(fontSize: 14)),
                   ),
                 ],
               ),
@@ -1841,8 +1845,9 @@ class _LinkedBusinessTile extends ConsumerWidget {
                 if ((org['profileImage'] as String?)?.isNotEmpty ?? false)
                   CircleAvatar(
                     radius: 16,
-                    backgroundImage:
-                        CachedNetworkImageProvider(org['profileImage']),
+                    backgroundImage: CachedNetworkImageProvider(
+                      org['profileImage'],
+                    ),
                   )
                 else
                   CircleAvatar(

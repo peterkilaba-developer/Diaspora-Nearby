@@ -8,7 +8,7 @@ import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 
-/// PoCT breakdown modal showing how a user earned their trust score.
+/// P.o.C.T breakdown modal showing how a user earned their trust score.
 /// Opened by tapping the Community Status card on profile page.
 class PoctBreakdownModal extends ConsumerWidget {
   final String userId;
@@ -83,7 +83,7 @@ class PoctBreakdownModal extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
               children: [
-                // PoCT Score Ring
+                // P.o.C.T Score Ring
                 SizedBox(
                   width: 56,
                   height: 56,
@@ -120,7 +120,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "$displayName's PoCT Score",
+                        "$displayName's P.o.C.T Score",
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -168,11 +168,46 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Genesis Milestones',
-                        'One-time +10 PoCT at first 10 unique',
+                        'One-time +10 P.o.C.T at first 10 unique',
                         LucideIcons.award,
                       ),
                       const SizedBox(height: 12),
 
+                      _buildTransparencyRow(
+                        theme,
+                        icon: LucideIcons.mapPin,
+                        label: 'Current Location Transparency',
+                        achieved: trustScore >= 10,
+                        poct: 10,
+                      ),
+                      _buildMilestoneRow(
+                        theme,
+                        icon: LucideIcons.userCheck,
+                        label: 'Profile Completion',
+                        count:
+                            t?.awardedQualificationMilestones.contains(
+                                  'Profile',
+                                ) ==
+                                true
+                            ? 1
+                            : 0,
+                        milestone: 1,
+                        poct: 10,
+                        achieved:
+                            t?.awardedQualificationMilestones.contains(
+                              'Profile',
+                            ) ==
+                            true,
+                      ),
+                      _buildMilestoneRow(
+                        theme,
+                        icon: LucideIcons.qrCode,
+                        label: 'QR Identity Exchanges',
+                        count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
+                        milestone: 10,
+                        poct: 10,
+                        achieved: (t?.uniqueQrCount ?? 0) >= 10,
+                      ),
                       _buildMilestoneRow(
                         theme,
                         icon: LucideIcons.users,
@@ -193,25 +228,6 @@ class PoctBreakdownModal extends ConsumerWidget {
                       ),
                       _buildMilestoneRow(
                         theme,
-                        icon: LucideIcons.qrCode,
-                        label: 'QR Identity Exchanges',
-                        count: (t?.uniqueQrCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueQrCount ?? 0) >= 10,
-                      ),
-                      // [UPDATED v3] Split into separate Verified and Vouched
-                      _buildMilestoneRow(
-                        theme,
-                        icon: LucideIcons.badgeCheck,
-                        label: 'Verified by Peers',
-                        count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
-                        milestone: 10,
-                        poct: 10,
-                        achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
-                      ),
-                      _buildMilestoneRow(
-                        theme,
                         icon: LucideIcons.shieldCheck,
                         label: 'Vouched by Peers',
                         count: (t?.uniqueVouchCount ?? 0).clamp(0, 10),
@@ -221,12 +237,12 @@ class PoctBreakdownModal extends ConsumerWidget {
                       ),
                       _buildMilestoneRow(
                         theme,
-                        icon: LucideIcons.userCheck,
-                        label: 'Profile Completion',
-                        count: t?.isVerified == true ? 1 : 0,
-                        milestone: 1,
+                        icon: LucideIcons.badgeCheck,
+                        label: 'Verified by Peers',
+                        count: (t?.uniqueVerificationCount ?? 0).clamp(0, 10),
+                        milestone: 10,
                         poct: 10,
-                        achieved: t?.isVerified == true,
+                        achieved: (t?.uniqueVerificationCount ?? 0) >= 10,
                       ),
 
                       const SizedBox(height: 8),
@@ -234,30 +250,11 @@ class PoctBreakdownModal extends ConsumerWidget {
 
                       const SizedBox(height: 24),
 
-                      // === SECTION 2: Transparency Signals ===
-                      _buildSectionHeader(
-                        theme,
-                        'Transparency Signals',
-                        'One-time +10 PoCT for openness',
-                        LucideIcons.eye,
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildTransparencyRow(
-                        theme,
-                        icon: LucideIcons.mapPin,
-                        label: 'City Visibility Enabled',
-                        achieved: trustScore >= 10, // proxy: city visibility contributes
-                        poct: 10,
-                      ),
-
-                      const SizedBox(height: 24),
-
                       // === SECTION 3: Community Participation ===
                       _buildSectionHeader(
                         theme,
                         'Community Participation',
-                        'One-time +10 PoCT per milestone',
+                        'One-time +10 P.o.C.T per milestone',
                         LucideIcons.users2,
                       ),
                       const SizedBox(height: 12),
@@ -281,11 +278,11 @@ class PoctBreakdownModal extends ConsumerWidget {
 
                       const SizedBox(height: 24),
 
-                      // === SECTION 4: Trust Slider (Ongoing PoCT) ===
+                      // === SECTION 4: Trust Slider (Ongoing P.o.C.T) ===
                       _buildSectionHeader(
                         theme,
                         'Trust Slider Vouches',
-                        '+1 PoCT per 10 unique full-trust (>90) voters',
+                        '+1 P.o.C.T per 10 unique full-trust (>90) voters',
                         LucideIcons.heartHandshake,
                       ),
                       const SizedBox(height: 12),
@@ -298,7 +295,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Economic Transactions',
-                        '+1 PoCT per 10 completed P2P/B2B/C2B transactions',
+                        '+1 P.o.C.T per 10 completed P2P/B2B/C2B transactions',
                         LucideIcons.arrowLeftRight,
                       ),
                       const SizedBox(height: 12),
@@ -311,7 +308,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Seniority',
-                        '+1 PoCT per 100 days active',
+                        '+1 P.o.C.T per 100 days active',
                         LucideIcons.calendar,
                       ),
                       const SizedBox(height: 12),
@@ -324,7 +321,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Penalties',
-                        '-10 PoCT per 10 occurrences',
+                        '-10 P.o.C.T per 10 occurrences',
                         LucideIcons.shieldAlert,
                       ),
                       const SizedBox(height: 12),
@@ -514,7 +511,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
                 if (achieved)
                   Text(
-                    '+$poct PoCT',
+                    '+$poct P.o.C.T',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppTheme.accent,
@@ -530,14 +527,17 @@ class PoctBreakdownModal extends ConsumerWidget {
   }
 
   Widget _buildMilestoneSummary(ThemeData theme, TrustData? t) {
-    // [UPDATED v3] 6 genesis milestones × 10 = 60 max
+    // Seven genesis milestones × 10 = 70 max.
     int milestonePoCT = 0;
+    if ((t?.trustScore ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueFamilyCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueFriendCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueQrCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueVerificationCount ?? 0) >= 10) milestonePoCT += 10;
     if ((t?.uniqueVouchCount ?? 0) >= 10) milestonePoCT += 10;
-    if (t?.isVerified == true) milestonePoCT += 10;
+    if (t?.awardedQualificationMilestones.contains('Profile') == true) {
+      milestonePoCT += 10;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -557,7 +557,7 @@ class PoctBreakdownModal extends ConsumerWidget {
             ),
           ),
           Text(
-            '+$milestonePoCT / 60',
+            '+$milestonePoCT / 70',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -616,7 +616,7 @@ class PoctBreakdownModal extends ConsumerWidget {
               const SizedBox(width: 12),
               _buildStatChip(
                 theme,
-                'PoCT from Vouches',
+                'P.o.C.T from Vouches',
                 '+$poctFromVouches',
                 LucideIcons.award,
                 highlight: poctFromVouches > 0,
@@ -625,7 +625,7 @@ class PoctBreakdownModal extends ConsumerWidget {
           ),
           if (fullTrustVoters > 0) ...[
             const SizedBox(height: 10),
-            // Progress to next PoCT
+            // Progress to next P.o.C.T
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
@@ -637,7 +637,7 @@ class PoctBreakdownModal extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${fullTrustVoters % 10} / 10 toward next PoCT',
+              '${fullTrustVoters % 10} / 10 toward next P.o.C.T',
               style: TextStyle(
                 fontSize: 11,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -740,7 +740,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${daysActive % 100} / 100 toward next PoCT',
+                  '${daysActive % 100} / 100 toward next P.o.C.T',
                   style: TextStyle(
                     fontSize: 11,
                     color: theme.colorScheme.onSurfaceVariant,
@@ -751,7 +751,7 @@ class PoctBreakdownModal extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
           Text(
-            '+$seniorityPoCT PoCT',
+            '+$seniorityPoCT P.o.C.T',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -852,7 +852,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
               ),
               Text(
-                '-$totalPenaltyPoCT PoCT',
+                '-$totalPenaltyPoCT P.o.C.T',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -913,7 +913,7 @@ class PoctBreakdownModal extends ConsumerWidget {
               ),
             ),
             Text(
-              achieved ? '+$poct PoCT' : '0 / 1',
+              achieved ? '+$poct P.o.C.T' : '0 / 1',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
@@ -951,14 +951,11 @@ class PoctBreakdownModal extends ConsumerWidget {
               children: [
                 const Text(
                   'Completed Transactions',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Every 10 completed P2P/B2B/C2B transactions earns +1 PoCT',
+                  'Every 10 completed P2P/B2B/C2B transactions earns +1 P.o.C.T',
                   style: TextStyle(
                     fontSize: 11,
                     color: theme.colorScheme.onSurfaceVariant,

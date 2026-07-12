@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxdart/rxdart.dart';
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/dsp/models/points_transaction.dart';
 import 'package:diaspora_nearby/features/dsp/models/corridor_model.dart';
@@ -125,7 +126,9 @@ class PointsRepository {
               'averagePoCT': '${data['averagePoCT'] ?? 0.0}',
             };
           }).toList();
-        });
+        })
+        .onErrorReturn(const <Map<String, String>>[])
+        .startWith(const <Map<String, String>>[]);
   }
 
   /// Streams points for a specific community.
@@ -134,7 +137,9 @@ class PointsRepository {
         .collection('communities')
         .doc(communityId)
         .snapshots()
-        .map((doc) => doc.data()?['points'] as int? ?? 0);
+        .map((doc) => doc.data()?['points'] as int? ?? 0)
+        .onErrorReturn(0)
+        .startWith(0);
   }
 
   /// Streams system treasury data.
@@ -143,7 +148,9 @@ class PointsRepository {
         .collection('system_stats')
         .doc('treasury')
         .snapshots()
-        .map((doc) => doc.data() ?? {});
+        .map((doc) => doc.data() ?? {})
+        .onErrorReturn(const <String, dynamic>{})
+        .startWith(const <String, dynamic>{});
   }
 
   /// Streams the total internal GDP from system stats.
@@ -164,7 +171,9 @@ class PointsRepository {
             total += (doc.data()['gdpTotal'] as num? ?? 0).toInt();
           }
           return total;
-        });
+        })
+        .onErrorReturn(0)
+        .startWith(0);
   }
 
   /// Streams the total fiat GDP in USD from system stats.
@@ -179,7 +188,9 @@ class PointsRepository {
         .snapshots()
         .map(
           (doc) => (doc.data()?['totalFiatGdpUsd'] as num?)?.toDouble() ?? 0.0,
-        );
+        )
+        .onErrorReturn(0)
+        .startWith(0);
   }
 
   /// Records a completed real-economy transaction's fiat value as GDP output.
@@ -228,15 +239,18 @@ class PointsRepository {
               senderCountry: host,
               receiverCountry: home,
               cumulativeGdp: (d['gdpTotal'] as num? ?? 0).toInt(),
-              transactionCount:
-                  (d['transactionCount'] as num? ?? 0).toInt(),
-              lastTransactionAt: Corridor.parseTimestamp(d['lastTransactionAt']),
+              transactionCount: (d['transactionCount'] as num? ?? 0).toInt(),
+              lastTransactionAt: Corridor.parseTimestamp(
+                d['lastTransactionAt'],
+              ),
             );
           }).toList();
           // Sort client-side by GDP desc (Firestore index would also work).
           corridors.sort((a, b) => b.cumulativeGdp.compareTo(a.cumulativeGdp));
           return corridors;
-        });
+        })
+        .onErrorReturn(const <Corridor>[])
+        .startWith(const <Corridor>[]);
   }
 
   // NOTE: Global supply tracking and treasury distribution are now handled
@@ -279,7 +293,9 @@ class PointsRepository {
         .collection('system_stats')
         .doc('dsp_supply')
         .snapshots()
-        .map((doc) => doc.data()?['totalMinted'] as int? ?? 0);
+        .map((doc) => doc.data()?['totalMinted'] as int? ?? 0)
+        .onErrorReturn(0)
+        .startWith(0);
   }
 
   // [NEW] Stream global member count for Community Epoch logic
@@ -290,7 +306,9 @@ class PointsRepository {
         .snapshots()
         .map((doc) {
           return (doc.data()?['memberCount'] as int?) ?? 0;
-        });
+        })
+        .onErrorReturn(0)
+        .startWith(0);
   }
 
   // [NEW] Update Wallet Address
@@ -337,7 +355,7 @@ class PointsRepository {
     }
   }
 
-  /// [NEW] Fetches all Pillars (100k+ DSP, 67+ PoCT) for a given country.
+  /// [NEW] Fetches all Pillars (100k+ DSP, 67+ P.o.C.T) for a given country.
   Future<List<UserPoints>> getPillars({String? countryCode}) async {
     Query query = _firestore
         .collection('user_points')
@@ -370,7 +388,9 @@ class PointsRepository {
         .collection('user_points')
         .doc(userId)
         .snapshots()
-        .map((doc) => doc.exists ? UserPoints.fromMap(doc.data()!) : null);
+        .map((doc) => doc.exists ? UserPoints.fromMap(doc.data()!) : null)
+        .onErrorReturn(null)
+        .startWith(null);
   }
 
   // [NEW] Stream user transactions history
@@ -385,10 +405,42 @@ class PointsRepository {
           return snapshot.docs.map((doc) {
             return PointsTransaction.fromMap(doc.data(), doc.id);
           }).toList();
-        });
+        })
+        .onErrorReturn(const <PointsTransaction>[])
+        .startWith(const <PointsTransaction>[]);
   }
 
   // Initialize points for new user — [SECURITY] Routes through Cloud Function
+  /// Counts completed transfer activity from the authoritative points ledger.
+  Future<int> getCompletedEconomicTransactionCount(String userId) async {
+    const economicActions = {
+      'dsp_transfer_sent',
+      'dsp_transfer_received',
+      'fiat_transfer_sent',
+      'fiat_transfer_received',
+      'token_transfer_sent',
+      'token_transfer_received',
+      'p2p_transfer',
+      'b2b_transfer',
+      'c2b_transfer',
+      'b2c_transfer',
+    };
+
+    final snapshot = await _firestore
+        .collection('points_transactions')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    return snapshot.docs.where((doc) {
+      final data = doc.data();
+      final action = data['action'] as String?;
+      final status = data['status'] as String?;
+      return economicActions.contains(action) &&
+          (status == null || status == 'success');
+    }).length;
+  }
+
+  // New-user points initialization routes through Cloud Functions.
   Future<void> initializeUserPoints(String userId) async {
     try {
       final callable = _functions.httpsCallable('initializeUserPoints');
@@ -584,11 +636,18 @@ class PointsRepository {
   // Get user's referral code
   Future<String?> getReferralCode(String userId) async {
     try {
+      // Source.server forces the SDK to go to Firestore directly instead of
+      // waiting on an internally-queued request that may never resolve when
+      // the index is missing or the connection is partial.
       final snapshot = await _firestore
           .collection('referral_codes')
           .where('userId', isEqualTo: userId)
           .limit(1)
-          .get();
+          .get(const GetOptions(source: Source.server))
+          .timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => throw Exception('Referral code lookup timed out'),
+          );
 
       if (snapshot.docs.isEmpty) return null;
       return snapshot.docs.first.data()['code'] as String;
@@ -711,7 +770,9 @@ class PointsRepository {
           return snapshot.docs
               .map((doc) => PointsTransaction.fromMap(doc.data(), doc.id))
               .toList();
-        });
+        })
+        .onErrorReturn(const <PointsTransaction>[])
+        .startWith(const <PointsTransaction>[]);
   }
 
   // Award points for sending a message — [SECURITY] Routes through Cloud Function
@@ -722,10 +783,7 @@ class PointsRepository {
   }) async {
     try {
       final callable = _functions.httpsCallable('awardMessagePoints');
-      await callable.call({
-        'points': points,
-        'multiplier': multiplier,
-      });
+      await callable.call({'points': points, 'multiplier': multiplier});
     } catch (e) {
       debugPrint('[awardMessagePoint] Cloud Function error: $e');
       rethrow;
@@ -771,7 +829,7 @@ class PointsRepository {
     }
   }
 
-  /// Updates the PoCT score in the user_points collection.
+  /// Updates the P.o.C.T score in the user_points collection.
   Future<void> updateTrustScore(String userId, double score) async {
     await _firestore.collection('user_points').doc(userId).update({
       'trustScore': score,
@@ -779,7 +837,7 @@ class PointsRepository {
     });
   }
 
-  /// Calculates and updates the average PoCT score of ALL users in a country.
+  /// Calculates and updates the average P.o.C.T score of ALL users in a country.
   Future<void> updateCommunityOverallAveragePoCT(String countryCode) async {
     final countryId = 'home_country_${countryCode.toLowerCase()}';
     final snapshot = await _firestore
@@ -800,7 +858,7 @@ class PointsRepository {
     });
   }
 
-  /// Calculates and updates the average PoCT score of ALL users in a continent.
+  /// Calculates and updates the average P.o.C.T score of ALL users in a continent.
   Future<void> updateContinentOverallAveragePoCT(String continentCode) async {
     final continentName = getContinentName(continentCode);
     final continentId = generateCommunityId(
@@ -834,7 +892,7 @@ class PointsRepository {
     });
   }
 
-  /// Calculates and updates the global average PoCT score.
+  /// Calculates and updates the global average P.o.C.T score.
   Future<void> updateGlobalOverallAveragePoCT() async {
     final countriesSnap = await _firestore
         .collection('communities')

@@ -51,10 +51,12 @@ class MessageLocation {
   /// Create from Firestore data
   factory MessageLocation.fromFirestore(Map<String, dynamic> data) {
     return MessageLocation(
-      lat: (data['lat'] as num?)?.toDouble() ??
+      lat:
+          (data['lat'] as num?)?.toDouble() ??
           (data['latitude'] as num?)?.toDouble() ??
           0.0,
-      lng: (data['lng'] as num?)?.toDouble() ??
+      lng:
+          (data['lng'] as num?)?.toDouble() ??
           (data['longitude'] as num?)?.toDouble() ??
           0.0,
       address: data['address'] as String? ?? '',

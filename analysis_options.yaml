@@ -4,6 +4,9 @@ analyzer:
   exclude:
     - pub_cache/**
     - temp_cache/**
+    - packages/flutter_background_service_android/**
+    - test/**/*.mocks.dart
+    - test/simulation/**
   # errors:
 
 linter:

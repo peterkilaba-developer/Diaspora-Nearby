@@ -140,11 +140,11 @@ void main() async {
       // [NEW] Centralized Initialization
       await AppBootstrap.init();
 
-      // [PERF] Disable runtime font fetching on native (fonts bundled in release).
-      // On web, allow runtime fetching since .ttf files aren't bundled as assets.
+      // Fonts are not currently bundled as app assets, so runtime fetching must
+      // remain enabled on every platform to avoid repeated GoogleFonts errors.
       try {
         // ignore: deprecated_member_use
-        GoogleFonts.config.allowRuntimeFetching = kIsWeb;
+        GoogleFonts.config.allowRuntimeFetching = true;
       } catch (_) {
         // GoogleFonts config may not be available on all platforms
       }

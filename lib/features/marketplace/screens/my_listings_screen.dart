@@ -99,7 +99,8 @@ class MyListingsScreen extends ConsumerWidget {
               AppTheme.pageHorizontalPadding,
               AppTheme.pageHorizontalPadding,
               AppTheme.pageHorizontalPadding,
-              AppTheme.pageHorizontalPadding + MediaQuery.of(context).padding.bottom,
+              AppTheme.pageHorizontalPadding +
+                  MediaQuery.of(context).padding.bottom,
             ),
             itemCount: listings.length,
             separatorBuilder: (_, _) => const SizedBox(height: 10),

@@ -179,8 +179,7 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
                 // [FIX] Use `text` directly — it was captured by MessageInput
                 // BEFORE clearing the shared controller. Re-reading
                 // _captionController here would return '' due to the race.
-                widget.onSend(
-                    widget.files, text.isNotEmpty ? text : null);
+                widget.onSend(widget.files, text.isNotEmpty ? text : null);
                 Navigator.pop(context);
               },
               onSendMedia: (_, _, _) {}, // Disabled here

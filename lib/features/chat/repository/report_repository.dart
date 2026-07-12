@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 final reportRepositoryProvider = Provider((ref) => ReportRepository(ref));
+
+/// Outcome of a report submission. Callers use this to decide whether to award
+/// the +100 DSP report reward (only on `success`, never on `duplicate`).
+enum ReportResult { success, duplicate, failed }
 
 class ReportRepository {
   final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
@@ -13,7 +16,7 @@ class ReportRepository {
 
   ReportRepository(this._ref);
 
-  Future<bool> reportMessage({
+  Future<ReportResult> reportMessage({
     required String reporterId,
     required String messageId,
     required String senderId,
@@ -30,7 +33,7 @@ class ReportRepository {
 
       if (existing.docs.isNotEmpty) {
         debugPrint('ℹ️ [ReportRepository] User already reported this message.');
-        return true;
+        return ReportResult.duplicate;
       }
 
       // 2. Add the report record
@@ -44,37 +47,17 @@ class ReportRepository {
         'status': 'pending',
       });
 
-      // 3. [UPDATED] Check unique reporter threshold for automated HTS signal
-      final snapshot = await _firestore
-          .collection('reports')
-          .where('type', isEqualTo: 'message')
-          .where('messageId', isEqualTo: messageId)
-          .get();
+      // 3. Every unique new report on this user contributes 1 to
+      //    profile.flaggedMessagesCount. P.o.C.T loss = -10 per 10 unique flags
+      //    (see TrustService.recalculateTrustScore).
+      await _ref
+          .read(trustServiceProvider)
+          .recordActivity(senderId, HTSActivityType.flaggedMessage);
 
-      final uniqueReporters = snapshot.docs
-          .map((d) => (d.data())['reporterId'])
-          .toSet();
-
-      if (uniqueReporters.isNotEmpty && uniqueReporters.length % 10 == 0) {
-        debugPrint(
-          '🚨 [ReportRepository] Message $messageId reached ${uniqueReporters.length} unique reports. Deducting -10 PoCT from $senderId.',
-        );
-
-        // [UPDATED v8] DSP deduction removed — only PoCT milestone deduction
-        // -10 PoCT per 10 unique reporters
-        final trustService = _ref.read(trustServiceProvider);
-        await trustService.recordActivity(senderId, HTSActivityType.flaggedMessage);
-
-        // Chat ad penalty (PoCT-only, no DSP) still triggers trust recalculation
-        if (reason == 'Prohibited Advertising' || reason == 'Spam or Scam') {
-          await _ref.read(pointsServiceProvider).trackChatAdPenalty(senderId);
-        }
-      }
-
-      return true;
+      return ReportResult.success;
     } catch (e) {
       debugPrint('Error reporting message: $e');
-      return false;
+      return ReportResult.failed;
     }
   }
 
@@ -92,7 +75,7 @@ class ReportRepository {
         .unblockUser(userId: currentUserId, relatedUserId: targetUserId);
   }
 
-  Future<bool> reportUser({
+  Future<ReportResult> reportUser({
     required String reporterId,
     required String reportedUserId,
     required String reason,
@@ -108,7 +91,7 @@ class ReportRepository {
 
       if (existing.docs.isNotEmpty) {
         debugPrint('ℹ️ [ReportRepository] User already reported this sender.');
-        return false;
+        return ReportResult.duplicate;
       }
 
       // 2. Add the report record
@@ -121,34 +104,17 @@ class ReportRepository {
         'status': 'pending',
       });
 
-      // 3. Count unique reporters for this user
-      final snapshot = await _firestore
-          .collection('reports')
-          .where('type', isEqualTo: 'user')
-          .where('reportedUserId', isEqualTo: reportedUserId)
-          .get();
+      // 3. Every unique new report contributes 1 to
+      //    profile.flaggedMessagesCount. P.o.C.T loss = -10 per 10 unique flags
+      //    (see TrustService.recalculateTrustScore).
+      await _ref
+          .read(trustServiceProvider)
+          .recordActivity(reportedUserId, HTSActivityType.flaggedMessage);
 
-      final uniqueReporters = snapshot.docs
-          .map((d) => (d.data())['reporterId'])
-          .toSet();
-
-      // 4. [UPDATED v8] At every 10 unique reporters → deduct -10 PoCT (no DSP)
-      if (uniqueReporters.isNotEmpty && uniqueReporters.length % 10 == 0) {
-        debugPrint(
-          '🚨 [ReportRepository] User $reportedUserId reached ${uniqueReporters.length} unique user reports. Deducting -10 PoCT.',
-        );
-
-        // [UPDATED v8] DSP deduction removed — only PoCT milestone
-        // HTS signal triggers trust recalculation which handles PoCT
-        await _ref
-            .read(trustServiceProvider)
-            .recordActivity(reportedUserId, HTSActivityType.flaggedMessage);
-      }
-
-      return true;
+      return ReportResult.success;
     } catch (e) {
       debugPrint('Error reporting user: $e');
-      return false;
+      return ReportResult.failed;
     }
   }
 

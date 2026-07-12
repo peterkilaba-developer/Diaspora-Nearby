@@ -692,6 +692,14 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
           as _i5.Stream<List<_i17.PointsTransaction>>);
 
   @override
+  _i5.Future<int> getCompletedEconomicTransactionCount(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getCompletedEconomicTransactionCount, [userId]),
+            returnValue: _i5.Future<int>.value(0),
+          )
+          as _i5.Future<int>);
+
+  @override
   _i5.Future<void> initializeUserPoints(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#initializeUserPoints, [userId]),
@@ -1199,15 +1207,6 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<void> trackVouchReward(String? userId, String? vouchedUserId) =>
-      (super.noSuchMethod(
-            Invocation.method(#trackVouchReward, [userId, vouchedUserId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
-
-  @override
   _i5.Future<void> trackVouchConsensusVote({
     required String? voucherId,
     required bool? isAgree,
@@ -1471,15 +1470,6 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<void> trackOrganizationVetting(String? userId) =>
-      (super.noSuchMethod(
-            Invocation.method(#trackOrganizationVetting, [userId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
-
-  @override
   _i5.Future<void> trackIdentityQRExchange(
     String? userId,
     String? otherUid, {
@@ -1653,6 +1643,24 @@ class MockPointsService extends _i1.Mock implements _i18.PointsService {
           as _i5.Future<void>);
 
   @override
+  _i5.Future<void> trackHostLocationMove(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackHostLocationMove, [userId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> trackAlsoLivedInAdded(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackAlsoLivedInAdded, [userId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   _i5.Future<void> awardPoints({
     required String? userId,
     required int? amount,
@@ -1737,22 +1745,6 @@ class MockTrustService extends _i1.Mock implements _i19.TrustService {
           as _i5.Future<bool>);
 
   @override
-  _i5.Future<bool> vetOrganization({
-    required String? vetterId,
-    required String? orgId,
-    required String? orgOwnerId,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#vetOrganization, [], {
-              #vetterId: vetterId,
-              #orgId: orgId,
-              #orgOwnerId: orgOwnerId,
-            }),
-            returnValue: _i5.Future<bool>.value(false),
-          )
-          as _i5.Future<bool>);
-
-  @override
   _i5.Future<_i20.TrustData?> getTrustData(String? uid) =>
       (super.noSuchMethod(
             Invocation.method(#getTrustData, [uid]),
@@ -1822,25 +1814,6 @@ class MockTrustService extends _i1.Mock implements _i19.TrustService {
             returnValue: _i5.Future<int>.value(0),
           )
           as _i5.Future<int>);
-
-  @override
-  _i5.Future<void> vouchForUser({
-    required String? fromUserId,
-    required String? toUserId,
-    required String? relationship,
-    int? stakeAmount = 0,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#vouchForUser, [], {
-              #fromUserId: fromUserId,
-              #toUserId: toUserId,
-              #relationship: relationship,
-              #stakeAmount: stakeAmount,
-            }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
 
   @override
   _i5.Future<void> rateUser({

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -26,11 +28,10 @@ class AppBootstrap {
     debugPrint('▶ AppBootstrap: [2/4] Firebase initialized ✓');
 
     // 3. [PERF] Audio & Storage are independent — run in parallel
-    debugPrint('▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...');
-    await Future.wait([
-      _initAudio(),
-      _initStorage(),
-    ]);
+    debugPrint(
+      '▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...',
+    );
+    await Future.wait([_initAudio(), _initStorage()]);
     debugPrint('▶ AppBootstrap: [3/4] Audio + Storage initialized ✓');
 
     // 4. Feature Services (may depend on storage)
@@ -50,18 +51,20 @@ class AppBootstrap {
         debugPrint('  → Firebase.initializeApp done');
       }
 
-      // [MIGRATED] Firestore persistence (auto-enabled on mobile, configure cache size)
-      if (!kIsWeb) {
-        try {
-          FirebaseFirestore.instance.settings = const Settings(
-            persistenceEnabled: true,
-            cacheSizeBytes: 100000000, // 100MB
-          );
-          debugPrint('AppBootstrap: Firestore Persistence Configured');
-        } catch (e) {
-          debugPrint('AppBootstrap: Persistence Init Warning: $e');
-        }
+      // [PERF] Firestore persistence on ALL platforms. On web this is
+      // opt-in (IndexedDB) — without it every browser refresh re-fetches
+      // all data from the network, which made reloads painfully slow.
+      try {
+        FirebaseFirestore.instance.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: 100000000, // 100MB
+        );
+        debugPrint('AppBootstrap: Firestore Persistence Configured');
+      } catch (e) {
+        debugPrint('AppBootstrap: Persistence Init Warning: $e');
+      }
 
+      if (!kIsWeb) {
         // Crashlytics for non-web
         FlutterError.onError =
             FirebaseCrashlytics.instance.recordFlutterFatalError;
@@ -72,7 +75,7 @@ class AppBootstrap {
       // Debug provider is used for local development builds.
       try {
         debugPrint('  → AppCheck.activate starting...');
-        await FirebaseAppCheck.instance.activate(
+        final activation = FirebaseAppCheck.instance.activate(
           providerWeb: ReCaptchaV3Provider(
             '6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G',
           ),
@@ -81,6 +84,18 @@ class AppBootstrap {
               : const AndroidDebugProvider(),
           providerApple: const AppleDeviceCheckProvider(),
         );
+        if (kIsWeb) {
+          // [PERF] Don't block first paint on the reCAPTCHA script download.
+          // Tokens are fetched lazily by the SDK once activation completes.
+          unawaited(
+            activation.catchError(
+              (Object e) =>
+                  debugPrint('AppBootstrap: App Check Init Error: $e'),
+            ),
+          );
+        } else {
+          await activation;
+        }
         debugPrint('  → AppCheck.activate done');
       } catch (e) {
         debugPrint('AppBootstrap: App Check Init Error: $e');

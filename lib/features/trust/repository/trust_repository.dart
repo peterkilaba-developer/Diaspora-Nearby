@@ -157,9 +157,7 @@ class TrustRepository {
         userIds.add(doc['fromUid'] as String);
       }
 
-      debugPrint(
-        '🔍 [TrustRepo] QR userIds for $userId: $userIds',
-      );
+      debugPrint('🔍 [TrustRepo] QR userIds for $userId: $userIds');
 
       return userIds.toList();
     } catch (e) {

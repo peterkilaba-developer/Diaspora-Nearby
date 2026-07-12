@@ -18,6 +18,7 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
+import 'package:diaspora_nearby/core/services/location_update_service.dart';
 import 'package:diaspora_nearby/features/shared/widgets/google_places_autocomplete_field.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
@@ -80,6 +81,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   List<loc_model.PastLocation> _pastLocations = [];
   String _selectedYearsInHost = '';
   bool _showCurrentLocationName = true;
+  bool _cityVisibilityForfeited = false;
   XFile? _newProfileImage;
   late Set<String> _activeHighlights;
 
@@ -422,6 +424,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     _pastLocations = List.from(p.pastLocations ?? []);
     _selectedYearsInHost = p.yearsInHostCountry ?? '';
     _showCurrentLocationName = p.showCurrentLocationName ?? true;
+    _cityVisibilityForfeited = p.cityVisibilityForfeited ?? false;
 
     if (p.education != null && p.education!.isNotEmpty) {
       _eduInstController.text = p.education!.first.institution;
@@ -583,6 +586,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             widget.initialProfile.homeCountryCode ??
             widget.initialProfile.homeLocation.countryCode,
         showCurrentLocationName: _showCurrentLocationName,
+        cityVisibilityForfeited: _cityVisibilityForfeited,
       );
 
       await widget.onSave(updatedProfile, _newProfileImage);
@@ -1537,56 +1541,135 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     );
   }
 
+  /// Immediately writes GPS-derived currentLocation to Firestore.
+  void _updateLocationFromGPS() {
+    final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (uid != null) {
+      LocationUpdateService().updateCurrentLocation(uid);
+    }
+  }
+
+  /// Immediately writes host location into currentLocation / geo in Firestore.
+  /// Used when the user hides their city so proximity still resolves to host city.
+  void _fallbackToHostLocation() {
+    final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (uid != null) {
+      LocationUpdateService().fallbackToHostLocation(
+        uid,
+        widget.initialProfile.hostLocation,
+      );
+    }
+  }
+
   Widget _buildLocationPrivacyToggle() {
+    final forfeited = _cityVisibilityForfeited;
     return SwitchListTile(
       title: const Text('Show my current city name'),
-      subtitle: _showCurrentLocationName
+      subtitle: forfeited
           ? Text(
-              '+10 PoCT for transparency',
-              style: TextStyle(fontSize: 11, color: Colors.green[400]),
+              'City Visibility P.o.C.T was forfeited and cannot be re-earned.',
+              style: TextStyle(fontSize: 11, color: Colors.orange[400]),
             )
-          : null,
+          : (_showCurrentLocationName
+                ? Text(
+                    '+10 P.o.C.T for transparency (forfeited permanently if hidden)',
+                    style: TextStyle(fontSize: 11, color: Colors.green[400]),
+                  )
+                : null),
       value: _showCurrentLocationName,
       onChanged: (v) {
         if (v) {
-          // User wants to show city — this is a trust-building action
-          _showCityConfirmation();
+          // Re-enabling — immediately refresh GPS so currentLocation reflects
+          // real position again, replacing the host-location fallback.
+          setState(() => _showCurrentLocationName = true);
+          _updateLocationFromGPS();
         } else {
-          // User hides city — no penalty, just toggle
-          setState(() => _showCurrentLocationName = false);
+          // Hiding — permanent loss of the +10 if not already forfeited.
+          if (forfeited) {
+            setState(() => _showCurrentLocationName = false);
+            _fallbackToHostLocation();
+          } else {
+            _confirmHideCity();
+          }
         }
       },
       contentPadding: EdgeInsets.zero,
     );
   }
 
-  Future<void> _showCityConfirmation() async {
+  Future<void> _confirmHideCity() async {
+    bool acknowledged = false;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Show Your City?'),
-        content: const Text(
-          'Showing your current city builds trust with the community.\n\nYou will earn +10 PoCT for transparency.',
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 8),
+              Expanded(child: Text('Hide City — Permanent Loss')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Hiding your current city will permanently forfeit your +10 City '
+                'Visibility P.o.C.T.',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '• You will lose 10 P.o.C.T from your trust score immediately.\n'
+                '• Turning visibility back on later will NOT restore the +10.\n'
+                '• This is a one-way action — there is no second chance.\n'
+                '• Lower P.o.C.T means lower DSP → \$DIASPORA conversion at TGE.',
+                style: TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              CheckboxListTile(
+                value: acknowledged,
+                onChanged: (val) => setSt(() => acknowledged = val ?? false),
+                title: const Text(
+                  'I understand this is permanent and cannot be undone.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep City Visible'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: acknowledged ? () => Navigator.pop(ctx, true) : null,
+              child: const Text('Hide & Forfeit +10 P.o.C.T'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Show City (+10 PoCT)'),
-          ),
-        ],
       ),
     );
 
     if (confirmed == true && mounted) {
-      setState(() => _showCurrentLocationName = true);
+      setState(() {
+        _showCurrentLocationName = false;
+        _cityVisibilityForfeited = true;
+      });
+      // Replace currentLocation with host location so proximity calculations
+      // remain accurate while the city name stays hidden from other users.
+      _fallbackToHostLocation();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('City is now visible. +10 PoCT for transparency!'),
+          content: Text('City hidden. +10 P.o.C.T permanently forfeited.'),
+          backgroundColor: Colors.orange,
         ),
       );
     }

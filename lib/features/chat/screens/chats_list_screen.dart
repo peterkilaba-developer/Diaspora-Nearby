@@ -26,6 +26,14 @@ final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   return chatRepo.subscribeToUserChats();
 });
 
+final discoverableChatsProvider = FutureProvider.family<List<Chat>, String>((
+  ref,
+  query,
+) {
+  final chatRepo = ref.watch(chatRepositoryProvider);
+  return chatRepo.searchDiscoverableChats(query);
+});
+
 class ChatsListScreen extends ConsumerStatefulWidget {
   const ChatsListScreen({super.key});
 
@@ -73,20 +81,15 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     // GLOBAL SEARCH MODE
     if (chatsMode == ViewMode.global) {
       // Show all or filtered based on query
+      final discoverableAsync = ref.watch(
+        discoverableChatsProvider(searchQuery),
+      );
 
-      return FutureBuilder<List<Chat>>(
-        future: ref
-            .read(chatRepositoryProvider)
-            .searchDiscoverableChats(searchQuery),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SkeletonList(skeleton: ChatCardSkeleton());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Error searching chats'));
-          }
-
-          final allResults = snapshot.data ?? [];
+      return discoverableAsync.when(
+        loading: () => const SkeletonList(skeleton: ChatCardSkeleton()),
+        error: (error, stack) =>
+            const Center(child: Text('Error searching chats')),
+        data: (allResults) {
           // Filter to show ONLY Organization and Event chats in Global mode
           final results = allResults
               .where(
@@ -113,53 +116,53 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
               final chat = results[index];
               return RepaintBoundary(
                 child: ChatCard(
-                chat: chat,
-                searchQuery: searchQuery,
-                onTap: () async {
-                  // [NEW] Track Discovery Click
-                  final user = ref.read(authRepositoryProvider).currentUser;
-                  if (user != null) {
-                    final actionId = 'action_discover_chat_${chat.id}';
-                    final rewarded = await ref
-                        .read(pointsServiceProvider)
-                        .trackExplorationReward(user.uid, actionId);
-                    if (rewarded && context.mounted) {
-                      confettiOverlayKey.currentState?.play();
-                      showExplorationRewardToast(
-                        context,
-                        message: 'Discovered ${chat.name}',
-                        points: 100,
-                      );
-                    }
-                  }
-
-                  // Navigate to entity details instead of chat screen
-                  if (chat.type == 'event') {
-                    // Ensure we pass eventId if available, otherwise we might have issues if chat.eventId is null
-                    if (chat.eventId != null) {
-                      if (context.mounted) {
-                        context.push('/events/${chat.eventId}');
+                  chat: chat,
+                  searchQuery: searchQuery,
+                  onTap: () async {
+                    // [NEW] Track Discovery Click
+                    final user = ref.read(authRepositoryProvider).currentUser;
+                    if (user != null) {
+                      final actionId = 'action_discover_chat_${chat.id}';
+                      final rewarded = await ref
+                          .read(pointsServiceProvider)
+                          .trackExplorationReward(user.uid, actionId);
+                      if (rewarded && context.mounted) {
+                        confettiOverlayKey.currentState?.play();
+                        showExplorationRewardToast(
+                          context,
+                          message: 'Discovered ${chat.name}',
+                          points: 100,
+                        );
                       }
                     }
-                  } else if (chat.type == 'organization') {
-                    // We used communityId to store orgId in searchDiscoverableChats
-                    if (context.mounted) {
-                      context.push('/organization/${chat.communityId}');
+
+                    // Navigate to entity details instead of chat screen
+                    if (chat.type == 'event') {
+                      // Ensure we pass eventId if available, otherwise we might have issues if chat.eventId is null
+                      if (chat.eventId != null) {
+                        if (context.mounted) {
+                          context.push('/events/${chat.eventId}');
+                        }
+                      }
+                    } else if (chat.type == 'organization') {
+                      // We used communityId to store orgId in searchDiscoverableChats
+                      if (context.mounted) {
+                        context.push('/organization/${chat.communityId}');
+                      }
+                    } else if (chat.type == 'community' || chat.isCommunity) {
+                      if (context.mounted) {
+                        // Navigate to community detail page for discovery/joining
+                        context.push('/communities/${chat.communityId}');
+                      }
+                    } else if (chat.type == 'group') {
+                      // [NEW]
+                      if (context.mounted) {
+                        // For public groups, go to chat. ChatScreen should handle non-member view (Join button).
+                        context.push('/chats/${chat.id}');
+                      }
                     }
-                  } else if (chat.type == 'community' || chat.isCommunity) {
-                    if (context.mounted) {
-                      // Navigate to community detail page for discovery/joining
-                      context.push('/communities/${chat.communityId}');
-                    }
-                  } else if (chat.type == 'group') {
-                    // [NEW]
-                    if (context.mounted) {
-                      // For public groups, go to chat. ChatScreen should handle non-member view (Join button).
-                      context.push('/chats/${chat.id}');
-                    }
-                  }
-                },
-              ),
+                  },
+                ),
               );
             },
           );
@@ -190,6 +193,20 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
         ),
       ),
       data: (chats) {
+        // Pre-warm partner profiles so DM cards render with names on first paint.
+        // keepAlive() on chatPartnerProvider ensures these are fetched only once
+        // per app session, not re-fetched on every tab switch.
+        final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
+        if (currentUid != null) {
+          for (final chat in chats) {
+            if (chat.isDirect) {
+              final otherId = chat.getOtherParticipantId(currentUid);
+              if (otherId != null && otherId.isNotEmpty) {
+                ref.read(chatPartnerProvider(otherId));
+              }
+            }
+          }
+        }
 
         final filteredChats = searchQuery.isEmpty
             ? chats

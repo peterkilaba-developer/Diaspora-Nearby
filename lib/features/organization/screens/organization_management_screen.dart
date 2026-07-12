@@ -389,6 +389,7 @@ class _OrganizationManagementScreenState
           if (org['chatId'] != null) ...[
             OrganizationChatPreview(
               chatId: org['chatId'],
+              canViewMessages: true,
               title: 'Organization Messages',
             ),
             const SizedBox(height: 24),

@@ -22,6 +22,8 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW] Share reward toast
+import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
+import 'package:diaspora_nearby/features/chat/services/chamber_service.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
@@ -580,6 +582,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         createdCommunityIds = await ref
             .read(communityServiceProvider)
             .createCommunitiesAndChats(profile, onFirstMember: onFirstMember);
+        await ref.read(chamberServiceProvider).ensureSignupChamber();
       } catch (e) {
         // If this fails, we must NOT proceed.
         // We report error and let user retry (submit button will re-enable).
@@ -608,6 +611,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             debugPrint('Referral processed. Referrer ID: $referrerId');
           } catch (e) {
             debugPrint('Error processing referral: $e');
+          }
+
+          // Log a QR exchange record so the referrer's 10-QR milestone advances
+          if (referrerId != null) {
+            try {
+              await ref
+                  .read(trustRepositoryProvider)
+                  .saveQRExchangeRecord(referrerId, user.uid);
+            } catch (e) {
+              debugPrint('Error saving QR exchange record: $e');
+            }
           }
         }
 
@@ -746,7 +760,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                             final user = ref
                                 .read(authRepositoryProvider)
                                 .currentUser;
-                            String shareUrl = 'https://diasporanearby.com/invite';
+                            String shareUrl =
+                                'https://diasporanearby.com/invite';
 
                             if (user != null) {
                               try {
@@ -786,7 +801,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                                 if (ctx.mounted) {
                                   showExplorationRewardToast(
                                     ctx,
-                                    message: 'Share sent! 🎉 You\'ll earn 1,000 DSP when they sign up.',
+                                    message:
+                                        'Share sent! 🎉 You\'ll earn 1,000 DSP when they sign up.',
                                     points: 1000,
                                   );
                                 }
@@ -799,7 +815,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                             if (ctx.mounted) Navigator.pop(ctx);
                           },
                           icon: const Icon(LucideIcons.share2),
-                          label: const Text('Invite Friends  •  Earn 1,000 DSP'),
+                          label: const Text(
+                            'Invite Friends  •  Earn 1,000 DSP',
+                          ),
                         ),
                       ),
                       TextButton(

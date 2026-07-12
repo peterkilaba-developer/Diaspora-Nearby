@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/radio/models/radio_station.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
@@ -9,64 +10,60 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 final radioRepositoryProvider = Provider(
   (ref) => RadioRepository(
     firestore: cf.FirebaseFirestore.instance,
+    functions: FirebaseFunctions.instance,
     auth: ref.read(authRepositoryProvider),
   ),
 );
 
 class RadioRepository {
   final cf.FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   // ignore: unused_field
   final AuthRepository _auth;
 
-  static const String _proxyUrl =
-      'https://us-central1-diaspora-nearby-a3dac.cloudfunctions.net/radioProxy';
   static const String _directUrl =
       'https://de1.api.radio-browser.info/json'; // Primary mirror
 
   RadioRepository({
     required cf.FirebaseFirestore firestore,
+    required FirebaseFunctions functions,
     required AuthRepository auth,
   }) : _firestore = firestore,
+       _functions = functions,
        _auth = auth;
 
   // --- Helper Methods ---
 
   Future<List<RadioStation>> _fetchWithFallback(String endpoint) async {
-    // 1. Try Proxy
-    final proxyUrl = Uri.parse('$_proxyUrl?endpoint=$endpoint');
-    debugPrint('RadioRepo: Attempting PROXY: $proxyUrl');
-
+    // 1. Try authenticated Cloud Function proxy.
+    debugPrint('RadioRepo: Attempting callable proxy for $endpoint');
     try {
-      final response = await http
-          .get(proxyUrl)
+      final response = await _functions
+          .httpsCallable('fetchRadioStations')
+          .call({'endpoint': endpoint})
           .timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final dynamic decoded = json.decode(response.body);
-        if (decoded is List && decoded.isNotEmpty) {
-          debugPrint(
-            'RadioRepo: Proxy SUCCESS - Found ${decoded.length} items',
-          );
-          return decoded
-              .map(
-                (item) => RadioStation.fromJson(item as Map<String, dynamic>),
-              )
-              .where(
-                (s) =>
-                    s.url.isNotEmpty &&
-                    !_unreliableStationsCache.contains(s.stationuuid),
-              )
-              .toList();
-        }
+      final decoded = response.data;
+      if (decoded is List && decoded.isNotEmpty) {
         debugPrint(
-          'RadioRepo: Proxy returned 200 but ${decoded is List ? "0 items" : "non-list body"}. Falling back to Direct...',
+          'RadioRepo: Callable proxy SUCCESS - Found ${decoded.length} items',
         );
-      } else {
-        debugPrint(
-          'RadioRepo: Proxy FAILED with status ${response.statusCode}. Falling back to Direct...',
-        );
+        return decoded
+            .map(
+              (item) =>
+                  RadioStation.fromJson(Map<String, dynamic>.from(item as Map)),
+            )
+            .where(
+              (s) =>
+                  s.url.isNotEmpty &&
+                  !_unreliableStationsCache.contains(s.stationuuid),
+            )
+            .toList();
       }
+      debugPrint('RadioRepo: Callable proxy returned no stations.');
     } catch (e) {
-      debugPrint('RadioRepo: Proxy EXCEPTION: $e. Falling back to Direct...');
+      debugPrint(
+        'RadioRepo: Callable proxy unavailable: $e. Falling back to Direct...',
+      );
     }
 
     // 2. Fallback to Direct (Mirrors)
@@ -161,13 +158,7 @@ class RadioRepository {
 
   Future<void> reportFailure(String stationUuid) async {
     try {
-      final docRef = _firestore
-          .collection('radio_station_health')
-          .doc(stationUuid);
-      await docRef.set({
-        'failureCount': cf.FieldValue.increment(1),
-        'lastReported': cf.FieldValue.serverTimestamp(),
-      }, cf.SetOptions(merge: true));
+      await _reportStationHealth(stationUuid, 'failure');
     } catch (e) {
       debugPrint('RadioHealth: Failed report failure: $e');
     }
@@ -175,16 +166,18 @@ class RadioRepository {
 
   Future<void> reportSuccess(String stationUuid) async {
     try {
-      final docRef = _firestore
-          .collection('radio_station_health')
-          .doc(stationUuid);
-      await docRef.set({
-        'successCount': cf.FieldValue.increment(1),
-        'lastReported': cf.FieldValue.serverTimestamp(),
-      }, cf.SetOptions(merge: true));
+      await _reportStationHealth(stationUuid, 'success');
     } catch (e) {
       debugPrint('RadioHealth: Failed report success: $e');
     }
+  }
+
+  Future<void> _reportStationHealth(String stationUuid, String outcome) async {
+    if (stationUuid.trim().isEmpty) return;
+    await _functions.httpsCallable('reportRadioStationHealth').call({
+      'stationUuid': stationUuid,
+      'outcome': outcome,
+    });
   }
 
   // --- Firestore Methods (Favorites & History) ---

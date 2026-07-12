@@ -26,7 +26,7 @@ The guiding principle is: **spending money to spend more money is not appealing*
 - **10% fixed expansion burn** (on new DSP minted)
 - **Unassigned slot burn** (treasury burn for unallocated slots)
 - **Unclaimed TGE burn** (post-TGE unclaimed allocations)
-- **PoCT efficiency** (trust-weighted distribution)
+- **P.o.C.T efficiency** (trust-weighted distribution)
 
 ## What Was Removed
 

@@ -7,7 +7,7 @@ import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'mocks.mocks.dart';
 
 /// Mock providers for testing with Riverpod
-/// 
+///
 /// Use these to override real providers in tests:
 
 // Mock Auth Repository

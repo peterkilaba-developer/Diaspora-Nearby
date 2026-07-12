@@ -1108,6 +1108,15 @@ class MockPointsRepository extends _i1.Mock implements _i13.PointsRepository {
           as _i3.Stream<List<_i16.PointsTransaction>>);
 
   @override
+  _i3.Future<int> getCompletedEconomicTransactionCount(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getCompletedEconomicTransactionCount, [userId]),
+            returnValue: _i3.Future<int>.value(0),
+            returnValueForMissingStub: _i3.Future<int>.value(0),
+          )
+          as _i3.Future<int>);
+
+  @override
   _i3.Future<void> initializeUserPoints(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#initializeUserPoints, [userId]),
@@ -1545,7 +1554,7 @@ class MockPointsRepository extends _i1.Mock implements _i13.PointsRepository {
 /// See the documentation for Mockito's code generation for more information.
 class MockReportRepository extends _i1.Mock implements _i17.ReportRepository {
   @override
-  _i3.Future<bool> reportMessage({
+  _i3.Future<_i17.ReportResult> reportMessage({
     required String? reporterId,
     required String? messageId,
     required String? senderId,
@@ -1558,10 +1567,14 @@ class MockReportRepository extends _i1.Mock implements _i17.ReportRepository {
               #senderId: senderId,
               #reason: reason,
             }),
-            returnValue: _i3.Future<bool>.value(false),
-            returnValueForMissingStub: _i3.Future<bool>.value(false),
+            returnValue: _i3.Future<_i17.ReportResult>.value(
+              _i17.ReportResult.success,
+            ),
+            returnValueForMissingStub: _i3.Future<_i17.ReportResult>.value(
+              _i17.ReportResult.success,
+            ),
           )
-          as _i3.Future<bool>);
+          as _i3.Future<_i17.ReportResult>);
 
   @override
   _i3.Future<void> blockUser(String? currentUserId, String? targetUserId) =>
@@ -1582,7 +1595,7 @@ class MockReportRepository extends _i1.Mock implements _i17.ReportRepository {
           as _i3.Future<void>);
 
   @override
-  _i3.Future<bool> reportUser({
+  _i3.Future<_i17.ReportResult> reportUser({
     required String? reporterId,
     required String? reportedUserId,
     required String? reason,
@@ -1593,10 +1606,14 @@ class MockReportRepository extends _i1.Mock implements _i17.ReportRepository {
               #reportedUserId: reportedUserId,
               #reason: reason,
             }),
-            returnValue: _i3.Future<bool>.value(false),
-            returnValueForMissingStub: _i3.Future<bool>.value(false),
+            returnValue: _i3.Future<_i17.ReportResult>.value(
+              _i17.ReportResult.success,
+            ),
+            returnValueForMissingStub: _i3.Future<_i17.ReportResult>.value(
+              _i17.ReportResult.success,
+            ),
           )
-          as _i3.Future<bool>);
+          as _i3.Future<_i17.ReportResult>);
 
   @override
   _i3.Future<int> getReportCount(String? userId) =>

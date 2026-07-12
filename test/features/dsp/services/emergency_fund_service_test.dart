@@ -31,7 +31,8 @@ class FakeChatRepository extends Fake implements ChatRepository {
   Future<List<Chat>> getUserChats() async => _chats;
 }
 
-class FakeNotificationsRepository extends Fake implements NotificationsRepository {
+class FakeNotificationsRepository extends Fake
+    implements NotificationsRepository {
   final List<NotificationItem> addedNotifications = [];
 
   @override
@@ -75,8 +76,26 @@ void main() {
       lastName: 'User',
       phone: '1234567890',
       profileImage: 'http://image.com',
-      homeLocation: const UserLocation(formattedAddress: 'Home', placeId: '1', city: 'City', country: 'Country', countryCode: 'US', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))),
-      hostLocation: const UserLocation(formattedAddress: 'Host', placeId: '2', city: 'City', country: 'Country', countryCode: 'US', geometry: UserLocationGeometry(location: UserLocationCoordinates(lat: 0, lng: 0))),
+      homeLocation: const UserLocation(
+        formattedAddress: 'Home',
+        placeId: '1',
+        city: 'City',
+        country: 'Country',
+        countryCode: 'US',
+        geometry: UserLocationGeometry(
+          location: UserLocationCoordinates(lat: 0, lng: 0),
+        ),
+      ),
+      hostLocation: const UserLocation(
+        formattedAddress: 'Host',
+        placeId: '2',
+        city: 'City',
+        country: 'Country',
+        countryCode: 'US',
+        geometry: UserLocationGeometry(
+          location: UserLocationCoordinates(lat: 0, lng: 0),
+        ),
+      ),
       bio: 'Bio',
       occupation: 'Dev',
       yearsInHostCountry: '5',
@@ -88,7 +107,9 @@ void main() {
       availability: ['Weekends'],
       servicesOffered: ['Coding'],
       lookingFor: ['Networking'],
-      education: [Education(institution: 'Uni', degree: 'BS', graduationYear: '2020')],
+      education: [
+        Education(institution: 'Uni', degree: 'BS', graduationYear: '2020'),
+      ],
       homeCountryCode: 'US',
       hostCountryCode: 'US',
     );
@@ -98,26 +119,43 @@ void main() {
     const userId = 'user123';
 
     // Eligibility model now requires `uniqueQrCount >= 10` from trust_scores
-     // (PoCT in-person QR scans). Seed it for tests that expect eligibility.
-     Future<void> seedQrScans(int count) async {
-       await fakeFirestore.collection('trust_scores').doc(userId).set({
-         'uniqueQrCount': count,
-       });
-     }
+    // (P.o.C.T in-person QR scans). Seed it for tests that expect eligibility.
+    Future<void> seedQrScans(int count) async {
+      await fakeFirestore.collection('trust_scores').doc(userId).set({
+        'uniqueQrCount': count,
+      });
+    }
 
     test('should return eligible when all criteria are met', () async {
       await seedQrScans(10);
       // 1. Profile Complete
-      when(mockProfileRepo.getUserProfile(userId))
-          .thenAnswer((_) async => createValidProfile(userId));
+      when(
+        mockProfileRepo.getUserProfile(userId),
+      ).thenAnswer((_) async => createValidProfile(userId));
 
       // 2. Points >= 100,000
-      when(mockPointsRepo.getUserPoints(userId)).thenAnswer((_) async =>
-          UserPoints(userId: userId, totalPoints: 100000, availablePoints: 100000, currentStreak: 1, dailyMessageCount: 0, lastUpdated: DateTime.now(), signupDate: DateTime.now()));
+      when(mockPointsRepo.getUserPoints(userId)).thenAnswer(
+        (_) async => UserPoints(
+          userId: userId,
+          totalPoints: 100000,
+          availablePoints: 100000,
+          currentStreak: 1,
+          dailyMessageCount: 0,
+          lastUpdated: DateTime.now(),
+          signupDate: DateTime.now(),
+        ),
+      );
 
       // 3. Trust Check (Deprecated - now ignored)
       fakeTrustRepo.setTrustData(
-          TrustData(uid: userId, trustScore: 10, isVerified: false, level: TrustLevel.lowTrust, lastUpdated: DateTime.now()));
+        TrustData(
+          uid: userId,
+          trustScore: 10,
+          isVerified: false,
+          level: TrustLevel.lowTrust,
+          lastUpdated: DateTime.now(),
+        ),
+      );
 
       // 4. Relationships (10 Family, 10 Friends)
       // Populate Fake Firestore
@@ -143,17 +181,37 @@ void main() {
 
     test('should return ineligible if points are insufficient', () async {
       await seedQrScans(10);
-      when(mockProfileRepo.getUserProfile(userId))
-          .thenAnswer((_) async => createValidProfile(userId));
+      when(
+        mockProfileRepo.getUserProfile(userId),
+      ).thenAnswer((_) async => createValidProfile(userId));
 
-      when(mockPointsRepo.getUserPoints(userId)).thenAnswer((_) async =>
-          UserPoints(userId: userId, totalPoints: 50000, availablePoints: 50000, currentStreak: 1, dailyMessageCount: 0, lastUpdated: DateTime.now(), signupDate: DateTime.now()));
+      when(mockPointsRepo.getUserPoints(userId)).thenAnswer(
+        (_) async => UserPoints(
+          userId: userId,
+          totalPoints: 50000,
+          availablePoints: 50000,
+          currentStreak: 1,
+          dailyMessageCount: 0,
+          lastUpdated: DateTime.now(),
+          signupDate: DateTime.now(),
+        ),
+      );
 
       fakeTrustRepo.setTrustData(
-          TrustData(uid: userId, trustScore: 70, isVerified: true, vouchCount: 5, lastUpdated: DateTime.now()));
+        TrustData(
+          uid: userId,
+          trustScore: 70,
+          isVerified: true,
+          vouchCount: 5,
+          lastUpdated: DateTime.now(),
+        ),
+      );
 
       // Relationships ok
-      final relationshipsRef = fakeFirestore.collection('users').doc(userId).collection('relationships');
+      final relationshipsRef = fakeFirestore
+          .collection('users')
+          .doc(userId)
+          .collection('relationships');
       for (int i = 0; i < 10; i++) {
         await relationshipsRef.add({'type': 'Sister', 'status': 'active'});
       }
@@ -171,12 +229,35 @@ void main() {
 
     test('should return ineligible if not enough family members', () async {
       await seedQrScans(10);
-      when(mockProfileRepo.getUserProfile(userId)).thenAnswer((_) async => createValidProfile(userId));
-      when(mockPointsRepo.getUserPoints(userId)).thenAnswer((_) async => UserPoints(userId: userId, totalPoints: 100000, availablePoints: 100000, currentStreak: 1, dailyMessageCount: 0, lastUpdated: DateTime.now(), signupDate: DateTime.now()));
-      fakeTrustRepo.setTrustData(TrustData(uid: userId, trustScore: 70, isVerified: true, vouchCount: 5, lastUpdated: DateTime.now()));
+      when(
+        mockProfileRepo.getUserProfile(userId),
+      ).thenAnswer((_) async => createValidProfile(userId));
+      when(mockPointsRepo.getUserPoints(userId)).thenAnswer(
+        (_) async => UserPoints(
+          userId: userId,
+          totalPoints: 100000,
+          availablePoints: 100000,
+          currentStreak: 1,
+          dailyMessageCount: 0,
+          lastUpdated: DateTime.now(),
+          signupDate: DateTime.now(),
+        ),
+      );
+      fakeTrustRepo.setTrustData(
+        TrustData(
+          uid: userId,
+          trustScore: 70,
+          isVerified: true,
+          vouchCount: 5,
+          lastUpdated: DateTime.now(),
+        ),
+      );
 
       // Only 5 family members
-      final relationshipsRef = fakeFirestore.collection('users').doc(userId).collection('relationships');
+      final relationshipsRef = fakeFirestore
+          .collection('users')
+          .doc(userId)
+          .collection('relationships');
       for (int i = 0; i < 5; i++) {
         await relationshipsRef.add({'type': 'Sister', 'status': 'active'});
       }
@@ -197,8 +278,10 @@ void main() {
     const userId = 'user123';
 
     test('streamMembership should emit membership updates', () async {
-      final membershipRef = fakeFirestore.collection('emergency_fund_memberships').doc(userId);
-      
+      final membershipRef = fakeFirestore
+          .collection('emergency_fund_memberships')
+          .doc(userId);
+
       final membership = EmergencyFundMembership(
         userId: userId,
         country: 'US',
@@ -206,12 +289,17 @@ void main() {
         joinedDate: DateTime.now(),
         annualContribution: 100,
         supportNumber: '12345',
-        nextPaymentDate: DateTime.now().add(const Duration(days: 365)), // Ensure this is set for test consistency
+        nextPaymentDate: DateTime.now().add(
+          const Duration(days: 365),
+        ), // Ensure this is set for test consistency
       );
 
       await membershipRef.set(membership.toMap());
 
-      expect(service.streamMembership(userId), emits(isA<EmergencyFundMembership>()));
+      expect(
+        service.streamMembership(userId),
+        emits(isA<EmergencyFundMembership>()),
+      );
     });
 
     test('requestProxyAndJoin should create pending membership', () async {
@@ -222,7 +310,10 @@ void main() {
         coveredFamilyMembers: ['fam1', 'fam2'],
       );
 
-      final doc = await fakeFirestore.collection('emergency_fund_memberships').doc(userId).get();
+      final doc = await fakeFirestore
+          .collection('emergency_fund_memberships')
+          .doc(userId)
+          .get();
       expect(doc.exists, true);
       final data = doc.data()!;
       expect(data['status'], MembershipStatus.pending_proxy.name);
@@ -239,13 +330,17 @@ void main() {
         description: 'Medical emergency',
       );
 
-      final snapshot = await fakeFirestore.collection('emergency_fund_claims').get();
+      final snapshot = await fakeFirestore
+          .collection('emergency_fund_claims')
+          .get();
       expect(snapshot.docs.length, 1);
       final data = snapshot.docs.first.data();
-      expect(data['type'], 'medical'); // stored as string name of enum usually, check model
+      expect(
+        data['type'],
+        'medical',
+      ); // stored as string name of enum usually, check model
       expect(data['userId'], userId);
       expect(data['beneficiaryName'], 'Beneficiary');
     });
   });
-
 }

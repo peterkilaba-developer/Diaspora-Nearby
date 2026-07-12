@@ -1,102 +1,89 @@
 # Contributing to Diaspora Nearby
 
-Thank you for your interest in contributing to Diaspora Nearby! We welcome all contributions that help improve this project.
+Thank you for helping improve Diaspora Nearby. This repository uses a staged promotion workflow so features can be integrated, validated, and released deliberately.
 
-## Code of Conduct
+## Source of Truth
 
-Please be respectful and professional in all interactions within this project.
+Before changing product behavior, review the `conductor/` directory:
 
-## Project Source of Truth: Conductor
+- [CONDUCTOR.md](conductor/CONDUCTOR.md)
+- [product.md](conductor/product.md)
+- [tech-stack.md](conductor/tech-stack.md)
+- [tracks.md](conductor/tracks.md)
+- [workflow.md](conductor/workflow.md)
 
-> **⚠️ IMPORTANT**: Before contributing, review the [`conductor/`](conductor/) directory.
+When markdown files disagree, treat the codebase, tests, and conductor files as authoritative.
 
-The conductor system is our project's **authoritative source of truth**:
-- **[CONDUCTOR.md](conductor/CONDUCTOR.md)** - Approved changes & core instructions
-- **[product.md](conductor/product.md)** - Product vision & features
-- **[tech-stack.md](conductor/tech-stack.md)** - Technology inventory
-- **[tracks.md](conductor/tracks.md)** - Development progress
-- **[workflow.md](conductor/workflow.md)** - Development guidelines
+## Branch Flow
 
-**Key Principle**: Always refer to the codebase and conductor files for current logic. Other markdown documentation may be outdated.
+Long-lived branches:
 
+- `dev`: integration branch and default branch.
+- `staging`: release-candidate validation branch.
+- `production`: production-ready branch.
+- `main`: legacy branch retained for history.
 
-## How to Contribute
+Short-lived branches:
 
-### Reporting Bugs
-If you find a bug, please create an issue on GitHub with:
-- A clear, descriptive title.
-- Steps to reproduce the issue.
-- Expected vs. actual behavior.
-- Screenshots if applicable.
+- `feature/<name>` targets `dev`.
+- `bugfix/<name>` targets `dev`.
+- `release/<version>` targets `staging`.
+- `hotfix/<name>` targets `staging` or `production`, depending on urgency.
 
-### Suggesting Enhancements
-We love new ideas! Please open an issue to discuss any major enhancements before starting work.
-
-### Git Flow Workflow
-
-We follow a **Git Flow** strategy with these branches:
-
-#### Core Branches
-- **`main`** - Production-ready code (protected, PR only)
-- **`develop`** - Integration branch (default working branch)
-
-#### Working Branches
-- **`feature/*`** - New features (branch from `develop`)
-- **`bugfix/*`** - Bug fixes (branch from `develop`)
-- **`hotfix/*`** - Critical fixes (branch from `main`)
-
-#### Workflow Steps
+Example:
 
 ```bash
-# 1. Start new work
-git checkout develop
-git pull origin develop
-git checkout -b feature/your-feature-name
-
-# 2. Commit your changes
-git add .
-git commit -m "feat: describe your change"
-
-# 3. Keep updated with develop
 git fetch origin
-git rebase origin/develop
-
-# 4. Push and create PR
-git push origin feature/your-feature-name
-# Create PR targeting 'develop'
+git switch dev
+git pull --ff-only origin dev
+git switch -c feature/your-feature-name
 ```
 
-#### Commit Convention
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `docs:` - Documentation
-- `refactor:` - Code restructuring
-- `test:` - Testing
-- `chore:` - Build/tooling
+## Commit Convention
 
-### Before Submitting PR
-1. Run `flutter analyze` (must pass)
-2. Run `flutter test` (all tests must pass)
-3. Use `dart format .` for code formatting
-4. Write tests for new features (see [Testing Guide](test/README.md))
+Use clear conventional prefixes:
 
-### Testing Requirements
+- `feat:` new feature
+- `fix:` bug fix
+- `docs:` documentation
+- `refactor:` code restructuring
+- `test:` tests
+- `ci:` CI or workflow changes
+- `chore:` build, tooling, or maintenance
 
-All new code should include appropriate tests:
-- **Services & Repositories** - Unit tests required
-- **Widgets** - Widget tests for complex components
-- **New Features** - Integration tests for critical flows
+## Pull Requests
 
-See our comprehensive [Testing Guide](test/README.md) for:
-- How to write unit, widget, and integration tests
-- Using test utilities and mocks
-- Best practices and examples
+Before opening a PR:
 
-## Development Setup
+- Confirm the branch target follows the branch flow above.
+- Run the checks relevant to your change.
+- Add or update tests for changed behavior.
+- Update `.env.example` files when adding environment variables.
+- Do not commit secrets, signing material, package directories, generated caches, or local diagnostic dumps.
 
-See the [README.md](README.md) for installation and setup instructions.
+## Validation
 
-### Coding Standards
-- Use `dart format` for consistent code formatting.
-- Follow the official [Dart style guide](https://dart.dev/guides/language/effective-dart/style).
-- Ensure all new widgets have clear documentation and follow the existing theme.
+Common checks:
+
+```bash
+dart format --set-exit-if-changed lib test integration_test scripts
+flutter analyze
+flutter test
+node scripts/check-repo-hygiene.js
+```
+
+Area-specific checks:
+
+```bash
+cd functions && npm run lint && npm audit --omit=dev --audit-level=high
+cd firestore-rules-test && npm test
+cd blockchain && npm run compile && npm test && npm audit --omit=dev --audit-level=high
+```
+
+## Release Promotions
+
+- Promote `dev` to `staging` only after CI is green and the release scope is approved.
+- Promote `staging` to `production` only after acceptance testing and rollback planning.
+- Back-merge production hotfixes into `dev`.
+
+See [docs/enterprise-readiness.md](docs/enterprise-readiness.md) for the release gate checklist.

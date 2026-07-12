@@ -118,7 +118,9 @@ class _OverviewTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.4,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -962,7 +964,9 @@ class _ClaimsTabState extends ConsumerState<_ClaimsTab> {
           }
           return ListView.builder(
             padding: EdgeInsets.fromLTRB(
-              16, 16, 16,
+              16,
+              16,
+              16,
               MediaQuery.of(context).padding.bottom + 80,
             ),
             itemCount: claims.length,

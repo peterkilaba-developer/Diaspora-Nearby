@@ -26,9 +26,7 @@ class DSPTransferMessageContent extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     // Asset-specific accent color
-    final accentColor = isToken
-        ? AppTheme.tokenColor
-        : AppTheme.dspColor;
+    final accentColor = isToken ? AppTheme.tokenColor : AppTheme.dspColor;
 
     return Container(
       width: 240,

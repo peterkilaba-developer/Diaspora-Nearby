@@ -2,6 +2,7 @@
 ///
 /// Run with: dart test test/valuation_service_test.dart
 library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:diaspora_nearby/features/dsp/services/valuation_service.dart';
 
@@ -92,10 +93,7 @@ void main() {
         fiatGdpUsd: 0.0,
       );
 
-      expect(
-        someBurn.impliedValueUsd,
-        greaterThan(noBurn.impliedValueUsd),
-      );
+      expect(someBurn.impliedValueUsd, greaterThan(noBurn.impliedValueUsd));
       expect(someBurn.deflationRatio, greaterThan(0.0));
     });
 

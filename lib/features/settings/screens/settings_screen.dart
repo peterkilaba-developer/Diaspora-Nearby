@@ -131,8 +131,7 @@ class SettingsScreen extends ConsumerWidget {
                               );
                             }
                           }
-                          SharingService.instance
-                              .shareApp(referralCode: code);
+                          SharingService.instance.shareApp(referralCode: code);
                         } catch (e) {
                           debugPrint('Error getting referral code: $e');
                           SharingService.instance.shareApp();
@@ -511,11 +510,13 @@ class SettingsScreen extends ConsumerWidget {
                         ctx,
                         label: 'Android',
                         icon: LucideIcons.smartphone,
-                        selected: selectedPlatform == 'android' ||
+                        selected:
+                            selectedPlatform == 'android' ||
                             selectedPlatform == 'both',
                         onTap: () => setState(() {
-                          selectedPlatform =
-                              selectedPlatform == 'android' ? 'both' : 'android';
+                          selectedPlatform = selectedPlatform == 'android'
+                              ? 'both'
+                              : 'android';
                         }),
                       ),
                       const SizedBox(width: 8),
@@ -523,11 +524,13 @@ class SettingsScreen extends ConsumerWidget {
                         ctx,
                         label: 'iOS',
                         icon: LucideIcons.tablet,
-                        selected: selectedPlatform == 'ios' ||
+                        selected:
+                            selectedPlatform == 'ios' ||
                             selectedPlatform == 'both',
                         onTap: () => setState(() {
-                          selectedPlatform =
-                              selectedPlatform == 'ios' ? 'both' : 'ios';
+                          selectedPlatform = selectedPlatform == 'ios'
+                              ? 'both'
+                              : 'ios';
                         }),
                       ),
                       const SizedBox(width: 8),
@@ -572,12 +575,12 @@ class SettingsScreen extends ConsumerWidget {
                               .collection('app_testers')
                               .doc(email)
                               .set({
-                            'email': email,
-                            'platform': selectedPlatform,
-                            'userId': currentUserId,
-                            'signedUpAt': FieldValue.serverTimestamp(),
-                            'status': 'pending',
-                          });
+                                'email': email,
+                                'platform': selectedPlatform,
+                                'userId': currentUserId,
+                                'signedUpAt': FieldValue.serverTimestamp(),
+                                'status': 'pending',
+                              });
 
                           if (ctx.mounted) {
                             Navigator.of(ctx).pop();
@@ -627,9 +630,7 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  SizedBox(
-                    height: 16 + MediaQuery.of(ctx).padding.bottom,
-                  ),
+                  SizedBox(height: 16 + MediaQuery.of(ctx).padding.bottom),
                 ],
               ),
             );

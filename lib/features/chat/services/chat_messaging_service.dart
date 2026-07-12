@@ -184,24 +184,9 @@ class ChatMessagingService {
         'updatedAt': now,
       };
 
-      if (targetParticipants.isNotEmpty) {
-        chatDocUpdate['participants'] = targetParticipants;
-      }
-
-      // Ensure type is set
-      if (chatId.startsWith('direct_')) {
-        chatDocUpdate['type'] = 'direct';
-      } else if (chatId.startsWith('chat_') ||
-          chatId.startsWith('home_') ||
-          chatId.startsWith('host_') ||
-          chatId.startsWith('past_') ||
-          chatId == 'global_community') {
-        chatDocUpdate['type'] = 'community';
-      } else if (chatId.startsWith('event_')) {
-        chatDocUpdate['type'] = 'event';
-      } else if (chatId.startsWith('org_')) {
-        chatDocUpdate['type'] = 'organization';
-      }
+      // Message delivery must not also repair chat schema fields such as
+      // participants/type. Legacy users may be authorized through userChats,
+      // while those unrelated chat-document changes are correctly denied.
 
       // [FIX] Use WriteBatch — all writes in a single network round-trip
       final batch = _firestore.batch();
@@ -806,11 +791,7 @@ class ChatMessagingService {
       'senderHomeCountryCode': homeCountryCode,
       'content': messageContent,
       'type': 'location',
-      'location': {
-        'lat': latitude,
-        'lng': longitude,
-        'address': address,
-      },
+      'location': {'lat': latitude, 'lng': longitude, 'address': address},
       'timestamp': now,
       'status': 'sent',
     };

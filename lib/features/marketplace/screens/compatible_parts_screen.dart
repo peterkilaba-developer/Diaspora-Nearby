@@ -221,7 +221,9 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
       onRefresh: _fetchParts,
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(
-          16, 16, 16,
+          16,
+          16,
+          16,
           16 + MediaQuery.of(context).padding.bottom,
         ),
         itemCount: parts.length,

@@ -5,9 +5,7 @@ class TelegramUtils {
   /// Share text via Telegram (no specific recipient).
   /// Tries the Telegram app first, then falls back to web.
   static Future<bool> shareText(String message) async {
-    final appUrl = Uri.parse(
-      'tg://msg?text=${Uri.encodeComponent(message)}',
-    );
+    final appUrl = Uri.parse('tg://msg?text=${Uri.encodeComponent(message)}');
     final webUrl = Uri.parse(
       'https://t.me/share/url?url=&text=${Uri.encodeComponent(message)}',
     );

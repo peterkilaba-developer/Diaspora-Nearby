@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -61,8 +62,6 @@ class GovernanceService {
       }
     }
 
-
-
     return qualified;
   }
 
@@ -100,15 +99,12 @@ class GovernanceService {
       );
     }
 
-    // 3. Add to role-specific candidate list
-    await repo.addRoleCandidate(unitId, userId, role);
+    // 3. Register candidacy through a protected structural mutation.
+    await FirebaseFunctions.instance
+        .httpsCallable('nominateForGovernanceRole')
+        .call({'unitId': unitId, 'role': role});
 
-    // 4. Ensure election is active (continuous voting = always active)
-    if (!unit.isActiveElection) {
-      await repo.startElection(unitId, 365 * 100); // Effectively permanent
-    }
-
-    // 5. Cast self-vote (Yay)
+    // 4. Cast self-vote (Yay)
     await repo.castRoleVote(
       unitId: unitId,
       voterId: userId,
@@ -117,12 +113,12 @@ class GovernanceService {
       verdict: VoteVerdict.yay,
     );
 
-    // 6. Record HTS activity
+    // 5. Record HTS activity
     await _ref
         .read(trustServiceProvider)
         .recordActivity(userId, HTSActivityType.vote);
 
-    // 7. Send system message to community chat
+    // 6. Send system message to community chat
     await _sendCandidacyAnnouncement(unit, userId, role);
 
     debugPrint(
@@ -218,113 +214,65 @@ class GovernanceService {
         .recordActivity(voterId, HTSActivityType.vote);
 
     // 4. Check if winner can be declared or vote-out applies
-    await _evaluateRoleStatus(unitId, candidateId, role);
+    await _evaluateManagedRoleStatus(unitId, candidateId, role);
 
     debugPrint(
       '✅ $voterId voted $verdict for $candidateId as $role in $unitId',
     );
   }
 
-  /// Evaluate after each vote: promote winner or vote-out losing leader.
-  Future<void> _evaluateRoleStatus(
+  Future<void> _evaluateManagedRoleStatus(
     String unitId,
     String candidateId,
     String role,
   ) async {
-    final repo = _ref.read(governanceRepositoryProvider);
-    final unit = await repo.getGovernanceUnit(unitId);
-    if (unit == null) return;
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('evaluateGovernanceVote')
+        .call({'unitId': unitId, 'candidateId': candidateId, 'role': role});
+    final data = Map<String, dynamic>.from(result.data as Map);
 
-    // Check quorum: 50% of community must have voted on this candidate
-    int totalMembers = 0;
-    if (unit.communityId != null) {
-      final community = await _ref
-          .read(communityRepositoryProvider)
-          .getCommunity(unit.communityId!);
-      totalMembers = community?.memberCount ?? 0;
-    }
-    if (totalMembers < 4) return;
-
-    final quorumTarget = (totalMembers * 0.5).ceil();
-
-    // Check the candidate who just received a vote
-    final summary = await repo.getCandidateVoteSummary(
-      unitId,
-      candidateId,
-      role,
-    );
-
-    if (summary.totalVotes >= quorumTarget && summary.isWinning) {
-      // Candidate has quorum + >50% favorable → promote to council
-      await repo.addCouncilMember(unitId, candidateId, role);
-
-      // [NEW] Add elected leader as admin of the community
-      if (unit.communityId != null) {
-        await FirebaseFirestore.instance
-            .collection('communities')
-            .doc(unit.communityId!)
-            .update({
-          'admins': FieldValue.arrayUnion([candidateId]),
-        });
-      }
-
-      // Award governance achievement
-      final pointsService = _ref.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(
-        candidateId,
-        10000,
-        'Governance Achievement: Elected as ${GovernanceRoles.displayName(role)}',
-      );
+    if (data['promoted'] == true) {
+      await _ref
+          .read(pointsServiceProvider)
+          .awardManualPoints(
+            candidateId,
+            10000,
+            'Governance Achievement: Elected as ${GovernanceRoles.displayName(role)}',
+          );
       await _ref.read(trustServiceProvider).updateTrustForUser(candidateId);
-
-      debugPrint(
-        '🏆 $candidateId won $role in $unitId with '
-        '${summary.yayCount} Yay / ${summary.nayCount} Nay',
-      );
+      debugPrint('$candidateId elected as $role in $unitId.');
     }
 
-    // Vote-out check: if existing leader drops below 50% favorable
-    await checkAndApplyVoteOut(unitId);
+    final removedMembers =
+        (data['removedMembers'] as List<dynamic>? ?? const [])
+            .map((entry) => Map<String, dynamic>.from(entry as Map))
+            .toList();
+    await _announceManagedVoteOuts(unitId, removedMembers);
   }
 
-  // ──────────────────────────────────
-  // VOTE-OUT (Auto-remove sub-50%)
-  // ──────────────────────────────────
+  Future<void> _announceManagedVoteOuts(
+    String unitId,
+    List<Map<String, dynamic>> removedMembers,
+  ) async {
+    final unit = await _ref
+        .read(governanceRepositoryProvider)
+        .getGovernanceUnit(unitId);
+    if (unit?.communityId == null) return;
 
-  /// Check all current council members. If anyone's favorable rate drops
-  /// below 50%, automatically remove them from the council.
-  Future<void> checkAndApplyVoteOut(String unitId) async {
-    final repo = _ref.read(governanceRepositoryProvider);
-    final unit = await repo.getGovernanceUnit(unitId);
-    if (unit == null) return;
+    for (final member in removedMembers) {
+      final memberId = member['userId'] as String?;
+      final role = member['role'] as String?;
+      if (memberId == null || role == null) continue;
 
-    for (final memberId in List<String>.from(unit.councilMembers)) {
-      final role = unit.councilRoles[memberId];
-      if (role == null) continue;
-
-      final summary = await repo.getCandidateVoteSummary(
-        unitId,
-        memberId,
-        role,
-      );
-
-      // Only vote out if there are enough decisive votes and rate < 50%
-      if (summary.decisiveVotes >= 3 && summary.shouldBeVotedOut) {
-        await repo.removeCouncilMember(unitId, memberId);
-
-        // Send chat notification about vote-out
-        if (unit.communityId != null) {
-          try {
-            final chatId = 'community_${unit.communityId}';
-            final roleName = GovernanceRoles.displayName(role);
-            final chatService = _ref.read(chatMessagingServiceProvider);
-            await chatService.sendTextMessage(
-              chatId,
-              '⚠️ A $roleName has been removed from council by community '
-              'vote (favorable rate dropped below 50%). '
-              'The role is now open for new candidates.',
+      try {
+        await _ref
+            .read(chatMessagingServiceProvider)
+            .sendTextMessage(
+              'community_${unit!.communityId}',
+              'A ${GovernanceRoles.displayName(role)} has been removed from '
+                  'council by community vote. The role is now open for candidates.',
               senderIdOverride: 'system',
-              senderNameOverride: '🗳️ Voice of Diaspora',
+              senderNameOverride: 'Voice of Diaspora',
               type: 'system',
               metadata: {
                 'systemType': 'election_vote_out',
@@ -333,15 +281,8 @@ class GovernanceService {
                 'unitId': unitId,
               },
             );
-          } catch (e) {
-            debugPrint('Error sending vote-out notification: $e');
-          }
-        }
-
-        debugPrint(
-          '🚫 $memberId voted out as $role from $unitId '
-          '(${summary.yayCount} Yay / ${summary.nayCount} Nay)',
-        );
+      } catch (e) {
+        debugPrint('Error sending vote-out notification: $e');
       }
     }
   }
@@ -415,7 +356,7 @@ class GovernanceService {
     for (final role in GovernanceRoles.all) {
       final candidates = unit.roleCandidates[role] ?? [];
       for (final candidateId in candidates) {
-        await _evaluateRoleStatus(unitId, candidateId, role);
+        await _evaluateManagedRoleStatus(unitId, candidateId, role);
       }
     }
   }
@@ -580,7 +521,12 @@ class GovernanceService {
           .toList();
 
       for (var unit in units) {
-        await checkAndApplyVoteOut(unit.id);
+        for (final memberId in unit.councilMembers) {
+          final role = unit.councilRoles[memberId];
+          if (role != null) {
+            await _evaluateManagedRoleStatus(unit.id, memberId, role);
+          }
+        }
       }
     }
   }

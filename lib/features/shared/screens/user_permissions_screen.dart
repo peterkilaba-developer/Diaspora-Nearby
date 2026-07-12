@@ -304,8 +304,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed:
-                      (_allPermissionsGranted && !_isProcessing)
+                  onPressed: (_allPermissionsGranted && !_isProcessing)
                       ? _continue
                       : null,
                   style: ElevatedButton.styleFrom(

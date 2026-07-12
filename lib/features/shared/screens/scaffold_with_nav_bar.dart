@@ -34,7 +34,6 @@ class ScaffoldWithNavBar extends ConsumerStatefulWidget {
 
 class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     with WidgetsBindingObserver {
-
   // [PERF FIX] Debounce resume actions — was running location update +
   // background service check + proximity check on EVERY resume (switching
   // apps, returning from notification, etc.). Now cooldown 5 minutes.

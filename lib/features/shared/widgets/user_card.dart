@@ -11,6 +11,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
@@ -276,7 +277,31 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
 
     // Calculate distance and proximity. `null` is a real state — viewer
     // has no location, or target's coords are missing — distinct from "0 km".
-    final double? distance = widget.distanceKm ?? widget.user.distance;
+    // When no caller-supplied distance is provided (e.g. profile-page
+    // connection cards), fall back to computing it locally from the viewer's
+    // profile so the bottom bar shows km + proximity instead of "Unknown / —".
+    double? distance = widget.distanceKm ?? widget.user.distance;
+    if (distance == null) {
+      final viewer = ref.watch(userProfileProvider).value;
+      final myLat =
+          viewer?.currentLocation?.geometry.location.lat ??
+          viewer?.hostLocation.geometry?.location.lat;
+      final myLng =
+          viewer?.currentLocation?.geometry.location.lng ??
+          viewer?.hostLocation.geometry?.location.lng;
+      final theirLat =
+          widget.user.currentLocation?.geometry.location.lat ??
+          widget.user.hostLocation.geometry?.location.lat;
+      final theirLng =
+          widget.user.currentLocation?.geometry.location.lng ??
+          widget.user.hostLocation.geometry?.location.lng;
+      if (myLat != null &&
+          myLng != null &&
+          theirLat != null &&
+          theirLng != null) {
+        distance = calculateDistance(myLat, myLng, theirLat, theirLng);
+      }
+    }
     final proximityLevel = _getProximityLevel(distance);
     final proximityColor = _getProximityColor(proximityLevel, isDark, theme);
     final (distanceValue, distanceUnit) = _formatDistanceMetric(distance);
@@ -785,7 +810,16 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                     color: proximityColor,
                                   ),
                                 ),
-                                if (widget.user.currentLocation != null) ...[
+                                // Show city when we have something to display —
+                                // either a real currentLocation, or a fallback
+                                // from hostLocation (city populated above on
+                                // ~L300). Previously this row was gated on
+                                // currentLocation != null, which hid the
+                                // fallback for connections who haven't opened
+                                // the app since location tracking shipped.
+                                if (widget.user.showCurrentLocationName !=
+                                        false &&
+                                    currentCityDisplay != null) ...[
                                   const SizedBox(width: 8),
                                   Container(
                                     width: 1,
@@ -799,30 +833,24 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        if (widget
-                                                    .user
-                                                    .showCurrentLocationName !=
-                                                false &&
-                                            currentCityDisplay != null) ...[
-                                          const _MovingLogo(),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              currentCityDisplay,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    fontSize: 12,
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                                    decoration:
-                                                        TextDecoration.none,
-                                                  ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                        const _MovingLogo(),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            currentCityDisplay,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  fontSize: 12,
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                  decoration:
+                                                      TextDecoration.none,
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                        ],
+                                        ),
                                       ],
                                     ),
                                   ),

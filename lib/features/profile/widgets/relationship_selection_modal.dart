@@ -34,15 +34,19 @@ class RelationshipSelectionModal extends ConsumerStatefulWidget {
 class _RelationshipSelectionModalState
     extends ConsumerState<RelationshipSelectionModal> {
   final Map<String, List<String>> _relationships = {
-    'Immediate Family (Emergency Fund Eligible)': ['Wife', 'Husband', 'Daughter', 'Son'],
-    'Close Family (Emergency Fund Eligible)': ['Mother', 'Father', 'Sister', 'Brother'],
-    'Extended Family': [
-      'Aunt',
-      'Uncle',
-      'Nephew',
-      'Niece',
-      'Cousin',
+    'Immediate Family (Emergency Fund Eligible)': [
+      'Wife',
+      'Husband',
+      'Daughter',
+      'Son',
     ],
+    'Close Family (Emergency Fund Eligible)': [
+      'Mother',
+      'Father',
+      'Sister',
+      'Brother',
+    ],
+    'Extended Family': ['Aunt', 'Uncle', 'Nephew', 'Niece', 'Cousin'],
   };
 
   static const Set<String> _familyTypes = {

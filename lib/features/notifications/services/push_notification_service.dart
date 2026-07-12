@@ -10,7 +10,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/router.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:diaspora_nearby/features/home/repository/home_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http; // [NEW]
 import 'package:path_provider/path_provider.dart'; // [NEW]
@@ -360,9 +359,7 @@ class PushNotificationService {
       // Show local notification if notification data exists OR if it's a data-only message we recognize
       String? title = notification?.title;
       String? body = notification?.body;
-      String? imageUrl = kIsWeb
-          ? null
-          : notification?.android?.imageUrl;
+      String? imageUrl = kIsWeb ? null : notification?.android?.imageUrl;
 
       // Centralized logic to match ChatCard display exactly
       String? msgType = data['type'];
@@ -482,9 +479,7 @@ class PushNotificationService {
   /// Register FCM token and save to Firestore
   Future<void> registerFCMToken(String userId) async {
     try {
-      final token = await _fcm.getToken(
-        vapidKey: kIsWeb ? _webVapidKey : null,
-      );
+      final token = await _fcm.getToken(vapidKey: kIsWeb ? _webVapidKey : null);
       if (token != null) {
         debugPrint(
           'PushNotificationService: Obtained FCM token, saving to Firestore...',
@@ -710,56 +705,6 @@ class PushNotificationService {
 
   String _encodePayload(Map<String, dynamic> data) {
     return jsonEncode(data);
-  }
-
-  /// Check for nearby compatriots and notify if any
-  Future<void> checkAndNotifyNearbyCompatriots() async {
-    try {
-      final homeRepo = _ref.read(homeRepositoryProvider);
-      final nearbyCompatriots = await homeRepo.getNearbyCompatriots();
-
-      if (nearbyCompatriots.isNotEmpty) {
-        // Filter for users strictly within 999 miles for notification
-        final closeCompatriots = nearbyCompatriots
-            .where((u) => (u.distance ?? 999999) <= 999)
-            .toList();
-
-        if (closeCompatriots.isNotEmpty && !kIsWeb) {
-          final compatriot = closeCompatriots.first;
-          final name = compatriot.firstName;
-          final homeCountry = compatriot.homeCountry ?? 'your home country';
-
-          // Show local notification with safety guard
-          try {
-            await _localNotifications.show(
-              id: compatriot.uid.hashCode,
-              title: 'Diaspora Nearby',
-              body: '$name from $homeCountry is nearby. Connect now!',
-              notificationDetails: const NotificationDetails(
-                android: AndroidNotificationDetails(
-                  'high_importance_channel',
-                  'High Importance Notifications',
-                  icon: '@mipmap/ic_launcher',
-                  largeIcon: DrawableResourceAndroidBitmap(
-                    'ic_launcher_foreground',
-                  ),
-                  priority: Priority.high,
-                  importance: Importance.max,
-                ),
-              ),
-              payload: _encodePayload({
-                'type': 'nearby_compatriot',
-                'userId': compatriot.uid,
-              }),
-            );
-          } catch (e) {
-            debugPrint('Error showing nearby compatriot notification: $e');
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error checking nearby compatriots: $e');
-    }
   }
 
   /// [NEW] Listen for incoming relationship requests and trigger local notification
@@ -2100,7 +2045,7 @@ class PushNotificationService {
                   id: 'trust_verify_$docId'.hashCode,
                   title: 'Identity Verified',
                   body:
-                      '$verifierName has verified your identity. Your PoCT score increased!',
+                      '$verifierName has verified your identity. Your P.o.C.T score increased!',
                   payload: jsonEncode({
                     'type': 'trust_peer_verified',
                     'fromUserId': verifierId,
@@ -2111,7 +2056,7 @@ class PushNotificationService {
                   type: NotificationType.trustPeerVerified,
                   title: 'Identity Verified',
                   body:
-                      '$verifierName has verified your identity. Your PoCT score increased!',
+                      '$verifierName has verified your identity. Your P.o.C.T score increased!',
                   payload: {'fromUserId': verifierId ?? ''},
                   dedupKey: 'trust_verify_$docId',
                 );

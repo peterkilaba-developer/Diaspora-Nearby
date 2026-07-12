@@ -47,7 +47,7 @@
 
 ### Identity & QR
 *   `qr_flutter`: Generating user and organization QRs.
-*   `mobile_scanner`: High-performance QR scanning for PoCT Level 3.
+*   `mobile_scanner`: High-performance QR scanning for P.o.C.T Level 3.
 
 ### File Handling
 *   `image_picker`: Media selection.

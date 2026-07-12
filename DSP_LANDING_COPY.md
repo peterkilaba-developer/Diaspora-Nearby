@@ -15,7 +15,7 @@
 ### **What is $DIASPORA?**
 In the traditional economy, you are just a user. In Diaspora Nearby, you are an **Architect**. 
 
-$DIASPORA is the world's first "Social Equity" asset. It is not something you buy on a whim; it is something you **earn** through Proof of Activity (PoA) and Proof of Community Trust (PoCT). 
+$DIASPORA is the world's first "Social Equity" asset. It is not something you buy on a whim; it is something you **earn** through Proof of Social Activities (P.o.S.A) and Proof of Community Trust (P.o.C.T).
 
 Every time you share a resource, send a message to family back home, book a trip, or start a new trade conversation, you are banking social capital that the world can finally see.
 
@@ -25,10 +25,10 @@ Every time you share a resource, send a message to family back home, book a trip
 ### **The Race to Epoch 1: The Great Reset**
 We are currently in **Epoch 1: The Accumulation Phase**. 
 
-The Diaspora system is tracking every point earned globally. When the community reaches the **1 Million $DIASPORA Benchmark** with **100 Verified Humans**, we trigger **The Great Reset**. 
+The Diaspora system tracks every DSP point distributed globally. When distributed DSP crosses the **1 Million DSP Benchmark**, it triggers **The Great Reset**. Member count is shown as a network-growth benchmark, but it does not gate the TGE.
 
 *   **1:1 Conversion**: Your off-chain points are snapshotted and converted 1:1 into liquid $DIASPORA tokens on the Coinbase L2 Base Blockchain.
-*   **10x Scaling**: Each subsequent Epoch requires 10x more supply and 10x more users, making early participation the most valuable.
+*   **10x Scaling**: Each subsequent Epoch requires 10x more distributed DSP. Member growth is tracked for context, while earned activity drives the TGE.
 *   **Your Advantage**: Those who build their balance *before* the reset own the largest share of the network at the lowest "difficulty."
 
 **Don't wait for the token launch. Build the wealth that justifies it.**
@@ -39,8 +39,8 @@ The Diaspora system is tracking every point earned globally. When the community 
 ### **How to "Mint" Your Social Wealth**
 You don't need a mining rig. You just need to be an active human.
 
-1.  **Proof of Activity (PoA)**: Earn daily for opening the app, messaging in communities, booking travel, and sharing diaspora news. High activity users earn **500–1,500 $DIASPORA per day**.
-2.  **Proof of Community Trust (PoCT)**: Your reputation is your multiplier. Get vouched for by others and act with integrity. 
+1.  **Proof of Social Activities (P.o.S.A)**: Earn daily for opening the app, messaging in communities, booking travel, and sharing diaspora news. High activity users earn **500–1,500 $DIASPORA per day**.
+2.  **Proof of Community Trust (P.o.C.T)**: Your reputation is your multiplier. Get vouched for by others and act with integrity.
 3.  **The 10,000 $DIASPORA Gate**: Reach the 10K milestone to ensure your seat at the TGE table.
 
 ---
@@ -95,7 +95,7 @@ The Epoch 1 milestone is being earned right now. Will you be a **Community Pilla
 ### **How to Earn Your Stake in 3 Taps:**
 1.  **Connect**: Join your Home Country Community Group.
 2.  **Interact**: Share one diaspora news item or send a verified relationship request.
-3.  **Track**: Watch your $DIASPORA balance and PoCT (Trust Score) grow in real-time on your dashboard.
+3.  **Track**: Watch your $DIASPORA balance and P.o.C.T (Trust Score) grow in real-time on your dashboard.
 
 ---
 

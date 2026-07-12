@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:diaspora_nearby/core/utils/location_utils.dart' as location_utils;
+import 'package:diaspora_nearby/core/utils/location_utils.dart'
+    as location_utils;
 
 void main() {
   group('Distance Formatting Tests (Whole Numbers)', () {

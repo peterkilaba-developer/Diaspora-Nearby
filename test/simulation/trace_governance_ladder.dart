@@ -1,4 +1,3 @@
-
 void main() {
   print('============================================================');
   print('DIASPORA NEARBY: GOVERNANCE LADDER TRACE');
@@ -23,24 +22,28 @@ void main() {
   print('  Discovery: Searching signers of parent country TZ...');
   print('  Candidate Pool from Towns: $tzPool');
   print('  Selected (Quota: 1 per Town): $tzWinners');
-  print('  * TGE Safeguard: ${tzWinners.length < 3 ? "LOCKED (Need 3 pillars in Council for Treasury)" : "UNLOCKED"}\n');
+  print(
+    '  * TGE Safeguard: ${tzWinners.length < 3 ? "LOCKED (Need 3 pillars in Council for Treasury)" : "UNLOCKED"}\n',
+  );
 
   // 3. CONTINENTAL TIER: Africa selects 1 from each country
   final keWinners = ['NAI-01']; // Kenya selected 1 from Nairobi
-  
+
   final africaPool = [...tzWinners, ...keWinners];
   final africaWinners = ['ARU-01', 'NAI-01']; // Reps from TZ and KE
 
   print('STEP 3: Continental Council (Africa)');
   print('  Candidate Pool from Countries: $africaPool');
   print('  Selected (Quota: 1 per Country): $africaWinners');
-  print('  * TGE Safeguard: ${africaWinners.length < 3 ? "LOCKED (Need 3 pillars)" : "UNLOCKED"}\n');
+  print(
+    '  * TGE Safeguard: ${africaWinners.length < 3 ? "LOCKED (Need 3 pillars)" : "UNLOCKED"}\n',
+  );
 
   // 4. GLOBAL TIER: Global selects 1 from each continent
   // Pool for Global = [AF-winners, EU-winners, AS-winners...]
   final euWinners = ['LON-01', 'PAR-02', 'BER-03'];
   final globalPool = [...africaWinners, ...euWinners];
-  
+
   // Winners (Simulated 1 from each child)
   final globalCouncil = ['ARU-01', 'NAI-01', 'LON-01', 'PAR-02', 'BER-03'];
 
