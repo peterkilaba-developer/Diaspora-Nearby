@@ -1,5 +1,10 @@
-const { expect } = require("chai");
-const { ethers, upgrades } = require("hardhat");
+import { expect } from "chai";
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
     let token, tgeController;
@@ -92,7 +97,7 @@ describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
         it("Should revert for non-oracle callers", async function () {
             await expect(
                 tgeController.connect(user1).mintEpochSupply(EPOCH_1_SUPPLY)
-            ).to.be.reverted;
+            ).to.revert(ethers);
         });
     });
 
@@ -219,7 +224,7 @@ describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
                     [ethers.parseUnits("100", DECIMALS)],
                     [100]
                 )
-            ).to.be.reverted;
+            ).to.revert(ethers);
         });
     });
 

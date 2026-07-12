@@ -1,5 +1,10 @@
-const { expect } = require("chai");
-const { ethers, upgrades } = require("hardhat");
+import { expect } from "chai";
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 /**
  * Tests for DiasporaTGEControllerV2.
@@ -72,7 +77,7 @@ describe("DiasporaTGEControllerV2", function () {
     });
 
     it("initializeV2 can only be called once", async function () {
-      await expect(tge.initializeV2(WELCOME_CAP)).to.be.reverted;
+      await expect(tge.initializeV2(WELCOME_CAP)).to.revert(ethers);
     });
 
     it("admin can tune the cap with setMaxWelcomeBonusPerRecipient", async function () {
@@ -81,7 +86,7 @@ describe("DiasporaTGEControllerV2", function () {
     });
 
     it("non-admin cannot tune the cap", async function () {
-      await expect(tge.connect(attacker).setMaxWelcomeBonusPerRecipient(500n * ONE)).to.be.reverted;
+      await expect(tge.connect(attacker).setMaxWelcomeBonusPerRecipient(500n * ONE)).to.revert(ethers);
     });
   });
 
@@ -197,7 +202,7 @@ describe("DiasporaTGEControllerV2", function () {
         tge.connect(attacker).distributeWelcomeBonus(
           user1.address, 1000n * ONE, [], [], ROOT_A
         )
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
 
     it("emits WelcomeBonusDistributed with full distribution", async function () {

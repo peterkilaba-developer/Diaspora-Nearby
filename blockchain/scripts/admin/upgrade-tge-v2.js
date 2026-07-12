@@ -34,7 +34,12 @@
  * Usage:
  *   npx hardhat run scripts/admin/upgrade-tge-v2.js --network base-mainnet
  */
-const { ethers, upgrades } = require("hardhat");
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 const TGE_PROXY = "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45";
 const WELCOME_CAP = ethers.parseUnits("1000", 18); // 1000 DIASPORA per user (matches landing-page tokenomics)

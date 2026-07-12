@@ -1,8 +1,12 @@
-const admin = require("firebase-admin");
-const { ethers } = require("hardhat");
-require("dotenv").config();
+import admin from "firebase-admin";
+import hre from "hardhat";
+import { createRequire } from "node:module";
+import "dotenv/config";
 
 // Initialize Firebase Admin
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const require = createRequire(import.meta.url);
 const serviceAccount = require("../../tools/admin-scripts/service-account-key.json");
 if (!admin.apps.length) {
     admin.initializeApp({

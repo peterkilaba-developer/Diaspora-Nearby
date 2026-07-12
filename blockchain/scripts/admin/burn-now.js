@@ -1,4 +1,7 @@
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 /**
  * Step 2: Burn the 120 $DIASPORA now sitting in deployer's wallet.

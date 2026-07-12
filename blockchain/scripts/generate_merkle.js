@@ -1,6 +1,6 @@
-const { MerkleTree } = require("merkletreejs");
-const keccak256 = require("keccak256");
-const fs = require("fs");
+import { MerkleTree } from "merkletreejs";
+import keccak256 from "keccak256";
+import fs from "node:fs";
 
 /**
  * Generates a Merkle Tree from a snapshot of users and their DSP balances.
