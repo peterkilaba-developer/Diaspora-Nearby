@@ -51,7 +51,31 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
+        resValue("string", "app_name", "Diaspora Nearby")
+        manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = true
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+    }
+
+    flavorDimensions += "environment"
+
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "Diaspora Nearby Dev")
+            manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = false
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            resValue("string", "app_name", "Diaspora Nearby Staging")
+            manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = false
+        }
+        create("production") {
+            dimension = "environment"
+            resValue("string", "app_name", "Diaspora Nearby")
+            manifestPlaceholders["DEEPLINK_AUTO_VERIFY"] = true
+        }
     }
 
     signingConfigs {
