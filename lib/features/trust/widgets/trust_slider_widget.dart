@@ -4,7 +4,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
-import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/shared/utils/app_snackbar.dart';
 import 'package:diaspora_nearby/features/shared/utils/loading_mixin.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
