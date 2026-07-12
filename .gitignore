@@ -137,8 +137,14 @@ output.txt
 output2.txt
 diff*.txt
 fix_*.dart
+fix_*.ps1
+fix_*.py
 restore_*.dart
+restore_*.ps1
+restore_*.py
 rewrite_*.dart
+rewrite_*.ps1
+rewrite_*.py
 replace_*.dart
 replace_*.py
 
