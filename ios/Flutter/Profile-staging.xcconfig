@@ -1,0 +1,6 @@
+#include "Release.xcconfig"
+
+APP_DISPLAY_NAME=Diaspora Nearby Staging
+APP_ENV=staging
+FLUTTER_TARGET=lib/main_staging.dart
+APP_BUNDLE_ID=com.diasporanearby.diasporaFlutter.staging

@@ -49,6 +49,8 @@ cd ../blockchain && npm ci
 Do not commit local Firebase config or service-account material.
 
 - Put `google-services.json` in `android/app/` locally.
+- For Android flavors, put environment-specific copies in `android/app/src/dev/`,
+  `android/app/src/staging/`, and `android/app/src/production/`.
 - Put `GoogleService-Info.plist` in `ios/Runner/` locally.
 - Keep local `.env` files out of git.
 - Document new environment variables in the matching `.env.example`.
@@ -56,8 +58,12 @@ Do not commit local Firebase config or service-account material.
 ### Run
 
 ```bash
-flutter run
+flutter run --flavor dev -t lib/main_dev.dart
+flutter run --flavor staging -t lib/main_staging.dart
+flutter run --flavor production -t lib/main_production.dart
 ```
+
+See [docs/app-flavors.md](docs/app-flavors.md) for package IDs, bundle IDs, and release commands.
 
 ## Validation
 

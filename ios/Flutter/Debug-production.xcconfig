@@ -1,0 +1,6 @@
+#include "Debug.xcconfig"
+
+APP_DISPLAY_NAME=Diaspora Nearby
+APP_ENV=production
+FLUTTER_TARGET=lib/main_production.dart
+APP_BUNDLE_ID=com.diasporanearby.diasporaFlutter
