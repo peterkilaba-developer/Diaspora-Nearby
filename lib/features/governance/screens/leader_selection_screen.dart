@@ -424,7 +424,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                   isMet: trustData?.isCouncilEligible ?? false,
                 ),
                 _buildEligibilityCriterion(
-                  'PoCT Score ≥ 90',
+                  'P.o.C.T Score ≥ 90',
                   isMet: (trustData?.trustScore ?? 0) >= 90,
                 ),
               ],
@@ -667,7 +667,7 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               message:
                   'No members currently meet all eligibility criteria. '
                   'Members must be on the app for 100+ days, be an admin of a '
-                  'group chat with 100+ members, and have a PoCT score of 90+.',
+                  'group chat with 100+ members, and have a P.o.C.T score of 90+.',
             );
           }
 
@@ -1279,7 +1279,7 @@ class _LeaderTile extends ConsumerWidget {
                               Text(
                                 isSigner
                                     ? 'Treasury Key Holder'
-                                    : '${up?.trustScore ?? 0} PoCT',
+                                    : '${up?.trustScore ?? 0} P.o.C.T',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: isSigner
@@ -1510,7 +1510,7 @@ class _QualifiedCandidateTile extends ConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${up?.trustScore ?? 0} PoCT · Qualified',
+                                '${up?.trustScore ?? 0} P.o.C.T · Qualified',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface.withValues(
