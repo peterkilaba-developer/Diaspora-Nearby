@@ -27,7 +27,7 @@ node scripts/generate-wallet.js
 node scripts/audit-supply.js
 ```
 
-See `scripts/` for read-only / setup tooling and `hardhat.config.js` for network configs.
+See `scripts/` for read-only / setup tooling and `hardhat.config.ts` for network configs.
 
 ### ⚠️ Dangerous admin scripts — `scripts/admin/`
 

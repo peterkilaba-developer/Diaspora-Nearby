@@ -28,7 +28,10 @@
  *   intentional. For a burn-residue sweep, use a one-off `transferToken`
  *   call instead (see manual instructions printed by this script).
  */
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 const TOKEN_ADDRESS = "0x55d7e7d006938A15082752225ED44Fd130B87735";
 const FACTORY_ADDRESS = "0x9cF797cf332595c00410fc4ee9FdEe5C59501945";

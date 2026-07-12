@@ -4,7 +4,7 @@
  * Prerequisites:
  *   - Set BASESCAN_API_KEY in blockchain/.env
  *     (get one free at https://basescan.org/myapikey)
- *   - hardhat-etherscan must be configured for `base-mainnet` in hardhat.config.js
+ *   - Hardhat Verify must be configured for `base-mainnet` in hardhat.config.ts
  *
  * The PROXY contracts are auto-detected by Basescan ("Source Code (Proxy)" badge),
  * but the IMPLEMENTATION contracts they delegate to are separate and need explicit
@@ -13,7 +13,11 @@
  * Usage:
  *   npx hardhat run scripts/admin/verify-impls.js --network base-mainnet
  */
-const { run, ethers } = require("hardhat");
+import hre from "hardhat";
+import { verifyContract } from "@nomicfoundation/hardhat-verify/verify";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 const LIVE_TOKEN = "0x55d7e7d006938A15082752225ED44Fd130B87735";
 const LIVE_TGE = "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45";
@@ -27,7 +31,7 @@ async function getImpl(proxy) {
 async function verifyOnce(address, label) {
   console.log(`\n→ Verifying ${label} impl at ${address}`);
   try {
-    await run("verify:verify", { address, constructorArguments: [] });
+    await verifyContract({ address, constructorArgs: [] }, hre);
     console.log(`  ✅ ${label} verified`);
   } catch (e) {
     if (e.message.toLowerCase().includes("already verified")) {

@@ -1,5 +1,10 @@
-const { expect } = require("chai");
-const { ethers, upgrades } = require("hardhat");
+import { expect } from "chai";
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 describe("DiasporaToken Proxy", function () {
     let DiasporaToken;
@@ -56,7 +61,7 @@ describe("DiasporaToken Proxy", function () {
 
             // Non-upgrader fails
             await expect(upgrades.upgradeProxy(await token.getAddress(), DiasporaTokenV2.connect(addr1)))
-                .to.be.reverted;
+                .to.revert(ethers);
 
             // Upgrader succeeds
             const upgraded = await upgrades.upgradeProxy(await token.getAddress(), DiasporaTokenV2.connect(upgrader));
