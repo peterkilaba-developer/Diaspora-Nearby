@@ -85,7 +85,7 @@ class TrustVouchModal extends ConsumerWidget {
             ),
           ),
 
-          // --- Title row with PoCT + DSP stats ---
+          // --- Title row with P.o.C.T + DSP stats ---
           Padding(
             padding: const EdgeInsets.only(
               left: AppTheme.pageHorizontalPadding,
@@ -106,7 +106,7 @@ class TrustVouchModal extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // PoCT + DSP inline stats
+                      // P.o.C.T + DSP inline stats
                       Row(
                         children: [
                           Icon(
@@ -123,7 +123,8 @@ class TrustVouchModal extends ConsumerWidget {
                           const SizedBox(width: 4),
                           Text(
                             trustAsync.when(
-                              data: (t) => '${t?.trustScore.toInt() ?? 0} PoCT',
+                              data: (t) =>
+                                  '${t?.trustScore.toInt() ?? 0} P.o.C.T',
                               loading: () => '--',
                               error: (_, _) => '--',
                             ),
@@ -231,13 +232,13 @@ class TrustVouchModal extends ConsumerWidget {
                         _buildExplainerRow(
                           context,
                           LucideIcons.lock,
-                          'Full Trust -- above 90 -- your 1,000 DSP is staked instead of free',
+                          'No Trust (1-10) or Full Trust (91-100) -- your 1,000 DSP is staked instead of free',
                         ),
                         const SizedBox(height: 8),
                         _buildExplainerRow(
                           context,
                           LucideIcons.trendingUp,
-                          'Full Trust stakers earn +100 DSP when others agree',
+                          'Stakers earn +100 DSP when others agree (same tier)',
                         ),
                         const SizedBox(height: 8),
                         _buildExplainerRow(
@@ -249,7 +250,7 @@ class TrustVouchModal extends ConsumerWidget {
                         _buildExplainerRow(
                           context,
                           LucideIcons.trophy,
-                          'Every 10 full-trust voters earns +1 PoCT for the trusted user',
+                          'Every 10 Net Vouches (Full Trust minus No Trust) earns ±1 P.o.C.T for the trusted user',
                         ),
                       ],
                     ),

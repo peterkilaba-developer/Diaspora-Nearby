@@ -63,6 +63,16 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
   vouchedBy:
       (json['vouchedBy'] as List<dynamic>?)?.map((e) => e as String).toList() ??
       const [],
+  fullTrustVoterIds:
+      (json['fullTrustVoterIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
+  noTrustVoterIds:
+      (json['noTrustVoterIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
   genesisFamilyIds:
       (json['genesisFamilyIds'] as List<dynamic>?)
           ?.map((e) => e as String)
@@ -80,6 +90,16 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
       const [],
   genesisTrustIds:
       (json['genesisTrustIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
+  genesisVerificationIds:
+      (json['genesisVerificationIds'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const [],
+  genesisVouchIds:
+      (json['genesisVouchIds'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ??
       const [],
@@ -125,10 +145,14 @@ Map<String, dynamic> _$TrustDataToJson(TrustData instance) => <String, dynamic>{
   'helpfulnessScore': instance.helpfulnessScore,
   'lastUpdated': instance.lastUpdated.toIso8601String(),
   'vouchedBy': instance.vouchedBy,
+  'fullTrustVoterIds': instance.fullTrustVoterIds,
+  'noTrustVoterIds': instance.noTrustVoterIds,
   'genesisFamilyIds': instance.genesisFamilyIds,
   'genesisFriendIds': instance.genesisFriendIds,
   'genesisQrIds': instance.genesisQrIds,
   'genesisTrustIds': instance.genesisTrustIds,
+  'genesisVerificationIds': instance.genesisVerificationIds,
+  'genesisVouchIds': instance.genesisVouchIds,
 };
 
 const _$TrustLevelEnumMap = {
