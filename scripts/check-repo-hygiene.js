@@ -68,9 +68,14 @@ const textFileExtensions = new Set([
   '.rules',
 ]);
 
+const privateKeyMarker = '-----BEGIN ' + 'PRIVATE KEY-----';
+const serviceAccountPrivateKey = new RegExp(
+  String.raw`"private_key"\s*:\s*"` + privateKeyMarker.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'),
+);
+
 const suspiciousContentPatterns = [
-  { pattern: /-----BEGIN PRIVATE KEY-----/, reason: 'private key block' },
-  { pattern: /"private_key"\s*:\s*"-----BEGIN PRIVATE KEY-----/, reason: 'Firebase service-account private key' },
+  { pattern: new RegExp(privateKeyMarker.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')), reason: 'private key block' },
+  { pattern: serviceAccountPrivateKey, reason: 'Firebase service-account private key' },
 ];
 
 for (const file of trackedFiles) {
