@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/dsp/models/emergency_fund_model.dart';
 import 'package:diaspora_nearby/features/dsp/services/emergency_fund_service.dart';
@@ -540,7 +541,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                     icon: LucideIcons.qrCode,
                     title: '10 In-Person QR Verifications',
                     subtitle: isLoading
-                        ? 'Checking PoCT scans...'
+                        ? 'Checking P.o.C.T scans...'
                         : '${result!.qrScanCount}/${EligibilityResult.requiredQrScans} unique in-person scans',
                     met: isLoading ? null : result!.hasEnoughQrScans,
                   ),
@@ -3047,20 +3048,18 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
       final q = await ref
           .read(emergencyFundServiceProvider)
           .quoteDiasporaContribution();
-      if (mounted) {
+      if (mounted)
         setState(() {
           _quote = q;
           _loadingQuote = false;
         });
-      }
     } catch (e) {
       debugPrint('[EmergencyFund] quote failed, using fallback: $e');
-      if (mounted) {
+      if (mounted)
         setState(() {
           _quote = _fallbackQuote();
           _loadingQuote = false;
         });
-      }
     }
   }
 
@@ -3083,17 +3082,15 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
         widget.onPaid();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         setState(() {
           _error = e.toString();
         });
-      }
     } finally {
-      if (mounted) {
+      if (mounted)
         setState(() {
           _paying = false;
         });
-      }
     }
   }
 

@@ -119,7 +119,7 @@ void main() {
     const userId = 'user123';
 
     // Eligibility model now requires `uniqueQrCount >= 10` from trust_scores
-    // (PoCT in-person QR scans). Seed it for tests that expect eligibility.
+    // (P.o.C.T in-person QR scans). Seed it for tests that expect eligibility.
     Future<void> seedQrScans(int count) async {
       await fakeFirestore.collection('trust_scores').doc(userId).set({
         'uniqueQrCount': count,

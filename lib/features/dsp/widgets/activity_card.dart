@@ -4,7 +4,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 
 /// Reusable activity reward card for the Points System screen.
 ///
-/// Used for both PoA (Proof of Activity) and PoCT (Proof of Community Trust) items.
+/// Used for both P.o.S.A (Proof of Social Activities) and P.o.C.T (Proof of Community Trust) items.
 class ActivityCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -23,7 +23,7 @@ class ActivityCard extends StatelessWidget {
     this.badgeColor = Colors.green,
   });
 
-  /// Factory constructor for PoA activity items.
+  /// Factory constructor for P.o.S.A activity items.
   factory ActivityCard.activity(
     BuildContext context, {
     required String title,
@@ -41,7 +41,7 @@ class ActivityCard extends StatelessWidget {
     );
   }
 
-  /// Factory constructor for PoCT trust items.
+  /// Factory constructor for P.o.C.T trust items.
   factory ActivityCard.trust({
     required String title,
     required String subtitle,

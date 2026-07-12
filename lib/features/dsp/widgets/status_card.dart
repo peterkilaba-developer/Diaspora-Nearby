@@ -12,7 +12,7 @@ class RequirementItem {
 
 /// Reusable status/level card showing progress toward a trust or activity level.
 ///
-/// Used in the Points System screen for both PoA activity levels and PoCT trust levels.
+/// Used in the Points System screen for both P.o.S.A activity levels and P.o.C.T trust levels.
 class StatusCard extends StatelessWidget {
   final String title;
   final TrustLevel level;
