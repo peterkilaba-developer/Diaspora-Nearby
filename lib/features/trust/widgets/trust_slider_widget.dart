@@ -32,6 +32,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
   late double _currentValue;
   double? _previousValue;
   bool _wasFullTrust = false;
+  bool _wasNoTrust = false;
   bool _isLoadingPrevious = true;
 
   @override
@@ -56,6 +57,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
           _currentValue = existingScore;
           _previousValue = existingScore;
           _wasFullTrust = existingScore > 90;
+          _wasNoTrust = existingScore >= 1 && existingScore <= 10;
           _isLoadingPrevious = false;
         });
         return;
@@ -69,29 +71,22 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
   }
 
   Color _getColor(BuildContext context, double value) {
-    // Not vouched — use theme color (white in dark, black in light)
     if (value == 0) return Theme.of(context).colorScheme.onSurface;
-    final level = TrustLevelExtension.fromScore(value);
-    switch (level) {
-      case TrustLevel.lowTrust:
-        return AppTheme.error;
-      case TrustLevel.basicTrust:
-        return Colors.deepOrange;
-      case TrustLevel.mediumTrust:
-        return Colors.amber;
-      case TrustLevel.standardTrust:
-        return Colors.lightGreen;
-      case TrustLevel.highTrust:
-        return AppTheme.accent;
-    }
+    if (value >= 1 && value <= 10) return AppTheme.error;
+    if (value > 90) return AppTheme.accent;
+    return Colors.amber;
   }
 
   String _getLabel(double value) {
+    if (value == 0) return 'Not Rated';
+    if (value >= 1 && value <= 10) return 'No Trust (Staked)';
     if (value > 90) return 'Full Trust (Staked)';
-    return TrustLevelExtension.fromScore(value).displayName;
+    return 'Standard Trust (Free)';
   }
 
   bool get _isFullTrust => _currentValue > 90;
+  bool get _isNoTrust => _currentValue >= 1 && _currentValue <= 10;
+  bool get _isStaked => _isFullTrust || _isNoTrust;
 
   /// Decile band index: [1-10]=0, [11-20]=1, ..., [91-100]=9. Value 0 = -1 (no vote).
   int _getDecile(double value) {
@@ -146,19 +141,20 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
         return;
       }
 
-      final isNowFullTrust = _isFullTrust;
+      final isNowStaked = _isStaked;
+      final wasStakedLocal = _wasFullTrust || _wasNoTrust;
 
-      // If transitioning to full trust but NOT from the stake button, just wait
-      if (isNowFullTrust && !_wasFullTrust && !isStakeConfirm) {
+      // If transitioning to a staked tier but NOT from the stake confirm button, just wait
+      if (isNowStaked && !wasStakedLocal && !isStakeConfirm) {
         return;
       }
 
-      // Show exit confirmation if leaving full trust
-      if (!isNowFullTrust && _wasFullTrust) {
-        final confirmed = await _showExitConfirmation();
+      // Show exit confirmation if leaving a staked tier
+      if (!isNowStaked && wasStakedLocal) {
+        final confirmed = await _showExitConfirmation(_wasFullTrust);
         if (!confirmed) {
           // Revert slider to previous value
-          setState(() => _currentValue = _previousValue ?? 95.0);
+          setState(() => _currentValue = _previousValue ?? 50.0);
           return;
         }
       }
@@ -172,7 +168,8 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
           );
 
       _previousValue = _currentValue;
-      _wasFullTrust = isNowFullTrust;
+      _wasFullTrust = _isFullTrust;
+      _wasNoTrust = _isNoTrust;
 
       if (mounted) {
         if (isStakeConfirm) {
@@ -187,7 +184,9 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
     },
   );
 
-  Future<bool> _showExitConfirmation() async {
+  Future<bool> _showExitConfirmation(bool wasFullTrustLocal) async {
+    final title = wasFullTrustLocal ? 'Remove Full Trust' : 'Remove No Trust';
+    final keepText = wasFullTrustLocal ? 'Keep Full Trust' : 'Keep No Trust';
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -198,7 +197,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
               children: [
                 Icon(LucideIcons.shieldOff, color: Colors.amber.shade700),
                 const SizedBox(width: 8),
-                const Text('Remove Full Trust'),
+                Text(title),
               ],
             ),
             content: const Text(
@@ -207,7 +206,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Keep Full Trust'),
+                child: Text(keepText),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
@@ -262,21 +261,25 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
     }
 
     final color = _getColor(context, _currentValue);
-    final isFullTrust = _isFullTrust;
+    final isStaked = _isStaked;
     final canSubmit = _canSubmit;
     final isAtZero = _currentValue == 0;
     final firstName = widget.displayName?.split(' ').first;
     final String buttonText;
+    final wasStakedLocal = _wasFullTrust || _wasNoTrust;
+
     if (isAtZero && firstName != null) {
       buttonText = 'Vouch for $firstName Trustworthy';
     } else if (isAtZero) {
       buttonText = 'Vouch Trustworthy';
     } else if (!canSubmit) {
       buttonText = 'Slide to a different range to update';
-    } else if (isFullTrust && !_wasFullTrust) {
-      buttonText = 'Trust & Stake 1,000 DSP';
+    } else if (isStaked && !wasStakedLocal) {
+      buttonText = _isNoTrust
+          ? 'Distrust & Stake 1,000 DSP'
+          : 'Trust & Stake 1,000 DSP';
     } else {
-      buttonText = 'Trust';
+      buttonText = 'Update Trust';
     }
 
     return Card(
@@ -300,29 +303,31 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: isFullTrust
-                        ? AppTheme.accent.withValues(alpha: 0.15)
+                    color: isStaked
+                        ? color.withValues(alpha: 0.15)
                         : color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
-                    border: isFullTrust
-                        ? Border.all(color: AppTheme.accent, width: 1.5)
+                    border: isStaked
+                        ? Border.all(color: color, width: 1.5)
                         : null,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (isFullTrust) ...[
-                        const Icon(
-                          LucideIcons.shieldCheck,
+                      if (isStaked) ...[
+                        Icon(
+                          _isNoTrust
+                              ? LucideIcons.shieldAlert
+                              : LucideIcons.shieldCheck,
                           size: 14,
-                          color: AppTheme.accent,
+                          color: color,
                         ),
                         const SizedBox(width: 4),
                       ],
                       Text(
                         _getLabel(_currentValue),
                         style: TextStyle(
-                          color: isFullTrust ? AppTheme.accent : color,
+                          color: color,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -371,7 +376,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                       color: color,
                     ),
                   ),
-                  if (_wasFullTrust && isFullTrust)
+                  if (wasStakedLocal && isStaked)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Row(
@@ -402,7 +407,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                     child: FilledButton(
                       onPressed: canSubmit
                           ? () => _submitRating(
-                              isStakeConfirm: isFullTrust && !_wasFullTrust,
+                              isStakeConfirm: isStaked && !wasStakedLocal,
                             )
                           : null,
                       style: FilledButton.styleFrom(

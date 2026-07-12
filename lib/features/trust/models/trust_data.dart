@@ -60,10 +60,10 @@ class TrustData {
   final int reviewCount;
   final double averageRating;
   final int reportCount; // Negative signal
-  final int blockedByCount; // [NEW] -10 PoCT for every 10 unique blocks
-  final int flaggedMessagesCount; // [NEW] -10 PoCT for every 10 unique flags
+  final int blockedByCount; // [NEW] -10 P.o.C.T for every 10 unique blocks
+  final int flaggedMessagesCount; // [NEW] -10 P.o.C.T for every 10 unique flags
   final int
-  bannedVoucheeCount; // [NEW] -10 PoCT if someone you vouched for is banned
+  bannedVoucheeCount; // [NEW] -10 P.o.C.T if someone you vouched for is banned
 
   // [NEW] Reliability & Helpfulness metrics
   final int attendedEventsCount;
@@ -83,11 +83,11 @@ class TrustData {
   final List<String> awardedQualificationMilestones; // [NEW] Track awards
   final int verifiedCheckInCount;
   final int unresponsiveLiaisonCount;
-  final int rejectedFamilyConnectionsCount; // [NEW] -10 PoCT
-  final int fakeVerificationsCount; // [NEW] -10 PoCT
-  final int eventNoShowCount; // [NEW] -10 PoCT
-  final int reportedFraudCount; // [NEW] -10 PoCT
-  final int referralCount; // [NEW] +1 PoCT per 10 referrals (linear)
+  final int rejectedFamilyConnectionsCount; // [NEW] -10 P.o.C.T
+  final int fakeVerificationsCount; // [NEW] -10 P.o.C.T
+  final int eventNoShowCount; // [NEW] -10 P.o.C.T
+  final int reportedFraudCount; // [NEW] -10 P.o.C.T
+  final int referralCount; // [NEW] +1 P.o.C.T per 10 referrals (linear)
 
   // [NEW] Ledger for already awarded/penalized HTS units (sets of 10)
   final Map<String, int> awardedHtsTracking;
@@ -101,12 +101,17 @@ class TrustData {
 
   // Vouching
   final List<String> vouchedBy; // UIDs of users who vouched for this user
+  final List<String>
+  fullTrustVoterIds; // UIDs of users who gave full trust (90-100)
+  final List<String> noTrustVoterIds; // UIDs of users who gave no trust (0-10)
 
   // [NEW] Genesis Milestone qualifying IDs (deduplicated, max 10 each)
   final List<String> genesisFamilyIds;
   final List<String> genesisFriendIds;
   final List<String> genesisQrIds;
   final List<String> genesisTrustIds;
+  final List<String> genesisVerificationIds;
+  final List<String> genesisVouchIds;
 
   TrustData({
     required this.uid,
@@ -148,10 +153,14 @@ class TrustData {
     this.awardedHtsTracking = const {},
     required this.lastUpdated,
     this.vouchedBy = const [],
+    this.fullTrustVoterIds = const [],
+    this.noTrustVoterIds = const [],
     this.genesisFamilyIds = const [],
     this.genesisFriendIds = const [],
     this.genesisQrIds = const [],
     this.genesisTrustIds = const [],
+    this.genesisVerificationIds = const [],
+    this.genesisVouchIds = const [],
   });
 
   factory TrustData.fromJson(Map<String, dynamic> json) {
@@ -196,10 +205,14 @@ class TrustData {
     double? helpfulnessScore,
     DateTime? lastUpdated,
     List<String>? vouchedBy,
+    List<String>? fullTrustVoterIds,
+    List<String>? noTrustVoterIds,
     List<String>? genesisFamilyIds,
     List<String>? genesisFriendIds,
     List<String>? genesisQrIds,
     List<String>? genesisTrustIds,
+    List<String>? genesisVerificationIds,
+    List<String>? genesisVouchIds,
     int? blockedByCount,
     int? flaggedMessagesCount,
     int? bannedVoucheeCount,
@@ -245,10 +258,15 @@ class TrustData {
       helpfulnessScore: helpfulnessScore ?? this.helpfulnessScore,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       vouchedBy: vouchedBy ?? this.vouchedBy,
+      fullTrustVoterIds: fullTrustVoterIds ?? this.fullTrustVoterIds,
+      noTrustVoterIds: noTrustVoterIds ?? this.noTrustVoterIds,
       genesisFamilyIds: genesisFamilyIds ?? this.genesisFamilyIds,
       genesisFriendIds: genesisFriendIds ?? this.genesisFriendIds,
       genesisQrIds: genesisQrIds ?? this.genesisQrIds,
       genesisTrustIds: genesisTrustIds ?? this.genesisTrustIds,
+      genesisVerificationIds:
+          genesisVerificationIds ?? this.genesisVerificationIds,
+      genesisVouchIds: genesisVouchIds ?? this.genesisVouchIds,
       blockedByCount: blockedByCount ?? this.blockedByCount,
       flaggedMessagesCount: flaggedMessagesCount ?? this.flaggedMessagesCount,
       bannedVoucheeCount: bannedVoucheeCount ?? this.bannedVoucheeCount,

@@ -66,7 +66,7 @@ class _ProfileVerificationModalState
           type = VerificationAlertType.conflict;
           title = 'Conflict of Interest';
         } else if (reason.contains('complete your profile') ||
-            reason.contains('PoCT score') ||
+            reason.contains('P.o.C.T score') ||
             reason.contains('acquired at least')) {
           type = VerificationAlertType.requirements;
           title = 'Requirements Not Met';

@@ -135,7 +135,7 @@ async function performTGE(triggerSource) {
       usersSkipped++;
       continue;
     }
-    
+
     // TGE participation gates:
     //   Every TGE → current-location transparency must be active.
     //   First TGE → additionally require a complete profile and >= 10 unique
@@ -2574,4 +2574,170 @@ exports.retryPendingTGEDeductions = functions
   });
 
 
+// V4 trust mechanics: trust rating staking trigger.
+exports.onVouchWrite = functions.firestore
+  .document("trust_ratings/{ratingId}")
+  .onWrite(async (change, context) => {
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
 
+    if (!afterData) {
+      if (beforeData && beforeData.remainingStake > 0) {
+        await db.collection("user_points").doc(beforeData.fromUserId).set({
+          availablePoints: admin.firestore.FieldValue.increment(beforeData.remainingStake),
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        await db.collection("points_transactions").doc().set({
+          userId: beforeData.fromUserId,
+          amount: beforeData.remainingStake,
+          action: "trust_stake_refund",
+          type: "earn",
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      return null;
+    }
+
+    const ratingId = context.params.ratingId;
+    const fromUserId = afterData.fromUserId;
+    const toUserId = afterData.toUserId;
+    const score = afterData.score;
+
+    const isNowNoTrust = score >= 1 && score <= 10;
+    const isNowFullTrust = score > 90;
+    const isNowStaked = isNowNoTrust || isNowFullTrust;
+
+    const wasNoTrust = beforeData ? (beforeData.score >= 1 && beforeData.score <= 10) : false;
+    const wasFullTrust = beforeData ? (beforeData.score > 90) : false;
+    const wasStaked = wasNoTrust || wasFullTrust;
+
+    const batch = db.batch();
+
+    // 1. First-time vouch reward
+    if (!beforeData) {
+       batch.set(db.collection("user_points").doc(fromUserId), {
+           availablePoints: admin.firestore.FieldValue.increment(1000),
+           totalPoints: admin.firestore.FieldValue.increment(1000),
+           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+       }, {merge: true});
+
+       batch.set(db.collection("points_transactions").doc(), {
+          userId: fromUserId,
+          amount: 1000,
+          action: "trust_vouch_reward",
+          type: "earn",
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+       });
+    }
+
+    // 2. Staking logic
+    let remainingStake = afterData.remainingStake || 0;
+    let stakedAmount = afterData.stakedAmount || 0;
+
+    if (isNowStaked && !wasStaked) {
+       // Deduct 1000 DSP (lock)
+       batch.set(db.collection("user_points").doc(fromUserId), {
+           availablePoints: admin.firestore.FieldValue.increment(-1000),
+           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+       }, {merge: true});
+
+       batch.set(db.collection("points_transactions").doc(), {
+          userId: fromUserId,
+          amount: 1000,
+          action: "trust_stake_locked",
+          type: "spend",
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+       });
+       stakedAmount = 1000;
+       remainingStake = 1000;
+    } else if (!isNowStaked && wasStaked) {
+       // Refund remaining stake
+       if (remainingStake > 0) {
+           batch.set(db.collection("user_points").doc(fromUserId), {
+               availablePoints: admin.firestore.FieldValue.increment(remainingStake),
+               lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+           }, {merge: true});
+           batch.set(db.collection("points_transactions").doc(), {
+               userId: fromUserId,
+               amount: remainingStake,
+               action: "trust_stake_refund",
+               type: "earn",
+               timestamp: admin.firestore.FieldValue.serverTimestamp()
+           });
+       }
+       stakedAmount = 0;
+       remainingStake = 0;
+    }
+
+    let updateVouch = false;
+    if (afterData.remainingStake !== remainingStake || afterData.stakedAmount !== stakedAmount || afterData.isFullTrust !== isNowFullTrust) {
+        updateVouch = true;
+    }
+
+    // 3. Stake Combat
+    if (isNowStaked && remainingStake > 0) {
+        const otherVouchesSnap = await db.collection("trust_ratings")
+            .where("toUserId", "==", toUserId)
+            .get();
+
+        for (const doc of otherVouchesSnap.docs) {
+            const vouch = doc.data();
+            if (vouch.fromUserId === fromUserId) continue;
+
+            const otherIsNoTrust = vouch.score >= 1 && vouch.score <= 10;
+            const otherIsFullTrust = vouch.score > 90;
+            const otherIsStaked = otherIsNoTrust || otherIsFullTrust;
+
+            if (!otherIsStaked || vouch.remainingStake <= 0) continue;
+
+            let agree = false;
+            if ((isNowNoTrust && otherIsNoTrust) || (isNowFullTrust && otherIsFullTrust)) {
+               agree = true;
+            }
+
+            if (agree) {
+                // Award 100 DSP to the other staker
+                batch.set(db.collection("user_points").doc(vouch.fromUserId), {
+                    availablePoints: admin.firestore.FieldValue.increment(100),
+                    totalPoints: admin.firestore.FieldValue.increment(100),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                }, {merge: true});
+                batch.set(db.collection("points_transactions").doc(), {
+                    userId: vouch.fromUserId,
+                    amount: 100,
+                    action: "trust_stake_agreement_reward",
+                    type: "earn",
+                    timestamp: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                // Deduct 100 DSP from the other staker
+                const otherRemaining = vouch.remainingStake - 100;
+                let newScore = vouch.score;
+                let otherIsNowFullTrust = otherIsFullTrust;
+
+                if (otherRemaining <= 0) {
+                    newScore = 50; // Auto-cancel to standard trust
+                    otherIsNowFullTrust = false;
+                }
+
+                batch.update(doc.ref, {
+                    remainingStake: Math.max(0, otherRemaining),
+                    score: newScore,
+                    isFullTrust: otherIsNowFullTrust
+                });
+            }
+        }
+    }
+
+    if (updateVouch) {
+        batch.update(change.after.ref, {
+            stakedAmount: stakedAmount,
+            remainingStake: remainingStake,
+            isFullTrust: isNowFullTrust
+        });
+    }
+
+    await batch.commit();
+    return null;
+  });
