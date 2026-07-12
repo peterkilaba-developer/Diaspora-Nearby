@@ -62,7 +62,7 @@ class UserPoints {
   final List<String> completedExplorationActions; // [FIX] Added missing field
   final String? walletAddress; // [NEW] User's Crypto Wallet Address
   final DateTime? lastCheckInDate; // [NEW]
-  final int? trustScore; // [NEW] Proof of Community Trust (PoCT)
+  final int? trustScore; // [NEW] Proof of Community Trust (P.o.C.T)
   final String? homeCountryCode; // [NEW] For community aggregation
   final Map<String, int>
   lifetimeEarnings; // [NEW] Track total DSP earned per activity

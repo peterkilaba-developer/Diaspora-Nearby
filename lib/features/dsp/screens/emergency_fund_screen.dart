@@ -540,7 +540,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
                     icon: LucideIcons.qrCode,
                     title: '10 In-Person QR Verifications',
                     subtitle: isLoading
-                        ? 'Checking PoCT scans...'
+                        ? 'Checking P.o.C.T scans...'
                         : '${result!.qrScanCount}/${EligibilityResult.requiredQrScans} unique in-person scans',
                     met: isLoading ? null : result!.hasEnoughQrScans,
                   ),

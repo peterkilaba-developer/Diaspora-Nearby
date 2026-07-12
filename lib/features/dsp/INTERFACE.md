@@ -87,7 +87,7 @@ Future<void> syncTreasuryBalances()
   - User profile data for point awards
 
 - **Trust** (`lib/features/trust/`)
-  - Trust score calculation and PoCT milestones
+  - Trust score calculation and P.o.C.T milestones
 
 ### Required From Core
 

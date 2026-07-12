@@ -8,6 +8,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Diaspora Direct Investments Loans screen — shows loan information
@@ -70,13 +71,20 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final communityName = widget.community?.name ?? 'Your Community';
+    final isHome = widget.community?.locationType == 'home';
+    final title = isHome ? 'Home Country DDI Loans' : 'Host Town DDI Loans';
+
+    // Retrieve user trust score
+    final uid = ref.watch(authRepositoryProvider).currentUser?.uid ?? '';
+    final userPoints = ref.watch(userPointsProvider(uid)).value;
+    final trustScore = userPoints?.trustScore ?? 0;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Diaspora Direct Investments Loans',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -91,7 +99,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Hero Header ──
-              _buildHeroHeader(theme, isDark, communityName),
+              _buildHeroHeader(theme, isDark, communityName, isHome),
               const SizedBox(height: 20),
 
               // ── Quick Key Terms ──
@@ -121,7 +129,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               if (!_showApplicationForm)
                 _buildApplyButton(theme, isDark)
               else
-                _buildApplicationForm(theme, isDark),
+                _buildApplicationForm(theme, isDark, isHome, trustScore),
 
               const SizedBox(height: 28),
               _buildApplicationsSection(theme),
@@ -135,7 +143,12 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   }
 
   // ── Hero Header ──────────────────────────────────────────────────────────
-  Widget _buildHeroHeader(ThemeData theme, bool isDark, String communityName) {
+  Widget _buildHeroHeader(
+    ThemeData theme,
+    bool isDark,
+    String communityName,
+    bool isHome,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -157,7 +170,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Diaspora Direct\nInvestments Loans',
+            isHome ? 'Home Country\nDDI Loans' : 'Host Town\nDDI Loans',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 22,
@@ -217,7 +230,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           ),
           const SizedBox(height: 14),
           Text(
-            'Community-powered lending backed by \$DIASPORA tokens. '
+            'Community-powered, interest-free lending backed by \$DIASPORA tokens. '
             'Loans cascade from local → country → continental → global treasury.',
             style: TextStyle(
               fontSize: 13,
@@ -233,7 +246,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               _buildTermBadge(theme, '0%', 'Interest'),
               _buildTermBadge(theme, '\$DIASPORA', 'Collateral'),
               _buildTermBadge(theme, '3–24 mo', 'Repayment'),
-              _buildTermBadge(theme, 'PoCT 91+', 'Required'),
+              _buildTermBadge(theme, 'P.o.C.T 91+', 'Required'),
             ],
           ),
         ],
@@ -307,8 +320,15 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   }
 
   // ── Application Form ─────────────────────────────────────────────────────
-  Widget _buildApplicationForm(ThemeData theme, bool isDark) {
-    final communityName = widget.community?.name ?? 'this host community';
+  Widget _buildApplicationForm(
+    ThemeData theme,
+    bool isDark,
+    bool isHome,
+    int trustScore,
+  ) {
+    final communityName = widget.community?.name ?? 'this community';
+    final isQualified = trustScore >= 91;
+
     return Form(
       key: _formKey,
       child: Container(
@@ -489,39 +509,57 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 24),
 
-            CheckboxListTile(
-              value: _confirmsHostBusiness,
-              onChanged: _isSubmitting
-                  ? null
-                  : (value) =>
-                        setState(() => _confirmsHostBusiness = value ?? false),
-              contentPadding: EdgeInsets.zero,
-              activeColor: AppTheme.accent,
-              title: Text(
-                'This business is based in $communityName',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurface,
+            if (!isHome) ...[
+              CheckboxListTile(
+                value: _confirmsHostBusiness,
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) => setState(
+                        () => _confirmsHostBusiness = value ?? false,
+                      ),
+                contentPadding: EdgeInsets.zero,
+                activeColor: AppTheme.accent,
+                title: Text(
+                  'This business is based in $communityName',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  'Host-community DDI loans require P.o.C.T 91+ and are only '
+                  'for businesses operating in this community.',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  'Home-country DDI loans require P.o.C.T 91+. '
+                  'While we suggest impactful usage, the community can use the fund however they see fit.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
-              subtitle: Text(
-                'Host-community DDI loans require PoCT 91+ and are only '
-                'for businesses operating in this community.',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ),
-              controlAffinity: ListTileControlAffinity.leading,
-            ),
-            const SizedBox(height: 12),
+            ],
 
             // Submit Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _isSubmitting ? null : _submitApplication,
+                onPressed: (!isQualified || _isSubmitting)
+                    ? null
+                    : _submitApplication,
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 16,
@@ -533,7 +571,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
                       )
                     : const Icon(LucideIcons.send, size: 16),
                 label: Text(
-                  _isSubmitting
+                  !isQualified
+                      ? 'Not Qualified (Requires 91+ P.o.C.T)'
+                      : _isSubmitting
                       ? 'Saving Application...'
                       : 'Submit Application',
                   style: const TextStyle(
@@ -1003,7 +1043,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           ],
         ),
         content: const Text(
-          'Your PoCT and host-community eligibility gates passed. Your loan '
+          'Your P.o.C.T and host-community eligibility gates passed. Your loan '
           'application has been saved, its public discussion group is live, '
           'and the 10-day community vote is open.\n\n'
           'Any community approval remains pending the Token Generation Event '

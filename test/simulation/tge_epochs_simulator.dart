@@ -83,7 +83,7 @@ void main() {
       '[EPOCH ${epochDef.epochNumber}: Epoch ${epochDef.epochNumber}] START',
     );
     print(
-      '  Gate: ${epochDef.minDspRequired} DSP  |  Efficiency: Decile PoCT Scale',
+      '  Gate: ${epochDef.minDspRequired} DSP  |  Efficiency: Decile P.o.C.T Scale',
     );
     print('-----------------------------------------------------------');
 

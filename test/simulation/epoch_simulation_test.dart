@@ -124,7 +124,7 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   // Current TGE Model:
   //   Gate  = DSP-only (minDspRequired = 10,000)
-  //   PoCT  = Affects efficiency via decile scale, NOT a gate
+  //   P.o.C.T  = Affects efficiency via decile scale, NOT a gate
   //           efficiency = ceil(trustScore / 10) / 10
   //   Swap  = DSP balance × efficiency
   // ──────────────────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ void main() {
   );
 
   group('TGE Eligibility (DSP-Only Gate, 10k minimum)', () {
-    test('User with >= 10k DSP is eligible regardless of PoCT', () async {
+    test('User with >= 10k DSP is eligible regardless of P.o.C.T', () async {
       final userId = 'user_dsp_pass';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
       // Seed a baseline user_points doc — the real client-side initializeUserPoints
@@ -169,7 +169,7 @@ void main() {
       final pointsService = container.read(pointsServiceProvider);
       await pointsService.awardManualPoints(userId, 10000, 'Grant');
 
-      // Low PoCT should NOT block eligibility:
+      // Low P.o.C.T should NOT block eligibility:
       await trustRepository.saveTrustData(
         TrustData(uid: userId, trustScore: 5.0, lastUpdated: DateTime.now()),
       );
@@ -180,11 +180,11 @@ void main() {
       expect(
         isEligible,
         true,
-        reason: 'DSP >= 10k → eligible (PoCT is not a gate)',
+        reason: 'DSP >= 10k → eligible (P.o.C.T is not a gate)',
       );
     });
 
-    test('User with < 10k DSP is NOT eligible even with max PoCT', () async {
+    test('User with < 10k DSP is NOT eligible even with max P.o.C.T', () async {
       final userId = 'user_dsp_fail';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
       // Seed a baseline user_points doc — the real client-side initializeUserPoints
@@ -243,7 +243,7 @@ void main() {
     });
   });
 
-  group('Decile PoCT Efficiency (swap rate, NOT a gate)', () {
+  group('Decile P.o.C.T Efficiency (swap rate, NOT a gate)', () {
     test('Efficiency scales with trust score decile', () {
       final epochService = EpochService();
 
