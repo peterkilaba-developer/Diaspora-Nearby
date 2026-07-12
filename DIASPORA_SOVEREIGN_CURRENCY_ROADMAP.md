@@ -39,7 +39,7 @@ POST-TGE:
 ```
 
 > [!IMPORTANT]
-> **Calling DSP "$DIASPORA" before TGE is misleading.** DSP does not exist on the blockchain. It has no market value. It is a **claim ticket** — earned through Proof of Activity — that converts into real $DIASPORA at the Token Generation Event. The codebase correctly calls it DSP.
+> **Calling DSP "$DIASPORA" before TGE is misleading.** DSP does not exist on the blockchain. It has no market value. It is a **claim ticket** — earned through Proof of Social Activities — that converts into real $DIASPORA at the Token Generation Event. The codebase correctly calls it DSP.
 
 ---
 

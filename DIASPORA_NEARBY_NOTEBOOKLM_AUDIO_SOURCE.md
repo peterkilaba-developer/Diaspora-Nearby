@@ -78,7 +78,7 @@ Diaspora Nearby is useful before a user ever thinks about tokens, treasuries, or
 
 Users can discover diaspora members near their current location. This helps newcomers and long-term residents find people who share cultural background, language, experiences, or connections to home.
 
-Location is used to enable proximity, not to sell personal data. Current Location Transparency is also a trust and TGE-participation signal. It must be active at the time of every TGE. Users can turn it off, but the associated ten PoCT is then permanently forfeited. Re-enabling transparency restores TGE eligibility without restoring those forfeited points.
+Location is used to enable proximity, not to sell personal data. Current Location Transparency is also a trust and TGE-participation signal. It must be active at the time of every TGE. Users can turn it off, but the associated ten P.o.C.T is then permanently forfeited. Re-enabling transparency restores TGE eligibility without restoring those forfeited points.
 
 ## Profiles and Relationships
 
@@ -171,7 +171,7 @@ Identity is strengthened through profile completeness, unique peer verification,
 
 The QR identity exchange is especially important because it demonstrates physical presence between two people. It is designed to make large-scale fake-account behavior more difficult.
 
-## Proof of Activity
+## Proof of Social Activities
 
 Users earn DSP through participation that helps build the network. Examples represented in the platform include:
 
@@ -190,17 +190,17 @@ Reward amounts and eligibility rules may evolve as the platform matures. The end
 
 ## Proof of Community Trust
 
-PoCT is a score representing how a user is known and trusted by the community. It is influenced by meaningful relationships, identity verification, activity, and trust signals.
+P.o.C.T is a score representing how a user is known and trusted by the community. It is influenced by meaningful relationships, identity verification, activity, and trust signals.
 
 The platform also includes a trust slider. A user can signal how strongly they trust another person. High-trust signals can involve DSP staking, giving the signal consequence rather than making it an empty endorsement.
 
-PoCT affects how efficiently eligible DSP converts during a Token Generation Event. Higher trust can produce higher conversion efficiency. This creates an incentive to build genuine reputation, not merely accumulate activity.
+P.o.C.T affects how efficiently eligible DSP converts during a Token Generation Event. Higher trust can produce higher conversion efficiency. This creates an incentive to build genuine reputation, not merely accumulate activity.
 
 ## The Seven Genesis Milestones
 
-The genesis trust foundation contains seven milestones, each worth up to ten PoCT:
+The genesis trust foundation contains seven milestones, each worth up to ten P.o.C.T:
 
-1. **Current Location Transparency:** Keep current-location visibility enabled. It must be active at the time of every TGE. Turning it off permanently forfeits its ten PoCT, even if transparency is later restored.
+1. **Current Location Transparency:** Keep current-location visibility enabled. It must be active at the time of every TGE. Turning it off permanently forfeits its ten P.o.C.T, even if transparency is later restored.
 2. **Profile Completion:** Complete every required profile field. A complete profile is also required for a user's first TGE.
 3. **QR Identity Exchanges:** Complete ten unique in-person Identity QR exchanges. This is also required for a user's first TGE.
 4. **Family Connections:** Establish ten unique family connections.
@@ -208,7 +208,7 @@ The genesis trust foundation contains seven milestones, each worth up to ten PoC
 6. **Vouched by Peers:** Receive ten unique full-trust peer vouches.
 7. **Verified by Peers:** Receive ten unique peer verifications.
 
-Together, these seven genesis milestones can contribute up to seventy PoCT. They create a trust foundation built from transparency, profile substance, physical-world identity proof, relationships, and peer accountability.
+Together, these seven genesis milestones can contribute up to seventy P.o.C.T. They create a trust foundation built from transparency, profile substance, physical-world identity proof, relationships, and peer accountability.
 
 ---
 
@@ -269,11 +269,11 @@ Each epoch contains ten TGE milestone events. The backend watches distributed DS
 
 ## Trust Efficiency
 
-At TGE, PoCT affects conversion efficiency. A stronger trust score can result in a higher percentage of eligible DSP converting to $DIASPORA. Unconverted amounts are subject to the protocol's applicable burn mechanics.
+At TGE, P.o.C.T affects conversion efficiency. A stronger trust score can result in a higher percentage of eligible DSP converting to $DIASPORA. Unconverted amounts are subject to the protocol's applicable burn mechanics.
 
 TGE participation has two layers of eligibility:
 
-- **Every TGE:** Current Location Transparency must be enabled at the time of the event. A user who turned it off can re-enable it to regain TGE eligibility, but the previously forfeited ten PoCT is not restored.
+- **Every TGE:** Current Location Transparency must be enabled at the time of the event. A user who turned it off can re-enable it to regain TGE eligibility, but the previously forfeited ten P.o.C.T is not restored.
 - **First TGE only:** The user must also have a fully completed profile and at least ten unique in-person Identity QR exchanges.
 
 After the first successful TGE, profile completion and the ten-QR threshold do not need to be re-proved for later events. Current Location Transparency remains an active gate for every TGE.
@@ -426,7 +426,7 @@ Trust requires honest safeguards.
 
 Diaspora Nearby uses Firebase and related services to operate the platform. It may collect identity, contact, location, device, usage, and user-generated content needed to provide its features.
 
-Precise and coarse location enable nearby discovery. Current Location Transparency must be enabled when a user participates in any TGE. Users can control location permissions and transparency, but disabling transparency permanently forfeits its ten PoCT reward and temporarily blocks TGE participation until it is re-enabled.
+Precise and coarse location enable nearby discovery. Current Location Transparency must be enabled when a user participates in any TGE. Users can control location permissions and transparency, but disabling transparency permanently forfeits its ten P.o.C.T reward and temporarily blocks TGE participation until it is re-enabled.
 
 The platform states that it does not sell personal data. Users may request account deletion through app settings or support.
 
@@ -517,10 +517,10 @@ Visit https://diasporanearby.com, open https://app.diasporanearby.com, or instal
 - Do not claim DSP is currently tradeable or guaranteed to have monetary value.
 - TGE is triggered by distributed DSP supply milestones, not member-count growth.
 - Member counts are informational network-growth benchmarks.
-- PoCT affects TGE conversion efficiency.
-- The seven genesis milestones can contribute up to seventy PoCT, in this order: Current Location Transparency, Profile Completion, QR Identity Exchanges, Family Connections, Friend Connections, Vouched by Peers, and Verified by Peers.
+- P.o.C.T affects TGE conversion efficiency.
+- The seven genesis milestones can contribute up to seventy P.o.C.T, in this order: Current Location Transparency, Profile Completion, QR Identity Exchanges, Family Connections, Friend Connections, Vouched by Peers, and Verified by Peers.
 - Current Location Transparency must be enabled at the time of every TGE.
-- Turning Current Location Transparency off permanently forfeits its ten PoCT. Re-enabling it restores TGE eligibility, but not the forfeited PoCT.
+- Turning Current Location Transparency off permanently forfeits its ten P.o.C.T. Re-enabling it restores TGE eligibility, but not the forfeited P.o.C.T.
 - A user's first TGE additionally requires a complete profile and ten unique in-person Identity QR exchanges.
 - Profile completion and the ten-QR threshold are first-TGE gates only; they do not need to be repeated for later TGEs.
 - Current and future capabilities should be clearly distinguished.
