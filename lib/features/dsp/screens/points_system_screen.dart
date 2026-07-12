@@ -225,8 +225,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     ),
                     tabs: const [
                       Tab(text: 'DASHBOARD'),
-                      Tab(text: 'PoA'),
-                      Tab(text: 'PoCT'),
+                      Tab(text: 'P.o.S.A'),
+                      Tab(text: 'P.o.C.T'),
                     ],
                   ),
                 ),
@@ -373,7 +373,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  // --- TAB 2: PoA (Proof of Activity) ---
+  // --- TAB 2: P.o.S.A (Proof of Social Activities) ---
   Widget _buildPoATab(
     BuildContext context,
     UserPoints userPoints,
@@ -639,7 +639,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  // --- TAB 3: PoCT (Proof of Community Trust) ---
+  // --- TAB 3: P.o.C.T (Proof of Community Trust) ---
   Widget _buildPoCTTab(
     BuildContext context,
     UserPoints userPoints,
@@ -673,7 +673,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              'DSP is earned instantly for all activities (except Profile Completion, which requires 10 fields for a 10,000 DSP payout). PoCT is earned instantly for general activities. For the four core connection milestones (Family, Friend, QR Connect, and Vouched/Verified), you earn 1,000 DSP instantly per connection, but the 10 PoCT is awarded only at 10× intervals (10, 100, 1K...).',
+              'DSP is earned instantly for all activities (except Profile Completion, which requires 10 fields for a 10,000 DSP payout). P.o.C.T is earned instantly for general activities. For the four core connection milestones (Family, Friend, QR Connect, and Vouched/Verified), you earn 1,000 DSP instantly per connection, but the 10 P.o.C.T is awarded only at 10× intervals (10, 100, 1K...).',
               style: TextStyle(
                 color: Theme.of(context).hintColor,
                 fontSize: 12,
@@ -688,7 +688,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Complete Your Profile',
               subtitle:
                   'Fill 10 profile fields to fully complete your profile and earn your genesis bonus.',
-              amount: '+10 PoCT  •  10,000 DSP',
+              amount: '+10 P.o.C.T  •  10,000 DSP',
               standing:
                   '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
             ),
@@ -700,16 +700,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Verified by Peer',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique verifications.',
-              amount: '+10 PoCT per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique verifications.',
+              amount: '+10 P.o.C.T per 10× milestone',
               standing: '${trustData?.uniqueVerificationCount ?? 0} Received',
             ),
             _buildTrustCard(
               context,
               title: 'Verify Peer',
               subtitle:
-                  'You verifying someone else. Earn 1,000 DSP instantly. Does not award PoCT (action builds trust for them, not you).',
-              amount: '0 PoCT',
+                  'You verifying someone else. Earn 1,000 DSP instantly. Does not award P.o.C.T (action builds trust for them, not you).',
+              amount: '0 P.o.C.T',
               standing: '-- Given',
             ),
 
@@ -722,16 +722,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Vouched by Peer',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique vouches.',
-              amount: '+10 PoCT per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique vouches.',
+              amount: '+10 P.o.C.T per 10× milestone',
               standing: '${trustData?.uniqueVouchCount ?? 0} Received',
             ),
             _buildTrustCard(
               context,
               title: 'Vouch for Peer',
               subtitle:
-                  'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award PoCT (action builds trust for them, not you).',
-              amount: '0 PoCT',
+                  'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award P.o.C.T (action builds trust for them, not you).',
+              amount: '0 P.o.C.T',
               standing: '-- Given',
             ),
 
@@ -740,24 +740,24 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Family Connection',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
-              amount: '+10 PoCT per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique connections.',
+              amount: '+10 P.o.C.T per 10× milestone',
               standing: '${trustData?.uniqueFamilyCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'Friend Connection',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
-              amount: '+10 PoCT per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique connections.',
+              amount: '+10 P.o.C.T per 10× milestone',
               standing: '${trustData?.uniqueFriendCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'QR Connect',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PoCT awarded at 10, 100, 1K... unique connections.',
-              amount: '+10 PoCT per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique connections.',
+              amount: '+10 P.o.C.T per 10× milestone',
               standing: '${trustData?.uniqueQrCount ?? 0} Scanned',
             ),
 
@@ -766,7 +766,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Account Age',
               subtitle: 'Time on the platform builds trust.',
-              amount: '+1 PoCT every 100 days',
+              amount: '+1 P.o.C.T every 100 days',
               standing: '$daysActive Days',
             ),
 
@@ -841,7 +841,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
   // --- HELPERS FOR CARDS ---
 
-  /// PoA activity card: title, subtitle, and amount each on their own row.
+  /// P.o.S.A activity card: title, subtitle, and amount each on their own row.
   Widget _buildActivityCard(
     BuildContext context, {
     required String title,
@@ -912,7 +912,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  /// PoCT trust card: title, subtitle, amount, and standing each on their own row.
+  /// P.o.C.T trust card: title, subtitle, amount, and standing each on their own row.
   Widget _buildTrustCard(
     BuildContext context, {
     required String title,
@@ -1786,7 +1786,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 24),
-                                // Row 1: Trust Check (Adopt PoCT Spectrum Color)
+                                // Row 1: Trust Check (Adopt P.o.C.T Spectrum Color)
                                 Builder(
                                   builder: (context) {
                                     final currentTrust =
@@ -1805,7 +1805,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                           style: TextStyle(fontSize: 10),
                                         ),
                                         Text(
-                                          '$currentTrust PoCT',
+                                          '$currentTrust P.o.C.T',
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -2084,14 +2084,14 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                       ),
                     ),
                     Text(
-                      '+$seniorityPoints PoCT earned from $daysActive days',
+                      '+$seniorityPoints P.o.C.T earned from $daysActive days',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).hintColor,
                       ),
                     ),
                     const Text(
-                      'Rule: +1 PoCT for every 100 days of activity',
+                      'Rule: +1 P.o.C.T for every 100 days of activity',
                       style: TextStyle(
                         fontSize: 10,
                         fontStyle: FontStyle.italic,
@@ -2169,7 +2169,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         ),
 
         const SizedBox(height: 24),
-        _buildSubHeader('PoCT Trust Levels'),
+        _buildSubHeader('P.o.C.T Trust Levels'),
         const SizedBox(height: 12),
 
         // Trust Score Journey
@@ -2397,7 +2397,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
       child: Column(
         children: [
           _buildEfficiencyRow(
-            'PoCT Score',
+            'P.o.C.T Score',
             'Efficiency',
             'Status',
             isHeader: true,
