@@ -90,6 +90,7 @@ exports.onEmergencyClaimWrite = emergencyFund.onEmergencyClaimWrite;
 exports.slashPromissoryForFraud = emergencyFund.slashPromissoryForFraud;
 
 // DSP (10)
+exports.onVouchWrite = dsp.onVouchWrite;
 exports.onGlobalDspMilestone = dsp.onGlobalDspMilestone;
 exports.executeTGE = dsp.executeTGE;
 exports.awardPoints = dsp.awardPoints;

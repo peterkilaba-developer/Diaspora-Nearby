@@ -157,7 +157,7 @@ void main() {
           timestamp: 1,
         ),
         phone: '1234567890',
-        showCurrentLocationName: true, // +10 PoCT transparency
+        showCurrentLocationName: true, // +10 P.o.C.T transparency
         createdAt: DateTime.now().subtract(const Duration(days: 200)),
       );
 
@@ -220,7 +220,7 @@ void main() {
       when(
         mockTrustRepo.getVouchesForUser(userId),
       ).thenAnswer((_) async => []); // Regular vouches empty
-      // Old trust data with 10 event check-ins (+10 PoCT participation)
+      // Old trust data with 10 event check-ins (+10 P.o.C.T participation)
       when(mockTrustRepo.getTrustData(userId)).thenAnswer(
         (_) async => TrustData(
           uid: userId,
@@ -235,7 +235,7 @@ void main() {
       when(
         mockTrustRepo.getVouchesByVoucher(userId),
       ).thenAnswer((_) async => []);
-      // 10 verifications (+10 PoCT verified milestone)
+      // 10 verifications (+10 P.o.C.T verified milestone)
       when(mockTrustRepo.getAllVerificationsForUser(userId)).thenAnswer(
         (_) async => List.generate(
           10,
