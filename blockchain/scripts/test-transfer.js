@@ -1,4 +1,7 @@
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 /**
  * Test $DIASPORA token on Base Mainnet.

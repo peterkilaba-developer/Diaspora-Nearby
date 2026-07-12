@@ -9,10 +9,16 @@
         "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
     },
     "devDependencies": {
-        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+        "@nomicfoundation/hardhat-ethers": "^4.0.14",
+        "@nomicfoundation/hardhat-ethers-chai-matchers": "^3.0.11",
+        "@nomicfoundation/hardhat-mocha": "^3.0.21",
+        "@nomicfoundation/hardhat-verify": "^3.0.21",
         "@openzeppelin/contracts-upgradeable": "^5.4.0",
-        "@openzeppelin/hardhat-upgrades": "^3.9.1",
-        "hardhat": "^2.19.4"
+        "@openzeppelin/hardhat-upgrades": "^4.0.2",
+        "chai": "^6.2.2",
+        "ethers": "^6.17.0",
+        "hardhat": "^3.9.1",
+        "mocha": "^11.7.6"
     },
     "dependencies": {
         "@openzeppelin/contracts": "^5.0.1",
@@ -32,5 +38,6 @@
         "serialize-javascript": "^7.0.7",
         "cookie": "^0.7.2",
         "elliptic": "^6.6.1"
-    }
+    },
+    "type": "module"
 }

@@ -1,5 +1,10 @@
-const { expect } = require("chai");
-const { ethers, upgrades } = require("hardhat");
+import { expect } from "chai";
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 /**
  * Tests for DiasporaTGEController.
@@ -61,7 +66,7 @@ describe("DiasporaTGEController", function () {
     });
 
     it("rejects non-oracle caller", async function () {
-      await expect(tge.connect(attacker).mintEpochSupply(ONE)).to.be.reverted;
+      await expect(tge.connect(attacker).mintEpochSupply(ONE)).to.revert(ethers);
     });
   });
 
@@ -130,7 +135,7 @@ describe("DiasporaTGEController", function () {
     it("rejects non-oracle caller", async function () {
       await expect(
         tge.connect(attacker).executeTGE([alice.address], [ONE], [100])
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
 
     it("integer-division rounding: efficiency=33 on amount=100 produces tiny drift", async function () {
@@ -186,7 +191,7 @@ describe("DiasporaTGEController", function () {
     it("rejects non-oracle caller", async function () {
       await expect(
         tge.connect(attacker).distributeWelcomeBonus([alice.address], [ONE])
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
 
     it("skips zero-amount recipients silently", async function () {
@@ -203,7 +208,7 @@ describe("DiasporaTGEController", function () {
       const TGEv2 = await ethers.getContractFactory("DiasporaTGEController", attacker);
       await expect(
         upgrades.upgradeProxy(await tge.getAddress(), TGEv2)
-      ).to.be.reverted;
+      ).to.revert(ethers);
     });
 
     it("admin can grant TGE_ORACLE_ROLE to a new address", async function () {

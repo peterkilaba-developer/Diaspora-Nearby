@@ -1,4 +1,7 @@
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 async function main() {
     const [deployer] = await ethers.getSigners();

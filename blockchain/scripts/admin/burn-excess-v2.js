@@ -1,4 +1,7 @@
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 /**
  * Burn 120 excess $DIASPORA to restore exact 1,000,000 total supply.

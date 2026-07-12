@@ -8,10 +8,14 @@
  * 
  * Usage: npx hardhat run scripts/setup-test-users.js --network base-mainnet
  */
-const { ethers } = require("hardhat");
-const admin = require("firebase-admin");
+import hre from "hardhat";
+import admin from "firebase-admin";
+import { createRequire } from "node:module";
 
 // Initialize Firebase Admin
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const require = createRequire(import.meta.url);
 const serviceAccount = require("../../tools/admin-scripts/service-account-key.json");
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),

@@ -43,7 +43,10 @@
  *   - Refuses if the env amounts exceed 20,000 DSP each (sanity guardrail —
  *     correct value is ~8,081; anything order-of-magnitude higher is a typo).
  */
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 const TOKEN = "0x55d7e7d006938A15082752225ED44Fd130B87735";
 const FOUNDERS = "0xda9073CbA407648d5EB3271F6B18CEbBd1290D3F";
