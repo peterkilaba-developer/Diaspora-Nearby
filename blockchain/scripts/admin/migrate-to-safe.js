@@ -26,7 +26,10 @@
  * After this completes, ask the Safe signers to execute the second-phase script
  * (renounce deployer's roles) — see the printed instructions at the end.
  */
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 const TOKEN_ADDRESS = "0x55d7e7d006938A15082752225ED44Fd130B87735";
 const TGE_ADDRESS = "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45";

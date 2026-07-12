@@ -1,4 +1,9 @@
-const { ethers, upgrades } = require("hardhat");
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 /**
  * Deploy test token + TGE controller to Sepolia for testing transfers.

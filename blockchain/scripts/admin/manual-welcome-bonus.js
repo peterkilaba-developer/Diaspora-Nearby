@@ -9,7 +9,8 @@
  * Inputs to fill in below:
  *   - USER_WALLET: the user's smart-wallet address (Firestore: users/<uid>.walletAddress)
  *   - COMMUNITY_TREASURY_WALLETS: array of {communityId, fraction, walletAddress}
- *     mirroring the dsp.js distribution. Run `node -e ...` against Firestore
+ *     mirroring the dsp.js distribution. Run
+ode -e ...` against Firestore
  *     to pull each community's walletAddress for the user's memberships.
  *
  * The treasury split per signup (per landing-page tokenomics):
@@ -27,7 +28,10 @@
  *     this anyway via welcomeBonusReceived mapping)
  *   - Logs the transaction hash and updates expected Firestore field hints
  */
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 const TGE = "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45";
 const TOKEN = "0x55d7e7d006938A15082752225ED44Fd130B87735";

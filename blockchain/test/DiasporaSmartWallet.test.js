@@ -1,5 +1,10 @@
-const { expect } = require("chai");
-const { ethers, upgrades } = require("hardhat");
+import { expect } from "chai";
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 describe("DiasporaSmartWallet & WalletFactory", function () {
     let factory, token;
@@ -85,7 +90,7 @@ describe("DiasporaSmartWallet & WalletFactory", function () {
             // user1 doesn't have DEPLOYER_ROLE
             await expect(
                 factory.connect(user1).createWallet(hash)
-            ).to.be.reverted;
+            ).to.revert(ethers);
         });
     });
 

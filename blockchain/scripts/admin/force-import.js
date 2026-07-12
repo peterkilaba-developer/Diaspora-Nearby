@@ -12,7 +12,12 @@
  * Usage:
  *   npx hardhat run scripts/admin/force-import.js --network base-mainnet
  */
-const { ethers, upgrades } = require("hardhat");
+import hre from "hardhat";
+import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
+const upgrades = await createUpgrades(hre, connection);
 
 const LIVE_TOKEN = "0x55d7e7d006938A15082752225ED44Fd130B87735";
 const LIVE_TGE = "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45";

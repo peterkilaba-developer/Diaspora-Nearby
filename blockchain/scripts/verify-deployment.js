@@ -1,4 +1,7 @@
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 async function main() {
     const TOKEN = "0x55d7e7d006938A15082752225ED44Fd130B87735";

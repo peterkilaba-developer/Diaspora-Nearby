@@ -41,7 +41,10 @@
  *   - The Safe's signers are confirmed and have access (hardware wallets recommended)
  *   - You hold BACKEND_SIGNER_PRIVATE_KEY (the EOA that owns the smart wallet)
  */
-const { ethers } = require("hardhat");
+import hre from "hardhat";
+
+const connection = await hre.network.getOrCreate();
+const { ethers } = connection;
 
 const TOKEN_ADDRESS = "0x55d7e7d006938A15082752225ED44Fd130B87735";
 
