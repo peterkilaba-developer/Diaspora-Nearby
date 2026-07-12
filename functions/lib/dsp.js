@@ -2577,7 +2577,7 @@ exports.retryPendingTGEDeductions = functions
 // V4 trust mechanics: trust rating staking trigger.
 exports.onVouchWrite = functions.firestore
   .document("trust_ratings/{ratingId}")
-  .onWrite(async (change, context) => {
+  .onWrite(async (change) => {
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
@@ -2599,10 +2599,15 @@ exports.onVouchWrite = functions.firestore
       return null;
     }
 
-    const ratingId = context.params.ratingId;
     const fromUserId = afterData.fromUserId;
     const toUserId = afterData.toUserId;
     const score = afterData.score;
+    const scoreChanged = beforeData ? beforeData.score !== afterData.score : true;
+    const partiesChanged = beforeData ?
+      beforeData.fromUserId !== afterData.fromUserId ||
+      beforeData.toUserId !== afterData.toUserId :
+      true;
+    const coreRatingChanged = !beforeData || scoreChanged || partiesChanged;
 
     const isNowNoTrust = score >= 1 && score <= 10;
     const isNowFullTrust = score > 90;
@@ -2635,7 +2640,7 @@ exports.onVouchWrite = functions.firestore
     let remainingStake = afterData.remainingStake || 0;
     let stakedAmount = afterData.stakedAmount || 0;
 
-    if (isNowStaked && !wasStaked) {
+    if (coreRatingChanged && isNowStaked && !wasStaked) {
        // Deduct 1000 DSP (lock)
        batch.set(db.collection("user_points").doc(fromUserId), {
            availablePoints: admin.firestore.FieldValue.increment(-1000),
@@ -2651,7 +2656,7 @@ exports.onVouchWrite = functions.firestore
        });
        stakedAmount = 1000;
        remainingStake = 1000;
-    } else if (!isNowStaked && wasStaked) {
+    } else if (coreRatingChanged && !isNowStaked && wasStaked) {
        // Refund remaining stake
        if (remainingStake > 0) {
            batch.set(db.collection("user_points").doc(fromUserId), {
@@ -2676,7 +2681,9 @@ exports.onVouchWrite = functions.firestore
     }
 
     // 3. Stake Combat
-    if (isNowStaked && remainingStake > 0) {
+    // Only actual rating changes should run combat. The metadata update below
+    // writes back into this document and must not replay rewards or penalties.
+    if (coreRatingChanged && isNowStaked && remainingStake > 0) {
         const otherVouchesSnap = await db.collection("trust_ratings")
             .where("toUserId", "==", toUserId)
             .get();
