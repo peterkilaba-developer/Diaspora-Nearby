@@ -1567,12 +1567,12 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       title: const Text('Show my current city name'),
       subtitle: forfeited
           ? Text(
-              'City Visibility PoCT was forfeited and cannot be re-earned.',
+              'City Visibility P.o.C.T was forfeited and cannot be re-earned.',
               style: TextStyle(fontSize: 11, color: Colors.orange[400]),
             )
           : (_showCurrentLocationName
                 ? Text(
-                    '+10 PoCT for transparency (forfeited permanently if hidden)',
+                    '+10 P.o.C.T for transparency (forfeited permanently if hidden)',
                     style: TextStyle(fontSize: 11, color: Colors.green[400]),
                   )
                 : null),
@@ -1618,15 +1618,15 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             children: [
               const Text(
                 'Hiding your current city will permanently forfeit your +10 City '
-                'Visibility PoCT.',
+                'Visibility P.o.C.T.',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
               const Text(
-                '• You will lose 10 PoCT from your trust score immediately.\n'
+                '• You will lose 10 P.o.C.T from your trust score immediately.\n'
                 '• Turning visibility back on later will NOT restore the +10.\n'
                 '• This is a one-way action — there is no second chance.\n'
-                '• Lower PoCT means lower DSP → \$DIASPORA conversion at TGE.',
+                '• Lower P.o.C.T means lower DSP → \$DIASPORA conversion at TGE.',
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 16),
@@ -1651,7 +1651,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: acknowledged ? () => Navigator.pop(ctx, true) : null,
-              child: const Text('Hide & Forfeit +10 PoCT'),
+              child: const Text('Hide & Forfeit +10 P.o.C.T'),
             ),
           ],
         ),
@@ -1668,7 +1668,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       _fallbackToHostLocation();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('City hidden. +10 PoCT permanently forfeited.'),
+          content: Text('City hidden. +10 P.o.C.T permanently forfeited.'),
           backgroundColor: Colors.orange,
         ),
       );
