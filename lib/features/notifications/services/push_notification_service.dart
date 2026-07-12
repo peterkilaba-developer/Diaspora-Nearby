@@ -2045,7 +2045,7 @@ class PushNotificationService {
                   id: 'trust_verify_$docId'.hashCode,
                   title: 'Identity Verified',
                   body:
-                      '$verifierName has verified your identity. Your PoCT score increased!',
+                      '$verifierName has verified your identity. Your P.o.C.T score increased!',
                   payload: jsonEncode({
                     'type': 'trust_peer_verified',
                     'fromUserId': verifierId,
@@ -2056,7 +2056,7 @@ class PushNotificationService {
                   type: NotificationType.trustPeerVerified,
                   title: 'Identity Verified',
                   body:
-                      '$verifierName has verified your identity. Your PoCT score increased!',
+                      '$verifierName has verified your identity. Your P.o.C.T score increased!',
                   payload: {'fromUserId': verifierId ?? ''},
                   dedupKey: 'trust_verify_$docId',
                 );

@@ -120,7 +120,7 @@ class LocationUpdateService {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
-      // Determine whether to auto-enable city visibility for the +10 PoCT.
+      // Determine whether to auto-enable city visibility for the +10 P.o.C.T.
       // We award it the moment we have the user's current location — but
       // never re-enable it if they've already forfeited the +10 by hiding.
       final userDoc = await _firestore.collection('users').doc(userId).get();
@@ -135,7 +135,7 @@ class LocationUpdateService {
       };
 
       // First-ever location fetch + user hasn't forfeited → grant visibility,
-      // which immediately triggers the +10 City Visibility PoCT.
+      // which immediately triggers the +10 City Visibility P.o.C.T.
       if (!forfeited && !hasExplicitChoice) {
         updates['showCurrentLocationName'] = true;
       }

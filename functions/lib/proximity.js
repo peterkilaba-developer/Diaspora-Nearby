@@ -60,6 +60,24 @@ function hasUsableName(data) {
     return n.length > 0 && n.toLowerCase() !== "unknown";
 }
 
+function locationDisplayName(loc, fallback = "your area") {
+    const city = loc && loc.city ? String(loc.city).trim() : "";
+    if (city) return city;
+
+    const formatted = loc && (loc.formatted_address || loc.formattedAddress)
+        ? String(loc.formatted_address || loc.formattedAddress).trim()
+        : "";
+    if (!formatted) return fallback;
+
+    const firstPart = formatted.split(",")[0].trim();
+    if (!firstPart) return fallback;
+
+    // Avoid showing raw GPS coordinates as a city name.
+    if (/^[+-]?\d+(\.\d+)?$/.test(firstPart)) return fallback;
+
+    return firstPart;
+}
+
 async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
     const newLoc = userData.currentLocation;
     if (!newLoc || !newLoc.geometry) return null;
@@ -111,7 +129,7 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
         lastProximityCheckAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(e => console.warn(`[Proximity] cooldown write failed: ${e.message}`));
 
-    const currentCity = newLoc.city || "your area";
+    const currentCity = locationDisplayName(newLoc);
     const firstName = userData.firstName;
     const blockedByMover = new Set(userData.blockedUsers || []);
     const homeCountry = userData.homeCountry || homeCountryCode;
@@ -162,7 +180,7 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
             distance,
             lat: oLat,
             lng: oLng,
-            city: oLoc.city || currentCity,
+            city: locationDisplayName(oLoc),
         });
     });
 
@@ -286,7 +304,7 @@ async function handleProximityMatch({
             body: `${distStr}. Tap to say hi.`,
             type: "nearby_compatriot",
             targetUserId: other.id,
-            city: moverCity,
+            city: other.city,
             androidCollapseKey: "nearby_compatriot",
             androidTag: "nearby_compatriot",
             apnsThreadId: "nearby_compatriot",
@@ -301,7 +319,7 @@ async function handleProximityMatch({
             body: `${distStr}. Tap to say hi.`,
             type: "nearby_compatriot",
             targetUserId: moverId,
-            city: other.city,
+            city: moverCity,
             androidCollapseKey: "nearby_compatriot",
             androidTag: "nearby_compatriot",
             apnsThreadId: "nearby_compatriot",
