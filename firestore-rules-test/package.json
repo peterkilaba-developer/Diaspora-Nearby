@@ -10,7 +10,7 @@
     "@firebase/rules-unit-testing": "^5.0.1",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
-    "firebase-tools": "14.23.0",
+    "firebase-tools": "15.23.0",
     "jest": "^30.4.2"
   },
   "overrides": {
