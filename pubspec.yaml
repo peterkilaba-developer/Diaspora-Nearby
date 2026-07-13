@@ -146,7 +146,7 @@ dev_dependencies:
   cloud_firestore_platform_interface: any
   firebase_auth_platform_interface: any
   firebase_storage_platform_interface: any
-  test: any
+  test: 1.31.0
 
 
 flutter_native_splash:
