@@ -119,7 +119,7 @@ dev_dependencies:
   mockito: ^5.6.3
   network_image_mock: ^2.1.1
   flutter_lints: ^6.0.0
-  fake_cloud_firestore: ^4.0.1
+  fake_cloud_firestore: ^4.1.1
   integration_test:
     sdk: flutter
 
