@@ -4,8 +4,8 @@ const connection = await hre.network.getOrCreate();
 const { ethers } = connection;
 
 /**
- * Test full epoch cycle: 10 TGE events → epoch advances.
- * Verifies the TGE counter and epoch advancement logic on mainnet.
+ * Test full epoch cycle: 10 TDE releases → epoch advances.
+ * Verifies the TDE counter and epoch advancement logic on mainnet.
  */
 async function main() {
     const [deployer] = await ethers.getSigners();
@@ -23,18 +23,18 @@ async function main() {
 
     // Check starting state
     let stats = await tge.getStats();
-    console.log(`\nStarting state: Epoch ${stats[0]}, TGE Event ${stats[1]}`);
+    console.log(`\nStarting state: Epoch ${stats[0]}, TDE ${stats[1]}`);
     console.log(`Already minted: ${ethers.formatUnits(stats[2], 18)} DIASPORA`);
 
     const startEpoch = Number(stats[0]);
     const startEvent = Number(stats[1]);
-    const eventsNeeded = 10 - startEvent; // Events to complete this epoch
+    const eventsNeeded = 10 - startEvent; // TDE releases to complete this epoch
 
-    console.log(`\nNeed ${eventsNeeded} more TGE events to complete Epoch ${startEpoch}`);
-    console.log(`Running ${eventsNeeded} mini TGE events (10 $DIASPORA each)...\n`);
+    console.log(`\nNeed ${eventsNeeded} more TDE releases to complete Epoch ${startEpoch}`);
+    console.log(`Running ${eventsNeeded} mini TDE releases (10 $DIASPORA each)...\n`);
 
     for (let i = 0; i < eventsNeeded; i++) {
-        // Small TGE: 1 recipient, 10 DIASPORA, 90% efficiency
+        // Small TDE: 1 recipient, 10 DIASPORA, 90% efficiency
         const tx = await tge.executeTGE(
             [deployer.address],
             [ethers.parseUnits("10", 18)],
@@ -47,7 +47,7 @@ async function main() {
         const event = Number(stats[1]);
         const totalEvents = Number(stats[5]);
 
-        console.log(`  TGE #${i + 1}: Epoch ${epoch}, Event ${event} (total: ${totalEvents})`);
+        console.log(`  TDE #${i + 1}: Epoch ${epoch}, Event ${event} (total: ${totalEvents})`);
 
         // Check if epoch advanced
         if (epoch > startEpoch) {
@@ -64,8 +64,8 @@ async function main() {
     console.log("  ✅ Epoch Cycle Test Complete");
     console.log("=".repeat(55));
     console.log(`  Current Epoch: ${stats[0]}`);
-    console.log(`  Current TGE Event: ${stats[1]}`);
-    console.log(`  Total TGE Events: ${stats[5]}`);
+    console.log(`  Current TDE: ${stats[1]}`);
+    console.log(`  Total TDE Releases: ${stats[5]}`);
     console.log(`  Total minted: ${ethers.formatUnits(stats[2], 18)} DIASPORA`);
     console.log(`  Total distributed: ${ethers.formatUnits(stats[3], 18)} DIASPORA`);
     console.log(`  Total burned: ${ethers.formatUnits(stats[4], 18)} DIASPORA`);

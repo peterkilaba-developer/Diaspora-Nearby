@@ -5,7 +5,7 @@ const { ethers } = connection;
 
 /**
  * Test $DIASPORA token on Base Mainnet.
- * Mints, transfers, and simulates a TGE event with the real contract.
+ * Mints, transfers, and simulates a TDE release with the real contract.
  * 
  * Usage: npx hardhat run scripts/test-transfer.js --network base-mainnet
  */
@@ -56,8 +56,8 @@ async function main() {
     console.log("   ✅ Burn addr:", ethers.formatUnits(burnBalance, decimals), symbol);
     console.log("   📝 TX:", tx2.hash);
 
-    // ── Test 3: TGE Simulation ───────────────────────────────
-    console.log("\n🎯 Test 3: Simulated TGE event...");
+    // ── Test 3: TDE Simulation ───────────────────────────────
+    console.log("\n🎯 Test 3: Simulated TDE release...");
     console.log("   Snapshot: 2 addresses, different efficiencies");
 
     const recipients = [deployer.address, deployer.address];
@@ -77,7 +77,7 @@ async function main() {
 
     const stats = await tge.getStats();
     console.log("   ✅ TGE executed!");
-    console.log("   📊 Epoch:", stats[0].toString(), "| TGE Event:", stats[1].toString());
+    console.log("   📊 Epoch:", stats[0].toString(), "| TDE:", stats[1].toString());
     console.log("   📊 Total minted:", ethers.formatUnits(stats[2], decimals), symbol);
     console.log("   📊 Total distributed:", ethers.formatUnits(stats[3], decimals), symbol);
     console.log("   📊 Total burned:", ethers.formatUnits(stats[4], decimals), symbol);

@@ -87,8 +87,8 @@ class ChatRepository {
 
   /// Subscribe to user's chat list via Firestore real-time listeners
   Stream<List<Chat>> subscribeToUserChats() {
-    if (currentUserId == null) return const Stream.empty();
-    final uid = currentUserId!;
+    final uid = currentUserId;
+    if (uid == null) return const Stream.empty();
 
     // Start Firestore real-time sync → in-memory cache → stream
     _startRealtimeSync(uid);
@@ -231,39 +231,107 @@ class ChatRepository {
   // ============================================
 
   Stream<List<Message>> subscribeToMessages(String chatId) {
-    if (currentUserId == null) return const Stream.empty();
+    final uid = currentUserId;
+    if (uid == null) return const Stream.empty();
 
     final controller = StreamController<List<Message>>();
     int clearedAt = 0;
     List<Message> lastMessages = [];
+    StreamSubscription? userChatSub;
+    StreamSubscription? subscription;
+    bool hasAccess = false;
 
     // Always leave Riverpod's loading state immediately. Cached/remote
     // messages replace this value as soon as they arrive.
     controller.add(const []);
 
-    // 1. Emit cached messages when available
-    () async {
+    Future<bool> canReadMessages() async {
+      try {
+        final chatDoc = await _chatsCol.doc(chatId).get();
+        final data = chatDoc.data();
+        final participants =
+            (data?['participants'] as List<dynamic>?)?.cast<String>() ??
+            const <String>[];
+        if (participants.contains(uid)) return true;
+
+        final userChatDoc = await _userChatsCol(uid).doc(chatId).get();
+        return userChatDoc.exists;
+      } catch (e) {
+        debugPrint('Error checking message access for $chatId: $e');
+        return false;
+      }
+    }
+
+    Future<void> emitCachedMessages() async {
       try {
         final messages = await _localService.getCachedMessages(chatId);
         messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         lastMessages = messages;
-        if (!controller.isClosed) controller.add(messages);
+        if (!controller.isClosed) {
+          final filtered = clearedAt > 0
+              ? messages.where((m) => m.timestamp > clearedAt).toList()
+              : messages;
+          controller.add(filtered);
+        }
       } catch (e) {
         debugPrint('Error reading cached messages: $e');
-        if (!controller.isClosed) controller.addError(e);
       }
-    }();
+    }
 
-    // 2. Listen to clearedAt from Firestore userChats
-    final clearedAtSub = _userChatsCol(currentUserId!)
+    void startMessagesListener() {
+      if (subscription != null) return;
+      subscription = _messagesCol(chatId)
+          .orderBy('timestamp', descending: true)
+          .limit(100)
+          .snapshots()
+          .listen(
+            (snapshot) {
+              final List<Message> messages = [];
+
+              for (final doc in snapshot.docs) {
+                try {
+                  messages.add(Message.fromFirestore(chatId, doc));
+                } catch (e) {
+                  debugPrint('Error parsing message ${doc.id}: $e');
+                }
+              }
+
+              // [PERF] Query already returns sorted by timestamp desc — skip redundant sort
+              lastMessages = messages;
+
+              if (!controller.isClosed) {
+                // [PERF] Only filter if clearedAt is actually set
+                final filtered = clearedAt > 0
+                    ? messages.where((m) => m.timestamp > clearedAt).toList()
+                    : messages;
+                controller.add(filtered);
+                _cacheMessagesLocally(chatId, messages);
+              }
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              debugPrint('Error listening to messages for $chatId: $error');
+              if (!controller.isClosed) controller.addError(error, stackTrace);
+            },
+          );
+    }
+
+    // Public chat docs can be readable while their message subcollections are
+    // restricted. Wait for participant/userChats access before subscribing.
+    userChatSub = _userChatsCol(uid)
         .doc(chatId)
         .snapshots()
         .listen(
-          (snapshot) {
+          (snapshot) async {
             final data = snapshot.data();
             clearedAt = (data?['clearedAt'] as int?) ?? 0;
 
-            if (lastMessages.isNotEmpty && !controller.isClosed) {
+            if (!hasAccess) {
+              hasAccess = snapshot.exists || await canReadMessages();
+              if (hasAccess) {
+                await emitCachedMessages();
+                startMessagesListener();
+              }
+            } else if (lastMessages.isNotEmpty && !controller.isClosed) {
               controller.add(
                 lastMessages.where((m) => m.timestamp > clearedAt).toList(),
               );
@@ -275,44 +343,9 @@ class ChatRepository {
           },
         );
 
-    // 3. Listen to Firestore Messages subcollection
-    final subscription = _messagesCol(chatId)
-        .orderBy('timestamp', descending: true)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            final List<Message> messages = [];
-
-            for (final doc in snapshot.docs) {
-              try {
-                messages.add(Message.fromFirestore(chatId, doc));
-              } catch (e) {
-                debugPrint('Error parsing message ${doc.id}: $e');
-              }
-            }
-
-            // [PERF] Query already returns sorted by timestamp desc — skip redundant sort
-            lastMessages = messages;
-
-            if (!controller.isClosed) {
-              // [PERF] Only filter if clearedAt is actually set
-              final filtered = clearedAt > 0
-                  ? messages.where((m) => m.timestamp > clearedAt).toList()
-                  : messages;
-              controller.add(filtered);
-              _cacheMessagesLocally(chatId, messages);
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            debugPrint('Error listening to messages for $chatId: $error');
-            if (!controller.isClosed) controller.addError(error, stackTrace);
-          },
-        );
-
     controller.onCancel = () {
-      clearedAtSub.cancel();
-      subscription.cancel();
+      userChatSub?.cancel();
+      subscription?.cancel();
     };
 
     return controller.stream;

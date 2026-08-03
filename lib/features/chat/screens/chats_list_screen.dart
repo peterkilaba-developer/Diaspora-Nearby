@@ -14,6 +14,8 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [
 import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+
 final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   final authState = ref.watch(authStateProvider);
   final chatRepo = ref.watch(chatRepositoryProvider);
@@ -208,9 +210,20 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
           }
         }
 
-        final filteredChats = searchQuery.isEmpty
+        final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
+        final baseChats = isGlobalUnlocked
             ? chats
-            : chats.where((chat) {
+            : chats
+                .where(
+                  (chat) =>
+                      chat.id != 'global_community' &&
+                      chat.locationType != 'global',
+                )
+                .toList();
+
+        final filteredChats = searchQuery.isEmpty
+            ? baseChats
+            : baseChats.where((chat) {
                 final query = searchQuery.toLowerCase();
                 final nameMatch = chat.name.toLowerCase().contains(query);
                 final messageMatch =

@@ -93,7 +93,7 @@ class EmergencyFundService {
     final profile = await _profileRepo.getUserProfile(userId);
     final isProfileComplete = profile?.isComplete ?? false;
 
-    // 2. In-person QR scan check — read P.o.C.T trust data
+    // 2. In-person QR scan check — read PCT trust data
     int qrScanCount = 0;
     try {
       final trustDoc = await _firestore

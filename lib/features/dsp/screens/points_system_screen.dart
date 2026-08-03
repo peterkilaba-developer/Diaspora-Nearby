@@ -19,6 +19,7 @@ import 'package:diaspora_nearby/features/dsp/widgets/country_leaderboard_item.da
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
+import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 
 final referralStatsProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, userId) {
@@ -205,7 +206,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   lifetimeEarnings: const {},
                   homeCountryCode: null,
                   signupDate: DateTime.now(),
-                  tgeHistory: const [],
+                  tdeHistory: const [],
                 );
 
             return Column(
@@ -225,8 +226,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     ),
                     tabs: const [
                       Tab(text: 'DASHBOARD'),
-                      Tab(text: 'P.o.S.A'),
-                      Tab(text: 'P.o.C.T'),
+                      Tab(text: 'PSA'),
+                      Tab(text: 'PCT'),
                     ],
                   ),
                 ),
@@ -373,7 +374,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  // --- TAB 2: P.o.S.A (Proof of Social Activities) ---
+  // --- TAB 2: PSA (Proof of Social Activities) ---
   Widget _buildPoATab(
     BuildContext context,
     UserPoints userPoints,
@@ -639,7 +640,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  // --- TAB 3: P.o.C.T (Proof of Community Trust) ---
+  // --- TAB 3: PCT (Proof of Community Trust) ---
   Widget _buildPoCTTab(
     BuildContext context,
     UserPoints userPoints,
@@ -673,7 +674,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              'DSP is earned instantly for all activities (except Profile Completion, which requires 10 fields for a 10,000 DSP payout). P.o.C.T is earned instantly for general activities. For the four core connection milestones (Family, Friend, QR Connect, and Vouched/Verified), you earn 1,000 DSP instantly per connection, but the 10 P.o.C.T is awarded only at 10× intervals (10, 100, 1K...).',
+              'DSP is earned instantly for all activities (except Profile Completion, which requires 10 fields for a 10,000 DSP payout). PCT is earned instantly for general activities. For the four core connection milestones (Family, Friend, QR Connect, and Vouched/Verified), you earn 1,000 DSP instantly per connection, but the 10 PCT is awarded only at 10× intervals (10, 100, 1K...).',
               style: TextStyle(
                 color: Theme.of(context).hintColor,
                 fontSize: 12,
@@ -688,7 +689,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               title: 'Complete Your Profile',
               subtitle:
                   'Fill 10 profile fields to fully complete your profile and earn your genesis bonus.',
-              amount: '+10 P.o.C.T  •  10,000 DSP',
+              amount: '+10 PCT  •  10,000 DSP',
               standing:
                   '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
             ),
@@ -700,16 +701,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Verified by Peer',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique verifications.',
-              amount: '+10 P.o.C.T per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique verifications.',
+              amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueVerificationCount ?? 0} Received',
             ),
             _buildTrustCard(
               context,
               title: 'Verify Peer',
               subtitle:
-                  'You verifying someone else. Earn 1,000 DSP instantly. Does not award P.o.C.T (action builds trust for them, not you).',
-              amount: '0 P.o.C.T',
+                  'You verifying someone else. Earn 1,000 DSP instantly. Does not award PCT (action builds trust for them, not you).',
+              amount: '0 PCT',
               standing: '-- Given',
             ),
 
@@ -722,16 +723,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Vouched by Peer',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique vouches.',
-              amount: '+10 P.o.C.T per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique vouches.',
+              amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueVouchCount ?? 0} Received',
             ),
             _buildTrustCard(
               context,
               title: 'Vouch for Peer',
               subtitle:
-                  'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award P.o.C.T (action builds trust for them, not you).',
-              amount: '0 P.o.C.T',
+                  'You vouching for someone else. Earn 1,000 DSP + 1,000 DSP staked. Does not award PCT (action builds trust for them, not you).',
+              amount: '0 PCT',
               standing: '-- Given',
             ),
 
@@ -740,24 +741,24 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Family Connection',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique connections.',
-              amount: '+10 P.o.C.T per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique connections.',
+              amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueFamilyCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'Friend Connection',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique connections.',
-              amount: '+10 P.o.C.T per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique connections.',
+              amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueFriendCount ?? 0} Connected',
             ),
             _buildTrustCard(
               context,
               title: 'QR Connect',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 P.o.C.T awarded at 10, 100, 1K... unique connections.',
-              amount: '+10 P.o.C.T per 10× milestone',
+                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique connections.',
+              amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueQrCount ?? 0} Scanned',
             ),
 
@@ -766,7 +767,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Account Age',
               subtitle: 'Time on the platform builds trust.',
-              amount: '+1 P.o.C.T every 100 days',
+              amount: '+1 PCT every 100 days',
               standing: '$daysActive Days',
             ),
 
@@ -830,7 +831,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 24),
 
             const SizedBox(height: 24),
-            _buildSubHeader('TGE Efficiency Gates'),
+            _buildSubHeader('TDE Efficiency Gates'),
             const SizedBox(height: 16),
             _buildEarningGateTable(curScore),
           ],
@@ -841,7 +842,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
   // --- HELPERS FOR CARDS ---
 
-  /// P.o.S.A activity card: title, subtitle, and amount each on their own row.
+  /// PSA activity card: title, subtitle, and amount each on their own row.
   Widget _buildActivityCard(
     BuildContext context, {
     required String title,
@@ -912,7 +913,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  /// P.o.C.T trust card: title, subtitle, amount, and standing each on their own row.
+  /// PCT trust card: title, subtitle, amount, and standing each on their own row.
   Widget _buildTrustCard(
     BuildContext context, {
     required String title,
@@ -1025,11 +1026,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
     final int totalPoints = points.totalPoints;
     // TGE gate is now 10 unique Identity QR exchanges — and only for the
-    // user's first TGE. After firstTgeReceivedAt is stamped, every TGE
+    // user's first TDE. After firstTgeReceivedAt is stamped, every TGE
     // after that is automatic and the gate disappears.
     const int qrGateThreshold = 10;
     final bool isPostFirstTge =
-        points.firstTgeReceivedAt != null || points.tgeHistory.isNotEmpty;
+        points.firstTgeReceivedAt != null || points.tdeHistory.isNotEmpty;
     final double progress = isPostFirstTge
         ? 1.0
         : (uniqueQrCount / qrGateThreshold).clamp(0.0, 1.0);
@@ -1056,10 +1057,17 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                 color: Colors.grey.withValues(alpha: 0.2),
               ),
               Expanded(
-                child: _buildBalanceItem(
-                  'Net Balance',
-                  NumberFormat('#,###').format(totalPoints),
-                  LucideIcons.wallet,
+                child: Builder(
+                  builder: (context) {
+                    final valuation = ref.watch(dspValuationProvider);
+                    final usdEst = valuation.formatBalance(totalPoints);
+                    return _buildBalanceItem(
+                      'Net Balance',
+                      NumberFormat('#,###').format(totalPoints),
+                      LucideIcons.wallet,
+                      subtitle: usdEst,
+                    );
+                  },
                 ),
               ),
               Container(
@@ -1069,7 +1077,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               ),
               Expanded(
                 child: _buildBalanceItemColored(
-                  'TGE Efficiency',
+                  'TDE Efficiency',
                   efficiencyStatus,
                   LucideIcons.barChart2,
                   efficiencyColor,
@@ -1095,7 +1103,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             children: [
               Text(
                 isPostFirstTge
-                    ? 'Auto-included in every future TGE'
+                    ? 'Auto-included in every future TDE'
                     : '$uniqueQrCount / $qrGateThreshold unique QR exchanges',
                 style: TextStyle(
                   fontSize: 11,
@@ -1123,7 +1131,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     );
   }
 
-  Widget _buildBalanceItem(String label, String value, IconData icon) {
+  Widget _buildBalanceItem(
+    String label,
+    String value,
+    IconData icon, {
+    String? subtitle,
+  }) {
     return Column(
       children: [
         Icon(icon, size: 20, color: AppTheme.accent),
@@ -1132,6 +1145,17 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           value,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0EA5E9),
+            ),
+          ),
+        ],
         Text(
           label,
           style: TextStyle(color: Theme.of(context).hintColor, fontSize: 11),
@@ -1237,7 +1261,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                 ),
                               ),
                               child: Text(
-                                'TGE $eventNumber / 10',
+                                'TDE $eventNumber / 10',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.accent,
@@ -1338,7 +1362,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
   Widget _buildEpochRoadmap(
     BuildContext context,
     int currentEpoch,
-    int currentTge,
+    int currentTde,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1403,7 +1427,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     .clamp(0.0, 1.0);
 
             // Calculate Total Distributed for this Epoch
-            final epochHistory = userPoints.tgeHistory
+            final epochHistory = userPoints.tdeHistory
                 .where((e) => e.epoch == epoch.level)
                 .toList();
             final double totalDistributed = epochHistory.fold(
@@ -1543,9 +1567,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   ),
                   const SizedBox(height: 24),
 
-                  // TGE Schedule
+                  // TDE Schedule
                   const Text(
-                    'TGE Schedule',
+                    'TDE Schedule',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 12),
@@ -1593,7 +1617,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
     return Column(
       children: List.generate(10, (index) {
-        final tgeNumber = index + 1;
+        final tdeNumber = index + 1;
 
         final stepStart = prevDspTarget + (index * stepSize);
         final stepTarget = prevDspTarget + ((index + 1) * stepSize);
@@ -1603,11 +1627,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             prevMemberTarget + ((index + 1) * effectiveMemberStep);
 
         // Find specific record for this TGE
-        final record = userPoints.tgeHistory.firstWhere(
-          (e) => e.epoch == epoch.level && e.tgeNumber == tgeNumber,
-          orElse: () => TgeDistributionRecord(
+        final record = userPoints.tdeHistory.firstWhere(
+          (e) => e.epoch == epoch.level && e.tdeNumber == tdeNumber,
+          orElse: () => TdeDistributionRecord(
             epoch: -1,
-            tgeNumber: -1,
+            tdeNumber: -1,
             amount: 0,
             efficiency: 0,
             date: DateTime.now(),
@@ -1659,7 +1683,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'TGE $tgeNumber',
+                              'TDE $tdeNumber',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: isCompleted
@@ -1786,7 +1810,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 24),
-                                // Row 1: Trust Check (Adopt P.o.C.T Spectrum Color)
+                                // Row 1: Trust Check (Adopt PCT Spectrum Color)
                                 Builder(
                                   builder: (context) {
                                     final currentTrust =
@@ -1805,7 +1829,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                           style: TextStyle(fontSize: 10),
                                         ),
                                         Text(
-                                          '$currentTrust P.o.C.T',
+                                          '$currentTrust PCT',
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -1818,12 +1842,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                 ),
                                 const SizedBox(height: 16),
                                 // Row 2: QR Gate (10 unique exchanges) — first
-                                // TGE only; auto-included after that.
+                                // TDE only; auto-included after that.
                                 Builder(
                                   builder: (context) {
                                     final isPostFirstTge =
                                         userPoints.firstTgeReceivedAt != null ||
-                                        userPoints.tgeHistory.isNotEmpty;
+                                        userPoints.tdeHistory.isNotEmpty;
                                     final qrMet =
                                         isPostFirstTge || uniqueQrCount >= 10;
                                     final label = isPostFirstTge
@@ -1897,7 +1921,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                   builder: (context) {
                                     final isPostFirstTge =
                                         userPoints.firstTgeReceivedAt != null ||
-                                        userPoints.tgeHistory.isNotEmpty;
+                                        userPoints.tdeHistory.isNotEmpty;
                                     final qrMet =
                                         isPostFirstTge || uniqueQrCount >= 10;
                                     final currentBalance =
@@ -1908,12 +1932,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                       efficiency = (trust / 10).ceil() / 10.0;
                                       if (efficiency > 1.0) efficiency = 1.0;
                                     }
-                                    final double payout =
-                                        currentBalance * efficiency;
-                                    final payoutStr = qrMet
-                                        ? '${NumberFormat('#,###').format(payout.round())} \$DIASPORA'
-                                        : '— complete QR gate first';
-
+                                    final double payout = currentBalance * efficiency;
+                                    final valuation =
+                                        ref.watch(dspValuationProvider);
+                                    final usdEst =
+                                        valuation.formatBalance(payout.round());
                                     return Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
@@ -1922,16 +1945,41 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                           'Estimated Payout',
                                           style: TextStyle(fontSize: 10),
                                         ),
-                                        Text(
-                                          payoutStr,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: qrMet
-                                                ? AppTheme.warning
-                                                : Colors.grey,
+                                        if (!qrMet)
+                                          const Text(
+                                            '— complete QR gate first',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.grey,
+                                            ),
+                                          )
+                                        else
+                                          Text.rich(
+                                            TextSpan(
+                                              children: [
+                                                TextSpan(
+                                                  text:
+                                                      '${NumberFormat('#,###').format(payout.round())} \$DIASPORA ',
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: AppTheme.warning,
+                                                  ),
+                                                ),
+                                                TextSpan(
+                                                  text: '($usdEst)',
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    color: Color(0xFF38BDF8),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
                                       ],
                                     );
                                   },
@@ -2084,14 +2132,14 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                       ),
                     ),
                     Text(
-                      '+$seniorityPoints P.o.C.T earned from $daysActive days',
+                      '+$seniorityPoints PCT earned from $daysActive days',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).hintColor,
                       ),
                     ),
                     const Text(
-                      'Rule: +1 P.o.C.T for every 100 days of activity',
+                      'Rule: +1 PCT for every 100 days of activity',
                       style: TextStyle(
                         fontSize: 10,
                         fontStyle: FontStyle.italic,
@@ -2169,7 +2217,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         ),
 
         const SizedBox(height: 24),
-        _buildSubHeader('P.o.C.T Trust Levels'),
+        _buildSubHeader('PCT Trust Levels'),
         const SizedBox(height: 12),
 
         // Trust Score Journey
@@ -2397,7 +2445,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
       child: Column(
         children: [
           _buildEfficiencyRow(
-            'P.o.C.T Score',
+            'PCT Score',
             'Efficiency',
             'Status',
             isHeader: true,
@@ -2406,68 +2454,20 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           _buildEfficiencyRow(
             '91 - 100',
             '100%',
-            'Maximum Yield',
+            'Full Conversion',
             textColor: EpochService.getEfficiencyColor(95),
           ),
           _buildEfficiencyRow(
-            '81 - 90',
-            '90%',
-            'Very High Yield',
-            textColor: EpochService.getEfficiencyColor(85),
+            '11 - 90',
+            '1:1 Map',
+            '1% per PCT point',
+            textColor: EpochService.getEfficiencyColor(50),
           ),
           _buildEfficiencyRow(
-            '71 - 80',
-            '80%',
-            'High Yield',
-            textColor: EpochService.getEfficiencyColor(75),
-          ),
-          _buildEfficiencyRow(
-            '61 - 70',
-            '70%',
-            'Good Yield',
-            textColor: EpochService.getEfficiencyColor(65),
-          ),
-          _buildEfficiencyRow(
-            '51 - 60',
-            '60%',
-            'Standard Yield',
-            textColor: EpochService.getEfficiencyColor(55),
-          ),
-          _buildEfficiencyRow(
-            '41 - 50',
-            '50%',
-            'Basic Yield',
-            textColor: EpochService.getEfficiencyColor(45),
-          ),
-          _buildEfficiencyRow(
-            '31 - 40',
-            '40%',
-            'Low Yield',
-            textColor: EpochService.getEfficiencyColor(35),
-          ),
-          _buildEfficiencyRow(
-            '21 - 30',
-            '30%',
-            'Very Low Yield',
-            textColor: EpochService.getEfficiencyColor(25),
-          ),
-          _buildEfficiencyRow(
-            '11 - 20',
-            '20%',
-            'Minimal Yield',
-            textColor: EpochService.getEfficiencyColor(15),
-          ),
-          _buildEfficiencyRow(
-            '1 - 10',
-            '10%',
-            'Entry Yield',
-            textColor: EpochService.getEfficiencyColor(5),
-          ),
-          _buildEfficiencyRow(
-            '0',
+            '0 - 10',
             '0%',
-            'No Yield',
-            textColor: EpochService.getEfficiencyColor(0),
+            'No Conversion',
+            textColor: EpochService.getEfficiencyColor(5),
           ),
         ],
       ),
@@ -2638,7 +2638,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             trustScore: (globalCommunity?.averagePoCT ?? 0).toDouble(),
             tgeEvent: globalTgeEvent,
             epochLabel:
-                'Chambers operations · Charitable donations · Protocol upkeep',
+                'Zero fee value transfer subsidies, salaries and benefits for community leaders and chambers of commerce staff, global charitable contributions, and all other costs associated with running the platform',
             avatarWidget: CommunityChatUtils.getCommunityAvatar(
               context: context,
               type: globalCommunity?.type ?? 'global',
@@ -2738,7 +2738,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             points: liquidityPoints,
             efficiency: 1.0,
             epochLabel:
-                'DEX Liquidity & Market Access • TGE $globalTgeEvent/10',
+                'DEX Liquidity & Market Access • TDE $globalTgeEvent/10',
           ),
           const SizedBox(height: 12),
 
@@ -3008,7 +3008,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         if (trustScore != null && tgeEvent != null)
                           const TextSpan(text: ' • '),
                         if (tgeEvent != null)
-                          TextSpan(text: 'TGE $tgeEvent/10'),
+                          TextSpan(text: 'TDE $tgeEvent/10'),
                       ],
                     ),
                   ),

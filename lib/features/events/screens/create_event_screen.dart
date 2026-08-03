@@ -23,6 +23,7 @@ import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/events/screens/organizer_events_screen.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
+import 'package:diaspora_nearby/core/services/plus_code_service.dart';
 
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
@@ -139,6 +140,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
   String? _venueCity;
   String? _venueState;
   String? _venueCountry;
+  String? _plusCode;
   double? _latitude;
   double? _longitude;
 
@@ -1449,6 +1451,16 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         orgName = org['name'] ?? org['businessName'];
       }
 
+      final locationText = _locationController.text.trim();
+      if (PlusCodeService.isValidPlusCode(locationText)) {
+        final decoded = PlusCodeService.decode(locationText);
+        if (decoded != null) {
+          _latitude = decoded['latitude'];
+          _longitude = decoded['longitude'];
+          _plusCode = locationText;
+        }
+      }
+
       if (widget.eventToEdit != null) {
         // UPDATE
         final updatedEvent = widget.eventToEdit!.copyWith(
@@ -1458,7 +1470,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           startTime: _formatTimeOfDay(_startTime),
           endDate: DateFormat('yyyy-MM-dd').format(_endDate),
           endTime: _formatTimeOfDay(_endTime),
-          location: _locationController.text.trim(),
+          location: locationText,
           category: _category,
           attendingPermission: _attendingPermission,
           venueName: _venueName,
@@ -1466,6 +1478,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           venueCity: _venueCity,
           venueState: _venueState,
           venueCountry: _venueCountry,
+          plusCode: _plusCode,
           latitude: _latitude,
           longitude: _longitude,
           status: _isPublished ? 'published' : 'hidden',
@@ -1535,6 +1548,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           venueCity: _venueCity,
           venueState: _venueState,
           venueCountry: _venueCountry,
+          plusCode: _plusCode,
           latitude: _latitude,
           longitude: _longitude,
           status: _isPublished ? 'published' : 'hidden', // [NEW] Use toggle

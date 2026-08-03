@@ -85,7 +85,7 @@ class TrustVouchModal extends ConsumerWidget {
             ),
           ),
 
-          // --- Title row with P.o.C.T + DSP stats ---
+          // --- Title row with PCT + DSP stats ---
           Padding(
             padding: const EdgeInsets.only(
               left: AppTheme.pageHorizontalPadding,
@@ -106,7 +106,7 @@ class TrustVouchModal extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      // P.o.C.T + DSP inline stats
+                      // PCT + DSP inline stats
                       Row(
                         children: [
                           Icon(
@@ -124,7 +124,7 @@ class TrustVouchModal extends ConsumerWidget {
                           Text(
                             trustAsync.when(
                               data: (t) =>
-                                  '${t?.trustScore.toInt() ?? 0} P.o.C.T',
+                                  '${t?.trustScore.toInt() ?? 0} PCT',
                               loading: () => '--',
                               error: (_, _) => '--',
                             ),
@@ -250,7 +250,7 @@ class TrustVouchModal extends ConsumerWidget {
                         _buildExplainerRow(
                           context,
                           LucideIcons.trophy,
-                          'Every 10 Net Vouches (Full Trust minus No Trust) earns ±1 P.o.C.T for the trusted user',
+                          'Every 10 Net Vouches (Full Trust minus No Trust) earns ±1 PCT for the trusted user',
                         ),
                       ],
                     ),

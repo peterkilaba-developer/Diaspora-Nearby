@@ -682,13 +682,209 @@
     <!-- ═══════════════════ HERO ═══════════════════ -->
     <header class="hero">
         <div class="container">
+<style>
+
+        .hierarchy-flow {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 0;
+            align-items: start;
+            margin-top: 20px;
+        }
+
+        .hierarchy-col {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .hierarchy-col-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 8px;
+        }
+
+        .hierarchy-col-center .vline {
+            width: 2px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .hier-node {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .hier-node.global {
+            grid-column: 1 / -1;
+            justify-self: center;
+            background: rgba(123, 158, 107, 0.12);
+            color: var(--sage);
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+
+        .hier-node i {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .hier-node .hier-label {
+            color: var(--text-secondary);
+            font-weight: 400;
+            font-size: 0.75rem;
+            margin-left: auto;
+        }
+
+        .hier-heading {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--sage);
+            margin-bottom: 4px;
+            text-align: center;
+        }
+
+        .ddi-callout {
+            background: rgba(255, 152, 0, 0.06);
+            border-radius: var(--card-radius);
+            padding: 20px;
+            margin-top: 28px;
+        }
+
+        .ddi-callout h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--orange);
+            margin-bottom: 8px;
+        }
+
+        .ddi-callout h3 i {
+            width: 20px;
+            height: 20px;
+        }
+
+        .ddi-callout p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .tge-callout {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: rgba(123, 158, 107, 0.08);
+            margin-top: 20px;
+            font-size: 0.82rem;
+            color: var(--sage);
+            font-weight: 500;
+        }
+
+        .tge-callout i {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .tge-callout .eff-val {
+            font-weight: 800;
+            font-size: 1rem;
+            color: var(--sage);
+            margin-left: auto;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        @media (max-width: 640px) {
+            .hierarchy-flow {
+                grid-template-columns: 1fr;
+            }
+
+            .hierarchy-col-center {
+                flex-direction: row;
+                padding: 8px 0;
+            }
+
+            .hierarchy-col-center .vline {
+                width: 40px;
+                height: 2px;
+            }
+        }
+
+        /* ── Footer ── */
+        .footer {
+            padding: 32px 0;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
+
+        .footer a {
+            color: var(--sage);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer .disclaimer {
+            margin-top: 12px;
+            font-size: 0.68rem;
+            color: rgba(241, 245, 249, 0.3);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .hero h1 {
+                font-size: 1.9rem;
+            }
+
+            .hero .tagline {
+                font-size: 0.95rem;
+            }
+
+            .contract-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .section-title {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══════════════════ HERO ═══════════════════ -->
+    <header class="hero">
+        <div class="container">
             <img src="/icons/logo-orange-transparent-256.png" alt="Diaspora Nearby" class="hero-logo">
             <h1><span class="token-name">$DIASPORA</span> Token</h1>
             <p class="tagline">The Hard Asset for the Global Diaspora</p>
             <div class="hero-badges">
                 <span class="badge live"><span class="dot"></span> Live on Coinbase L2 Base Blockchain</span>
                 <a class="badge token-badge"
-                    href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
+                    href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank"
                     rel="noopener">
                     <i data-lucide="external-link" style="width:12px;height:12px"></i> Verify on Blockchain
                 </a>
@@ -721,7 +917,7 @@
                     <div class="card-icon orange"><i data-lucide="lock"></i></div>
                     <h3>Mint-and-Lock</h3>
                     <p>Each epoch's token supply is pre-minted and locked on-chain in the TGE Controller. Tokens are
-                        only distributed via transparent TGE events, verifiable on Basescan.</p>
+                        only distributed via transparent TDE releases, verifiable on Basescan.</p>
                 </div>
                 <div class="card">
                     <div class="card-icon orange"><i data-lucide="flame"></i></div>
@@ -732,8 +928,8 @@
                 <div class="card">
                     <div class="card-icon"><i data-lucide="shield-check"></i></div>
                     <h3>Proof of Community Trust</h3>
-                    <p>P.o.C.T — a reputation score based on verifications, vouches, connections, and account age —
-                        determines your TGE conversion efficiency.</p>
+                    <p>P.o.C.T — a trust score based on verifications, vouches, connections, and account age —
+                        determines your TDE distribution efficiency.</p>
                 </div>
             </div>
         </div>
@@ -751,9 +947,9 @@
                 <div class="contract-row">
                     <span class="contract-label">Token (Proxy)</span>
                     <span class="contract-value">
-                        <a href="https://basescan.org/address/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                        <a href="https://basescan.org/address/0x55d7e7d006938A15082752225ED44Fd130B87735"
                             target="_blank" rel="noopener">
-                            0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c
+                            0x55d7e7d006938A15082752225ED44Fd130B87735
                         </a>
                     </span>
                 </div>
@@ -803,8 +999,8 @@
                 <span class="token-name">$DIASPORA</span> follows a 10-epoch growth model. Each epoch's supply is 10×
                 the previous.
                 Token supply is pre-minted and locked on-chain in the TGE Controller before distribution begins.
-                Each epoch has 10 TGE events, distributing 10% of the epoch supply per event based on users' accumulated
-                DSP and P.o.C.T efficiency.
+                Each epoch has one TGE and 10 TDE releases. TDEs occur at every 10% DSP-supply milestone inside the epoch,
+                distributing the corresponding epoch decile based on users' accumulated DSP and P.o.C.T efficiency.
             </p>
 
             <table class="eff-table" style="margin-top: 24px;">
@@ -813,7 +1009,7 @@
                         <th>Epoch</th>
                         <th>DSP Target</th>
                         <th>Token Supply</th>
-                        <th>TGE Events</th>
+                        <th>TDE Releases</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -824,7 +1020,7 @@
                         <td class="eff-rate" style="color: var(--orange);">1,000,000</td>
                         <td>10</td>
                         <td style="color: var(--sage); font-weight: 600;">Active — <a
-                                href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c"
+                                href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735"
                                 target="_blank" rel="noopener"
                                 style="color: var(--sage); text-decoration: underline; text-underline-offset: 2px;">1M
                                 Locked on-chain</a></td>
@@ -947,18 +1143,16 @@
                 <div class="card">
                     <div class="card-icon"><i data-lucide="vote"></i></div>
                     <h3>Community Governance</h3>
-                    <p>Each community governs its treasury. Members vote on proposals for how funds are allocated —
-                        grants,
-                        infrastructure, events, and Diaspora Direct Investments lending pools.</p>
+                    <p>Each community governs its treasury. Members who complete the 7 Genesis Milestones vote on proposals and community loans — with mandatory voting enforced (-1 P.C.T member / -10 P.C.T leader missed-vote penalty).</p>
                 </div>
                 <div class="card">
                     <div class="card-icon orange"><i data-lucide="badge-check"></i></div>
-                    <h3>APoCT TGE Efficiency</h3>
-                    <p>Community treasuries convert at the <strong style="color:var(--sage)">Average P.o.C.T
-                            (APoCT)</strong> of their members
-                        during TGE events. The higher the collective trust of a community, the more
-                        <span class="token-name">$DIASPORA</span> its treasury yields using the same decile scale as
-                        individuals.
+                    <h3>AP.C.T TDE Efficiency</h3>
+                    <p>Community treasuries convert at the <strong style="color:var(--sage)">Average P.C.T
+                            (AP.C.T)</strong> of their members
+                        during TDE releases. The higher the collective trust of a community, the more
+                        <span class="token-name">$DIASPORA</span> its treasury yields using the same exact-percent
+                        efficiency rule as individuals.
                     </p>
                 </div>
             </div>
@@ -1034,9 +1228,9 @@
             <!-- TGE efficiency callout -->
             <div class="tge-callout">
                 <i data-lucide="shield-check"></i>
-                <span>Community treasuries convert at APoCT efficiency — the weighted average P.o.C.T of all members,
-                    applied on the same decile scale</span>
-                <span class="eff-val">APoCT</span>
+                <span>Community treasuries convert at AP.C.T efficiency — the weighted average P.C.T of all members,
+                    applied with the same no-trust, standard-trust, and full-trust rule</span>
+                <span class="eff-val">AP.C.T</span>
             </div>
         </div>
     </section>
@@ -1045,17 +1239,17 @@
     <section>
         <div class="container">
             <p class="section-label"><i data-lucide="gauge"></i> TGE Efficiency</p>
-            <h2 class="section-title">P.o.C.T-Based Efficiency Scale</h2>
+            <h2 class="section-title">P.C.T-Based Efficiency Scale</h2>
             <p class="section-desc">
-                Your Proof of Community Trust score determines what percentage of your DSP converts to <span
+                Your Proof of Community Trust (P.C.T) score determines what percentage of your DSP converts to <span
                     class="token-name">$DIASPORA</span>
-                during a TGE event. The scale uses a 10-step decile system: <code>(score ÷ 10) → ceil → × 10%</code>.
+                during a TDE release. Scores 1-10 convert at 0%, scores 11-90 convert at the exact P.C.T percentage, and scores 91-100 convert at 100%. Completing all 7 Genesis Milestones and reaching 91+ P.C.T unlocks Peer Hosting, Peer Stay, Leadership Candidacy, and Voting Rights.
             </p>
 
             <table class="eff-table">
                 <thead>
                     <tr>
-                        <th>P.o.C.T Score</th>
+                        <th>P.C.T Score</th>
                         <th>Efficiency</th>
                         <th>Yield Status</th>
                     </tr>
@@ -1068,48 +1262,48 @@
                     </tr>
                     <tr class="eff-high">
                         <td>81 – 90</td>
-                        <td class="eff-rate">90%</td>
+                        <td class="eff-rate">81-90%</td>
                         <td>Very High Yield</td>
                     </tr>
                     <tr class="eff-standard">
                         <td>71 – 80</td>
-                        <td class="eff-rate">80%</td>
+                        <td class="eff-rate">71-80%</td>
                         <td>High Yield</td>
                     </tr>
                     <tr class="eff-standard">
                         <td>61 – 70</td>
-                        <td class="eff-rate">70%</td>
+                        <td class="eff-rate">61-70%</td>
                         <td>Good Yield</td>
                     </tr>
                     <tr class="eff-medium">
                         <td>51 – 60</td>
-                        <td class="eff-rate">60%</td>
+                        <td class="eff-rate">51-60%</td>
                         <td>Standard Yield</td>
                     </tr>
                     <tr class="eff-medium">
                         <td>41 – 50</td>
-                        <td class="eff-rate">50%</td>
+                        <td class="eff-rate">41-50%</td>
                         <td>Basic Yield</td>
                     </tr>
                     <tr class="eff-basic">
                         <td>31 – 40</td>
-                        <td class="eff-rate">40%</td>
+                        <td class="eff-rate">31-40%</td>
                         <td>Low Yield</td>
                     </tr>
                     <tr class="eff-basic">
                         <td>21 – 30</td>
-                        <td class="eff-rate">30%</td>
+                        <td class="eff-rate">21-30%</td>
                         <td>Very Low Yield</td>
                     </tr>
                     <tr class="eff-low">
                         <td>11 – 20</td>
-                        <td class="eff-rate">20%</td>
+                        <td class="eff-rate">11-20%</td>
                         <td>Minimal Yield</td>
                     </tr>
                     <tr class="eff-low">
                         <td>1 – 10</td>
-                        <td class="eff-rate">10%</td>
-                        <td>Entry Yield</td>
+                        <td class="eff-rate">0%</td>
+                        <td>No Conversion</td>
                     </tr>
                     <tr class="eff-none">
                         <td>0</td>
@@ -1136,141 +1330,8 @@
                 <div class="card">
                     <div class="card-icon"><i data-lucide="target"></i></div>
                     <h3>2. Qualify for TGE</h3>
-                    <p>Accumulate DSP to reach the epoch's TGE threshold. Your P.o.C.T score determines your conversion
-                        rate.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="zap"></i></div>
-                    <h3>3. Token Generation</h3>
-                    <p>At each TGE, qualified users receive <span class="token-name">$DIASPORA</span> tokens from the
-                        locked on-chain supply, proportional to DSP × efficiency.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="wallet"></i></div>
-                    <h3>4. On-Chain Ownership</h3>
-                    <p><span class="token-name">$DIASPORA</span> tokens are real ERC-20 assets on Coinbase L2 Base Blockchain. Fully
-                        verifiable, transferable, and community-governed.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══════════════════ SECURITY ═══════════════════ -->
-    <section>
-        <div class="container">
-            <p class="section-label"><i data-lucide="shield"></i> Security</p>
-            <h2 class="section-title">Security & Transparency</h2>
-            <div class="card-grid">
-                <div class="card">
-                    <div class="card-icon"><i data-lucide="lock-keyhole"></i></div>
-                    <h3>UUPS Proxy Pattern</h3>
-                    <p>Contracts are upgradeable via UUPS proxies with OpenZeppelin's battle-tested libraries, allowing
-                        bug fixes while preserving state.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon"><i data-lucide="users"></i></div>
-                    <h3>Role-Based Access</h3>
-                    <p>Admin, Minter, Upgrader, and TGE Oracle roles are separated. No single key controls everything.
-                    </p>
-                </div>
-                <div class="card">
-                    <div class="card-icon"><i data-lucide="search-check"></i></div>
-                    <h3>On-Chain Verification</h3>
-                    <p>All minting, locking, and distribution events are recorded on-chain. Anyone can verify
-                        on the blockchain.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="flame"></i></div>
-                    <h3>Immutable Burns</h3>
-                    <p>Burned tokens are sent to the zero address — permanently removed from circulation, verifiable
-                        on-chain.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══════════════════ TEAM ═══════════════════ -->
-    <section>
-        <div class="container">
-            <p class="section-label"><i data-lucide="user-circle"></i> Team</p>
-            <h2 class="section-title">Who's Building This?</h2>
-            <p class="section-desc">Diaspora Nearby is built by diaspora members, for diaspora members.</p>
-
-            <div class="team-grid">
-                <div class="team-card">
-                    <div class="team-avatar">PK</div>
-                    <div class="team-info">
-                        <h3>Peter Kilaba</h3>
-                        <span class="role">Founder & Lead Developer</span>
-                        <p class="bio">Full-stack & blockchain developer. Building tools for the global diaspora.</p>
-                        <a href="https://www.linkedin.com/in/peter-kilaba" target="_blank" rel="noopener">
-                            <i data-lucide="linkedin"></i> LinkedIn
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══════════════════ LINKS ═══════════════════ -->
-    <section>
-        <div class="container">
-            <p class="section-label"><i data-lucide="link"></i> Resources</p>
-            <h2 class="section-title">Links & Resources</h2>
-            <div class="card-grid">
-                <div class="card">
-                    <div class="card-icon"><i data-lucide="smartphone"></i></div>
-                    <h3>Mobile App</h3>
-                    <p>Available on Android (Google Play) and iOS (App Store). Search "Diaspora Nearby".</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon"><i data-lucide="file-text"></i></div>
-                    <h3>Legal</h3>
-                    <p>
-                        <a href="/privacy_policy.html" style="color: var(--accent-blue); text-decoration: none;">Privacy
-                            Policy</a> ·
-                        <a href="/terms_service.html" style="color: var(--accent-blue); text-decoration: none;">Terms of
-                            Service</a>
-                    </p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="scan-search"></i></div>
-                    <h3>Blockchain Explorer</h3>
-                    <p>
-                        <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
-                            rel="noopener" style="color: var(--orange); text-decoration: none;">Token Contract</a> ·
-                        <a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED"
-                            target="_blank" rel="noopener" style="color: var(--orange); text-decoration: none;">TGE
-                            Controller</a>
-                    </p>
-                </div>
-                <div class="card">
-                    <div class="card-icon"><i data-lucide="mail"></i></div>
-                    <h3>Contact</h3>
-                    <p>
-                        <a href="mailto:peterkilaba.developer@gmail.com"
-                            style="color: var(--accent-blue); text-decoration: none;">peterkilaba.developer@gmail.com</a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ═══════════════════ FOOTER ═══════════════════ -->
-    <footer class="footer">
-        <div class="container">
-            <p>&copy; 2026 Diaspora Nearby. All rights reserved.</p>
-            <p style="margin-top: 6px;">
-                <a href="/">Home</a> ·
-                <a href="/privacy_policy.html">Privacy</a> ·
-                <a href="/terms_service.html">Terms</a> ·
-                <a href="https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c" target="_blank"
-                    rel="noopener">Blockchain Explorer</a>
-            </p>
-            <p class="disclaimer">
-                $DIASPORA is a utility token used within the Diaspora Nearby platform.
-                The primary method of token distribution is community participation. SAFT offerings are conducted under Regulation Crowdfunding (Reg CF) for all eligible investors, with a parallel Regulation D 506(c) offering for accredited investors from Epoch 4 onward.
-                There is no public sale, ICO, or IEO.
+                    <p>Accumulate DSP to reach the epoch's TGE threshold. Your P.o.C.T score determines your exact TDE
+                        distribution rate.</p>
             </p>
         </div>
     </footer>

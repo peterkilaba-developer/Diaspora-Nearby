@@ -40,6 +40,7 @@
 
 ### DDI Loan System (Multisig)
 - [ ] **DDI loan application form** — regular member submits loan request (amount, purpose, collateral)
+  - Enforces 10% token collateral locking based on borrower balance (`collateralAmount = requestedAmount * 0.10`)
 - [ ] **Council approval flow** — elected council members review & approve in-app
   - Stored in `governance/{communityId}/ddi_loans/{loanId}`
   - `requiredSignatures: 3` (3 of 5 council members)
@@ -49,7 +50,7 @@
   - Records TX hash for audit
 - [ ] **Cascading treasury logic** — if local treasury insufficient, escalate:
   - City → State → Country → Continent (each level needs its own council approval)
-- [ ] **Repayment tracking** — schedule, payments received, status updates
+- [ ] **Option A Repayment tracking** — Open-market DEX buyback deposited to Community Treasury (Host Town or Home Country) with schedule, payments received, and status updates
 
 ### TGE Security
 - [ ] **Admin role for executeTGE** — restrict manual trigger to admin custom claim

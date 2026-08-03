@@ -225,6 +225,38 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
             hostCountryCode: profile?.hostCountryCode,
             homeCountryCode: profile?.homeCountryCode,
           ),
+          // Info banner distinguishing Paid Peer Stays (Airbnb Alternatives) vs Free Peer Hosting in Communities
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppTheme.accent.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  LucideIcons.info,
+                  size: 14,
+                  color: AppTheme.accent,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Peer Stays below are paid Airbnb alternatives. For Free Peer Hosting, tap the ✈️ airplane icon next to any city in Communities.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           if (_showSearch) _buildSearchPanel(theme, isDark),
           Expanded(child: _buildBody(theme, isDark, listings)),
         ],

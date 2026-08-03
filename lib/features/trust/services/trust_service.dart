@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:diaspora_nearby/features/chat/repository/report_repository.dart';
 import 'package:flutter/foundation.dart';
@@ -176,7 +177,7 @@ class TrustService {
       // 7. Award 1,000 DSP to the solution author per verification.
       //    Duplicate verifications by the same user are already blocked at
       //    step 2, so every reward here corresponds to a unique verifier.
-      //    P.o.C.T is handled by the milestone system via verifiedSolutionsCount.
+      //    PCT is handled by the milestone system via verifiedSolutionsCount.
       try {
         await _ref
             .read(pointsServiceProvider)
@@ -229,6 +230,16 @@ class TrustService {
   }
 
   Future<TrustData?> getTrustData(String uid) => _repository.getTrustData(uid);
+
+  /// Calculate and return the trust score for [userId] (or current logged-in user if null).
+  Future<double> calculateTrustScore([String? userId]) async {
+    final targetUid = userId ?? FirebaseAuth.instance.currentUser?.uid;
+    if (targetUid == null || targetUid.isEmpty) return 0.0;
+
+    await updateTrustForUser(targetUid);
+    final trustData = await getTrustData(targetUid);
+    return trustData?.trustScore ?? 0.0;
+  }
 
   /// Helper to fetch data and recalculate
   Future<void> updateTrustForUser(String userId) async {
@@ -377,7 +388,7 @@ class TrustService {
       trustDataOld?.awardedQualificationMilestones ?? [],
     );
 
-    // Create a writable copy of the ledger for tracking real-time DSP and P.o.C.T levels
+    // Create a writable copy of the ledger for tracking real-time DSP and PCT levels
     final ledger = Map<String, int>.from(
       trustDataOld?.awardedHtsTracking ?? {},
     );
@@ -469,9 +480,9 @@ class TrustService {
         }
       }
 
-      // 3. P.o.C.T: One-time +10 P.o.C.T award when count reaches required threshold.
+      // 3. PCT: One-time +10 PCT award when count reaches required threshold.
       //    Awarded once per milestone. After threshold, only DSP is earned.
-      //    Seven Genesis Milestones = 70 max P.o.C.T, including active current
+      //    Seven Genesis Milestones = 70 max PCT, including active current
       //    location transparency below.
       //    Profile requires ALL fields (totalMilestoneFields), others require 10.
       final threshold = milestone == 'Profile'
@@ -491,14 +502,14 @@ class TrustService {
     await checkAndAward('Profile', profile.completedMilestoneFieldCount);
 
     // --- Programmatic HTS Engine (The Ledger) ---
-    // [UPDATED v3] Multiple ongoing P.o.C.T earners:
-    // 1. Trust Slider: +1 P.o.C.T per 10 unique full-trust voters (>90, staked 1,000 DSP)
-    // 2. Economic Transactions: +1 P.o.C.T per 10 completed unique txns
-    // Penalties: -10 P.o.C.T per 10 occurrences (milestone-based)
+    // [UPDATED v3] Multiple ongoing PCT earners:
+    // 1. Trust Slider: +1 PCT per 10 unique full-trust voters (>90, staked 1,000 DSP)
+    // 2. Economic Transactions: +1 PCT per 10 completed unique txns
+    // Penalties: -10 PCT per 10 occurrences (milestone-based)
 
     int htsPoctDelta = 0;
 
-    // GAINS/LOSSES: Trust Slider Net Vouches (+1 P.o.C.T per 10 net full-trust voters)
+    // GAINS/LOSSES: Trust Slider Net Vouches (+1 PCT per 10 net full-trust voters)
     // Full Trust (>90) adds +1, No Trust (1-10) subtracts -1. They cancel each other out.
     final fullTrustVoterIds = ratingDetails
         .where((r) => (r['score'] as num) > 90)
@@ -517,11 +528,11 @@ class TrustService {
     final netVouches = fullTrustVouchCount - noTrustVouchCount;
     htsPoctDelta += netVouches ~/ 10;
 
-    // GAINS: Economic Transactions (+1 P.o.C.T per 10 completed unique transactions)
+    // GAINS: Economic Transactions (+1 PCT per 10 completed unique transactions)
     final economicTxCount = await _getCompletedEconomicTransactionCount(userId);
     htsPoctDelta += economicTxCount ~/ 10;
 
-    // LOSSES: -10 P.o.C.T for every 10 occurrences (matches trust_data.dart docs).
+    // LOSSES: -10 PCT for every 10 occurrences (matches trust_data.dart docs).
     // flaggedMessagesCount now increments by 1 per unique reporter (see
     // ReportRepository), so the integer division yields the correct number
     // of 10-flag milestones to apply. Read from trust_data — that's where
@@ -536,7 +547,7 @@ class TrustService {
     htsPoctDelta -= (trustDataOld?.eventNoShowCount ?? 0) ~/ 10;
     htsPoctDelta -= (trustDataOld?.rejectedFamilyConnectionsCount ?? 0) ~/ 10;
 
-    // --- Transparency: City Visibility (+10 P.o.C.T) ---
+    // --- Transparency: City Visibility (+10 PCT) ---
     // Awarded automatically the moment we have the user's current location
     // (location permission granted + position fetched). Permanently forfeited
     // if the user ever toggles visibility off — re-enabling does NOT restore
@@ -549,14 +560,14 @@ class TrustService {
       cityVisibilityPoCT = 10;
     }
 
-    // --- Community Participation: Event Attendance (+10 P.o.C.T at 10 check-ins) ---
+    // --- Community Participation: Event Attendance (+10 PCT at 10 check-ins) ---
     double eventAttendancePoCT = 0;
     final checkInCount = trustDataOld?.verifiedCheckInCount ?? 0;
     if (checkInCount >= 10) {
       eventAttendancePoCT = 10;
     }
 
-    // --- Community Participation: Emergency Fund Contributor (+10 P.o.C.T) ---
+    // --- Community Participation: Emergency Fund Contributor (+10 PCT) ---
     double emergencyFundPoCT = 0;
     final hasStaked = await _ref
         .read(emergencyFundServiceProvider)
@@ -589,7 +600,7 @@ class TrustService {
         htsPoctDelta +
         seniorityScore;
 
-    // Ensure 0-100 (P.o.C.T is usually 1-100, but can exceed in theoretical systems, we clamp for UI)
+    // Ensure 0-100 (PCT is usually 1-100, but can exceed in theoretical systems, we clamp for UI)
     if (finalScore > 100) finalScore = 100;
     if (finalScore < 0) finalScore = 0;
 
@@ -618,7 +629,7 @@ class TrustService {
           (isProfileComplete ? 5.0 : 0.0) +
           (uniqueQrCount > 0 ? 15.0 : 0.0), // Simplified Legacy Fallback
       activityScore: (points.currentStreak * 1.0).clamp(0, 20),
-      reputationScore: (vouches.length * 2.0).clamp(0, 20),
+      vouchTrustScore: (vouches.length * 2.0).clamp(0, 20),
       vouchCount: vouches.length,
       lastUpdated: DateTime.now(),
       vouchedBy: vouches.map((v) => v.fromUserId).toList(),
@@ -652,8 +663,23 @@ class TrustService {
       genesisTrustIds: uniqueTrustIds.take(10).toList(),
       genesisVerificationIds: uniqueVerificationIds.take(10).toList(),
       genesisVouchIds: uniqueVouchIds.take(10).toList(),
-      isCouncilEligible:
-          daysActive >= 100 && isAdminOfLargeGroup && finalScore >= 90,
+      isCouncilEligible: (uniqueFamilyCount >= 10 &&
+              uniqueFriendCount >= 10 &&
+              uniqueQrCount >= 10 &&
+              uniqueVerificationIds.length >= 10 &&
+              uniqueVouchIds.length >= 10 &&
+              isProfileComplete &&
+              daysActive >= 100) &&
+          isAdminOfLargeGroup &&
+          finalScore >= 91,
+      isDdiEligible: (uniqueFamilyCount >= 10 &&
+              uniqueFriendCount >= 10 &&
+              uniqueQrCount >= 10 &&
+              uniqueVerificationIds.length >= 10 &&
+              uniqueVouchIds.length >= 10 &&
+              isProfileComplete &&
+              daysActive >= 100) &&
+          finalScore >= 91,
       awardedQualificationMilestones: milestones,
       awardedHtsTracking: ledger,
       referralCount: trustDataOld?.referralCount ?? 0,
@@ -982,7 +1008,7 @@ class TrustService {
     String fromUserId,
     String toUserId,
   ) async {
-    // [NEW] Base P.o.C.T Conditions
+    // [NEW] Base PCT Conditions
     final baseError = await _checkBasePoCTEligibility(fromUserId);
     if (baseError != null) return baseError;
 
@@ -1039,7 +1065,7 @@ class TrustService {
     String fromUserId,
     String toUserId,
   ) async {
-    // [NEW] Base P.o.C.T Conditions
+    // [NEW] Base PCT Conditions
     // 4. Check Vouch Eligibility (Must be Verified - via Profile or QR)
     final eligibilityError = await _checkBasePoCTEligibility(fromUserId);
     if (eligibilityError != null) return eligibilityError;
@@ -1085,7 +1111,7 @@ class TrustService {
     return null;
   }
 
-  /// Helper to enforce base P.o.C.T conditions for any trust action.
+  /// Helper to enforce base PCT conditions for any trust action.
   Future<String?> _checkBasePoCTEligibility(String userId) async {
     final profileRepo = _ref.read(profileRepositoryProvider);
     final pointsRepo = _ref.read(pointsRepositoryProvider);
@@ -1097,7 +1123,7 @@ class TrustService {
       return "You must complete your profile before you can verify or vouch for others.";
     }
 
-    // 2. Check Verified Status (implied P.o.C.T >= 30)
+    // 2. Check Verified Status (implied PCT >= 30)
     final trustData = await _repository.getTrustData(userId);
     if (trustData == null || !trustData.isVerified) {
       return "You must be a Verified User to perform this action.";
@@ -1143,8 +1169,8 @@ class TrustService {
   }
 
   // --- TGE Eligibility Checks ---
-  // P.o.C.T is NOT a gate. It only affects DSP→$DIASPORA swap efficiency
-  // via the decile scale in EpochService.calculateEfficiency().
+  // PCT is NOT a gate. It only affects DSP→$DIASPORA swap efficiency
+  // via exact PCT percent in EpochService.calculateEfficiency().
 
   Future<bool> checkUserTgeEligibility(String userId, int epoch) async {
     final points = await _ref
@@ -1203,7 +1229,7 @@ class TrustService {
   }
 
   /// [v3] Count completed economic transactions (DSP transfers, fiat, token)
-  /// for the ongoing P.o.C.T earner: +1 P.o.C.T per 10 completed transactions.
+  /// for the ongoing PCT earner: +1 PCT per 10 completed transactions.
   Future<int> _getCompletedEconomicTransactionCount(String userId) async {
     try {
       return await _ref

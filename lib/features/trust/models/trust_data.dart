@@ -53,17 +53,18 @@ class TrustData {
   // Component Scores (stored for transparency)
   final double identityScore;
   final double activityScore;
-  final double reputationScore;
+  final double vouchTrustScore;
 
-  // Reputation Metrics
+  // Trust Metrics
   final int vouchCount;
   final int reviewCount;
   final double averageRating;
   final int reportCount; // Negative signal
-  final int blockedByCount; // [NEW] -10 P.o.C.T for every 10 unique blocks
-  final int flaggedMessagesCount; // [NEW] -10 P.o.C.T for every 10 unique flags
+  final int blockedByCount; // [NEW] -10 PCT for every 10 unique blocks
+  final int flaggedMessagesCount; // [NEW] -10 PCT for every 10 unique flags
   final int
-  bannedVoucheeCount; // [NEW] -10 P.o.C.T if someone you vouched for is banned
+  bannedVoucheeCount; // [NEW] -10 PCT if someone you vouched for is banned
+  final int fakeVerificationsCount; // [NEW] -10 PCT for every 10 fake verifications
 
   // [NEW] Reliability & Helpfulness metrics
   final int attendedEventsCount;
@@ -80,14 +81,15 @@ class TrustData {
   final int verifiedByCount; // How many peers verified this user
   final int vouchedByCount; // How many peers vouched for this user
   final bool isCouncilEligible;
+  final bool isDdiEligible; // [NEW] 7 Genesis Milestones + 100+ days active + PCT 91+
   final List<String> awardedQualificationMilestones; // [NEW] Track awards
   final int verifiedCheckInCount;
   final int unresponsiveLiaisonCount;
-  final int rejectedFamilyConnectionsCount; // [NEW] -10 P.o.C.T
-  final int fakeVerificationsCount; // [NEW] -10 P.o.C.T
-  final int eventNoShowCount; // [NEW] -10 P.o.C.T
-  final int reportedFraudCount; // [NEW] -10 P.o.C.T
-  final int referralCount; // [NEW] +1 P.o.C.T per 10 referrals (linear)
+  final int rejectedFamilyConnectionsCount; // [NEW] -10 PCT
+
+  final int eventNoShowCount; // [NEW] -10 PCT
+  final int reportedFraudCount; // [NEW] -10 PCT
+  final int referralCount; // [NEW] +1 PCT per 10 referrals (linear)
 
   // [NEW] Ledger for already awarded/penalized HTS units (sets of 10)
   final Map<String, int> awardedHtsTracking;
@@ -120,7 +122,7 @@ class TrustData {
     this.isVerified = false,
     this.identityScore = 0.0,
     this.activityScore = 0.0,
-    this.reputationScore = 0.0,
+    this.vouchTrustScore = 0.0,
     this.vouchCount = 0,
     this.reviewCount = 0,
     this.averageRating = 0.0,
@@ -137,6 +139,7 @@ class TrustData {
     this.verifiedByCount = 0,
     this.vouchedByCount = 0,
     this.isCouncilEligible = false,
+    this.isDdiEligible = false,
     this.awardedQualificationMilestones = const [],
     this.verifiedCheckInCount = 0,
     this.unresponsiveLiaisonCount = 0,
@@ -145,8 +148,9 @@ class TrustData {
     this.blockedByCount = 0,
     this.flaggedMessagesCount = 0,
     this.bannedVoucheeCount = 0,
-    this.rejectedFamilyConnectionsCount = 0,
     this.fakeVerificationsCount = 0,
+    this.rejectedFamilyConnectionsCount = 0,
+
     this.eventNoShowCount = 0,
     this.reportedFraudCount = 0,
     this.referralCount = 0,
@@ -181,7 +185,7 @@ class TrustData {
     bool? isVerified,
     double? identityScore,
     double? activityScore,
-    double? reputationScore,
+    double? vouchTrustScore,
     int? vouchCount,
     int? reviewCount,
     double? averageRating,
@@ -216,8 +220,9 @@ class TrustData {
     int? blockedByCount,
     int? flaggedMessagesCount,
     int? bannedVoucheeCount,
-    int? rejectedFamilyConnectionsCount,
     int? fakeVerificationsCount,
+    int? rejectedFamilyConnectionsCount,
+
     int? eventNoShowCount,
     int? reportedFraudCount,
     int? referralCount,
@@ -230,7 +235,7 @@ class TrustData {
       isVerified: isVerified ?? this.isVerified,
       identityScore: identityScore ?? this.identityScore,
       activityScore: activityScore ?? this.activityScore,
-      reputationScore: reputationScore ?? this.reputationScore,
+      vouchTrustScore: vouchTrustScore ?? this.vouchTrustScore,
       vouchCount: vouchCount ?? this.vouchCount,
       reviewCount: reviewCount ?? this.reviewCount,
       averageRating: averageRating ?? this.averageRating,
@@ -270,10 +275,11 @@ class TrustData {
       blockedByCount: blockedByCount ?? this.blockedByCount,
       flaggedMessagesCount: flaggedMessagesCount ?? this.flaggedMessagesCount,
       bannedVoucheeCount: bannedVoucheeCount ?? this.bannedVoucheeCount,
-      rejectedFamilyConnectionsCount:
-          rejectedFamilyConnectionsCount ?? this.rejectedFamilyConnectionsCount,
       fakeVerificationsCount:
           fakeVerificationsCount ?? this.fakeVerificationsCount,
+      rejectedFamilyConnectionsCount:
+          rejectedFamilyConnectionsCount ?? this.rejectedFamilyConnectionsCount,
+
       eventNoShowCount: eventNoShowCount ?? this.eventNoShowCount,
       reportedFraudCount: reportedFraudCount ?? this.reportedFraudCount,
       referralCount: referralCount ?? this.referralCount,

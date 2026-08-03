@@ -120,9 +120,11 @@ class _OrganizationDetailScreenState
     }
   }
 
-  void _openChat() {
+  Future<void> _openChat() async {
     if (_orgData == null) return;
-    final chatId = _orgData!['chatId'] as String?;
+    final chatId = await _resolveChatIdForNavigation();
+    if (!mounted) return;
+
     if (chatId != null) {
       context.push('/chats/$chatId');
     } else {
@@ -130,6 +132,33 @@ class _OrganizationDetailScreenState
         context,
       ).showSnackBar(const SnackBar(content: Text('Chat not available')));
     }
+  }
+
+  Future<String?> _resolveChatIdForNavigation() async {
+    if (_orgData == null) return null;
+
+    final orgId = (_orgData!['id'] as String?) ?? widget.orgId;
+    final storedChatId = _orgData!['chatId'] as String?;
+    final isCorridorChamber = _orgData!['kind'] == 'corridor_chamber';
+
+    if (isCorridorChamber) {
+      final canonicalChatId = 'org_$orgId';
+      final canonicalChat = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(canonicalChatId)
+          .get();
+      if (canonicalChat.exists) return canonicalChatId;
+    }
+
+    if (storedChatId == null || storedChatId.isEmpty) return null;
+
+    final storedChat = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(storedChatId)
+        .get();
+    if (storedChat.exists) return storedChatId;
+
+    return null;
   }
 
   Future<void> _checkIfFollowing() async {

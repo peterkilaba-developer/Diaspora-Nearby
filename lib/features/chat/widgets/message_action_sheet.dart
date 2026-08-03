@@ -217,7 +217,7 @@ class ChatMessageActionSheet extends ConsumerWidget {
                             iconBgColor: Colors.green.shade50,
                             title: 'Mark as Verified Solution',
                             subtitle:
-                                'Earn 1,000 DSP · Boost sender\'s P.o.C.T',
+                                'Earn 1,000 DSP · Boost sender\'s PCT',
                             onTap: () {
                               Navigator.pop(context);
                               onVerifySolution?.call(message);

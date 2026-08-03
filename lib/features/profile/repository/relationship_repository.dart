@@ -612,8 +612,8 @@ class RelationshipRepository {
       );
     }
 
-    // 3. [UPDATED v8] Block milestone: P.o.C.T-only (no DSP deduction)
-    // -10 P.o.C.T per 10 unique blockers — handled by TrustService recalculation
+    // 3. [UPDATED v8] Block milestone: PCT-only (no DSP deduction)
+    // -10 PCT per 10 unique blockers — handled by TrustService recalculation
     try {
       final blockersSnapshot = await _firestore
           .collection('users')
@@ -623,10 +623,10 @@ class RelationshipRepository {
       final uniqueBlockers = blockersSnapshot.count ?? 0;
 
       if (uniqueBlockers > 0 && uniqueBlockers % 10 == 0) {
-        // DSP deduction removed (v8) — P.o.C.T handled in TrustService
+        // DSP deduction removed (v8) — PCT handled in TrustService
         await _ref.read(trustServiceProvider).updateTrustForUser(relatedUserId);
         debugPrint(
-          '🚨 Block milestone: $uniqueBlockers unique blockers — P.o.C.T deducted from $relatedUserId (no DSP)',
+          '🚨 Block milestone: $uniqueBlockers unique blockers — PCT deducted from $relatedUserId (no DSP)',
         );
       }
     } catch (e) {

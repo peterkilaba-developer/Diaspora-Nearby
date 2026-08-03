@@ -698,6 +698,68 @@ class EventRepository {
     }
   }
 
+  /// Frictionless geofenced check-in: Automatically confirms attendance
+  /// when user's location is detected inside the event venue boundary.
+  Future<bool> confirmAttendeeGeofenced(
+    String eventId,
+    String userId, {
+    required double lat,
+    required double lng,
+  }) async {
+    try {
+      final eventDoc = await _firestore.collection('events').doc(eventId).get();
+      if (!eventDoc.exists) return false;
+
+      final data = eventDoc.data();
+      if (data == null) return false;
+
+      final confirmed = List<String>.from(data['confirmedAttendees'] ?? []);
+      if (confirmed.contains(userId)) {
+        // Already checked in
+        return true;
+      }
+
+      final creatorId = data['creatorId'] as String? ?? '';
+
+      // Mark confirmed in Firestore
+      await _firestore.collection('events').doc(eventId).update({
+        'confirmedAttendees': cf.FieldValue.arrayUnion([userId]),
+      });
+
+      // Award 1,000 DSP to attendee & host via PointsService
+      try {
+        final pointsService = _ref.read(pointsServiceProvider);
+        await pointsService.trackEventAttendance(
+          attendeeUserId: userId,
+          hostUserId: creatorId,
+          eventId: eventId,
+        );
+      } catch (e) {
+        debugPrint('Error awarding geofence event attendance DSP: $e');
+      }
+
+      // Record Trust Check-In
+      try {
+        final trustService = _ref.read(trustServiceProvider);
+        await trustService.performCheckIn(
+          userId: userId,
+          entityId: eventId,
+          type: 'event_geofence',
+          lat: lat,
+          lng: lng,
+        );
+      } catch (e) {
+        debugPrint('Error recording trust check-in: $e');
+      }
+
+      debugPrint('📍 [GEOFENCE] Successfully auto-checked in user $userId for event $eventId');
+      return true;
+    } catch (e) {
+      debugPrint('Error in confirmAttendeeGeofenced: $e');
+      return false;
+    }
+  }
+
   // Fetch events created by a specific user
   // Fetch events created by a specific user
   Stream<List<Event>> getUserEvents(String userId) {

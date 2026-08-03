@@ -1,26 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class TgeDistributionRecord {
+class TdeDistributionRecord {
   final int epoch;
-  final int tgeNumber;
+  final int tdeNumber;
   final double amount;
   final double efficiency;
   final DateTime date;
   final String? txHash; // On-chain transaction hash for Basescan
 
-  TgeDistributionRecord({
+  TdeDistributionRecord({
     required this.epoch,
-    required this.tgeNumber,
+    required this.tdeNumber,
     required this.amount,
     required this.efficiency,
     required this.date,
     this.txHash,
   });
 
-  factory TgeDistributionRecord.fromMap(Map<String, dynamic> map) {
-    return TgeDistributionRecord(
+  factory TdeDistributionRecord.fromMap(Map<String, dynamic> map) {
+    return TdeDistributionRecord(
       epoch: (map['epoch'] as num? ?? 0).toInt(),
-      tgeNumber: (map['tgeNumber'] as num? ?? 0).toInt(),
+      tdeNumber: (map['tdeNumber'] as num? ?? 0).toInt(),
       amount: (map['amount'] as num? ?? 0).toDouble(),
       efficiency: (map['efficiency'] as num? ?? 0).toDouble(),
       date: _parseDateTime(map['date']) ?? DateTime.now(),
@@ -38,7 +38,7 @@ class TgeDistributionRecord {
   Map<String, dynamic> toMap() {
     return {
       'epoch': epoch,
-      'tgeNumber': tgeNumber,
+      'tdeNumber': tdeNumber,
       'amount': amount,
       'efficiency': efficiency,
       'date': date.toIso8601String(),
@@ -62,12 +62,12 @@ class UserPoints {
   final List<String> completedExplorationActions; // [FIX] Added missing field
   final String? walletAddress; // [NEW] User's Crypto Wallet Address
   final DateTime? lastCheckInDate; // [NEW]
-  final int? trustScore; // [NEW] Proof of Community Trust (P.o.C.T)
+  final int? trustScore; // [NEW] Proof of Community Trust (PCT)
   final String? homeCountryCode; // [NEW] For community aggregation
   final Map<String, int>
   lifetimeEarnings; // [NEW] Track total DSP earned per activity
-  final List<TgeDistributionRecord>
-  tgeHistory; // [NEW] Track historical TGE distributions
+  final List<TdeDistributionRecord>
+  tdeHistory; // [NEW] Track historical TDE distributions
   final int verifiedCount; // [NEW] Track number of verified peers
   final int familyConnectionCount; // [NEW] Track number of family connections
   final int qrConnectionCount; // [NEW] Track number of QR connections
@@ -91,7 +91,7 @@ class UserPoints {
     this.trustScore = 0,
     this.homeCountryCode,
     this.lifetimeEarnings = const {},
-    this.tgeHistory = const [],
+    this.tdeHistory = const [],
     this.verifiedCount = 0,
     this.familyConnectionCount = 0,
     this.qrConnectionCount = 0,
@@ -132,10 +132,10 @@ class UserPoints {
             (key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0),
           ) ??
           {},
-      tgeHistory:
-          (map['tgeHistory'] as List<dynamic>?)
+      tdeHistory:
+          (map['tdeHistory'] as List<dynamic>?)
               ?.map(
-                (e) => TgeDistributionRecord.fromMap(e as Map<String, dynamic>),
+                (e) => TdeDistributionRecord.fromMap(e as Map<String, dynamic>),
               )
               .toList() ??
           [],
@@ -165,7 +165,7 @@ class UserPoints {
       'trustScore': trustScore,
       'homeCountryCode': homeCountryCode,
       'lifetimeEarnings': lifetimeEarnings,
-      'tgeHistory': tgeHistory.map((e) => e.toMap()).toList(),
+      'tdeHistory': tdeHistory.map((e) => e.toMap()).toList(),
       'verifiedCount': verifiedCount,
       'familyConnectionCount': familyConnectionCount,
       'qrConnectionCount': qrConnectionCount,
@@ -190,7 +190,7 @@ class UserPoints {
     int? trustScore,
     String? homeCountryCode,
     Map<String, int>? lifetimeEarnings,
-    List<TgeDistributionRecord>? tgeHistory,
+    List<TdeDistributionRecord>? tdeHistory,
     int? verifiedCount,
     int? familyConnectionCount,
     int? qrConnectionCount,
@@ -215,7 +215,7 @@ class UserPoints {
       trustScore: trustScore ?? this.trustScore,
       homeCountryCode: homeCountryCode ?? this.homeCountryCode,
       lifetimeEarnings: lifetimeEarnings ?? this.lifetimeEarnings,
-      tgeHistory: tgeHistory ?? this.tgeHistory,
+      tdeHistory: tdeHistory ?? this.tdeHistory,
       verifiedCount: verifiedCount ?? this.verifiedCount,
       familyConnectionCount:
           familyConnectionCount ?? this.familyConnectionCount,

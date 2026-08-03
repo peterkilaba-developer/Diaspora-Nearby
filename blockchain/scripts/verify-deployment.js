@@ -22,7 +22,7 @@ async function main() {
     console.log("\nTGEController:", TGE);
     const stats = await tge.getStats();
     console.log("Epoch:", stats[0].toString());
-    console.log("TGE Event:", stats[1].toString());
+    console.log("TDE:", stats[1].toString());
     console.log("Total Minted:", ethers.formatEther(stats[2]), "DIASPORA");
     console.log("Total Distributed:", ethers.formatEther(stats[3]), "DIASPORA");
     console.log("Total Burned:", ethers.formatEther(stats[4]), "DIASPORA");

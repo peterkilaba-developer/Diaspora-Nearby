@@ -25,7 +25,9 @@ const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || 'price_1T6tvlI1F9UMWfaW1r
  * Creates a Stripe PaymentIntent for the $100 annual contribution.
  * Returns clientSecret + ephemeralKey + customerId for the in-app Payment Sheet.
  */
-exports.createEmergencyFundCheckout = functions.https.onCall(async (data, context) => {
+exports.createEmergencyFundCheckout = functions
+  .runWith({ secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
   }
@@ -98,7 +100,9 @@ exports.createEmergencyFundCheckout = functions.https.onCall(async (data, contex
  *   2. Updates staker status to 'contributed'
  *   3. Awards +10 PoCT
  */
-exports.stripeEmergencyFundWebhook = functions.https.onRequest(async (req, res) => {
+exports.stripeEmergencyFundWebhook = functions
+  .runWith({ secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] })
+  .https.onRequest(async (req, res) => {
   // Only accept POST
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed');

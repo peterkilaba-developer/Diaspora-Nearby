@@ -416,13 +416,26 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                               .withValues(alpha: 0.5),
                         ),
                         child: isLoading
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
+                            ? const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  const Text(
+                                    'Securing connection...',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               )
                             : const Text(
                                 'Send Verification Code',
@@ -433,6 +446,34 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                               ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    // WhatsApp Fallback Button
+                    if (!isLoading)
+                      SizedBox(
+                        height: 56,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            // Extract phone number in E.164
+                            final e164Number = '${_selectedCountry.dialCode}${_phoneController.text.trim()}';
+                            ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, e164Number);
+                          },
+                          icon: const Icon(LucideIcons.messageCircle, color: Colors.green),
+                          label: const Text(
+                            'Sign in with WhatsApp',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.green, width: 2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 16),
 
                     // Terms of Service & Privacy Policy

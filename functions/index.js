@@ -132,3 +132,9 @@ exports.submitDdiLoanApplication = ddi.submitDdiLoanApplication;
 exports.joinDdiDiscussion = ddi.joinDdiDiscussion;
 exports.castDdiLoanVote = ddi.castDdiLoanVote;
 exports.resolveDdiLoanVoting = ddi.resolveDdiLoanVoting;
+
+// Custom Auth (2)
+const auth = require("./lib/auth");
+exports.requestWhatsAppOtp = auth.requestWhatsAppOtp;
+exports.verifyWhatsAppOtp = auth.verifyWhatsAppOtp;
+

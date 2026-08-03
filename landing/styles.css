@@ -659,6 +659,7 @@ img {
 /* ── SECTIONS ── */
 .section {
   padding: 72px 0;
+  scroll-margin-top: 72px;
 }
 
 .section-header {

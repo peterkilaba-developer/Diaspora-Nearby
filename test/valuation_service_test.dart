@@ -131,7 +131,7 @@ void main() {
       expect(epoch1.epochScarcity, 1.1);
     });
 
-    test('increases with fiat GDP activity', () {
+    test('increases with fiat GDP activity via additive floor', () {
       final noGdp = service.calculateImpliedValue(
         totalUsers: 100,
         totalMinted: 100000,
@@ -146,26 +146,29 @@ void main() {
         totalBurned: 0,
         currentEpoch: 1,
         fiatGdpUsd: 10000.0,
+        circulatingSupply: 100000,
       );
 
       expect(withGdp.impliedValueUsd, greaterThan(noGdp.impliedValueUsd));
-      expect(withGdp.fiatGdpBoost, greaterThan(1.0));
+      expect(withGdp.gdpFloorPerToken, equals(0.1)); // 10,000 / 100,000 = 0.1
+      expect(withGdp.impliedValueUsd, equals(noGdp.impliedValueUsd + 0.1));
     });
 
-    test('all factors contribute multiplicatively', () {
+    test('all factors contribute to combined price floor', () {
       final result = service.calculateImpliedValue(
         totalUsers: 10000,
         totalMinted: 500000,
         totalBurned: 50000,
         currentEpoch: 3,
         fiatGdpUsd: 50000.0,
+        circulatingSupply: 450000,
       );
 
       // All factors should be active
       expect(result.networkMultiplier, greaterThan(0));
       expect(result.deflationRatio, greaterThan(0));
       expect(result.epochScarcity, 1.3); // epoch 3: 1 + 0.3
-      expect(result.fiatGdpBoost, greaterThan(1.0));
+      expect(result.gdpFloorPerToken, closeTo(50000 / 450000, 0.0001));
       // Value should be meaningfully above base
       expect(result.impliedValueUsd, greaterThan(0.001));
     });

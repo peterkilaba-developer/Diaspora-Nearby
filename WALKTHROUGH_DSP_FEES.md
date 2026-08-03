@@ -15,7 +15,7 @@ The guiding principle is: **spending money to spend more money is not appealing*
 | Spam Report | −100 DSP | Per-report deduction |
 | Relationship Rejection | −1,000 DSP | Rejected request |
 | Event No-Show | −1,000 DSP | Confirmed absence |
-| Fake Verification | −1,000 DSP | False identity claim |
+
 | Vouching Bad Actor | −1,000 DSP | Vouched for a fraudster |
 | Misinformation | −1,000 DSP | Community-flagged content |
 | Deceptive Org | −10,000 DSP | Fraudulent business |
@@ -26,7 +26,7 @@ The guiding principle is: **spending money to spend more money is not appealing*
 - **10% fixed expansion burn** (on new DSP minted)
 - **Unassigned slot burn** (treasury burn for unallocated slots)
 - **Unclaimed TGE burn** (post-TGE unclaimed allocations)
-- **P.o.C.T efficiency** (trust-weighted distribution)
+- **PCT efficiency** (trust-weighted distribution)
 
 ## What Was Removed
 

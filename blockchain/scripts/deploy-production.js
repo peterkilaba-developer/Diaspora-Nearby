@@ -94,7 +94,7 @@ async function main() {
     console.log("  TGE_CONTROLLER=" + tgeAddress);
     console.log("\n📊 Initial State:");
     console.log("  Epoch:", stats[0].toString());
-    console.log("  TGE Event:", stats[1].toString());
+    console.log("  TDE:", stats[1].toString());
     console.log("  Total Minted:", ethers.formatUnits(stats[2], 18), "DIASPORA");
     console.log("  Total Supply:", ethers.formatUnits(await token.totalSupply(), 18), "DIASPORA");
     console.log("\n⛽ Gas used:", ethers.formatEther(gasUsed), "ETH");

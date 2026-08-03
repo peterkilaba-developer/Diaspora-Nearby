@@ -20,10 +20,10 @@ void main() {
       'trustScore': 75,
       'homeCountryCode': 'TZ',
       'lifetimeEarnings': {'message_sent': 500},
-      'tgeHistory': [
+      'tdeHistory': [
         {
           'epoch': 1,
-          'tgeNumber': 1,
+          'tdeNumber': 1,
           'amount': 100.0,
           'efficiency': 1.0,
           'date': now.toIso8601String(),
@@ -44,8 +44,8 @@ void main() {
       expect(userPoints.trustScore, 75);
       expect(userPoints.homeCountryCode, 'TZ');
       expect(userPoints.lifetimeEarnings['message_sent'], 500);
-      expect(userPoints.tgeHistory.length, 1);
-      expect(userPoints.tgeHistory.first.amount, 100.0);
+      expect(userPoints.tdeHistory.length, 1);
+      expect(userPoints.tdeHistory.first.amount, 100.0);
     });
 
     test('toMap should return a valid map representation', () {
@@ -61,7 +61,7 @@ void main() {
       expect(map['trustScore'], 75);
       expect(map['homeCountryCode'], 'TZ');
       expect(map['lifetimeEarnings']['message_sent'], 500);
-      expect(map['tgeHistory'].length, 1);
+      expect(map['tdeHistory'].length, 1);
     });
 
     test('copyWith should update specified fields', () {

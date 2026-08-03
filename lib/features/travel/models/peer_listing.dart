@@ -6,6 +6,7 @@ import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
 class PeerListing {
   final String id;
   final String type; // 'stay', 'car', or 'hotel'
+  final bool isPeerHosting; // True if free community hosting, false if paid stay
   final String ownerId;
   final String ownerName;
   final String ownerPhoto;
@@ -78,6 +79,7 @@ class PeerListing {
   PeerListing({
     required this.id,
     required this.type,
+    this.isPeerHosting = false,
     required this.ownerId,
     required this.ownerName,
     this.ownerPhoto = '',
@@ -145,6 +147,7 @@ class PeerListing {
     return PeerListing(
       id: docId,
       type: json['type'] ?? 'stay',
+      isPeerHosting: json['isPeerHosting'] as bool? ?? false,
       ownerId: json['ownerId'] ?? '',
       ownerName: json['ownerName'] ?? '',
       ownerPhoto: json['ownerPhoto'] ?? '',
@@ -303,6 +306,7 @@ class PeerListing {
     return PeerListing(
       id: 'api_${hotel.hotelId}',
       type: 'hotel',
+      isPeerHosting: false,
       ownerId: 'amadeus',
       ownerName: chainName ?? 'Partner Hotel',
       ownerPhoto: '',
@@ -333,6 +337,7 @@ class PeerListing {
   Map<String, dynamic> toJson() {
     return {
       'type': type,
+      'isPeerHosting': isPeerHosting,
       'ownerId': ownerId,
       'ownerName': ownerName,
       'ownerPhoto': ownerPhoto,

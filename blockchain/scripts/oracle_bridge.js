@@ -78,11 +78,11 @@ async function main() {
     }
 
     /**
-     * 2. TGE EXECUTION
+     * 2. TDE EXECUTION
      * Checks if a milestone has been reached and triggers release/burn.
      */
     async function checkTGE() {
-        console.log("Checking TGE milestones...");
+        console.log("Checking TDE milestones...");
         const supplyDoc = await db.collection("system_stats").doc("dsp_supply").get();
         if (!supplyDoc.exists) return;
 

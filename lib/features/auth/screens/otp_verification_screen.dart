@@ -8,11 +8,13 @@ import 'auth_controller.dart';
 class OTPVerificationScreen extends ConsumerStatefulWidget {
   final String verificationId;
   final String phoneNumber;
+  final bool isWhatsApp;
 
   const OTPVerificationScreen({
     super.key,
     required this.verificationId,
     required this.phoneNumber,
+    this.isWhatsApp = false,
   });
 
   @override
@@ -29,7 +31,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   @override
   void initState() {
     super.initState();
-    _startListeningForCode();
+    if (!widget.isWhatsApp) {
+      _startListeningForCode();
+    }
   }
 
   @override
@@ -80,9 +84,15 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       final isLoading = ref.read(authControllerProvider);
       if (isLoading) return; // Prevent double submission
 
-      ref
-          .read(authControllerProvider.notifier)
-          .verifyOTP(context, widget.verificationId, _otpCode);
+      if (widget.isWhatsApp) {
+        ref
+            .read(authControllerProvider.notifier)
+            .verifyWhatsAppOTP(context, widget.phoneNumber, _otpCode);
+      } else {
+        ref
+            .read(authControllerProvider.notifier)
+            .verifyOTP(context, widget.verificationId, _otpCode);
+      }
     }
   }
 
@@ -137,7 +147,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'We sent a 6-digit code to ${widget.phoneNumber}',
+                    widget.isWhatsApp 
+                        ? 'We sent a 6-digit WhatsApp message to ${widget.phoneNumber}'
+                        : 'We sent a 6-digit SMS to ${widget.phoneNumber}',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -253,12 +265,38 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                   ),
                   const SizedBox(height: 16),
                   // Retry button
-                  if (!_isListening)
+                  // Retry button
+                  if (!widget.isWhatsApp) ...[
+                    if (!_isListening)
+                      TextButton.icon(
+                        onPressed: _startListeningForCode,
+                        icon: const Icon(LucideIcons.refreshCw, size: 16),
+                        label: const Text('Retry SMS detection'),
+                      ),
+                    const SizedBox(height: 16),
                     TextButton.icon(
-                      onPressed: _startListeningForCode,
-                      icon: const Icon(LucideIcons.refreshCw, size: 16),
-                      label: const Text('Retry SMS detection'),
+                      onPressed: () {
+                        ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, widget.phoneNumber);
+                      },
+                      icon: const Icon(LucideIcons.messageCircle, size: 16, color: Colors.green),
+                      label: const Text(
+                        'Didn\'t receive SMS? Send via WhatsApp',
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      ),
                     ),
+                  ] else ...[
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: () {
+                        ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, widget.phoneNumber);
+                      },
+                      icon: const Icon(LucideIcons.refreshCw, size: 16, color: Colors.green),
+                      label: const Text(
+                        'Resend WhatsApp Message',
+                        style: TextStyle(color: Colors.green),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),

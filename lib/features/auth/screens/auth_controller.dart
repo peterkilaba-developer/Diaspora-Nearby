@@ -178,4 +178,58 @@ class AuthController extends Notifier<bool> {
       }
     }
   }
+
+  void signInWithWhatsApp(BuildContext context, String phoneNumber) async {
+    state = true;
+    final repository = ref.read(authRepositoryProvider);
+    try {
+      await repository.requestWhatsAppOtp(phoneNumber);
+      state = false;
+      if (context.mounted) {
+        context.push(
+          '/auth/otp',
+          extra: {
+            'verificationId': 'whatsapp',
+            'phoneNumber': phoneNumber,
+            'isWhatsApp': true,
+          },
+        );
+      }
+    } catch (e) {
+      state = false;
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('WhatsApp request failed: $e')));
+      }
+    }
+  }
+
+  void verifyWhatsAppOTP(BuildContext context, String phoneNumber, String otp) async {
+    debugPrint('AuthCtrl: verifyWhatsAppOTP called');
+    state = true;
+    final repository = ref.read(authRepositoryProvider);
+    try {
+      debugPrint('AuthCtrl: calling repository.verifyWhatsAppOtp...');
+      final customToken = await repository.verifyWhatsAppOtp(phoneNumber, otp);
+      
+      debugPrint('AuthCtrl: calling signInWithCustomToken...');
+      final userCredential = await repository.signInWithCustomToken(customToken);
+
+      if (userCredential.user != null) {
+        if (context.mounted) {
+          await _handleSuccessfulSignIn(context, userCredential.user!);
+        }
+      }
+      state = false;
+    } catch (e) {
+      debugPrint('AuthCtrl: verifyWhatsAppOTP ERROR: $e');
+      state = false;
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('WhatsApp verification failed: $e')));
+      }
+    }
+  }
 }

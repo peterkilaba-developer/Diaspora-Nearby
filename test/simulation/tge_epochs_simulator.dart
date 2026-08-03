@@ -83,7 +83,7 @@ void main() {
       '[EPOCH ${epochDef.epochNumber}: Epoch ${epochDef.epochNumber}] START',
     );
     print(
-      '  Gate: ${epochDef.minDspRequired} DSP  |  Efficiency: Decile P.o.C.T Scale',
+      '  Gate: ${epochDef.minDspRequired} DSP  |  Efficiency: Exact P.o.C.T Percent',
     );
     print('-----------------------------------------------------------');
 
@@ -111,7 +111,7 @@ void main() {
       if (user.trustScore > 100) user.trustScore = 100;
     }
 
-    // --- B. TGE Event (Gate Check) ---
+    // --- B. TDE Release (Gate Check) ---
     int qualifiedCount = 0;
     double mintedThisEpoch = 0;
     double rolloverThisEpoch = 0;

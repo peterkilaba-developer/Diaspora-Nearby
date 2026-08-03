@@ -237,7 +237,7 @@ class UserProfileView extends ConsumerWidget {
                               ),
                               child: Row(
                                 children: [
-                                  // P.o.C.T Score Graph
+                                  // PCT Score Graph
                                   SizedBox(
                                     height: 52,
                                     width: 52,
@@ -310,7 +310,7 @@ class UserProfileView extends ConsumerWidget {
                                               MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
-                                              'P.o.C.T Score',
+                                              'PCT Score',
                                               style: TextStyle(
                                                 color: trustColor,
                                                 fontSize: 16,
@@ -378,7 +378,7 @@ class UserProfileView extends ConsumerWidget {
                   _buildPoctSectionHeader(
                     context,
                     title: 'Genesis Milestones',
-                    subtitle: 'One-time +10 P.o.C.T at first 10 unique',
+                    subtitle: 'One-time +10 PCT at first 10 unique',
                     icon: LucideIcons.trophy,
                   ),
                   const SizedBox(height: 12),
@@ -1009,7 +1009,7 @@ class UserProfileView extends ConsumerWidget {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'Earning +10 P.o.C.T for maintaining community transparency.',
+                                            'Earning +10 PCT for maintaining community transparency.',
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: Theme.of(
@@ -2254,7 +2254,7 @@ class UserProfileView extends ConsumerWidget {
     WidgetRef ref,
     RelationshipRequest req,
   ) async {
-    // Confirm rejection (warn about P.o.C.T penalty if desired, or simpler)
+    // Confirm rejection (warn about PCT penalty if desired, or simpler)
     final confirm = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -2412,7 +2412,7 @@ class UserProfileView extends ConsumerWidget {
   }
 
   // ══════════════════════════════════════════════════════
-  //  P.o.C.T SECTION BUILDERS
+  //  PCT SECTION BUILDERS
   // ══════════════════════════════════════════════════════
 
   /// Main section header — plain text, no card wrapper
@@ -2847,7 +2847,7 @@ class UserProfileView extends ConsumerWidget {
     final avgRating = trust.averageRating;
     final fullTrustVoterIds = trust.fullTrustVoterIds;
     final noTrustVoterIds = trust.noTrustVoterIds;
-    final poctFromVouches = (totalRatings ~/ 10); // +1 P.o.C.T per 10 unique
+    final poctFromVouches = (totalRatings ~/ 10); // +1 PCT per 10 unique
     final nextMilestone = ((totalRatings ~/ 10) + 1) * 10;
     final progressToNext = totalRatings % 10;
 
@@ -2857,7 +2857,7 @@ class UserProfileView extends ConsumerWidget {
         _buildPoctSectionHeader(
           context,
           title: 'Continuous Trust Score',
-          subtitle: '+1 P.o.C.T per 10 unique full-trust voters',
+          subtitle: '+1 PCT per 10 unique full-trust voters',
           icon: LucideIcons.barChart3,
         ),
         const SizedBox(height: 12),
@@ -2918,7 +2918,7 @@ class UserProfileView extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              // P.o.C.T earned + progress to next
+              // PCT earned + progress to next
               Row(
                 children: [
                   Expanded(
@@ -2926,7 +2926,7 @@ class UserProfileView extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'P.o.C.T Earned: $poctFromVouches',
+                          'PCT Earned: $poctFromVouches',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onSurface,
                             fontSize: 12,
@@ -3018,7 +3018,7 @@ class UserProfileView extends ConsumerWidget {
   /// Seniority section — days active with progress to next award
   Widget _buildSenioritySection(BuildContext context, UserPoints userPoints) {
     final daysActive = DateTime.now().difference(userPoints.signupDate).inDays;
-    final poctFromSeniority = daysActive ~/ 100; // +1 P.o.C.T per 100 days
+    final poctFromSeniority = daysActive ~/ 100; // +1 PCT per 100 days
     final progressDays = daysActive % 100;
     final nextMilestone = ((daysActive ~/ 100) + 1) * 100;
 
@@ -3028,7 +3028,7 @@ class UserProfileView extends ConsumerWidget {
         _buildPoctSectionHeader(
           context,
           title: 'Seniority',
-          subtitle: '+1 P.o.C.T per 100 active days',
+          subtitle: '+1 PCT per 100 active days',
           icon: LucideIcons.clock,
         ),
         const SizedBox(height: 12),
@@ -3079,7 +3079,7 @@ class UserProfileView extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '+$poctFromSeniority P.o.C.T',
+                      '+$poctFromSeniority PCT',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
                         fontSize: 11,
@@ -3140,11 +3140,7 @@ class UserProfileView extends ConsumerWidget {
         count: trust.reportedFraudCount,
         icon: LucideIcons.alertTriangle,
       ),
-      _PenaltyItem(
-        label: 'Fake Verifications',
-        count: trust.fakeVerificationsCount,
-        icon: LucideIcons.shieldOff,
-      ),
+
       _PenaltyItem(
         label: 'Event No-Shows',
         count: trust.eventNoShowCount,
@@ -3162,7 +3158,7 @@ class UserProfileView extends ConsumerWidget {
       ),
     ];
 
-    // Total penalty: -10 P.o.C.T per 10 of each type
+    // Total penalty: -10 PCT per 10 of each type
     final totalPenaltyPoCT = penalties.fold<int>(
       0,
       (acc, p) => acc + ((p.count ~/ 10) * 10),
@@ -3176,7 +3172,7 @@ class UserProfileView extends ConsumerWidget {
         _buildPoctSectionHeader(
           context,
           title: 'Penalties',
-          subtitle: '-10 P.o.C.T per 10 infractions of each type',
+          subtitle: '-10 PCT per 10 infractions of each type',
           icon: LucideIcons.alertOctagon,
         ),
         const SizedBox(height: 12),
@@ -3227,7 +3223,7 @@ class UserProfileView extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '-${(p.count ~/ 10) * 10} P.o.C.T',
+                                  '-${(p.count ~/ 10) * 10} PCT',
                                   style: TextStyle(
                                     color: AppTheme.error.withValues(
                                       alpha: 0.7,
@@ -3252,7 +3248,7 @@ class UserProfileView extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          '-$totalPenaltyPoCT P.o.C.T',
+                          '-$totalPenaltyPoCT PCT',
                           style: const TextStyle(
                             color: AppTheme.error,
                             fontSize: 13,

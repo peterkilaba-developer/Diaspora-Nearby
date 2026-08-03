@@ -79,8 +79,12 @@ async function getDiasporaPriceUsd() {
     const rawDef = totalMinted > 0 ? totalBurned / totalMinted : 0;
     const deflation = Math.min(rawDef, 0.5);
     const epochScarcity = 1 + Math.max(currentEpoch, 1) * 0.1;
-    const fiatBoost = fiatGdpUsd > 0 ? 1 + Math.log(Math.max(fiatGdpUsd, 1)) / (Math.LN10 * 10) : 1;
-    return basePrice * (1 + networkMult + deflation) * epochScarcity * fiatBoost;
+    const networkBaseline = basePrice * (1 + networkMult + deflation) * epochScarcity;
+
+    const circulatingSupply = Number(treasury.circulatingSupply) || Math.max(totalMinted - totalBurned, 0);
+    const gdpFloorPerToken = (circulatingSupply > 0 && fiatGdpUsd > 0) ? (fiatGdpUsd / circulatingSupply) : 0;
+
+    return networkBaseline + gdpFloorPerToken;
   } catch (e) {
     console.warn(`[EmergencyFund] Price oracle fallback to base: ${e.message}`);
     return basePrice;

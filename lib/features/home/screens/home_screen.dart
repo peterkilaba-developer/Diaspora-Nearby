@@ -10,6 +10,8 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -79,21 +81,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () {
-                      ref.read(nearbyViewModeProvider.notifier).setGlobal();
-                    },
-                    icon: const Icon(LucideIcons.globe),
-                    label: const Text('Switch to Global View'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.pageHorizontalPadding,
-                        vertical: 12,
+                  if (ref.watch(isGlobalUnlockedSyncProvider)) ...[
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: () {
+                        ref.read(nearbyViewModeProvider.notifier).setGlobal();
+                      },
+                      icon: const Icon(LucideIcons.globe),
+                      label: const Text('Switch to Global View'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.pageHorizontalPadding,
+                          vertical: 12,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

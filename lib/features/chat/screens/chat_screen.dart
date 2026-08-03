@@ -28,6 +28,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart'; // [FIXED]
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart'; // [NEW]
 // [FIXED]
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
@@ -1167,6 +1168,55 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// Build screen for existing chat with messages
   Widget _buildChatScreen(ThemeData theme, String currentUserId) {
+    final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
+    if (!isGlobalUnlocked &&
+        (_activeChatId == 'global_community' ||
+            widget.chatId == 'global_community')) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Global Community Chat')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  LucideIcons.globe,
+                  size: 56,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Global Features Coming Soon',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Global community chat will unlock once members from all countries in our network have joined.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed:
+                      () =>
+                          context.canPop()
+                              ? context.pop()
+                              : context.go('/chats'),
+                  child: const Text('Back to My Chats'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final displayNameAsync = ref.watch(chatDisplayNameProvider(_activeChatId!));
     final chatAsync = ref.watch(chatProvider(_activeChatId!));
     final messagesAsync = ref.watch(messagesStreamProvider(_activeChatId!));
@@ -1712,8 +1762,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 }
               }
 
+              // Corridor chamber: followers can read but not post.
+              // Substitute the input with an upgrade banner when accessLevel
+              // is anything other than 'member' on the user's userChats doc.
+              final isChamberChat =
+                  chat != null &&
+                  chat.type == 'organization' &&
+                  chat.id.startsWith('org_chamber_');
+
               // [MODIFIED] Only allow messaging if participant OR it's a direct chat
-              if (chat != null && !isParticipant && chat.type != 'direct') {
+              if (chat != null &&
+                  !isParticipant &&
+                  chat.type != 'direct' &&
+                  !isChamberChat) {
                 return ChatRestrictionView(
                   isCommunity: chat.isCommunity,
                   isOrganization: chat.isOrganization,
@@ -1731,6 +1792,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 const SnackBar(content: Text('Joined group!')),
                               );
                               ref.invalidate(chatProvider(chat.id));
+                              ref.invalidate(messagesStreamProvider(chat.id));
                             }
                           } catch (e) {
                             if (context.mounted) {
@@ -1744,13 +1806,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 );
               }
 
-              // Corridor chamber: followers can read but not post.
-              // Substitute the input with an upgrade banner when accessLevel
-              // is anything other than 'member' on the user's userChats doc.
-              final isChamberChat =
-                  chat != null &&
-                  chat.type == 'organization' &&
-                  chat.id.startsWith('org_chamber_');
               if (isChamberChat) {
                 return _ChamberFollowerGate(
                   chatId: chat.id,
@@ -3050,6 +3105,8 @@ class _ChamberFollowerGate extends ConsumerWidget {
                         await ref
                             .read(organizationRepositoryProvider)
                             .joinChamber(orgId: orgId, userId: uid);
+                        ref.invalidate(chatProvider(chatId));
+                        ref.invalidate(messagesStreamProvider(chatId));
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(

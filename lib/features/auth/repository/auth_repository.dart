@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -36,6 +37,10 @@ class AuthRepository {
     PhoneAuthCredential credential,
   ) async {
     return await _firebaseAuth.signInWithCredential(credential);
+  }
+
+  Future<UserCredential> signInWithCustomToken(String token) async {
+    return await _firebaseAuth.signInWithCustomToken(token);
   }
 
   Future<void> signOut() async {
@@ -99,15 +104,31 @@ class AuthRepository {
           });
         }
       }
-
-      // 2. Delete User Profile
-      await firestore.collection('users').doc(uid).delete();
-
-      // 3. Delete auxiliary data (Points, etc.)
-      await firestore.collection('user_points').doc(uid).delete();
     }
 
-    // 4. Delete Auth Account
-    await user.delete();
+    try {
+      // 2. Delete user profile document
+      await firestore.collection('users').doc(uid).delete();
+
+      // 3. Delete user points record
+      await firestore.collection('user_points').doc(uid).delete();
+
+      // 4. Delete Auth account
+      await user.delete();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Custom WhatsApp Auth Flow
+  Future<void> requestWhatsAppOtp(String phoneNumber) async {
+    final callable = FirebaseFunctions.instance.httpsCallable('requestWhatsAppOtp');
+    await callable.call({'phoneNumber': phoneNumber});
+  }
+
+  Future<String> verifyWhatsAppOtp(String phoneNumber, String otp) async {
+    final callable = FirebaseFunctions.instance.httpsCallable('verifyWhatsAppOtp');
+    final result = await callable.call({'phoneNumber': phoneNumber, 'otp': otp});
+    return result.data['token'] as String;
   }
 }

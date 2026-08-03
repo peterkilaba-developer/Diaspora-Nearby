@@ -2045,7 +2045,7 @@ class PushNotificationService {
                   id: 'trust_verify_$docId'.hashCode,
                   title: 'Identity Verified',
                   body:
-                      '$verifierName has verified your identity. Your P.o.C.T score increased!',
+                      '$verifierName has verified your identity. Your PCT score increased!',
                   payload: jsonEncode({
                     'type': 'trust_peer_verified',
                     'fromUserId': verifierId,
@@ -2056,7 +2056,7 @@ class PushNotificationService {
                   type: NotificationType.trustPeerVerified,
                   title: 'Identity Verified',
                   body:
-                      '$verifierName has verified your identity. Your P.o.C.T score increased!',
+                      '$verifierName has verified your identity. Your PCT score increased!',
                   payload: {'fromUserId': verifierId ?? ''},
                   dedupKey: 'trust_verify_$docId',
                 );
@@ -2185,7 +2185,7 @@ class PushNotificationService {
                   id: 'full_trust_$docId'.hashCode,
                   title: 'Full Trust Received!',
                   body:
-                      '$stakerName gave you full trust and staked 100 DSP on your reputation!',
+                      '$stakerName gave you full trust and staked 100 DSP on your trust!',
                   payload: jsonEncode({
                     'type': 'trust_full_trust_received',
                     'fromUserId': stakerId,
@@ -2196,7 +2196,7 @@ class PushNotificationService {
                   type: NotificationType.trustFullTrustReceived,
                   title: 'Full Trust Received!',
                   body:
-                      '$stakerName gave you full trust and staked 100 DSP on your reputation!',
+                      '$stakerName gave you full trust and staked 100 DSP on your trust!',
                   payload: {'fromUserId': stakerId ?? ''},
                   dedupKey: 'full_trust_$docId',
                 );

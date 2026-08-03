@@ -1536,7 +1536,7 @@ class _AttachmentPickerModalState
     // Fetch real on-chain $DIASPORA balance
     final tokenBalanceAsync = ref.watch(tokenBalanceProvider);
     final tokenBalance =
-        int.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0;
+        (double.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0.0).toInt();
 
     final currentBalance = isPoints ? pointsBalance : tokenBalance;
     final isLoadingBalance = isPoints
@@ -1625,232 +1625,235 @@ class _AttachmentPickerModalState
                 const SizedBox(height: 20),
               ],
 
-              // ─── TRANSACTION HISTORY (above toggle, scrollable) ───
-              if (hasSelection && !isFiat)
-                _buildWiredTransactionHistory(
-                  theme,
-                  activeColor,
-                  authUser?.uid,
-                ),
-              if (hasSelection && !isFiat) const SizedBox(height: 12),
-
-              // ─── THREE-WAY TOGGLE (always visible) ───
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.5,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  children: [
-                    _buildToggleTab(
-                      theme,
-                      label: 'DSP',
-                      isSelected: isPoints,
-                      selectedColor: theme.colorScheme.primary,
-                      onTap: () => _selectAsset('points'),
-                    ),
-                    _buildToggleTab(
-                      theme,
-                      label: r'$DIASPORA',
-                      isSelected: isToken,
-                      selectedColor: AppTheme.tokenColor,
-                      onTap: () => _selectAsset('token'),
-                    ),
-                    _buildToggleTab(
-                      theme,
-                      label: currencyCode,
-                      isSelected: isFiat,
-                      selectedColor: AppTheme.fiatColor,
-                      onTap: () => _selectAsset('fiat'),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ─── TRANSACTION UI (shown when an asset is selected) ───
-              if (hasSelection) ...[
-                const SizedBox(height: 16),
-
-                // Recipient Address Row (Only for Token)
-                if (widget.recipientUserId != null && isToken)
-                  _buildRecipientRow(theme),
-
-                // Recipient Row for Fiat
-                if (widget.recipientUserId != null && isFiat)
-                  _buildFiatRecipientRow(theme, currencyCode),
-
-                if (isPoints || isToken) ...[
-                  const SizedBox(height: 12),
-                  // DSP / Token input container
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest
-                          .withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // LEFT: Balance
-                              Expanded(
-                                flex: 2,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Balance',
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                            fontSize: 10,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      isLoadingBalance ? '...' : '$remaining',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: isError
-                                                ? theme.colorScheme.error
-                                                : theme.colorScheme.onSurface,
-                                          ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      isPoints ? 'DSP' : r'$DIASPORA',
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
-                                            fontSize: 8,
-                                            color: activeColor,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // CENTER: Input
-                              Expanded(
-                                flex: 3,
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.surface,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: TextField(
-                                    controller: _amountController,
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.headlineSmall
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: activeColor,
-                                        ),
-                                    decoration: InputDecoration(
-                                      hintText: '0',
-                                      hintStyle: TextStyle(
-                                        color: theme
-                                            .colorScheme
-                                            .onSurfaceVariant
-                                            .withValues(alpha: 0.3),
-                                      ),
-                                      border: InputBorder.none,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            vertical: 8,
-                                          ),
-                                      isDense: true,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // RIGHT: Send
-                              Expanded(
-                                flex: 2,
-                                child: Center(
-                                  child: Material(
-                                    color:
-                                        (isZero || isError || isLoadingBalance)
-                                        ? theme.disabledColor
-                                        : activeColor,
-                                    shape: const CircleBorder(),
-                                    child: InkWell(
-                                      onTap:
-                                          (isZero ||
-                                              isError ||
-                                              isLoadingBalance)
-                                          ? null
-                                          : () =>
-                                                _handlePickDSP(currentBalance),
-                                      customBorder: const CircleBorder(),
-                                      child: Container(
-                                        width: 48,
-                                        height: 48,
-                                        alignment: Alignment.center,
-                                        child: const Icon(
-                                          LucideIcons.arrowRight,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Enter Amount of ${isPoints ? 'DSP' : r'$DIASPORA'} to Send',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontSize: 10,
-                            color: activeColor,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // ─── FIAT UI (remittance details + history first, then input) ───
-                if (isFiat) ...[
-                  const SizedBox(height: 12),
-                  // Remittance details card at TOP
-                  _buildFiatRemittanceDetails(
-                    theme,
-                    currencyCode,
-                    currencySymbol,
-                    homeCurrencyCode,
-                    homeCurrencySymbol,
-                  ),
-                  const SizedBox(height: 12),
-                  // Transaction history (or card input placeholder)
-                  _buildFiatTransactionHistory(
+              // ─── VALUE TRANSFER BAR (peer-to-peer chats only) ───
+              if (widget.recipientUserId != null) ...[
+                // ─── TRANSACTION HISTORY (above toggle, scrollable) ───
+                if (hasSelection && !isFiat)
+                  _buildWiredTransactionHistory(
                     theme,
                     activeColor,
                     authUser?.uid,
                   ),
-                  const SizedBox(height: 12),
-                  // Fiat amount input
-                  _buildFiatInputContainer(
-                    theme,
-                    currencyCode,
-                    currencySymbol,
-                    activeColor,
+                if (hasSelection && !isFiat) const SizedBox(height: 12),
+
+                // ─── THREE-WAY TOGGLE ───
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  padding: const EdgeInsets.all(4),
+                  child: Row(
+                    children: [
+                      _buildToggleTab(
+                        theme,
+                        label: 'DSP',
+                        isSelected: isPoints,
+                        selectedColor: theme.colorScheme.primary,
+                        onTap: () => _selectAsset('points'),
+                      ),
+                      _buildToggleTab(
+                        theme,
+                        label: r'$DIASPORA',
+                        isSelected: isToken,
+                        selectedColor: AppTheme.tokenColor,
+                        onTap: () => _selectAsset('token'),
+                      ),
+                      _buildToggleTab(
+                        theme,
+                        label: currencyCode,
+                        isSelected: isFiat,
+                        selectedColor: AppTheme.fiatColor,
+                        onTap: () => _selectAsset('fiat'),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ─── TRANSACTION UI (shown when an asset is selected) ───
+                if (hasSelection) ...[
+                  const SizedBox(height: 16),
+
+                  // Recipient Address Row (Only for Token)
+                  if (widget.recipientUserId != null && isToken)
+                    _buildRecipientRow(theme),
+
+                  // Recipient Row for Fiat
+                  if (widget.recipientUserId != null && isFiat)
+                    _buildFiatRecipientRow(theme, currencyCode),
+
+                  if (isPoints || isToken) ...[
+                    const SizedBox(height: 12),
+                    // DSP / Token input container
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // LEFT: Balance
+                                Expanded(
+                                  flex: 2,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Balance',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                              fontSize: 10,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        isLoadingBalance ? '...' : '$remaining',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: isError
+                                                  ? theme.colorScheme.error
+                                                  : theme.colorScheme.onSurface,
+                                            ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        isPoints ? 'DSP' : r'$DIASPORA',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              fontSize: 8,
+                                              color: activeColor,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // CENTER: Input
+                                Expanded(
+                                  flex: 3,
+                                  child: Container(
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: TextField(
+                                      controller: _amountController,
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.center,
+                                      style: theme.textTheme.headlineSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: activeColor,
+                                          ),
+                                      decoration: InputDecoration(
+                                        hintText: '0',
+                                        hintStyle: TextStyle(
+                                          color: theme
+                                              .colorScheme
+                                              .onSurfaceVariant
+                                              .withValues(alpha: 0.3),
+                                        ),
+                                        border: InputBorder.none,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              vertical: 8,
+                                            ),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // RIGHT: Send
+                                Expanded(
+                                  flex: 2,
+                                  child: Center(
+                                    child: Material(
+                                      color:
+                                          (isZero || isError || isLoadingBalance)
+                                          ? theme.disabledColor
+                                          : activeColor,
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                        onTap:
+                                            (isZero ||
+                                                isError ||
+                                                isLoadingBalance)
+                                            ? null
+                                            : () =>
+                                                  _handlePickDSP(currentBalance),
+                                        customBorder: const CircleBorder(),
+                                        child: Container(
+                                          width: 48,
+                                          height: 48,
+                                          alignment: Alignment.center,
+                                          child: const Icon(
+                                            LucideIcons.arrowRight,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Enter Amount of ${isPoints ? 'DSP' : r'$DIASPORA'} to Send',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                              color: activeColor,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ─── FIAT UI ───
+                  if (isFiat) ...[
+                    const SizedBox(height: 12),
+                    // Remittance details card at TOP
+                    _buildFiatRemittanceDetails(
+                      theme,
+                      currencyCode,
+                      currencySymbol,
+                      homeCurrencyCode,
+                      homeCurrencySymbol,
+                    ),
+                    const SizedBox(height: 12),
+                    // Transaction history (or card input placeholder)
+                    _buildFiatTransactionHistory(
+                      theme,
+                      activeColor,
+                      authUser?.uid,
+                    ),
+                    const SizedBox(height: 12),
+                    // Fiat amount input
+                    _buildFiatInputContainer(
+                      theme,
+                      currencyCode,
+                      currencySymbol,
+                      activeColor,
+                    ),
+                  ],
                 ],
               ],
             ],

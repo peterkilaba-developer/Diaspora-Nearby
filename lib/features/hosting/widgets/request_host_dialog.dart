@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:diaspora_nearby/features/hosting/services/hosting_service.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
 /// Bottom sheet dialog for travelers to request hosting in a community.
@@ -114,6 +115,22 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
     if (!_isValid || _isSubmitting) return;
 
     setState(() => _isSubmitting = true);
+
+    // Validate 91+ Trust Score to Request Peer Hosting
+    final trustService = ref.read(trustServiceProvider);
+    final trustScore = await trustService.calculateTrustScore(null); // Passing null uses current user
+    if (trustScore < 91) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trust Score of 91+ required to request Peer Hosting.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     final hostingService = ref.read(hostingServiceProvider);
     final result = await hostingService.createHostingRequest(

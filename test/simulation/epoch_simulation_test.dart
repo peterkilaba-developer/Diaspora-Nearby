@@ -124,8 +124,8 @@ void main() {
   // ──────────────────────────────────────────────────────────────────────────
   // Current TGE Model:
   //   Gate  = DSP-only (minDspRequired = 10,000)
-  //   P.o.C.T  = Affects efficiency via decile scale, NOT a gate
-  //           efficiency = ceil(trustScore / 10) / 10
+  //   P.o.C.T  = Affects efficiency by exact percent, NOT a gate
+  //           efficiency = 0% for scores 0-10; otherwise trustScore / 100
   //   Swap  = DSP balance × efficiency
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -243,22 +243,24 @@ void main() {
     });
   });
 
-  group('Decile P.o.C.T Efficiency (swap rate, NOT a gate)', () {
-    test('Efficiency scales with trust score decile', () {
+  group('Exact P.o.C.T Efficiency (swap rate, NOT a gate)', () {
+    test('Efficiency maps no-trust to 0, standard trust exactly, full trust to 100', () {
       final epochService = EpochService();
 
-      // Decile table: ceil(score/10) / 10
-      expect(epochService.calculateEfficiency(0), 0.0); // D0: 0%
-      expect(epochService.calculateEfficiency(1), 0.1); // D1: 10%
-      expect(epochService.calculateEfficiency(10), 0.1); // D1: 10%
-      expect(epochService.calculateEfficiency(11), 0.2); // D2: 20%
-      expect(epochService.calculateEfficiency(20), 0.2); // D2: 20%
-      expect(epochService.calculateEfficiency(50), 0.5); // D5: 50%
-      expect(epochService.calculateEfficiency(51), 0.6); // D6: 60%
-      expect(epochService.calculateEfficiency(80), 0.8); // D8: 80%
-      expect(epochService.calculateEfficiency(81), 0.9); // D9: 90%
-      expect(epochService.calculateEfficiency(91), 1.0); // D10: 100%
-      expect(epochService.calculateEfficiency(100), 1.0); // D10: 100%
+      expect(epochService.calculateEfficiency(0), 0.0);
+      expect(epochService.calculateEfficiency(1), 0.0);
+      expect(epochService.calculateEfficiency(10), 0.0);
+      expect(epochService.calculateEfficiency(11), 0.11);
+      expect(epochService.calculateEfficiency(20), 0.2);
+      expect(epochService.calculateEfficiency(50), 0.5);
+      expect(epochService.calculateEfficiency(51), 0.51);
+      expect(epochService.calculateEfficiency(80), 0.8);
+      expect(epochService.calculateEfficiency(81), 0.81);
+      expect(epochService.calculateEfficiency(90), 0.9);
+      expect(epochService.calculateEfficiency(91), 1.0);
+      expect(epochService.calculateEfficiency(95), 1.0);
+      expect(epochService.calculateEfficiency(100), 1.0);
+      expect(epochService.calculateEfficiency(150), 1.0);
     });
 
     test('TGE swap = DSP × efficiency', () {
@@ -274,7 +276,17 @@ void main() {
         5000.0,
       );
 
-      // 10k DSP, trust 91 → efficiency 100% → 10k tokens
+      // 10k DSP, trust 10 -> efficiency 0% -> 0 tokens
+      expect(
+        epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: 10000,
+          trustScore: 10,
+        ),
+        0.0,
+      );
+
+      // 10k DSP, trust 91 -> full trust efficiency 100% -> 10k tokens
       expect(
         epochService.calculateTGESwap(
           epochNumber: 1,

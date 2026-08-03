@@ -8,11 +8,17 @@ import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/travel/screens/peer_listing_detail_screen.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 class CreateStayListingScreen extends ConsumerStatefulWidget {
   final PeerListing? existing; // If editing
+  final bool isPeerHosting;
 
-  const CreateStayListingScreen({super.key, this.existing});
+  const CreateStayListingScreen({
+    super.key,
+    this.existing,
+    this.isPeerHosting = false,
+  });
 
   @override
   ConsumerState<CreateStayListingScreen> createState() =>
@@ -36,6 +42,7 @@ class _CreateStayListingScreenState
   int _maxGuests = 2;
   final List<String> _selectedAmenities = [];
   bool _isSaving = false;
+  bool _isPeerHosting = false;
 
   static const _propertyTypes = [
     'Apartment',
@@ -68,10 +75,14 @@ class _CreateStayListingScreenState
   @override
   void initState() {
     super.initState();
+    _isPeerHosting = widget.isPeerHosting;
     if (widget.existing != null) {
       _prefillFromExisting(widget.existing!);
     } else {
       _prefillFromProfile();
+      if (_isPeerHosting) {
+        _priceC.text = '0';
+      }
     }
   }
 
@@ -87,6 +98,12 @@ class _CreateStayListingScreenState
     _beds = l.beds ?? 1;
     _baths = l.baths ?? 1;
     _maxGuests = l.maxGuests ?? 2;
+    _isPeerHosting = l.isPeerHosting;
+    if (_isPeerHosting) {
+      _priceC.text = '0';
+    } else {
+      _priceC.text = l.pricePerUnit.toStringAsFixed(0);
+    }
     if (l.amenities != null) _selectedAmenities.addAll(l.amenities!);
   }
 
@@ -123,15 +140,23 @@ class _CreateStayListingScreenState
 
       final repo = ref.read(peerListingRepositoryProvider);
 
+      if (_isPeerHosting) {
+        final trustData = ref.read(userTrustProvider(user.uid)).value;
+        if (trustData == null || trustData.trustScore < 91) {
+          throw Exception('You need a Trust Score of 91+ to host in Peer Hosting.');
+        }
+      }
+
       final listing = PeerListing(
         id: widget.existing?.id ?? '',
         type: 'stay',
+        isPeerHosting: _isPeerHosting,
         ownerId: user.uid,
         ownerName: profile.fullName,
         ownerPhoto: profile.profileImage,
         title: _titleC.text.trim(),
         description: _descC.text.trim(),
-        pricePerUnit: double.tryParse(_priceC.text.trim()) ?? 0,
+        pricePerUnit: _isPeerHosting ? 0 : (double.tryParse(_priceC.text.trim()) ?? 0),
         city: _cityC.text.trim(),
         country: profile.hostCountry,
         countryCode: profile.hostCountryCode,
@@ -275,19 +300,21 @@ class _CreateStayListingScreenState
             const SizedBox(height: 14),
 
             // Price
-            _buildTextField(
-              controller: _priceC,
-              label: 'Price per Night (USD)',
-              hint: 'e.g. 85',
-              icon: LucideIcons.dollarSign,
-              keyboardType: TextInputType.number,
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Price is required';
-                if (double.tryParse(v) == null) return 'Enter a valid number';
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
+            if (!_isPeerHosting) ...[
+              _buildTextField(
+                controller: _priceC,
+                label: 'Price per Night (USD)',
+                hint: 'e.g. 85',
+                icon: LucideIcons.dollarSign,
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Price is required';
+                  if (double.tryParse(v) == null) return 'Enter a valid number';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+            ],
 
             // Location section
             _sectionLabel(theme, 'Location'),

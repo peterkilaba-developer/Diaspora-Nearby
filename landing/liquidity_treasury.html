@@ -59,7 +59,7 @@
                 <div class="hero-badge"><span class="dot"></span> Open Market — Trade Any Amount</div>
                 <h1>Trade <span class="accent-orange">$DIASPORA</span> on the Open Market.</h1>
                 <p style="max-width:700px;">
-                    The Liquidity Treasury deploys <strong>5% of total epoch supply</strong> directly to DEX pools on Coinbase L2 Base Blockchain. No lot sizes, no minimums — <strong>swap any amount</strong> of $DIASPORA for USDC or ETH on Uniswap or Aerodrome.
+                    The Liquidity Treasury deploys <strong>5% of total epoch supply</strong> directly to DEX pools on Coinbase L2 Base Blockchain. No lot sizes, no minimums — <strong>swap any amount</strong> of $DIASPORA for USDC or ETH on Aerodrome DEX.
                 </p>
                 <div class="hero-actions" style="margin-top:32px;display:flex;gap:12px;flex-wrap:wrap;">
                     <a href="#how-it-works" class="btn btn-orange">How It Works <i data-lucide="arrow-down" style="width:16px;height:16px"></i></a>
@@ -72,7 +72,7 @@
     <!-- LIVE PRICE TICKER -->
     <div class="live-ticker fade-in">
         <div class="container" style="display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;">
-            <div class="ticker-item"><span class="ticker-dot green"></span> <strong>Live DSP Price:</strong> <span id="live-dsp-price" class="ticker-value">$0.00110</span></div>
+            <div class="ticker-item"><span class="ticker-dot green"></span> <strong>Live $DIASPORA Token Price:</strong> <span id="live-dsp-price" class="ticker-value">$0.00110</span></div>
             <div class="ticker-divider"></div>
             <div class="ticker-item"><i data-lucide="users" style="width:14px;height:14px"></i> Users: <span id="factor-users">0</span></div>
             <div class="ticker-divider"></div>
@@ -94,19 +94,19 @@
                 <div class="card" style="border:2px solid var(--orange-bg);">
                     <div class="card-icon orange"><i data-lucide="droplets"></i></div>
                     <h3>1. Liquidity Deployed</h3>
-                    <p>At each <strong>TGE milestone</strong>, 10% of that epoch's treasury allocation is deployed to <strong>DEX liquidity pools</strong> on Base. Earlier TGEs have higher conversion rates (100% → 10%).</p>
+                    <p>At each <strong>TDE milestone</strong>, 10% of that epoch's treasury allocation is deployed to <strong>DEX liquidity pools</strong> on Base. Earlier TDEs have higher conversion rates (100% → 10%).</p>
                     <div style="margin-top:12px;padding:8px 12px;background:var(--orange-bg);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--orange);">Automated pool deployment</div>
                 </div>
                 <div class="card" style="border:2px solid rgba(100,149,237,0.15);">
                     <div class="card-icon" style="background:rgba(100,149,237,0.1);color:cornflowerblue;"><i data-lucide="bell"></i></div>
                     <h3>2. Get Notified</h3>
-                    <p>Register your interest for any epoch or TGE. We'll <strong>email you directly</strong> when that liquidity goes live on the DEX — with a direct swap link so you don't miss the window.</p>
-                    <div style="margin-top:12px;padding:8px 12px;background:rgba(100,149,237,0.08);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:cornflowerblue;">Never miss a TGE drop</div>
+                    <p>Register your interest for any epoch or TDE. We'll <strong>email you directly</strong> when that liquidity goes live on the DEX — with a direct swap link so you don't miss the window.</p>
+                    <div style="margin-top:12px;padding:8px 12px;background:rgba(100,149,237,0.08);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:cornflowerblue;">Never miss a TDE drop</div>
                 </div>
                 <div class="card" style="border:2px solid var(--sage-bg);">
                     <div class="card-icon green"><i data-lucide="arrow-left-right"></i></div>
                     <h3>3. Swap Any Amount</h3>
-                    <p>Trade <strong>any amount</strong> of $DIASPORA — no lot sizes, no minimums. Swap $DIASPORA/USDC or $DIASPORA/ETH on <strong>Uniswap</strong> or <strong>Aerodrome</strong> on Coinbase L2 Base Blockchain.</p>
+                    <p>Trade <strong>any amount</strong> of $DIASPORA — no lot sizes, no minimums. Swap $DIASPORA/USDC or $DIASPORA/ETH on <strong>Aerodrome DEX</strong> on Coinbase L2 Base Blockchain.</p>
                     <div style="margin-top:12px;padding:8px 12px;background:var(--sage-bg);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--sage);">Open market, equal access</div>
                 </div>
             </div>
@@ -119,29 +119,27 @@
             <div class="section-header fade-in">
                 <div class="section-label orange"><i data-lucide="arrow-left-right" style="width:14px;height:14px"></i> Trading Pairs</div>
                 <h2>Swap With USDC or ETH</h2>
-                <p>$DIASPORA liquidity is deployed to two primary pairs on Coinbase L2 Base Blockchain — trade against stablecoins or ETH, with no lot sizes or minimums.</p>
+                <p>$DIASPORA liquidity is deployed to two primary pairs on Aerodrome DEX on Coinbase L2 Base Blockchain — trade against stablecoins or ETH, with no lot sizes or minimums.</p>
             </div>
             <div class="card-grid fade-in" style="grid-template-columns:repeat(2,1fr);">
                 <div class="card" style="border:2px solid var(--orange-bg);text-align:center;">
                     <div class="card-icon orange" style="margin:0 auto 12px;"><i data-lucide="dollar-sign"></i></div>
                     <h3>$DIASPORA / USDC</h3>
                     <div style="font-size:13px;color:var(--fg-muted);margin-bottom:12px;">Primary Pair — Stablecoin</div>
-                    <p style="font-size:14px;">The primary trading pair. Stable dollar-denominated pricing that aligns directly with the implied value model. Best for price discovery and straightforward swaps.</p>
+                    <p style="font-size:14px;">The primary trading pair on Aerodrome DEX. Stable dollar-denominated pricing that aligns directly with the dynamic price floor model. Best for price discovery and straightforward swaps.</p>
                     <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
                         <span class="pair-badge">Coinbase L2 Base Blockchain</span>
-                        <span class="pair-badge">Uniswap V3</span>
-                        <span class="pair-badge">Aerodrome</span>
+                        <span class="pair-badge">Aerodrome DEX</span>
                     </div>
                 </div>
                 <div class="card" style="border:2px solid rgba(100,149,237,0.2);text-align:center;">
                     <div class="card-icon" style="margin:0 auto 12px;background:rgba(100,149,237,0.1);color:cornflowerblue;"><i data-lucide="hexagon"></i></div>
                     <h3>$DIASPORA / ETH</h3>
                     <div style="font-size:13px;color:var(--fg-muted);margin-bottom:12px;">Secondary Pair — Crypto Native</div>
-                    <p style="font-size:14px;">For crypto-native users who want to swap directly from ETH. Captures DeFi-native demand. DEX aggregators will also auto-route through the best pool.</p>
+                    <p style="font-size:14px;">For crypto-native users who want to swap directly from ETH on Aerodrome DEX. Captures DeFi-native demand with auto-routing.</p>
                     <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
                         <span class="pair-badge">Coinbase L2 Base Blockchain</span>
-                        <span class="pair-badge">Uniswap V3</span>
-                        <span class="pair-badge">Aerodrome</span>
+                        <span class="pair-badge">Aerodrome DEX</span>
                     </div>
                 </div>
             </div>
@@ -166,7 +164,7 @@
                                 <span style="font-size:12px;color:var(--fg-dim);">Trade any amount on equal terms</span>
                             </div>
                         </div>
-                        <p style="font-size:14px;">There are no private rounds, pre-sales, VC allocations, or lot-size requirements. Liquidity goes to the DEX — <strong>anyone can trade any amount on equal terms</strong>.</p>
+                        <p style="font-size:14px;">There are no private rounds, pre-sales, VC allocations, or lot-size requirements. Liquidity goes to Aerodrome DEX — <strong>anyone can trade any amount on equal terms</strong>.</p>
                     </div>
                     <div class="card" style="border-left:3px solid var(--sage);">
                         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
@@ -193,34 +191,34 @@
         </div>
     </section>
 
-    <!-- FOMO CONVERSION -->
+    <!-- FOMO CONVERSION (INFORMATIONAL SAFT) -->
     <section class="section" id="conversion">
         <div class="container">
             <div class="section-header fade-in">
-                <div class="section-label orange"><i data-lucide="trending-down" style="width:14px;height:14px"></i> Decile Conversion</div>
-                <h2>Earlier TGE = Higher Conversion</h2>
-                <p>The FOMO conversion model rewards early believers. TGE 1 converts at 100%, declining by 10% per milestone. This pattern repeats identically across every Epoch.</p>
+                <div class="section-label orange"><i data-lucide="info" style="width:14px;height:14px"></i> Reference Model</div>
+                <h2>Informational SAFT Conversion</h2>
+                <p>For informational purposes only, if we were offering a SAFT (Simple Agreement for Future Tokens), the FOMO conversion model would reward early believers where TDE 1 converts at 100%, declining by 10% per milestone.</p>
+                <p>In reality, the Liquidity Treasury simply distributes DEX liquidity in equal 10% deciles to ensure open market access. The TDE fires each time 10% of the epoch DSP is distributed. For example, during the first epoch, a TDE occurs at every 100,000 DSP up to 1,000,000. In epoch 2, it occurs at every 1,000,000 DSP up to 10,000,000. This continuous release prevents users from waiting for an entire epoch to finish to reap the rewards.</p>
             </div>
-            <div class="fade-in" style="max-width:700px;margin:0 auto;">
-                <div class="conversion-bar-wrap">
-                    <div class="conversion-bars" id="conversion-bars"></div>
+            <div class="fade-in" style="max-width:750px;margin:0 auto;">
+                <div class="table-responsive">
+                    <table class="lt-table">
+                        <thead><tr><th>TDE</th><th>Conversion</th><th>Effective DSP</th></tr></thead>
+                        <tbody>
+                            <tr class="highlight-row"><td><strong>TDE 1</strong></td><td><div class="conv-cell"><span class="conv-badge c100">100%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c100" style="width:100%;"></div></div></div></td><td>10,000 of 10,000</td></tr>
+                            <tr><td>TDE 2</td><td><div class="conv-cell"><span class="conv-badge c90">90%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c90" style="width:90%;"></div></div></div></td><td>9,000 of 10,000</td></tr>
+                            <tr><td>TDE 3</td><td><div class="conv-cell"><span class="conv-badge c80">80%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c80" style="width:80%;"></div></div></div></td><td>8,000 of 10,000</td></tr>
+                            <tr><td>TDE 4</td><td><div class="conv-cell"><span class="conv-badge c70">70%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c70" style="width:70%;"></div></div></div></td><td>7,000 of 10,000</td></tr>
+                            <tr><td>TDE 5</td><td><div class="conv-cell"><span class="conv-badge c60">60%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c60" style="width:60%;"></div></div></div></td><td>6,000 of 10,000</td></tr>
+                            <tr><td>TDE 6</td><td><div class="conv-cell"><span class="conv-badge c50">50%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c50" style="width:50%;"></div></div></div></td><td>5,000 of 10,000</td></tr>
+                            <tr><td>TDE 7</td><td><div class="conv-cell"><span class="conv-badge c40">40%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c40" style="width:40%;"></div></div></div></td><td>4,000 of 10,000</td></tr>
+                            <tr><td>TDE 8</td><td><div class="conv-cell"><span class="conv-badge c30">30%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c30" style="width:30%;"></div></div></div></td><td>3,000 of 10,000</td></tr>
+                            <tr><td>TDE 9</td><td><div class="conv-cell"><span class="conv-badge c20">20%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c20" style="width:20%;"></div></div></div></td><td>2,000 of 10,000</td></tr>
+                            <tr><td>TDE 10</td><td><div class="conv-cell"><span class="conv-badge c10">10%</span><div class="conv-bar-mini-track"><div class="conv-bar-mini-fill c10" style="width:10%;"></div></div></div></td><td>1,000 of 10,000</td></tr>
+                        </tbody>
+                        <tfoot><tr><td colspan="3" style="text-align:center;font-size:12px;color:var(--fg-muted);padding-top:12px;font-weight:500;">* DSP shown for Epoch 1 (10,000 per TDE release). Each subsequent epoch scales by 10×.</td></tr></tfoot>
+                    </table>
                 </div>
-                <table class="lt-table" style="margin-top:24px;">
-                    <thead><tr><th>TGE</th><th>Conversion</th><th>Effective DSP</th></tr></thead>
-                    <tbody>
-                        <tr class="highlight-row"><td><strong>TGE 1</strong></td><td><span class="conv-badge c100">100%</span></td><td>10,000 of 10,000</td></tr>
-                        <tr><td>TGE 2</td><td><span class="conv-badge c90">90%</span></td><td>9,000 of 10,000</td></tr>
-                        <tr><td>TGE 3</td><td><span class="conv-badge c80">80%</span></td><td>8,000 of 10,000</td></tr>
-                        <tr><td>TGE 4</td><td><span class="conv-badge c70">70%</span></td><td>7,000 of 10,000</td></tr>
-                        <tr><td>TGE 5</td><td><span class="conv-badge c60">60%</span></td><td>6,000 of 10,000</td></tr>
-                        <tr><td>TGE 6</td><td><span class="conv-badge c50">50%</span></td><td>5,000 of 10,000</td></tr>
-                        <tr><td>TGE 7</td><td><span class="conv-badge c40">40%</span></td><td>4,000 of 10,000</td></tr>
-                        <tr><td>TGE 8</td><td><span class="conv-badge c30">30%</span></td><td>3,000 of 10,000</td></tr>
-                        <tr><td>TGE 9</td><td><span class="conv-badge c20">20%</span></td><td>2,000 of 10,000</td></tr>
-                        <tr><td>TGE 10</td><td><span class="conv-badge c10">10%</span></td><td>1,000 of 10,000</td></tr>
-                    </tbody>
-                    <tfoot><tr><td colspan="3" style="text-align:center;font-size:12px;color:var(--fg-dim);padding-top:8px;">* DSP shown for Epoch 1 (10,000 per TGE release). Each subsequent epoch scales by 10×.</td></tr></tfoot>
-                </table>
             </div>
         </div>
     </section>
@@ -230,17 +228,26 @@
         <div class="container">
             <div class="section-header fade-in">
                 <div class="section-label orange"><i data-lucide="trending-up" style="width:14px;height:14px"></i> Value Trajectory</div>
-                <h2>DSP Implied Value Across Epochs</h2>
-                <p>Prices shown are <strong>live</strong>, computed from the same formula used in the app. As users grow, DSP burns, and fiat GDP increases — the implied value rises across all epochs.</p>
+                <h2>$DIASPORA Token Price Across Epochs</h2>
+                <p>Prices shown reflect the actual initial <strong>$DIASPORA token price</strong> on Aerodrome DEX, computed from the unified formula used in the app. As users grow, DSP burns, and fiat GDP increases — the dynamic price floor rises across all epochs.</p>
             </div>
             <div class="fade-in" style="max-width:900px;margin:0 auto;">
-                <div class="chart-container"><canvas id="trajectory-canvas"></canvas></div>
-                <div class="factor-cards">
+                
+                <h3 style="text-align:center; font-size:16px; margin-bottom:6px; font-weight:600;">Network Baseline Initial Token Price</h3>
+                <p style="text-align:center; font-size:13px; color:var(--fg-muted); margin-bottom:16px;">Initial DEX token price anchored to Metcalfe's network growth, burn ratio, and epoch scarcity (Day-1 baseline token price)</p>
+                <div class="chart-container" style="margin-bottom:24px;"><canvas id="trajectory-canvas"></canvas></div>
+
+                <div class="factor-cards" style="margin-bottom:48px;">
                     <div class="factor-card"><div class="fc-label">Network Effect</div><div class="fc-value" id="factor-network">0%</div><div class="fc-desc">log₁₀(users) / 10</div></div>
                     <div class="factor-card"><div class="fc-label">Deflation Ratio</div><div class="fc-value" id="factor-deflation">0%</div><div class="fc-desc">burned / minted (cap 50%)</div></div>
                     <div class="factor-card"><div class="fc-label">Epoch Scarcity</div><div class="fc-value" id="factor-epoch">1.10×</div><div class="fc-desc">1 + epoch × 0.1</div></div>
-                    <div class="factor-card"><div class="fc-label">Fiat GDP Boost</div><div class="fc-value" id="factor-gdp">1.000×</div><div class="fc-desc">1 + log₁₀(GDP) / 10</div></div>
+                    <div class="factor-card"><div class="fc-label">Fiat GDP Floor</div><div class="fc-value" id="factor-gdp">+$0.00000</div><div class="fc-desc">GDP ÷ Circulating Supply</div></div>
                 </div>
+
+                <h3 style="text-align:center; font-size:16px; margin-bottom:6px; font-weight:600;">Combined Dynamic Price Floor Projection ($DIASPORA Token)</h3>
+                <p style="text-align:center; font-size:13px; color:var(--fg-muted); margin-bottom:16px;">Calculated as Network Implied Baseline + (Platform Real GDP ÷ DEX $DIASPORA Supply)</p>
+                <div class="chart-container" style="margin-bottom:16px;"><canvas id="projected-trajectory-canvas"></canvas></div>
+                <div id="price-floor-table-container" style="margin-bottom:32px; overflow-x:auto;"></div>
             </div>
         </div>
     </section>
@@ -251,7 +258,7 @@
             <div class="section-header fade-in">
                 <div class="section-label orange"><i data-lucide="calendar" style="width:14px;height:14px"></i> All Epochs</div>
                 <h2>Browse Epochs & Get Notified</h2>
-                <p>10 Epochs × 10 TGEs = 100 liquidity release events. Register to be notified when liquidity goes live on the DEX — values update <strong>in real-time</strong> from live platform data.</p>
+                <p>10 Epochs × 10 TDEs = 100 liquidity release events. Register to be notified when liquidity goes live on Aerodrome DEX — values update <strong>in real-time</strong> from live platform data.</p>
             </div>
             <div id="epoch-tables" class="fade-in"></div>
         </div>
@@ -263,13 +270,13 @@
             <div class="section-header fade-in">
                 <div class="section-label orange"><i data-lucide="wallet" style="width:14px;height:14px"></i> How to Trade</div>
                 <h2>Trade $DIASPORA in 4 Steps</h2>
-                <p>No gatekeepers, no applications. When liquidity goes live on the DEX, anyone can trade freely using a Web3 wallet on Coinbase L2 Base Blockchain.</p>
+                <p>No gatekeepers, no applications. When liquidity goes live on Aerodrome DEX, anyone can trade freely using a Web3 wallet on Coinbase L2 Base Blockchain.</p>
             </div>
             <div class="fade-in" style="max-width:500px;margin:0 auto;">
                 <div class="wallet-flow">
                     <div class="wallet-step"><div class="ws-num">1</div><div><strong>Get notified</strong><br><span class="fg-muted">Register interest for any epoch above — we'll email you when liquidity drops</span></div></div>
-                    <div class="wallet-step"><div class="ws-num">2</div><div><strong>Connect a wallet</strong><br><span class="fg-muted">Use MetaMask, Coinbase Wallet, or any Web3 wallet on Coinbase L2 Base Blockchain</span></div></div>
-                    <div class="wallet-step"><div class="ws-num">3</div><div><strong>Swap any amount</strong><br><span class="fg-muted">Trade $DIASPORA/USDC or $DIASPORA/ETH on Uniswap or Aerodrome — no minimums</span></div></div>
+                    <div class="wallet-step"><div class="ws-num">2</div><div><strong>Connect a wallet</strong><br><span class="fg-muted">Use Coinbase Wallet, MetaMask, or any Web3 wallet on Coinbase L2 Base Blockchain</span></div></div>
+                    <div class="wallet-step"><div class="ws-num">3</div><div><strong>Swap any amount</strong><br><span class="fg-muted">Trade $DIASPORA/USDC or $DIASPORA/ETH on Aerodrome DEX — no minimums</span></div></div>
                     <div class="wallet-step"><div class="ws-num">4</div><div><strong>Hold or use in-app</strong><br><span class="fg-muted">Link your wallet in Diaspora Nearby to use $DIASPORA across the ecosystem</span></div></div>
                 </div>
             </div>
@@ -289,8 +296,8 @@
                 </div>
                 <div style="margin-top:20px;display:flex;gap:20px;justify-content:center;flex-wrap:wrap;font-size:12px;color:var(--fg-muted);">
                     <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Free to join</span>
-                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Earn DSP daily</span>
-                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Smart Wallet auto-created</span>
+                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Base L2 Blockchain</span>
+                    <span><i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:-2px;color:#4caf50;"></i> Zero Gas Fees</span>
                 </div>
             </div>
         </div>
@@ -367,11 +374,8 @@
                 <div style="margin-top:24px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);">
                     <div class="lt-label">When Live, Trade Here</div>
                     <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
-                        <a href="https://app.uniswap.org/swap?chain=base" target="_blank" rel="noopener" class="dex-link-btn">
-                            <i data-lucide="arrow-right-left" style="width:14px;height:14px"></i> Uniswap (Base) <i data-lucide="external-link" style="width:12px;height:12px"></i>
-                        </a>
                         <a href="https://aerodrome.finance/swap" target="_blank" rel="noopener" class="dex-link-btn">
-                            <i data-lucide="plane" style="width:14px;height:14px"></i> Aerodrome (Base) <i data-lucide="external-link" style="width:12px;height:12px"></i>
+                            <i data-lucide="plane" style="width:14px;height:14px"></i> Aerodrome DEX (Base) <i data-lucide="external-link" style="width:12px;height:12px"></i>
                         </a>
                     </div>
                     <p class="fg-muted" style="font-size:11px;margin-top:10px;">Swap any amount — $DIASPORA/USDC or $DIASPORA/ETH. No lot sizes, no minimums.</p>

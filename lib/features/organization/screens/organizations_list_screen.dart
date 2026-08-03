@@ -12,6 +12,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dart';
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 
 class OrganizationsListScreen extends ConsumerStatefulWidget {
   const OrganizationsListScreen({super.key});
@@ -327,8 +328,9 @@ class _OrganizationsListScreenState
                             },
                             tooltip: 'Clear search',
                           ),
-                        // Global toggle with animation (visible when not searching)
-                        if (_searchQuery.isEmpty)
+                        // Global toggle with animation (visible when not searching and unlocked)
+                        if (_searchQuery.isEmpty &&
+                            ref.watch(isGlobalUnlockedSyncProvider))
                           IconButton(
                             icon: Icon(
                               LucideIcons.globe,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 /// The 6 leadership seats on a corridor Chamber of Commerce.
+/// The Chamber of Commerce is run by the elected Community Council, who oversee and hire these chamber officers.
 ///
 /// Shape is intentionally compatible with [GovernanceRoles] in
 /// `lib/features/governance/models/governance_roles.dart` so that when

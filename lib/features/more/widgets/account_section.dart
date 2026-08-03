@@ -64,7 +64,7 @@ class AccountSection extends ConsumerWidget {
                 context,
                 icon: LucideIcons.shieldCheck,
                 iconColor: Colors.green,
-                title: 'Trust & Reputation',
+                title: 'Trust & Verification',
                 subtitle: 'View your Community Trust breakdown',
                 onTap: () {
                   context.push('/profile');

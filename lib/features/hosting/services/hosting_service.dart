@@ -8,6 +8,7 @@ import 'package:diaspora_nearby/features/hosting/models/hosting_request.dart';
 import 'package:diaspora_nearby/features/hosting/models/hosting_session.dart';
 import 'package:diaspora_nearby/features/hosting/repository/hosting_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -272,6 +273,18 @@ class HostingService {
 
       // 2. Mark as settled (no DSP fee — hosting is free)
       await _hostingRepo.markSettled(sessionId);
+
+      // 3. Award DSP for Peer Hosting (1000 flat + 100 per night)
+      final session = await _hostingRepo.getSession(sessionId);
+      if (session != null) {
+        final nights = session.plannedDeparture.difference(session.plannedArrival).inDays;
+        final actualNights = nights > 0 ? nights : 1;
+        await _ref.read(pointsServiceProvider).trackHostATraveler(
+          session.hostId,
+          session.travelerId,
+          nights: actualNights,
+        );
+      }
 
       debugPrint('✅ [Hosting] Session $sessionId settled');
       return true;

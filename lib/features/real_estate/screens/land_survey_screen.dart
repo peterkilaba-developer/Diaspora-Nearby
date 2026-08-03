@@ -624,7 +624,7 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                 Expanded(
                   child: Text(
                     'Fraud prevention: Only GPS-verified locations can be listed. '
-                    'Misrepresenting location results in 10 P.o.C.T deduction per violation.',
+                    'Misrepresenting location results in 10 PCT deduction per violation.',
                     style: TextStyle(
                       fontSize: 11,
                       color: theme.colorScheme.error.withValues(alpha: 0.9),

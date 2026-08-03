@@ -113,13 +113,13 @@ Send a message        →    +10 DSP (social activity, no fiat value tracked)
 - "Your progress toward the 10,000 DSP Gate"
 - Floor price indicator (based on accumulated Fiat GDP)
 
-**At TGE (Epoch 1 triggers when cumulative distributed DSP reaches the milestone)**:
+**At TGE/TDE (Epoch 1 supply is pre-minted at TGE, then released through ten TDEs)**:
 1. Cumulative distributed DSP supply reaches 1,000,000
 2. Member count is recorded as an informational network-growth benchmark; it does not gate TGE
 3. Snapshot all DSP balances from Firebase
 4. Apply **decile scaling efficiency** (Trust Score → conversion rate)
-5. Mint $DIASPORA on Base at adjusted ratio
-6. Distribute to wallets
+5. Pre-mint the epoch's $DIASPORA supply on Base at TGE
+6. Distribute to wallets through ten Token Distribution Events, releasing 10% through 100% of the epoch supply
 7. **ALL DSP is burned** — balances reset to 0
 8. Announce: **"Floor price: $X.XX based on $Y Fiat GDP"**
 9. New DSP accumulation cycle begins for Epoch 2
@@ -132,12 +132,12 @@ Send a message        →    +10 DSP (social activity, no fiat value tracked)
 
 ```
 USER'S WALLET STATE POST-TGE:
-├── $DIASPORA balance: 8,500 (on-chain, Base) ← minted at TGE
+├── $DIASPORA balance: 8,500 (on-chain, Base) ← pre-minted at TGE and released through TDE
 ├── DSP balance: 0 (burned at TGE)
 └── DSP starts accumulating again for Epoch 2
 
 ON-RAMP (Fiat → $DIASPORA):
-├── User buys $DIASPORA via DEX (Uniswap on Base)
+├── User buys $DIASPORA via DEX (Aerodrome on Base)
 ├── User buys $DIASPORA via mobile money partner (Mpesa, MTN)
 ├── User tops up via Stripe/PayStack (credit card → $DIASPORA)
 └── $DIASPORA goes directly to user's Base wallet
@@ -360,7 +360,7 @@ Total Fiat GDP = Σ(all fiat-tracked transactions normalized to USD)
 
 ### Step 2: Calculate Circulating Supply
 ```
-Circulating Supply = Total $DIASPORA minted at TGE (user rewards + treasury match - burns)
+Circulating Supply = Total $DIASPORA distributed through TDE releases (user rewards + treasury match - burns)
 ```
 
 ### Step 3: Calculate Floor Price
@@ -450,7 +450,7 @@ Public Price = Adjusted Price × 3.5 (Network Effect Multiplier)
 | CurrencyHelper (200+ country → USD static rates) | `marketplace/utils/currency_helper.dart` | ✅ Complete |
 | ValuationService (price formula: GDP/Supply/Velocity) | `dsp/services/valuation_service.dart` | ✅ Complete |
 | PointsService (earn/spend/transfer with 1% fee) | `dsp/services/points_service.dart` | ✅ Complete |
-| EpochService (10 epochs, distributed-DSP-triggered TGE) | `dsp/services/epoch_service.dart` | ✅ Complete |
+| EpochService (10 epochs, one TGE plus ten TDEs per epoch) | `dsp/services/epoch_service.dart` | ✅ Complete |
 | TreasuryService (1:1 allocation, 10-slot model) | `dsp/services/treasury_service.dart` | ✅ Complete |
 | Marketplace `priceAmount` in local currency | `marketplace/models/listing_data.dart` | ✅ Complete |
 | Travel `pricePerUnit` in USD | `travel/models/peer_listing.dart` | ✅ Complete |

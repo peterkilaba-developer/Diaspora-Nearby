@@ -617,7 +617,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           GestureDetector(
             onTap: () => launchUrl(
               Uri.parse(
-                'https://basescan.org/token/0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c',
+                'https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735',
               ),
               mode: LaunchMode.externalApplication,
             ),
@@ -632,7 +632,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'View \$DIASPORA on Blockchain',
+                  'View on Blockchain',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 13,
@@ -1414,42 +1414,41 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   Consumer(
                     builder: (context, ref, _) {
                       final balanceAsync = ref.watch(tokenBalanceProvider);
+                      final valuation = ref.watch(dspValuationProvider);
                       return balanceAsync.when(
-                        data: (balance) => Row(
-                          children: [
-                            Text(
-                              'Balance: ',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.6),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                        data: (balance) {
+                          final parsedInt =
+                              (double.tryParse(balance) ?? 0).toInt();
+                          final usdEst = valuation.formatBalance(parsedInt);
+                          return Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              Image.asset(
+                                'assets/icons/logo-orange-transparent-32.png',
+                                width: 24,
+                                height: 24,
                               ),
-                            ),
-                            Image.asset(
-                              'assets/icons/logo-orange-transparent-32.png',
-                              width: 28,
-                              height: 28,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              balance,
-                              style: const TextStyle(
-                                color: Colors.orange,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                              Text(
+                                '$balance \$DIASPORA',
+                                style: const TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              r'$DIASPORA',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.4),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
+                              Text(
+                                '($usdEst)',
+                                style: const TextStyle(
+                                  color: Color(0xFF38BDF8),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          );
+                        },
                         loading: () => Row(
                           children: [
                             Text(
@@ -1514,6 +1513,40 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => launchUrl(
+                  Uri.parse(
+                    'https://aerodrome.finance/swap?from=0x55d7e7d006938A15082752225ED44Fd130B87735&to=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                  ),
+                  mode: LaunchMode.externalApplication,
+                ),
+                icon: const Icon(
+                  LucideIcons.repeat,
+                  size: 16,
+                  color: Colors.black,
+                ),
+                label: const Text(
+                  'Swap / Sell \$DIASPORA on Aerodrome',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.black,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                ),
+              ),
             ),
           ] else ...[
             Container(
@@ -1618,7 +1651,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
 
             // 2. Add TGE distributions (these are on-chain mints)
             if (userPoints != null) {
-              for (final record in userPoints.tgeHistory) {
+              for (final record in userPoints.tdeHistory) {
                 // Skip if already present from on-chain logs
                 if (record.txHash != null &&
                     activities.any((a) => a.txHash == record.txHash)) {
@@ -1627,7 +1660,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 activities.add(
                   _BlockchainEvent(
                     title:
-                        'Epoch ${record.epoch} TGE ${record.tgeNumber} Distribution',
+                        'Epoch ${record.epoch} TDE ${record.tdeNumber} Distribution',
                     timestamp: record.date,
                     amount: record.amount,
                     isPositive: record.amount >= 0,
@@ -2190,15 +2223,39 @@ class _GovernanceUnitCard extends ConsumerWidget {
                                 fit: BoxFit.contain,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                showingDsp
-                                    ? '$balance DSP'
-                                    : '$balance \$DIASPORA',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.orange,
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final valuation =
+                                      ref.watch(dspValuationProvider);
+                                  final parsedVal =
+                                      (double.tryParse(balance) ?? 0).toInt();
+                                  final usdEst =
+                                      valuation.formatBalance(parsedVal);
+                                  return Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: showingDsp
+                                              ? '$balance DSP '
+                                              : '$balance \$DIASPORA ',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: Colors.orange,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: '($usdEst)',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                            color: Color(0xFF38BDF8),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),

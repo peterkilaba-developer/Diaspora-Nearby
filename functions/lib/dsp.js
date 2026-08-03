@@ -743,6 +743,8 @@ exports.awardPoints = functions
     'verified_solution_milestone', 'verified_solution_verifier_reward',
     'host_traveler_host_reward', 'host_traveler_guest_reward',
     'event_hosting_per_attendee', 'event_attendance',
+    'message_received', 'new_dm_received', 'reaction_received',
+    'share_received', 'link_opened_by_peer'
   ];
 
   if (callerId !== userId && !CROSS_USER_ACTIONS.includes(action)) {
@@ -2621,6 +2623,7 @@ exports.onVouchWrite = functions.firestore
 
     // 1. First-time vouch reward
     if (!beforeData) {
+       // Reward voucher
        batch.set(db.collection("user_points").doc(fromUserId), {
            availablePoints: admin.firestore.FieldValue.increment(1000),
            totalPoints: admin.firestore.FieldValue.increment(1000),
@@ -2629,6 +2632,21 @@ exports.onVouchWrite = functions.firestore
 
        batch.set(db.collection("points_transactions").doc(), {
           userId: fromUserId,
+          amount: 1000,
+          action: "trust_vouch_reward",
+          type: "earn",
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+       });
+
+       // Reward vouchee
+       batch.set(db.collection("user_points").doc(toUserId), {
+           availablePoints: admin.firestore.FieldValue.increment(1000),
+           totalPoints: admin.firestore.FieldValue.increment(1000),
+           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+       }, {merge: true});
+
+       batch.set(db.collection("points_transactions").doc(), {
+          userId: toUserId,
           amount: 1000,
           action: "trust_vouch_reward",
           type: "earn",

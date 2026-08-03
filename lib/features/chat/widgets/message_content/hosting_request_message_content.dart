@@ -12,6 +12,7 @@ import 'package:diaspora_nearby/features/hosting/models/hosting_request.dart';
 import 'package:diaspora_nearby/features/hosting/repository/hosting_repository.dart';
 import 'package:diaspora_nearby/features/hosting/services/hosting_service.dart';
 import 'package:diaspora_nearby/features/hosting/widgets/interested_hosts_sheet.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 /// Rich card rendered inside the community chat when a traveler broadcasts
 /// a hosting request. Shows traveler info, travel dates, purpose, and a
@@ -70,6 +71,22 @@ class _HostingRequestMessageContentState
   Future<void> _handleShowInterest() async {
     final reqId = _requestId;
     if (reqId == null || reqId.isEmpty) return;
+
+    // Validate 91+ Trust Score for Host
+    final trustService = ref.read(trustServiceProvider);
+    final trustScore = await trustService.calculateTrustScore(null);
+    if (trustScore < 91) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trust Score of 91+ required to offer Peer Hosting.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isShowingInterest = true);
     try {
       await ref.read(hostingServiceProvider).showInterest(reqId);

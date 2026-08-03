@@ -26,6 +26,7 @@ class PointsTransaction {
     final mergedMeta = <String, dynamic>{
       ...rawMeta,
       if (map['txHash'] != null) 'txHash': map['txHash'],
+      if (map['assetType'] != null) 'assetType': map['assetType'],
       if (map['toUserId'] != null && !rawMeta.containsKey('toUserId'))
         'toUserId': map['toUserId'],
       if (map['fromUserId'] != null && !rawMeta.containsKey('fromUserId'))

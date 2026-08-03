@@ -131,7 +131,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Invest in your home country using Diaspora (\$DIASPORA) across 6 key sectors: Food, Healthcare, Education, Real Estate, Water, and Energy.',
+                'Invest in your home country using Diaspora (\$DIASPORA) across 7 key sectors: Food, Healthcare, Education, Real Estate, Water, Energy, and Public-Private Partnerships.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),

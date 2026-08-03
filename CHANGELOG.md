@@ -20,7 +20,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - **Slimmer account section.** Stripped ~336 lines of dead UI paths in `account_section.dart` and deleted the unreachable `storage_settings_screen`.
 - **DSP refactor.** Tightened distribution logic in `functions/lib/dsp.js`; simplified client-side `points_service` / `points_repository`; refreshed Diaspora Crypto and Points System screens.
 - **Corridor list now reads from chamber docs.** `streamCorridors` and `streamInternalGdp` now derive from `organizations` where `kind == 'corridor_chamber'` — single source of truth, no more drift between treasury totals and per-corridor rollups.
-- **Trust score model v3.** Council eligibility now requires `daysActive >= 100 AND isAdminOfLargeGroup AND finalScore >= 90`, with separate Vouch and Verified milestones and +10 P.o.C.T each.
+- **Trust score model v3.** Council eligibility now requires `daysActive >= 100 AND isAdminOfLargeGroup AND finalScore >= 91`, with separate Vouch and Verified milestones and +10 PCT each.
 
 ### Security
 

@@ -1233,7 +1233,7 @@ class ChatMessagingService {
     if (senderIdOverride != null || currentUserId == null) return;
 
     // 1. Regular message reward (100 DSP, daily limit 100 handled in repo)
-    _pointsService.trackMessageSent(currentUserId!);
+    // (Moved inside the logic below to handle bi-directional rewards for DMs)
 
     // 2. Specialized rewards (1,000 DSP)
     // Community IDs usually start with 'home_', 'host_', 'past_', 'chat_', or is 'global_community'
@@ -1245,6 +1245,7 @@ class ChatMessagingService {
         chatId == 'global_community';
 
     if (isCommunity) {
+      _pointsService.trackMessageSent(currentUserId!);
       _pointsService.trackCommunityMessage(currentUserId!, chatId);
     } else if (chatId.startsWith('direct_')) {
       // DM reward (Unique per user pair)
@@ -1254,9 +1255,16 @@ class ChatMessagingService {
           orElse: () => '',
         );
         if (targetUserId.isNotEmpty) {
+          _pointsService.trackMessageSent(currentUserId!, receiverId: targetUserId);
           _pointsService.trackNewDM(currentUserId!, targetUserId);
+        } else {
+          _pointsService.trackMessageSent(currentUserId!);
         }
+      } else {
+        _pointsService.trackMessageSent(currentUserId!);
       }
+    } else {
+      _pointsService.trackMessageSent(currentUserId!);
     }
   }
 }

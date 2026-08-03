@@ -46,7 +46,7 @@ describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
     });
 
     describe("Initial State", function () {
-        it("Should start at Epoch 1, TGE Event 0, zero supply", async function () {
+        it("Should start at Epoch 1, TDE 0, zero supply", async function () {
             const stats = await tgeController.getStats();
             expect(stats[0]).to.equal(1); // epoch
             expect(stats[1]).to.equal(0); // tgeEvent
@@ -171,7 +171,7 @@ describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
 
             const stats = await tgeController.getStats();
             expect(stats[0]).to.equal(1);     // still epoch 1
-            expect(stats[1]).to.equal(1);     // advanced to TGE event 1
+            expect(stats[1]).to.equal(1);     // advanced to TDE 1
             expect(stats[3]).to.equal(ethers.parseUnits("8000", DECIMALS));  // distributed
             expect(stats[4]).to.equal(ethers.parseUnits("2000", DECIMALS));  // burned
             expect(stats[5]).to.equal(1);     // tgeCount
@@ -233,10 +233,10 @@ describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
             await tgeController.connect(oracle).mintEpochSupply(EPOCH_1_SUPPLY);
         });
 
-        it("Should advance epoch after 10 TGE events", async function () {
-            const perTGE = ethers.parseUnits("100000", DECIMALS); // 100K per TGE (1M / 10)
+        it("Should advance epoch after 10 TDE releases", async function () {
+            const perTGE = ethers.parseUnits("100000", DECIMALS); // 100K per TDE (1M / 10)
 
-            // Execute 10 TGE events (10% of epoch each)
+            // Execute 10 TDE releases (10% of epoch each)
             for (let i = 0; i < 10; i++) {
                 await tgeController.connect(oracle).executeTGE(
                     [user1.address],
@@ -247,8 +247,8 @@ describe("Diaspora Ecosystem: Pre-Minted Epoch TGE", function () {
 
             const stats = await tgeController.getStats();
             expect(stats[0]).to.equal(2);     // Epoch advanced to 2
-            expect(stats[1]).to.equal(0);     // TGE event reset to 0
-            expect(stats[5]).to.equal(10);    // 10 TGE events executed
+            expect(stats[1]).to.equal(0);     // TDE counter reset to 0
+            expect(stats[5]).to.equal(10);    // 10 TDE releases executed
 
             // Epoch tracking should be reset
             expect(await tgeController.epochLockedSupply()).to.equal(0);

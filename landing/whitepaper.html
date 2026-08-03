@@ -121,7 +121,7 @@
             <div class="section-label orange"><i data-lucide="file-text" style="width:14px;height:14px"></i> Token Whitepaper</div>
             <h1>The <span class="accent-orange">$DIASPORA</span> Token</h1>
             <p>
-                A comprehensive overview of the world's first Reputation-to-Asset Engine — covering tokenomics, 
+                A comprehensive overview of the world's first Trust-to-Asset Engine — covering tokenomics, 
                 smart contracts, the dynamic valuation model, epoch-based scaling, governance, and the team building it.
             </p>
             <div class="wp-meta">
@@ -160,7 +160,7 @@
         <div class="wp-section" id="abstract">
             <h2>1. Abstract</h2>
             <p>
-                Diaspora Nearby is the world's first <strong>Reputation-to-Asset Engine</strong> — a platform that converts 
+                Diaspora Nearby is the world's first <strong>Trust-to-Asset Engine</strong> — a platform that converts 
                 social capital and community participation into liquid, on-chain assets. The $DIASPORA token (ERC-20 on Coinbase L2 Base Blockchain) 
                 represents the economic layer of a social network purpose-built for the global diaspora community.
             </p>
@@ -221,18 +221,18 @@
 
             <h3>Diaspora Social Points (DSP)</h3>
             <ul>
-                <li><strong>Off-chain</strong> reputation score stored in Firestore</li>
+                <li><strong>Off-chain</strong> trust score stored in Firestore</li>
                 <li>Earned through daily social activity (verifying, vouching, messaging, transacting)</li>
                 <li>Tracks your social contribution to the community</li>
                 <li>Accumulates until the next TGE milestone is triggered</li>
-                <li>1:1 matching — for every 1 DSP earned, another 1 DSP is created for distribution</li>
+                <li>The Ubuntu Protocol (1:1 matching) — for every 1 DSP earned, another 1 DSP is created for geographic community treasuries</li>
             </ul>
 
             <h3>$DIASPORA Token</h3>
             <ul>
                 <li><strong>On-chain</strong> ERC-20 on Coinbase L2 Base Blockchain — a real, liquid asset you own</li>
                 <li>Pre-minted and locked per epoch by the TGE Controller contract</li>
-                <li>Conversion rate at TGE depends on your P.o.C.T (Proof of Community Trust) score</li>
+                <li>Conversion rate at TGE depends on your PCT (Proof of Community Trust) score</li>
                 <li>Fully verifiable on <a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color:var(--orange);">Basescan</a></li>
                 <li>Burns are permanent — sent to address zero, verifiable on-chain</li>
             </ul>
@@ -240,8 +240,25 @@
             <div class="highlight-box sage-border">
                 <p><strong>TGE Conversion:</strong> A TGE fires when globally distributed DSP crosses the next supply
                 milestone. Member counts are informational growth benchmarks, not TGE gates. Eligible off-chain DSP
-                converts into liquid $DIASPORA tokens at each participant's P.o.C.T efficiency rate.</p>
+                converts into liquid $DIASPORA tokens at each participant's PCT efficiency rate.</p>
             </div>
+
+            <h3>Proof of Community Trust (PCT)</h3>
+            <p>
+                Your PCT score (0-100) dictates how efficiently your DSP converts to $DIASPORA at each TDE. Scores 1-10 convert at 0%, 11-90 convert at exact percentage, and 91-100 convert at 100%.
+            </p>
+            <p>
+                The foundation of trust is established through the <strong>7 Genesis Milestones</strong>, each worth up to 10 PCT (70 Max):
+            </p>
+            <ul>
+                <li><strong>1. Current Location Transparency:</strong> Must be enabled at every TGE/TDE participation check. Turning it off permanently forfeits its 10 PCT.</li>
+                <li><strong>2. Profile Completion:</strong> Complete every required field. (Also required for first TGE).</li>
+                <li><strong>3. QR Identity Exchanges:</strong> Complete 10 unique in-person exchanges. (Also required for first TGE).</li>
+                <li><strong>4. Family Connections:</strong> Establish 10 unique family connections.</li>
+                <li><strong>5. Friend Connections:</strong> Establish 10 unique friend connections.</li>
+                <li><strong>6. Vouched by Peers:</strong> Receive 10 unique full-trust peer vouches.</li>
+                <li><strong>7. Verified by Peers:</strong> Receive 10 unique peer verifications.</li>
+            </ul>
         </div>
 
         <!-- 4. How You Earn -->
@@ -253,7 +270,7 @@
             </p>
             <div class="wp-table-scroll">
             <table class="wp-epoch-table">
-                <tr><th>Activity</th><th>Reward</th></tr>
+                <tr><th>Activity</th><th>Reward / Penalty</th></tr>
                 <tr><td>Welcome Bonus</td><td><strong>+1,000 DSP</strong></td></tr>
                 <tr><td>Complete Profile</td><td><strong>+10,000 DSP</strong></td></tr>
                 <tr><td>Refer a Friend</td><td><strong>+1,000 DSP each</strong></td></tr>
@@ -264,16 +281,22 @@
                 <tr><td>Community Event</td><td><strong>+1,000 DSP</strong></td></tr>
                 <tr><td>Host a Traveler</td><td><strong>+1,000 DSP each</strong></td></tr>
                 <tr><td>Economy Transaction</td><td><strong>$1 = 1 DSP</strong></td></tr>
+                <tr class="active-row"><td colspan="2"><strong>Accountability & Penalties</strong></td></tr>
+                <tr><td>Chat Advertising</td><td><strong>-1,000 DSP</strong> (10 unique spam reports)</td></tr>
+                <tr><td>Relationship Rejection</td><td><strong>-1,000 DSP</strong> (Send request to people you know)</td></tr>
+                <tr><td>Event No-Show</td><td><strong>-1,000 DSP</strong> (Confirmed absence)</td></tr>
+
+                <tr><td>Vouching Bad Actor</td><td><strong>-1,000 DSP</strong> (Backing a fraudster)</td></tr>
             </table>
             </div>
         </div>
 
         <!-- 5. Token Distribution -->
         <div class="wp-section" id="distribution">
-            <h2>5. Token Distribution Model — 1:1 Matching Expansion</h2>
+            <h2>5. Token Distribution Model — The Ubuntu Protocol</h2>
             <p>
                 For every <strong>1 DSP</strong> earned by a user, the protocol creates a <strong>matching 1 DSP</strong> — 
-                distributed across 10 equal slots. This ensures that community value creation simultaneously funds all ecosystem layers.
+                a concept rooted in the philosophy of <em>"I am because we are."</em> The matching DSP is distributed across 10 equal slots for hierarchical geographic treasuries. This ensures that community value creation simultaneously funds all ecosystem layers. (This same philosophy powers our separate Community Emergency Fund).
             </p>
 
             <div class="wp-dist-bar">
@@ -294,7 +317,7 @@
                 The 70% Community Treasuries allocation flows into <strong>7 treasury slots</strong>:
             </p>
             <ul>
-                <li><strong>Global Reserve</strong> — funds chambers operations, charitable donations, and protocol upkeep</li>
+                <li><strong>Global Reserve</strong> — funds zero fee value transfer subsidies, salaries and benefits for community leaders and chambers of commerce staff, global charitable contributions, and all other costs associated with running the platform</li>
                 <li><strong>Home Continent</strong> — user's country of origin continent</li>
                 <li><strong>Home Country</strong> — user's country of origin</li>
                 <li><strong>Home City</strong> — user's city of origin</li>
@@ -304,7 +327,7 @@
             </ul>
             <p>
                 These treasuries power <strong>Diaspora Direct Investments</strong> (DDI) — community-governed loans and investments 
-                that fund businesses, large infrastructure projects, and economic development in both home and host communities.
+                that fund businesses, large infrastructure projects, education grants, and economic development in both home and host communities.
             </p>
         </div>
 
@@ -320,16 +343,16 @@
             <div class="wp-table-scroll">
             <table class="wp-epoch-table">
                 <tr><th>Epoch</th><th>Milestone</th><th>$DIASPORA Pre-Minted</th><th>Name</th></tr>
-                <tr class="active-row"><td><strong>1</strong></td><td>100 Verified</td><td>1,000,000</td><td>"Genesis Believer"</td></tr>
-                <tr><td>2</td><td>1,000</td><td>10,000,000</td><td>"Growth Partner"</td></tr>
-                <tr><td>3</td><td>10,000</td><td>100,000,000</td><td>"Scale Investor"</td></tr>
-                <tr><td>4</td><td>100,000</td><td>1,000,000,000</td><td>"Institutional Partner"</td></tr>
-                <tr><td>5</td><td>1,000,000</td><td>10,000,000,000</td><td>"Strategic Partner"</td></tr>
-                <tr><td>6</td><td>10,000,000</td><td>100,000,000,000</td><td>"Sovereign Fund"</td></tr>
-                <tr><td>7</td><td>100,000,000</td><td>1,000,000,000,000</td><td>"Global Reserve"</td></tr>
-                <tr><td>8</td><td>1,000,000,000</td><td>10,000,000,000,000</td><td>"Planetary"</td></tr>
-                <tr><td>9</td><td>10,000,000,000</td><td>100,000,000,000,000</td><td>"Universal"</td></tr>
-                <tr><td>10</td><td>100,000,000,000</td><td>1,000,000,000,000,000</td><td>"Infinite"</td></tr>
+                <tr class="active-row"><td><strong>1</strong></td><td>1,000,000 DSP</td><td>1,000,000</td><td>"Genesis Believer"</td></tr>
+                <tr><td>2</td><td>10,000,000 DSP</td><td>10,000,000</td><td>"Growth Partner"</td></tr>
+                <tr><td>3</td><td>100,000,000 DSP</td><td>100,000,000</td><td>"Scale Investor"</td></tr>
+                <tr><td>4</td><td>1,000,000,000 DSP</td><td>1,000,000,000</td><td>"Institutional Partner"</td></tr>
+                <tr><td>5</td><td>10,000,000,000 DSP</td><td>10,000,000,000</td><td>"Strategic Partner"</td></tr>
+                <tr><td>6</td><td>100,000,000,000 DSP</td><td>100,000,000,000</td><td>"Sovereign Fund"</td></tr>
+                <tr><td>7</td><td>1,000,000,000,000 DSP</td><td>1,000,000,000,000</td><td>"Global Reserve"</td></tr>
+                <tr><td>8</td><td>10,000,000,000,000 DSP</td><td>10,000,000,000,000</td><td>"Planetary"</td></tr>
+                <tr><td>9</td><td>100,000,000,000,000 DSP</td><td>100,000,000,000,000</td><td>"Universal"</td></tr>
+                <tr><td>10</td><td>1,000,000,000,000,000 DSP</td><td>1,000,000,000,000,000</td><td>"Infinite"</td></tr>
             </table>
             </div>
 
@@ -345,32 +368,28 @@
             <h2>7. Dynamic Valuation Model</h2>
             <p>
                 $DIASPORA's value is <strong>not speculative</strong> — it's anchored to real economic activity. The implied token price 
-                is determined by a multi-factor model that considers network effects, deflation, epoch progression, and fiat GDP.
+                is determined by a unified dynamic price floor model that combines network growth factors with direct fiat GDP backing.
             </p>
 
-            <h3>Pre-TGE Implied Pricing Formula</h3>
+            <h3>Unified Dynamic Price Floor Formula</h3>
             <div class="wp-formula">
-                Implied Price = Base × (1 + NetworkFactor) × (1 + DeflationFactor) × EpochMultiplier × (1 + GDPFactor)
+                Dynamic Price Floor = [Base × (1 + NetworkFactor) × (1 + DeflationFactor) × EpochMultiplier] + (Total Fiat GDP ÷ Circulating Supply)
             </div>
 
             <h3>Factor Breakdown</h3>
             <ul>
-                <li><strong>Network Factor (N):</strong> Based on Metcalfe's Law — value scales with the square of the user count, 
-                normalized to a 0–3 range. More users = exponentially higher value.</li>
+                <li><strong>Base Price:</strong> Fixed starting constant ($0.001 per token).</li>
+                <li><strong>Network Factor (N):</strong> Based on Metcalfe's Law — value scales with user adoption, 
+                normalized logarithmically. More active users = higher network baseline.</li>
                 <li><strong>Deflation Factor (D):</strong> Measures the burn ratio (totalBurned ÷ totalMinted). As more tokens are 
-                permanently burned, scarcity increases and the price floor rises.</li>
-                <li><strong>Epoch Multiplier (E):</strong> Each epoch compounds growth — Epoch 1 = 1x, Epoch 2 = 1.5x, Epoch 3 = 2.25x, etc.</li>
-                <li><strong>GDP Factor (G):</strong> Actual fiat GDP processed through the platform. Every flight booked, product sold, 
-                and service hired adds real fiat value to the floor. Formula: <code>$1 fiat GDP = $0.0001 per DSP boost</code>.</li>
+                permanently burned, scarcity increases.</li>
+                <li><strong>Epoch Multiplier (E):</strong> Progressive scarcity multiplier — Epoch 1 = 1.1x, Epoch 2 = 1.2x, Epoch 3 = 1.3x, etc. Formula: <code>1 + (epoch * 0.1)</code>.</li>
+                <li><strong>Fiat GDP Floor (G):</strong> Direct additive fiat economic backing. Every flight booked, product sold, 
+                and service hired adds real fiat value directly to the token floor. Formula: <code>Total Fiat GDP ÷ Circulating Supply</code>.</li>
             </ul>
 
-            <h3>Floor Price</h3>
-            <div class="wp-formula">
-                Floor Price = Total Fiat GDP ÷ Circulating Supply
-            </div>
             <p>
-                This floor price ensures that $DIASPORA always has a minimum value anchored to real economic activity on the platform, 
-                not market speculation.
+                This unified price floor ensures that $DIASPORA always has a non-zero starting baseline anchored to network growth at Day 1, which strictly rises as platform fiat GDP accumulates.
             </p>
         </div>
 
@@ -480,7 +499,7 @@
             </div>
 
             <div class="wp-formula">
-                Floor Price = Total Fiat GDP ÷ Circulating Supply
+                Dynamic Price Floor = Network Implied Baseline + (Total Fiat GDP ÷ Circulating Supply)
             </div>
             <p>
                 Every flight booked, product sold, and service hired adds real fiat value to the GDP floor. 
@@ -507,18 +526,19 @@
             <ul>
                 <li><strong>100 days</strong> active participation minimum</li>
                 <li>Must be an <strong>admin of a 100+ member group</strong></li>
-                <li><strong>P.o.C.T score ≥ 90</strong> (Proof of Community Trust)</li>
-                <li>Staking requirement: P.o.C.T score must stay above 90</li>
+                <li><strong>PCT score ≥ 91</strong> (Proof of Community Trust)</li>
+                <li>Staking requirement: PCT score must stay above 90 (at 91+)</li>
             </ul>
 
             <h3>Governance Types</h3>
             <ul>
-                <li><strong>Host Community DDI Loans:</strong> 51% vote required, 10-day window — for starting, expanding, or operating businesses</li>
-                <li><strong>Home Country Large Projects:</strong> 67% supermajority, 100-day window — for $1M+ capital expansions and infrastructure</li>
+                <li><strong>Diaspora Direct Investments - Host Town:</strong> 51% vote required, 10-day window — for starting, expanding, or operating businesses, and education grants. Applicant must live in the host town they apply for a loan from.</li>
+                <li><strong>Diaspora Direct Investments - Home Town:</strong> 51% vote required, 10-day window — for starting, expanding, or operating businesses, and education grants. Applicant must live in the home town they apply for a loan from.</li>
+                <li><strong>Diaspora Direct Investments - Home Country:</strong> 67% supermajority, 100-day window — for $1M+ capital expansions, infrastructure, and education grants</li>
             </ul>
 
             <div class="highlight-box sage-border">
-                <p><strong>No Token Voting:</strong> Governance is based on reputation and community contribution, not token holdings. 
+                <p><strong>No Token Voting:</strong> Governance is based on trust and community contribution, not token holdings. 
                 This prevents whale dominance and ensures decisions are made by active, trusted community members.</p>
             </div>
         </div>
@@ -534,9 +554,7 @@
 
             <h3>How It Works</h3>
             <p>
-                Each epoch has 10 TGE milestones. At each milestone, the Liquidity Treasury releases tokens 
-                to the DEX pool with a decile conversion model — earlier releases provide higher conversion rates, 
-                creating natural price discovery.
+                Each epoch has 10 TDE (Token Distribution Event) milestones. The TDE fires each time 10% of the epoch DSP is distributed, releasing that decile of the epoch's DEX liquidity supply. This prevents users from having to wait for the entire epoch to finish to reap the rewards. For example, during the first epoch (1,000,000 DSP supply), a TDE occurs at every 100,000 DSP distributed. In epoch 2 (10,000,000 DSP supply), a TDE occurs at every 1,000,000 DSP distributed.
             </p>
 
             <h3>Why Open Market Instead of Private Sales</h3>
@@ -614,7 +632,7 @@
                         <img src="icons/token-logo-transparent.png" alt="Diaspora Nearby" width="28" height="28">
                         Diaspora Nearby
                     </div>
-                    <p>The world's first Reputation-to-Asset Engine. Connecting diaspora communities globally with an
+                    <p>The world's first Trust-to-Asset Engine. Connecting diaspora communities globally with an
                         earn-to-own social economy.</p>
                 </div>
                 <div class="footer-links">

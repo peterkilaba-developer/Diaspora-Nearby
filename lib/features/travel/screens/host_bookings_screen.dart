@@ -5,6 +5,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 /// Screen for hosts to manage incoming booking requests.
 class HostBookingsScreen extends ConsumerStatefulWidget {
@@ -52,6 +53,16 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
   Future<void> _updateStatus(PeerBooking booking, String status) async {
     final repo = ref.read(peerListingRepositoryProvider);
     await repo.updateBookingStatus(booking.id, status);
+
+    if (status == 'completed' && booking.listingType == 'stay') {
+      final pointsService = ref.read(pointsServiceProvider);
+      await pointsService.trackHostATraveler(
+        booking.hostId,
+        booking.guestId,
+        nights: booking.nights,
+      );
+    }
+
     _load();
   }
 

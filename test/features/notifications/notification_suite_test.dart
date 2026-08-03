@@ -207,7 +207,7 @@ class FakeUser extends Fake implements User {
 // ==========================================
 class FakePointsService extends Fake implements PointsService {
   @override
-  Future<void> trackMessageSent(String userId) async {}
+  Future<void> trackMessageSent(String userId, {String? receiverId}) async {}
 }
 
 void main() {

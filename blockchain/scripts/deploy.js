@@ -65,7 +65,7 @@ async function main() {
     // ── Step 3: Configure Roles ──────────────────────────────────────
     console.log("\n🔗 Configuring Roles...");
 
-    // TGEController needs MINTER_ROLE to mint tokens at TGE events
+    // TGEController needs MINTER_ROLE to pre-mint epoch supply at TGE
     const MINTER_ROLE = await token.MINTER_ROLE();
     console.log("   Granting MINTER_ROLE to TGEController...");
     await token.grantRole(MINTER_ROLE, tgeAddress);

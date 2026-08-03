@@ -86,3 +86,10 @@
 - [x] Implement "Run for Council" UI in `LeaderSelectionScreen` with commitment prompt.
 - [x] Verify **Internal GDP** and **Corridor** data population in `DiasporaCryptoScreen`.
 - [x] Implement **Utility Burn** (1% for <100 P.o.C.T users) in transfer logic (Backend check).
+
+## Future Vision Expansion (Post-Maturity)
+- [ ] **The "Repatriation Vault" Protocol**: Time-locked $DIASPORA for return-home services (land, shipping) subsidized by DDI treasury.
+- [ ] **Digital DDI (Brain Trust Remittance)**: Decentralized gig/mentorship economy where host-country professionals provide services to home-country users, subsidized by the treasury.
+- [ ] **Legacy Accounts (Cultural Inheritance)**: Trustless accounts for next-gen diaspora that unlock via Heritage Quests (language, cultural visits).
+- [ ] **Sovereign Co-Funding API**: Integration for home country governments/NGOs to automatically match DDI project funding in fiat.
+- [ ] **Proof of Shared Experience (PoSE)**: Advanced QR handshake requiring context (events, business locations) to prevent Sybil-like farming.

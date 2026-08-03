@@ -63,13 +63,13 @@ class GovernanceRoles {
   static String description(String role) {
     switch (role) {
       case president:
-        return 'Leads the community council and represents the community externally.';
+        return 'Leads the community council and the Chamber of Commerce, and represents the community externally.';
       case treasurer:
-        return 'Manages community treasury and financial operations.';
+        return 'Manages community treasury, chamber funding, and financial operations.';
       case secretary:
-        return 'Maintains community records and facilitates communication.';
+        return 'Maintains community records and facilitates communication for the council and chamber.';
       case councilMember:
-        return 'Serves on the community council and participates in governance decisions.';
+        return 'Serves on the community council to run the Chamber of Commerce, hire staff, and participate in governance decisions.';
       default:
         return '';
     }

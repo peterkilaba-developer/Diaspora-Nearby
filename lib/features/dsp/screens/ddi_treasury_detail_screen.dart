@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 
 /// Detail screen for a treasury card — shows Diaspora Direct Investments
 /// loan information for community treasuries, or system reserve information
@@ -124,13 +124,33 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
             fit: BoxFit.contain,
           ),
           const SizedBox(height: 12),
-          Text(
-            '$balance \$DIASPORA',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 28,
-              color: Colors.orange,
-            ),
+          Consumer(
+            builder: (context, ref, _) {
+              final valuation = ref.watch(dspValuationProvider);
+              final parsedInt = (double.tryParse(balance) ?? 0).toInt();
+              final usdEst = valuation.formatBalance(parsedInt);
+              return Column(
+                children: [
+                  Text(
+                    '$balance \$DIASPORA',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 28,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    usdEst,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF38BDF8),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 4),
           Text(

@@ -23,6 +23,8 @@ import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart'
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/chat/services/audio_playback_service.dart';
 
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
 
@@ -262,6 +264,12 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
         _trackExploration(ExplorationAction.toggleViewChats); // [NEW]
         ref.read(chatsViewModeProvider.notifier).toggleView();
       };
+    }
+
+    final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
+    if (!isGlobalUnlocked) {
+      onToggleView = null;
+      isGlobalView = false;
     }
 
     return Scaffold(

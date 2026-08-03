@@ -140,7 +140,7 @@ class ProfileData {
 
   // Privacy
   final bool? showCurrentLocationName;
-  // Once true, the +10 City Visibility P.o.C.T is permanently forfeited and
+  // Once true, the +10 City Visibility PCT is permanently forfeited and
   // cannot be re-earned by toggling visibility back on. Set when the user
   // confirms the hide-city action.
   final bool? cityVisibilityForfeited;

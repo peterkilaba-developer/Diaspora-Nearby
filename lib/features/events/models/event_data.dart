@@ -56,6 +56,7 @@ class Event {
   String? venueCity;
   String? venueState;
   String? venueCountry;
+  String? plusCode;
 
   // Status: 'published', 'hidden'
   String status;
@@ -112,6 +113,7 @@ class Event {
     this.venueCity,
     this.venueState,
     this.venueCountry,
+    this.plusCode,
     this.status = 'published',
     this.latitude,
     this.longitude,
@@ -160,6 +162,7 @@ class Event {
     String? venueCity,
     String? venueState,
     String? venueCountry,
+    String? plusCode,
     String? status,
     double? latitude,
     double? longitude,
@@ -201,6 +204,7 @@ class Event {
       venueCity: venueCity ?? this.venueCity,
       venueState: venueState ?? this.venueState,
       venueCountry: venueCountry ?? this.venueCountry,
+      plusCode: plusCode ?? this.plusCode,
       status: status ?? this.status,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,

@@ -66,7 +66,7 @@ class _ProfileVerificationModalState
           type = VerificationAlertType.conflict;
           title = 'Conflict of Interest';
         } else if (reason.contains('complete your profile') ||
-            reason.contains('P.o.C.T score') ||
+            reason.contains('PCT score') ||
             reason.contains('acquired at least')) {
           type = VerificationAlertType.requirements;
           title = 'Requirements Not Met';
@@ -545,7 +545,10 @@ class _ProfileVerificationModalState
         );
       }
 
-      await pointsService.trackVerifierReward(widget.currentUserId);
+      await pointsService.trackVerifierReward(
+        widget.currentUserId,
+        verifiedUserId: toUserId,
+      );
 
       if (!mounted) return;
       Navigator.pop(context);

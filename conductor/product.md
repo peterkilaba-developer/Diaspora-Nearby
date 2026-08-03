@@ -18,9 +18,9 @@ To be the premier social network for connecting individuals with their diaspora 
 *   Automatic Community Assignment based on location.
 
 ### 2. Networking ($DSP Economy)
-*   **Proof of Social Activities (P.o.S.A):** Earn DSP for messaging, connecting, and contributing value.
-*   **Proof of Community Trust (P.o.C.T):** Reputation-based verification levels (Level 0-3).
-*   **Trust Score:** Dynamic scoring based on identity, activity, and reputation.
+*   **Proof of Social Activities (PSA):** Earn DSP for messaging, connecting, and contributing value.
+*   **Proof of Community Trust (PCT):** Trust-based verification levels (Level 0-3).
+*   **Trust Score:** Dynamic scoring based on identity, activity, and trust.
 *   **Vouching:** Peer-to-peer trust signals with associated risk/reward.
 *   **Leaderboards:** National competition for Treasury tokenization milestones.
 

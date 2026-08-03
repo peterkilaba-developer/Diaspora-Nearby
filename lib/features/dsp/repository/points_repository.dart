@@ -355,7 +355,7 @@ class PointsRepository {
     }
   }
 
-  /// [NEW] Fetches all Pillars (100k+ DSP, 67+ P.o.C.T) for a given country.
+  /// [NEW] Fetches all Pillars (100k+ DSP, 67+ PCT) for a given country.
   Future<List<UserPoints>> getPillars({String? countryCode}) async {
     Query query = _firestore
         .collection('user_points')
@@ -829,7 +829,7 @@ class PointsRepository {
     }
   }
 
-  /// Updates the P.o.C.T score in the user_points collection.
+  /// Updates the PCT score in the user_points collection.
   Future<void> updateTrustScore(String userId, double score) async {
     await _firestore.collection('user_points').doc(userId).update({
       'trustScore': score,
@@ -837,7 +837,7 @@ class PointsRepository {
     });
   }
 
-  /// Calculates and updates the average P.o.C.T score of ALL users in a country.
+  /// Calculates and updates the average PCT score of ALL users in a country.
   Future<void> updateCommunityOverallAveragePoCT(String countryCode) async {
     final countryId = 'home_country_${countryCode.toLowerCase()}';
     final snapshot = await _firestore
@@ -858,7 +858,7 @@ class PointsRepository {
     });
   }
 
-  /// Calculates and updates the average P.o.C.T score of ALL users in a continent.
+  /// Calculates and updates the average PCT score of ALL users in a continent.
   Future<void> updateContinentOverallAveragePoCT(String continentCode) async {
     final continentName = getContinentName(continentCode);
     final continentId = generateCommunityId(
@@ -892,7 +892,7 @@ class PointsRepository {
     });
   }
 
-  /// Calculates and updates the global average P.o.C.T score.
+  /// Calculates and updates the global average PCT score.
   Future<void> updateGlobalOverallAveragePoCT() async {
     final countriesSnap = await _firestore
         .collection('communities')
@@ -990,6 +990,47 @@ class PointsRepository {
       return true;
     }
     return false;
+  }
+
+  /// Retrieves the last peer visit reward timestamp between a host and a visitor.
+  Future<DateTime?> getLastPeerVisitTime({
+    required String hostUserId,
+    required String visitorUserId,
+  }) async {
+    final pairId = '${hostUserId}_$visitorUserId';
+    final reversePairId = '${visitorUserId}_$hostUserId';
+
+    final doc = await _firestore.collection('peer_visits').doc(pairId).get();
+    if (doc.exists && doc.data() != null) {
+      final ts = doc.data()!['lastVisitTimestamp'];
+      return _parseDateTime(ts);
+    }
+
+    final reverseDoc = await _firestore.collection('peer_visits').doc(reversePairId).get();
+    if (reverseDoc.exists && reverseDoc.data() != null) {
+      final ts = reverseDoc.data()!['lastVisitTimestamp'];
+      return _parseDateTime(ts);
+    }
+
+    return null;
+  }
+
+  /// Records a peer visit timestamp between a host and a visitor.
+  Future<void> recordPeerVisit({
+    required String hostUserId,
+    required String visitorUserId,
+    String? locationAddress,
+  }) async {
+    final pairId = '${hostUserId}_$visitorUserId';
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    await _firestore.collection('peer_visits').doc(pairId).set({
+      'hostUserId': hostUserId,
+      'visitorUserId': visitorUserId,
+      'locationAddress': locationAddress,
+      'lastVisitTimestamp': now,
+      'visitCount': FieldValue.increment(1),
+    }, SetOptions(merge: true));
   }
 
   DateTime? _parseDateTime(dynamic value) {

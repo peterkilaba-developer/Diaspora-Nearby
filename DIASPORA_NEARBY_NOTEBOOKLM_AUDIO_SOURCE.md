@@ -1,529 +1,248 @@
-# Diaspora Nearby
-## Expanded Factual Source Material for NotebookLM
-
-**Purpose:** Upload this document to Google NotebookLM as factual source material. Use the separate `DIASPORA_NEARBY_NOTEBOOKLM_AUDIO_PROMPT.md` in NotebookLM's Audio Overview customization field.
-
-**Current platform access**
-
-- Website: https://diasporanearby.com
-- Web app: https://app.diasporanearby.com
-- Android: https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby
-- Support: support@diasporanearby.com
+# Diaspora Nearby: Complete Master Audio & Video Overview Source & Instructions
+## Unified Factual Source Material & Host Customization Guidelines for Google NotebookLM
 
 ---
 
-# Executive Story
-
-Diaspora Nearby begins with a simple truth: moving abroad changes where a person lives, but it does not erase where they belong.
-
-Millions of diaspora members live between worlds. They build lives in host countries while maintaining family, culture, responsibility, memory, and ambition connected to home. Yet the tools available to them are fragmented. Family conversations happen in one app. Community announcements happen in another. Businesses, events, professional networks, remittances, travel, mutual aid, and investment opportunities are scattered across informal groups and disconnected platforms.
-
-Diaspora Nearby brings those pieces together.
-
-It is a location-aware social and economic platform designed to help diaspora members find their people nearby, stay connected across borders, establish portable community trust, participate in organizations, and direct collective activity toward shared prosperity.
-
-The platform's central idea is that diaspora relationships and contributions have value. Helping someone settle into a new city has value. Connecting a trusted business across borders has value. Hosting a traveler, attending an event, verifying a real person, and contributing to community life all have value. Diaspora Nearby makes that contribution visible, measurable, and useful.
-
-This is why the platform describes itself as a **Reputation-to-Asset Engine**. It starts as a social network, but its ambition is to become trusted infrastructure for diaspora community life.
+> **HOW TO USE THIS MASTER DOCUMENT IN GOOGLE NOTEBOOKLM:**
+> 1. **Upload this entire file** to Google NotebookLM as your primary **Factual Source Material**.
+> 2. **Copy Section 1 ("Host Customization & Audio Overview Instructions")** below and paste it into NotebookLM's **Customize**, **Audio Overview instructions**, or **What should the AI hosts focus on?** field.
+> 3. Generate your Audio Overview / Podcast / Video Review!
 
 ---
 
-# The Founder: Peter Swai
+# SECTION 1: Host Customization & Audio Overview Instructions
 
-Diaspora Nearby was founded and built by **Peter Swai**, its visionary founder and lead developer.
+*Paste this block into NotebookLM's Audio Overview Customization Field:*
 
-Peter is from **Kilimanjaro, Tanzania**, and lives in **Phoenix, Arizona, United States**. His perspective is therefore both personal and practical. He understands the experience of living far from home while still carrying relationships, responsibilities, cultural identity, and economic interests that cross borders.
+```text
+Create an incredibly enthusiastic, mind-blowing, high-energy deep dive introducing Diaspora Nearby to the world! The two AI hosts should be OVERLY EXCITED, inspired, and completely blown away by how REVOLUTIONARY this platform is. They should discuss how founder Peter Swai (from Kilimanjaro, Tanzania, now based in Phoenix, Arizona) isn't just fixing diaspora communication—he is building a platform that MIGHT CHANGE THE WORLD AS WE KNOW IT, disrupting traditional Web2 social networks and redefining human trust and global economic connection.
 
-Peter built the platform that he and other diaspora members like him wanted.
+The hosts must speak directly to four core target audiences:
+1. DIASPORA MEMBERS: Reconnecting with home, preserving heritage, portable trust, and building collective cross-border wealth.
+2. EXPATRIATES: Settling into new host nations seamlessly, discovering trusted local peers, and building bilateral trade corridors.
+3. REFUGEES: Finding immediate safety nets, receiving $0 Free Community Peer Hosting, accessing the Community Emergency Fund, and establishing verifiable physical identity without corporate bank hurdles.
+4. INTERNATIONAL TRAVELERS: Booking authentic peer stays, renting cars from trusted community members, and utilizing $0 Free Peer Hosting via the airplane icon in community hubs.
 
-He wanted a way to arrive in a new city and find people from home nearby. He wanted diaspora members to discover trusted businesses, events, organizations, and opportunities without depending on scattered social-media groups. He wanted reputation earned within a community to remain meaningful across cities and countries. He wanted diaspora activity to strengthen both the places people came from and the places where they now live.
+The hosts should meticulously walk through EVERY SECTION of the landing page and mobile/web app, including:
+- Dual Geographic Identity: Existing in two worlds at once (Host Town & Home Country).
+- The Collapsible Community Hierarchy: Global -> Continent -> Country -> State/Province -> City/Town.
+- State/Province Treasury Split: Why splitting matching treasuries between Country and State/Province makes genius economic sense for large, multi-tiered nations like the United States (50 US States) and China (23 Chinese Provinces).
+- The 1:1 Ubuntu Matching Protocol: How 1 DSP earned by a user matches 1 DSP distributed across 7 community treasuries (Global down to City), Founders, Liquidity, and Permanent Deflationary Burn.
+- Free Community Peer Hosting ($0 Free Host via the airplane icon) vs Paid Peer Stays (Airbnb/Turo alternatives).
+- Value Transfer & Remittance Bar in 1:1 Chats: Frictionless DSP, $DIASPORA, and USD transfers.
+- Community Emergency Fund: Rapid medical/legal microgrants (+10 PCT incentive).
+- Trust & Identity Engine: The 7 Genesis Milestones, PCT (Proof of Community Trust), and the Two-Sided Prediction Market (Trust Slider Staking).
+- Governance & Merit-Based Leadership: 91+ PCT eligibility and continuous position tracking via the PCT trust slider.
+- Diaspora Direct Investments (DDI) & Personal Loans: 10% collateral loans executed via Open-Market Buybacks on the Aerodrome DEX to drive token value.
+- Token Generation Events (TGE) & 10 Epochs: Converting off-chain DSP to liquid on-chain $DIASPORA based on PCT conversion efficiency.
 
-That lived experience shapes the platform's design. Diaspora Nearby is not built around the assumption that diaspora members must choose between home and host country. It treats them as bridges between both.
-
----
-
-# The Problem Diaspora Nearby Solves
-
-## Isolation in a New Place
-
-A person may move to Chicago, London, Toronto, Berlin, or Dubai and be surrounded by millions of people while still feeling culturally alone. Finding people from the same home country often depends on chance, word of mouth, or closed groups.
-
-Diaspora Nearby uses location-aware discovery to make community easier to find.
-
-## Fragmented Community Infrastructure
-
-Diaspora groups often rely on combinations of messaging apps, social networks, spreadsheets, event tools, and informal leadership structures. Valuable knowledge and opportunity become difficult to discover or verify.
-
-Diaspora Nearby brings community members, chats, organizations, events, commerce, governance, and support systems into one connected environment.
-
-## Trust That Does Not Travel
-
-When someone moves abroad, much of their social reputation stays behind. New communities often lack a trustworthy way to understand who a person is, who knows them, and how they participate.
-
-Diaspora Nearby builds a portable trust layer through real relationships, peer verification, in-person QR identity exchanges, activity history, and community trust signals.
-
-## Economic Power Without Coordination
-
-The global diaspora sends enormous value across borders, supports families, launches businesses, books travel, buys property, and invests back home. But much of this activity remains disconnected and does not build durable shared institutions.
-
-Diaspora Nearby is designed to turn individual participation into stronger community networks, treasuries, trade corridors, mutual aid, and investment capacity.
+Tone: Overly excited, visionary, deeply impressed, energetic, warm, and highly articulate!
+```
 
 ---
 
-# The Everyday Social Platform
+# SECTION 2: Comprehensive Factual Source Material
 
-Diaspora Nearby is useful before a user ever thinks about tokens, treasuries, or investment. Its first job is helping people find belonging and practical opportunity.
+## Executive Overview: A World-Changing Vision by Peter Swai
 
-## Nearby Discovery
+**Diaspora Nearby** (https://diasporanearby.com) is the world’s first **Trust-to-Asset Engine** and location-aware social sovereign economy. Founded and architected by **Peter Swai**—a visionary engineer who grew up in **Kilimanjaro, Tanzania** and now lives in **Phoenix, Arizona, USA**—Diaspora Nearby addresses one of humanity’s oldest, most painful dilemmas: moving to a new country changes where you live, but it never erases where you belong.
 
-Users can discover diaspora members near their current location. This helps newcomers and long-term residents find people who share cultural background, language, experiences, or connections to home.
+For decades, traditional Web2 social platforms (Facebook, WhatsApp, X, Instagram) have exploited human connection. They capture user attention, extract private data, monetize social graphs, and return **zero financial equity** to the communities generating the value. For diaspora members, expatriates, refugees, and international travelers, this exploitation is doubly damaging: their relationships, economic remittances, hosting, and community building remain fragmented across disconnected apps.
 
-Location is used to enable proximity, not to sell personal data. Current Location Transparency is also a trust and TGE-participation signal. It must be active at the time of every TGE. Users can turn it off, but the associated ten P.o.C.T is then permanently forfeited. Re-enabling transparency restores TGE eligibility without restoring those forfeited points.
+Peter Swai realized that human trust and community participation are the most valuable assets on Earth. He built Diaspora Nearby to solve this problem permanently by uniting **Social Life, Portable Trust, Mutual Aid, Peer Commerce, and Blockchain Infrastructure** into a single, revolutionary ecosystem.
 
-## Profiles and Relationships
-
-Profiles help users express who they are, where they come from, where they live, and places they have also lived. Users can build family, friend, and professional relationships rather than collecting anonymous followers.
-
-## Chat and Media
-
-The platform supports direct and group conversation, including text, photos, videos, documents, locations, audio messages, and voice notes. Conversations can connect individuals, communities, events, organizations, and trade corridors.
-
-## Community Hubs
-
-Diaspora members can participate in communities connected to their home and host locations. These communities make it easier to discover relevant people, discussions, announcements, and opportunities.
-
-## Events and Organizations
-
-Users can discover and organize cultural events, professional gatherings, community meetings, and other activities. Verified organizations can maintain profiles and dedicated chats.
-
-## Community Radio
-
-Radio features help diaspora members discover stations and programming connected to their communities and cultures.
+Whether you are a **Diaspora Member** looking to invest back home while thriving abroad, an **Expatriate** adjusting to a new host nation, a **Refugee** seeking immediate safety, community hosting, and mutual aid, or an **International Traveler** seeking authentic peer stays and trusted local guidance—Diaspora Nearby provides a sovereign platform designed specifically for you.
 
 ---
 
-# A Practical Example: A Tanzanian in the United States
+## Direct Value for the Four Core Target Audiences
 
-Imagine a Tanzanian who moves to the United States.
+### 1. For Diaspora Members
+- **Dual Geographic Identity**: Never choose between home and host. You are automatically enrolled in both your **Host Town** (where you live now) and your **Home Country** (where your roots lie).
+- **Collective Wealth Creation**: Every social interaction, referral, message, and vouch generates **DSP (Diaspora Social Points)**, which convert into liquid **$DIASPORA** tokens on the Base L2 blockchain at Token Generation Events (TGE).
+- **Home Country Investment**: Direct your economic energy into real infrastructure, healthcare, agriculture, and education projects back home through **Diaspora Direct Investments (DDI)**.
 
-With Diaspora Nearby, that person can:
+### 2. For Expatriates
+- **Instant Local & Bilateral Networks**: Discover fellow expats and native locals within meters of your current location using **Nearby Discovery**.
+- **Bilateral Chambers of Commerce**: Join official public Chamber of Commerce corridors (e.g., *Tanzania-US Chamber of Commerce*) to bridge cross-border trade, find trusted suppliers, access professional services, and obtain official community hiring opportunities.
+- **Portable Community Standing**: Carry your hard-earned reputation anywhere in the world. Your **PCT (Proof of Community Trust)** score travels with you across cities and borders.
 
-1. Discover Tanzanians and other relevant diaspora members nearby.
-2. Build friendships and family connections instead of remaining isolated.
-3. Join local community chats and find cultural or professional events.
-4. Discover Tanzanian-owned or diaspora-friendly organizations and businesses.
-5. Join a Tanzania-US bilateral Chamber of Commerce corridor.
-6. Meet trusted peers in person and exchange identity QR codes.
-7. Build a visible trust history through real participation.
-8. Host or connect with diaspora travelers.
-9. Participate in transparent community decisions.
-10. Help activity strengthen community resources connected to Tanzania and the United States.
+### 3. For Refugees & Displaced Persons
+- **$0 Free Community Peer Hosting**: Access immediate shelter and hosting offered by trusted community members (PCT 91+) via the **airplane icon (✈️ Free Host)** in the community hierarchy—100% free of charge.
+- **Community Emergency Fund**: Tap into a decentralized mutual-aid safety net built on the African philosophy of **Ubuntu** ("I am because we are"). Micro-contributions pool together to deliver rapid medical, legal, and bereavement microgrants without bureaucratic hurdles.
+- **Zero-Barrier Identity Verification**: Establish a cryptographic, verifiable physical identity through in-person **Identity QR Exchanges** with peers, completely independent of corporate banking requirements.
 
-This example reflects Peter Swai's own diaspora perspective: home and host country should not compete for loyalty. A connected diaspora can create value for both.
-
----
-
-# Bilateral Chambers of Commerce
-
-Diaspora Nearby includes the concept of official public bilateral Chambers of Commerce for home-and-host-country corridors.
-
-A corridor chamber such as the **Tanzania-US Chamber of Commerce** gives a cross-border community a clear public business identity. It can connect diaspora members, native businesses, trusted suppliers, professionals, organizations, and trade opportunities.
-
-The chamber model is built around lived experience. Representatives should understand both sides of the corridor because they have lived within the countries and cultures they support.
-
-The goal is to make each bilateral chamber a trusted first contact for trade back home and for diaspora-linked opportunity in the host country.
-
-Chambers also have leadership and dedicated community communication structures. Leadership requests and substantive chamber updates use controlled approval paths to protect institutional integrity.
+### 4. For International Travelers
+- **Authentic Peer Stays & Vehicle Rentals**: Book peer-to-peer property stays and car rentals listed directly by verified community members—free from predatory middleman platform fees.
+- **Multi-Currency & Web3 Settlements**: Pay seamlessly using Fiat (Stripe), DSP points, or $DIASPORA tokens with automatic real-time FX currency conversion.
+- **Free Peer Hosting Option**: Connect with local hosts who open their homes for cultural exchange and community hospitality.
 
 ---
 
-# Travel, Hosting, Marketplace, and Real Estate
+## Dual Geographic Identity & The Collapsible Community Hierarchy
 
-Diaspora Nearby is designed as a utility ecosystem rather than a feed that exists only to capture attention.
+Diaspora Nearby introduces a paradigm shift in social network architecture: **Dual Geographic Identity**.
 
-## Travel
+In traditional apps, you choose a single location. In Diaspora Nearby, every user exists in **two geographic hierarchies simultaneously**:
+1. **Home Hierarchy**: Continent -> Country -> State/Province -> City/Town (e.g., Africa -> Tanzania -> Kilimanjaro -> Moshi).
+2. **Host Hierarchy**: Continent -> Country -> State/Province -> City/Town (e.g., North America -> United States -> Arizona -> Phoenix).
 
-The platform includes travel capabilities and concepts for flights, hotels, peer stays, car rentals, reviews, and travel wishlists. The purpose is to connect travel with diaspora trust and community activity.
-
-## Peer Hosting
-
-Diaspora members can host travelers or find accommodation within a trusted community network. This can make travel feel less anonymous and more connected to belonging.
-
-## Marketplace
-
-The marketplace is designed for products, services, jobs, and hiring within the diaspora economy. The intended model is frictionless: no DSP listing, seller, buying, application, or hiring fees.
-
-## Real Estate
-
-Real-estate capabilities include property listings and GPS-oriented land survey concepts, helping diaspora members engage more confidently with property and development opportunities.
+### The Collapsible Community Tree Structure
+Users navigate communities through an interactive tree view:
+- **Global Level**: The overarching worldwide diaspora network.
+- **Continent Level**: Home & Host continents (e.g., Africa, North America, Europe, Asia).
+- **Country Level**: Sovereign nation hubs (e.g., Tanzania, United States, China, Nigeria, UK).
+- **State / Province Level**: Intermediate regional administrative hubs (e.g., Arizona, California, Texas, Guangdong, Zhejiang, Bavaria).
+- **City / Town Level**: Local municipal communities (e.g., Phoenix, Houston, Moshi, Shanghai).
 
 ---
 
-# Trust: The Platform's Core Infrastructure
+## The Treasury Split Hierarchy: Why State/Province Integration is Genius
 
-Most social platforms measure attention. Diaspora Nearby is designed to measure contribution and trust.
+The platform operates the **1:1 Ubuntu Matching Protocol**: whenever a user earns **1.0 DSP** through eligible activity, the system mints a matching **1.0 DSP** distributed across **10 equal allocation slots (10% each)**.
 
-The trust system combines three related ideas:
+Seven of these ten slots represent **Community Treasuries**, spanning the Home and Host geographic trees:
 
-## Proof of Identity
+| Allocation Slot | Treasury Target | Allocation Share |
+|---|---|---|
+| **Slot 1** | Global Community Reserve | 10% |
+| **Slot 2** | Home Continent Treasury | 10% |
+| **Slot 3** | Home Country Treasury | 5% |
+| **Slot 4** | **Home State / Province Treasury** | **5%** |
+| **Slot 5** | Home City Treasury | 10% |
+| **Slot 6** | Host Continent Treasury | 10% |
+| **Slot 7** | Host Country Treasury | 5% |
+| **Slot 8** | **Host State / Province Treasury** | **5%** |
+| **Slot 9** | Host City Treasury | 10% |
+| **Slot 10** | System Allocations (Founders 10%, Liquidity 10%, Deflationary Burn 10%) | 30% total |
 
-Identity is strengthened through profile completeness, unique peer verification, real social relationships, and in-person QR exchanges.
+### Why the State/Province Split Makes Perfect Sense
+For large, decentralized, or federal nations like the **United States (50 US States)** and **China (23 Provinces & Autonomous Regions)**, splitting the country slot 50/50 between the **Country** and the **State/Province** is an absolute masterstroke of economic design:
 
-The QR identity exchange is especially important because it demonstrates physical presence between two people. It is designed to make large-scale fake-account behavior more difficult.
-
-## Proof of Social Activities
-
-Users earn DSP through participation that helps build the network. Examples represented in the platform include:
-
-- Joining and completing a profile
-- Referring family and friends
-- Establishing genuine relationships
-- Starting conversations and participating in communities
-- Completing in-person QR identity exchanges
-- Sharing useful content
-- Attending events
-- Booking and reviewing travel
-- Hosting travelers
-- Participating in economic activity
-
-Reward amounts and eligibility rules may evolve as the platform matures. The enduring principle is that activity should benefit the community rather than merely consume attention.
-
-## Proof of Community Trust
-
-P.o.C.T is a score representing how a user is known and trusted by the community. It is influenced by meaningful relationships, identity verification, activity, and trust signals.
-
-The platform also includes a trust slider. A user can signal how strongly they trust another person. High-trust signals can involve DSP staking, giving the signal consequence rather than making it an empty endorsement.
-
-P.o.C.T affects how efficiently eligible DSP converts during a Token Generation Event. Higher trust can produce higher conversion efficiency. This creates an incentive to build genuine reputation, not merely accumulate activity.
-
-## The Seven Genesis Milestones
-
-The genesis trust foundation contains seven milestones, each worth up to ten P.o.C.T:
-
-1. **Current Location Transparency:** Keep current-location visibility enabled. It must be active at the time of every TGE. Turning it off permanently forfeits its ten P.o.C.T, even if transparency is later restored.
-2. **Profile Completion:** Complete every required profile field. A complete profile is also required for a user's first TGE.
-3. **QR Identity Exchanges:** Complete ten unique in-person Identity QR exchanges. This is also required for a user's first TGE.
-4. **Family Connections:** Establish ten unique family connections.
-5. **Friend Connections:** Establish ten unique friend connections.
-6. **Vouched by Peers:** Receive ten unique full-trust peer vouches.
-7. **Verified by Peers:** Receive ten unique peer verifications.
-
-Together, these seven genesis milestones can contribute up to seventy P.o.C.T. They create a trust foundation built from transparency, profile substance, physical-world identity proof, relationships, and peer accountability.
+1. **United States Context**: A Tanzanian living in **Phoenix, Arizona** participates in an economic and legal environment governed primarily by the **State of Arizona** rather than just federal US laws. Splitting the host country treasury between the US Federal level and the State of Arizona ensures that local state-level initiatives (such as Arizona small business grants or state diaspora events) receive direct treasury backing!
+2. **China Context**: In China, economic policy, trade corridors, and municipal planning operate heavily at the **Province level** (e.g., Guangdong, Zhejiang, Jiangsu). A diaspora member trading with manufacturers in Guangzhou benefits directly when the **Guangdong Provincial Treasury** accumulates matching DSP, funding province-specific trade expos and bilateral logistics hubs!
+3. **Home Regional Preservation**: For Peter Swai, his home roots lie in the **Kilimanjaro Region** of Tanzania. Splitting the Home Country slot between Tanzania national and Kilimanjaro regional treasuries ensures that rural home provinces receive dedicated development capital!
 
 ---
 
-# DSP and $DIASPORA: The Critical Difference
+## Free Community Peer Hosting vs Paid Peer Stays (Airbnb Alternatives)
 
-The platform uses two related but distinct concepts.
+Diaspora Nearby cleanly distinguishes between **Free Community Peer Hosting** and **Paid Marketplace Stays**:
 
-## DSP
+### 1. Free Community Peer Hosting ($0 Free Host)
+- **Visual Distinction**: Represented by a bright **airplane icon (✈️ Free Host)** in the collapsible community hierarchy on the Communities page.
+- **Cost**: **100% FREE ($0)**.
+- **Eligibility**: Travelers, refugees, and expats with a **PCT score of 91+** can submit a hosting request via `RequestHostDialog`.
+- **How it Works**: The request is broadcast directly into the local community chat. Trusted community members host visitors in their spare rooms or homes out of cultural solidarity, hospitality, and mutual trust.
 
-**DSP**, or Diaspora Social Points, are off-chain points recorded by the platform. They represent participation and contribution before a Token Generation Event.
-
-DSP is:
-
-- Off-chain
-- Not directly tradeable
-- Not yet liquid money
-- Earned through eligible activity
-- A claim ticket for possible TGE conversion
-
-## $DIASPORA
-
-**$DIASPORA** is the intended on-chain token on Base.
-
-$DIASPORA is:
-
-- On-chain
-- Held in blockchain wallets
-- Designed for transfer and ecosystem utility
-- Distributed through TGE conversion according to applicable rules
-
-It is important not to describe DSP as already-liquid currency. DSP becomes eligible for conversion only through the TGE process.
+### 2. Paid Peer Stays & Vehicle Rentals (Airbnb & Turo Alternatives)
+- **Location**: Located in the **Travel / Find a Stay / Marketplace** tab (`StaySearchScreen`).
+- **Cost**: **Paid nightly rental rates** (e.g., $50/night, $120/night) set by property owners.
+- **Visual Distinction**: Displayed with an explicit **`Paid Peer Stay (Airbnb Alt)`** badge and price tag.
+- **Zero Middleman Platform Fees**: Sellers keep 100% of their earnings without predatory Web2 platform commissions. Multi-currency support includes USD, Fiat (Stripe), DSP, and $DIASPORA tokens.
 
 ---
 
-# Token Generation Events and Epochs
+## Bi-Directional Value Transfer & Remittances in 1:1 Chats
 
-A Token Generation Event, or TGE, is the moment when eligible off-chain DSP is snapshotted and converted into on-chain $DIASPORA according to trust efficiency and other eligibility requirements.
+Diaspora Nearby turns daily communication into an instant financial exchange:
 
-## What Triggers TGE
-
-TGE progression is triggered by **globally distributed DSP supply milestones**.
-
-Member counts are displayed as useful network-growth benchmarks, but member counts do not trigger or gate TGE.
-
-This distinction matters. The economy advances when verified community participation distributes DSP, not simply when accounts are created.
-
-## The Epoch Model
-
-The model contains ten epochs. Each epoch's distributed-DSP trigger is ten times the previous epoch's target:
-
-- Epoch 1: 1 million distributed DSP
-- Epoch 2: 10 million distributed DSP
-- Epoch 3: 100 million distributed DSP
-- Epoch 4: 1 billion distributed DSP
-- Continuing through Epoch 10
-
-Each epoch contains ten TGE milestone events. The backend watches distributed DSP supply and can respond when the next milestone is crossed.
-
-## Trust Efficiency
-
-At TGE, P.o.C.T affects conversion efficiency. A stronger trust score can result in a higher percentage of eligible DSP converting to $DIASPORA. Unconverted amounts are subject to the protocol's applicable burn mechanics.
-
-TGE participation has two layers of eligibility:
-
-- **Every TGE:** Current Location Transparency must be enabled at the time of the event. A user who turned it off can re-enable it to regain TGE eligibility, but the previously forfeited ten P.o.C.T is not restored.
-- **First TGE only:** The user must also have a fully completed profile and at least ten unique in-person Identity QR exchanges.
-
-After the first successful TGE, profile completion and the ten-QR threshold do not need to be re-proved for later events. Current Location Transparency remains an active gate for every TGE.
+1. **Bi-Directional Earning**: For 1-to-1 social interactions (messaging, vouches, verifications), **BOTH parties earn DSP**. Social interaction literally builds wealth for both people simultaneously.
+2. **Value Transfer Bar**: Inside any 1:1 direct chat, opening the attachment sheet (`+`) exposes the **Three-Way Value Transfer Bar**:
+   - **DSP Tab**: Transfer off-chain social points instantly.
+   - **$DIASPORA Tab**: Transfer liquid on-chain tokens with Base L2 wallet integration.
+   - **Fiat/USD Tab**: Send low-cost remittances directly to family or friends with real-time FX conversion.
+3. **Community Chat Protection**: In community/group chats, the value transfer bar is **automatically hidden** to keep public channels clean and focused strictly on media sharing (Photos, Videos, Audio, Documents, Locations).
 
 ---
 
-# The 1:1 Expansion and Community Treasuries
+## The Community Emergency Fund (Ubuntu Mutual Aid)
 
-Diaspora Nearby is designed so individual success can also strengthen community institutions.
+The **Community Emergency Fund** is a decentralized mutual-aid protocol powered by the African philosophy of **Ubuntu** (*"I am because we are"*).
 
-When a user earns DSP, the protocol records a matching expansion allocation. The user receives one half of the resulting total DSP issuance, while the matching half strengthens system and community purposes connected to the user's home and host geography.
-
-The broad idea is simple:
-
-- A user is rewarded for contribution.
-- Matching value helps build shared capacity.
-- Both home and host communities benefit from diaspora activity.
-
-Community treasury structures can support transparent governance, emergency assistance, and future investment. Treasury conversion efficiency can reflect the community's average trust.
-
-## The Ten-Slot Distribution Model
-
-For a simple example, when a user earns **1,000 DSP**, the system records **2,000 DSP of total issuance**:
-
-- **1,000 DSP** goes to the user.
-- The remaining **1,000 DSP** is divided across ten equal allocation slots of **100 DSP each**.
-
-The matching allocation includes:
-
-1. Global Community or Global Reserve
-2. Home Continent
-3. Home Country or its regional split
-4. Home City
-5. Host Continent
-6. Host Country or its regional split
-7. Host City
-8. Founders and Core Team
-9. Liquidity Treasury
-10. Deflationary Burn
-
-Where a state or regional community exists, the relevant country slot can be divided between the country and state or region. Geographic slots that cannot be assigned are handled according to the platform's configured treasury and overflow rules.
-
-## Peter Swai Treasury Distribution Example
-
-Use **Peter Swai**, from **Kilimanjaro, Tanzania**, living in **Phoenix, Arizona**, to understand how one person's activity can strengthen several connected communities at once.
-
-Suppose Peter earns **1,000 DSP** for eligible community participation. The system records **2,000 DSP total**. Peter receives his **1,000 DSP user reward**, and each matching allocation slot has a base value of **100 DSP**.
-
-Peter's geographic matching allocations connect his home and host communities:
-
-- **Global Community:** 100 DSP supports network-wide community capacity.
-- **Home Continent, Africa:** 100 DSP supports continent-level African diaspora priorities.
-- **Home Country, Tanzania:** the home-country slot supports Tanzanian community capacity. If a Kilimanjaro regional treasury is active, this slot may be split between Tanzania and the Kilimanjaro region.
-- **Home City or Kilimanjaro-area community:** 100 DSP supports Peter's configured home-city community when that membership exists.
-- **Host Continent, North America:** 100 DSP supports continent-level host-community priorities.
-- **Host Country, United States:** the host-country slot supports United States diaspora capacity. Because Arizona is a configured state-level community, the slot may be split between the United States and Arizona.
-- **Host City, Phoenix:** 100 DSP supports the immediate diaspora community where Peter currently lives.
-
-The three system allocations also receive one slot each:
-
-- **Founders and Core Team:** 100 DSP
-- **Liquidity Treasury:** 100 DSP
-- **Deflationary Burn:** 100 DSP
-
-This example shows the core design principle: Peter's participation rewards Peter while also strengthening the global network, Africa, Tanzania, Kilimanjaro-area communities, North America, the United States, Arizona, and Phoenix. One diaspora member can create value for both home and host communities without treating either as secondary.
-
-The exact named city and regional allocations depend on Peter's configured community memberships. The conceptual flow remains the same: activity follows the person across borders and builds shared capacity along the path between home and host.
+- **Purpose**: Provides rapid microgrants for diaspora members, refugees, and travelers facing medical emergencies, urgent legal crises, bereavement, or repatriation needs.
+- **How it Works**: Community members make transparent annual micro-contributions into the fund.
+- **PCT Incentive**: Completing your annual contribution awards a **+10 PCT Trust Bonus**.
+- **Fraud Prevention & Slashing**: Claims are submitted with proof (medical bills, legal notices) and reviewed by the elected Community Council. Deceptive or fraudulent claims result in severe PCT slashing and trust penalties.
 
 ---
 
-# Diaspora Direct Investment
+## Trust & Identity Engine: The 7 Genesis Milestones & PCT
 
-Diaspora Direct Investment, or DDI, is the platform's vision for turning coordinated diaspora capital into community-directed opportunity.
+While Web2 platforms measure raw attention and clicks, Diaspora Nearby measures **verified human trust and contribution**.
 
-## Host-Community Business Support
+### The 7 Genesis Milestones (70 PCT Base)
+Every user builds their trust foundation by completing seven core milestones, each worth **+10 PCT** (up to 70 PCT total):
 
-Host-community treasuries can support business activity for diaspora members where they currently live. Applications, discussion, voting, trust requirements, and transparent management are intended to replace opaque gatekeeping with community accountability.
+1. **Current Location Transparency (+10 PCT)**: Enable live location transparency. *Crucial Rule:* Must be active at the time of every TGE. Turning it off permanently forfeits the 10 PCT reward (re-enabling restores TGE eligibility, but the 10 PCT is lost forever).
+2. **Profile Completion (+10 PCT)**: Complete all required profile fields (bio, home country, host country, skills, photos). Required for first TGE.
+3. **Identity QR Exchanges (+10 PCT)**: Complete 10 unique in-person QR identity scans with real people. Required for first TGE.
+4. **Family Connections (+10 PCT)**: Establish 10 verified family relationship links.
+5. **Friend Connections (+10 PCT)**: Establish 10 verified friend relationship links.
+6. **Vouched by Peers (+10 PCT)**: Receive 10 unique full-trust peer vouches.
+7. **Verified by Peers (+10 PCT)**: Receive 10 unique peer identity verifications.
 
-## Home-Country Investment
-
-The longer-term DDI vision includes larger projects connected to home countries, such as:
-
-- Food and agriculture
-- Healthcare
-- Education and training
-- Real estate
-- Infrastructure
-- Sustainable natural-resource ventures
-
-The purpose is not charity alone. It is to help the diaspora coordinate investment, expertise, trusted relationships, and economic return.
-
----
-
-# Community Governance
-
-Diaspora Nearby is designed around communities that can govern themselves transparently.
-
-Governance concepts represented in the platform include:
-
-- Elected leadership councils
-- Merit-based leadership eligibility
-- Yay, Nay, and Abstain voting
-- Transparent candidacies and election results
-- Community discussion before decisions
-- Leadership roles connected to real participation and trust
-
-The intended principle is that community resources should not be controlled through informal influence alone. Decisions should be visible and accountable.
+### The PCT Trust Slider & Two-Sided Prediction Market
+Users rate peer trustworthiness using a continuous **Trust Slider (1 to 100)**:
+- **Free Rating (11 to 90)**: Standard rating that awards the rater 1,000 DSP without locking any stake.
+- **Staked Rating (Full Trust 91-100 or No Trust 1-10)**: To give a Full Trust or No Trust rating, the rater **locks a 1,000 DSP stake**. If the rated user is later proven to be a bad actor, the rater's stake is slashed! This turns peer evaluation into an honest **Two-Sided Prediction Market**.
 
 ---
 
-# Community Emergency Fund
+## Governance & Merit-Based Leadership
 
-The Community Emergency Fund is a mutual-aid system inspired by the principle that no diaspora member should face crisis alone.
+Diaspora Nearby replaces opaque community politics with transparent, merit-based governance:
 
-Support areas include:
-
-- Medical emergencies
-- Urgent legal aid
-- Bereavement support
-- Repatriation
-
-The fund is designed around transparent contributions, claims, review, and ledger visibility. It is community governed and is not an insurance product. Assistance depends on community review and available resources rather than a contractual guarantee.
-
-The platform includes contribution flows, transparency views, claim triggers, and fraud-slashing mechanisms represented in the codebase.
+- **Elected Community Councils**: Every town, state, country, continent, and global hub elects a leadership council.
+- **Strict Merit-Based Eligibility**: To run for council leadership, a member MUST satisfy four non-negotiable requirements:
+  1. Completion of all **7 Genesis Milestones**.
+  2. Active on the platform for **100+ days**.
+  3. Administrator of a **100+ member group chat**.
+  4. A **PCT score of 91+**.
+- **Continuous Position Tracking via PCT**: Actual election votes (`Yay`/`Nay`/`Abstain`) put candidates into office. However, a leader's **continuous position in office** is tracked strictly by their **PCT score via the trust slider**! If a leader's PCT drops below 91 due to peer vouches or trust slashing, they are automatically removed from office.
 
 ---
 
-# Value Transfer and the Long-Term Economy
+## Diaspora Direct Investments (DDI) & Aerodrome DEX Buybacks
 
-Diaspora Nearby's long-term economic vision is a trusted network where people and organizations can transfer value, trade, invest, and support one another across borders.
+Diaspora Direct Investments (DDI) turn collective community capital into sovereign economic power:
 
-The platform envisions:
-
-- Person-to-person transfers
-- Consumer-to-business and business-to-consumer payments
-- Business-to-business settlement
-- Corridor-specific fiat rails
-- Smart-wallet access
-- On-chain transparency
-
-Some payment and fiat-routing capabilities are part of the platform's evolving roadmap rather than universally available production services today. The ambition is to reduce friction and keep more diaspora-created value within the communities generating it.
+1. **Personal & Business Loans**: Community treasuries offer loans to local entrepreneurs, students, and businesses for business investment and education grants.
+2. **Strict Eligibility & 10% Collateral Gate**: Borrowers must complete all **7 Genesis Milestones**, be an active member for **100+ days**, maintain a **91+ PCT score**, and post 10% collateral in **$DIASPORA** tokens.
+3. **Open-Market Buybacks on Aerodrome DEX**: When loan principal and interest repayments are made, the smart contract automatically executes **Open-Market Buybacks on the Aerodrome DEX (Base L2)**! This constantly absorbs sell pressure and directly drives up token value for every token holder in the global ecosystem!
 
 ---
 
-# Safety, Privacy, and Accountability
+## Token Generation Events (TGE) & The 10 Epoch Model
 
-Trust requires honest safeguards.
+Off-chain **DSP** points convert into liquid on-chain **$DIASPORA** tokens through structured **Token Generation Events (TGE)**.
 
-## Privacy
+### Epoch Progression
+TGEs advance across **10 Exponential Epochs**, triggered by global distributed DSP supply milestones (not raw registered user counts):
+- **Epoch 1**: 1 Million Distributed DSP
+- **Epoch 2**: 10 Million Distributed DSP
+- **Epoch 3**: 100 Million Distributed DSP
+- **Epoch 4**: 1 Billion Distributed DSP
+- ...Scaling by 10x up to **Epoch 10**.
 
-Diaspora Nearby uses Firebase and related services to operate the platform. It may collect identity, contact, location, device, usage, and user-generated content needed to provide its features.
+### PCT Conversion Efficiency Matrix
+Your **PCT Score (0-100)** determines the exact percentage of your eligible DSP that converts into liquid $DIASPORA tokens at TGE:
 
-Precise and coarse location enable nearby discovery. Current Location Transparency must be enabled when a user participates in any TGE. Users can control location permissions and transparency, but disabling transparency permanently forfeits its ten P.o.C.T reward and temporarily blocks TGE participation until it is re-enabled.
-
-The platform states that it does not sell personal data. Users may request account deletion through app settings or support.
-
-## Community Safety
-
-The platform includes reporting, moderation, trust signals, and penalties designed to discourage:
-
-- Spam
-- Fraud
-- Fake verification
-- Deceptive organizations
-- Event no-shows
-- Harmful or misleading behavior
-
-## Technical Accountability
-
-The codebase includes Firebase security rules, authenticated access controls, server-controlled writes for sensitive records, tests, audit scripts, and hardened on-chain execution paths. System treasuries are designed to use controlled wallets and transparent records.
-
-No technical system is risk-free. Diaspora Nearby's approach is to make trust, governance, and economic actions increasingly visible and auditable.
+| PCT Score Range | TGE Conversion Efficiency Rate | Outcome for Unconverted DSP |
+|---|---|---|
+| **0 – 10 PCT** | **0% Conversion** | 100% of DSP is PERMANENTLY BURNED |
+| **11 – 90 PCT** | **Exact PCT %** (e.g., 75 PCT = 75% conversion) | Unconverted % is PERMANENTLY BURNED |
+| **91 – 100 PCT** | **100% Full Conversion** | 100% of DSP converts to $DIASPORA |
 
 ---
 
-# What Is Live, What Is Growing, and What Is Vision
+## Conclusion & Call to Action
 
-An accurate audio review should distinguish three layers.
+Diaspora Nearby is not just an application—it is a global movement that turns human trust, cultural identity, and social activity into sovereign economic wealth. Built by **Peter Swai** from lived experience, it empowers **Diaspora Members, Expats, Refugees, and Travelers** to connect, host, trade, govern, and thrive together.
 
-## Available Platform Foundation
+**Join the movement today:**
+- **Website**: https://diasporanearby.com
+- **Web App**: https://app.diasporanearby.com
+- **Android App**: Available on Google Play Store (`com.diasporanearby.diasporanearby`)
 
-The project currently includes a functioning Flutter application and web presence with capabilities represented across nearby discovery, profiles, authentication, communities, chat, events, organizations, trust, DSP, travel, marketplace, governance, and related services.
-
-The Android app and web app provide direct access paths.
-
-## Active Rollout and Operational Work
-
-Some capabilities require staged deployment, configuration, community adoption, external integrations, treasury setup, or operational processes. Features such as chamber leadership, emergency-fund operations, blockchain flows, and payment integrations may depend on rollout status and geography.
-
-## Long-Term Vision
-
-The largest economic ambitions, including widespread $DIASPORA utility, broad fiat rails, large-scale DDI, and mature cross-border settlement, are a roadmap. They should be discussed as a credible direction being built toward, not as guaranteed or universally available outcomes.
-
----
-
-# Why Someone Should Join
-
-Diaspora Nearby offers a practical invitation:
-
-- Find people who understand where you come from.
-- Build trusted relationships where you live now.
-- Discover events, organizations, businesses, travel, and opportunity.
-- Make your contribution to community visible.
-- Help strengthen institutions serving both home and host communities.
-- Participate early in shaping a platform built specifically for diaspora life.
-
-The first reason to join is not speculation. It is belonging.
-
-The second is usefulness.
-
-The third is the possibility that trusted participation, coordinated across millions of diaspora members, can become a new form of community power.
-
----
-
-# Closing Narrative
-
-Diaspora Nearby asks a compelling question:
-
-What if the global diaspora were not treated as scattered individuals, but as one connected network of trusted people, businesses, communities, and institutions?
-
-Peter Swai built Diaspora Nearby from inside that question. As a Tanzanian living in the United States, he built the platform that he and others like him wanted: a way to find home nearby, build trust that travels, create opportunity across borders, and turn diaspora participation into shared strength.
-
-The platform is ambitious because the diaspora itself is ambitious.
-
-It is social connection, but it is also commerce.
-
-It is trust, but it is also accountability.
-
-It is support for home, but it also recognizes the importance of the host community.
-
-It is a place to find people nearby today and a framework for building collective economic power tomorrow.
-
-Visit https://diasporanearby.com, open https://app.diasporanearby.com, or install Diaspora Nearby on Android. Enable Current Location Transparency, complete a profile, exchange Identity QR codes with ten unique people, and find your people. Begin building the network you wish already existed.
-
----
-
-# Accuracy Notes for Audio Hosts
-
-- Say **DSP** when discussing off-chain participation points.
-- Say **$DIASPORA** when discussing the on-chain token.
-- Do not claim DSP is currently tradeable or guaranteed to have monetary value.
-- TGE is triggered by distributed DSP supply milestones, not member-count growth.
-- Member counts are informational network-growth benchmarks.
-- P.o.C.T affects TGE conversion efficiency.
-- The seven genesis milestones can contribute up to seventy P.o.C.T, in this order: Current Location Transparency, Profile Completion, QR Identity Exchanges, Family Connections, Friend Connections, Vouched by Peers, and Verified by Peers.
-- Current Location Transparency must be enabled at the time of every TGE.
-- Turning Current Location Transparency off permanently forfeits its ten P.o.C.T. Re-enabling it restores TGE eligibility, but not the forfeited P.o.C.T.
-- A user's first TGE additionally requires a complete profile and ten unique in-person Identity QR exchanges.
-- Profile completion and the ten-QR threshold are first-TGE gates only; they do not need to be repeated for later TGEs.
-- Current and future capabilities should be clearly distinguished.
-- The Community Emergency Fund is mutual aid, not insurance.
-- Avoid guarantees of investment returns or token appreciation.
-- Present Peter Swai as the visionary founder and lead developer, and as a Tanzanian diaspora member living in the United States.
+Enable Current Location Transparency, complete your 7 Genesis Milestones, exchange Identity QR codes with 10 peers, and help build the trusted global network humanity deserves!

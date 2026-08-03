@@ -244,7 +244,7 @@ Today `test/` only has `DiasporaSmartWallet.test.js`. The TGE controller is the 
 
 - `mintEpochSupply` enforces `epochLockedSupply` accounting
 - `executeTGE` correctly applies efficiency, burns inefficiency
-- Epoch advances after exactly 10 TGE events
+- Epoch advances after exactly 10 TDE releases
 - `distributeWelcomeBonus` doesn't advance event counter
 - Integer rounding edge cases (efficiency = 33 on amount = 100)
 - Reverts: `insufficient locked supply`, `array length mismatch`, `empty batch`

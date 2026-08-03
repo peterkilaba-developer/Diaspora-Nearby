@@ -342,6 +342,23 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                   '${item.totalMembers} members',
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
+                if (item.type == 'city' || item.type == 'community') ...[
+                  const SizedBox(width: 8),
+                  const Icon(
+                    LucideIcons.plane,
+                    size: 12,
+                    color: AppTheme.accent,
+                  ),
+                  const SizedBox(width: 2),
+                  const Text(
+                    'Free Peer Host',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                ],
               ],
             ),
             onTap: () {
@@ -368,25 +385,55 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // [NEW] Request Host button — only for city-level communities
+                // Free Peer Host action button — available in any host or home town community
                 if (item.type == 'city' || item.type == 'community')
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    tooltip: 'Request Host',
-                    icon: const Icon(
-                      LucideIcons.plane,
-                      size: 20,
-                      color: AppTheme.accent,
+                  Tooltip(
+                    message: 'Free Peer Host Available',
+                    child: InkWell(
+                      onTap: () {
+                        RequestHostDialog.show(
+                          context,
+                          communityId: item.id,
+                          communityName: item.name,
+                          communityChatId: 'chat_${item.id}',
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.accent.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.plane,
+                              size: 14,
+                              color: AppTheme.accent,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Free Host',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.accent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    onPressed: () {
-                      RequestHostDialog.show(
-                        context,
-                        communityId: item.id,
-                        communityName: item.name,
-                        communityChatId: 'chat_${item.id}',
-                      );
-                    },
                   ),
                 if (hasChildren)
                   (isPreExpanded

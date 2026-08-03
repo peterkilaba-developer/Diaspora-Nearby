@@ -16,6 +16,11 @@ class DspValuation {
   final double networkMultiplier;
   final double deflationRatio;
   final double epochScarcity;
+
+  /// Direct fiat GDP contribution per token (Total Fiat GDP ÷ Circulating Supply).
+  final double gdpFloorPerToken;
+
+  /// Legacy factor multiplier equivalent for backward compatibility.
   final double fiatGdpBoost;
 
   /// Raw inputs used in calculation (for display).
@@ -34,6 +39,7 @@ class DspValuation {
     required this.networkMultiplier,
     required this.deflationRatio,
     required this.epochScarcity,
+    required this.gdpFloorPerToken,
     required this.fiatGdpBoost,
     required this.totalUsers,
     required this.totalMinted,
@@ -76,57 +82,54 @@ class ValuationService {
 
   ValuationService();
 
-  /// Calculates the dynamic implied value of 1 DSP based on platform metrics.
+  /// Calculates the dynamic implied value / price floor of 1 DSP.
   ///
   /// Formula:
   /// ```
-  /// impliedValue = basePriceUSD × (1 + networkMultiplier + deflationRatio)
-  ///                             × epochScarcity
-  ///                             × fiatGdpBoost
+  /// Dynamic Price Floor = [basePriceUSD × (1 + networkMultiplier + deflationRatio) × epochScarcity]
+  ///                     + (fiatGdpUsd / circulatingSupply)
   /// ```
-  ///
-  /// Each factor only pushes the value UP — it can never drop below the
-  /// base price × epochScarcity × fiatGdpBoost.
   DspValuation calculateImpliedValue({
     required int totalUsers,
     required int totalMinted,
     required int totalBurned,
     required int currentEpoch,
     required double fiatGdpUsd,
+    int circulatingSupply = 0,
   }) {
     // --- Factor 1: Network Effect ---
-    // Logarithmic growth — slow at first, increasingly valuable with each
-    // order-of-magnitude increase in users.
     final double networkMultiplier = totalUsers > 0
         ? log(max(totalUsers, 1).toDouble()) / (ln10 * 10)
         : 0.0;
 
     // --- Factor 2: Deflation Ratio ---
-    // Rewards burn activity. As more DSP is burned, scarcity increases.
-    // Capped at 0.5 to prevent a single large burn from dominating.
     final double rawDeflation = totalMinted > 0
         ? totalBurned / totalMinted.toDouble()
         : 0.0;
     final double deflationRatio = min(rawDeflation, 0.5);
 
     // --- Factor 3: Epoch Scarcity ---
-    // Each epoch adds a 10% premium, reflecting the progressive scarcity
-    // of later-epoch DSP.
     final double epochScarcity = 1.0 + (max(currentEpoch, 1) * 0.1);
 
-    // --- Factor 4: Fiat GDP Boost ---
-    // Real economic activity (marketplace, travel, remittances) adds a
-    // bonus. Logarithmic scale prevents extreme spikes.
-    final double fiatGdpBoost = fiatGdpUsd > 0
-        ? 1.0 + log(max(fiatGdpUsd, 1.0)) / (ln10 * 10)
-        : 1.0;
+    // --- Network Baseline Valuation ---
+    final double networkBaseline =
+        basePriceUsd * (1.0 + networkMultiplier + deflationRatio) * epochScarcity;
 
-    // --- Composite ---
-    final double impliedValue =
-        basePriceUsd *
-        (1.0 + networkMultiplier + deflationRatio) *
-        epochScarcity *
-        fiatGdpBoost;
+    // --- Factor 4: Additive Fiat GDP Floor per Token ---
+    final int effectiveCirculating = circulatingSupply > 0
+        ? circulatingSupply
+        : max(totalMinted - totalBurned, 0);
+
+    final double gdpFloorPerToken = (effectiveCirculating > 0 && fiatGdpUsd > 0)
+        ? fiatGdpUsd / effectiveCirculating.toDouble()
+        : 0.0;
+
+    // --- Composite Dynamic Price Floor ---
+    final double impliedValue = networkBaseline + gdpFloorPerToken;
+
+    final double fiatGdpBoost = networkBaseline > 0
+        ? 1.0 + (gdpFloorPerToken / networkBaseline)
+        : 1.0;
 
     return DspValuation(
       impliedValueUsd: impliedValue,
@@ -134,6 +137,7 @@ class ValuationService {
       networkMultiplier: networkMultiplier,
       deflationRatio: deflationRatio,
       epochScarcity: epochScarcity,
+      gdpFloorPerToken: gdpFloorPerToken,
       fiatGdpBoost: fiatGdpBoost,
       totalUsers: totalUsers,
       totalMinted: totalMinted,

@@ -16,7 +16,7 @@ class EpochDefinition {
 
 class EpochService {
   // Epoch Schedule (Epoch 1 to 10)
-  // Each Epoch has 10 TGE Events (10% supply each)
+  // Each Epoch has 1 TGE and 10 TDE releases (10% supply each)
   // Epochs are identified by number only — labels deprecated.
   static const List<EpochDefinition> _epochSchedule = [
     EpochDefinition(epochNumber: 1, minDspRequired: 10000),
@@ -46,7 +46,7 @@ class EpochService {
 
   /// Returns true if the user meets the minimum DSP requirement for TGE.
   /// Trust score is NOT a gate — it only affects swap efficiency via the
-  /// decile scale (see [calculateEfficiency]).
+  /// no-trust / standard-trust / full-trust rule (see [calculateEfficiency]).
   bool isEligibleForTGE({
     required int epochNumber,
     required double userTotalDsp,
@@ -75,20 +75,14 @@ class EpochService {
     return currentDspBalance * efficiency;
   }
 
-  /// [NEW] Public Helper for Efficiency Calculation (Decile Scale)
+  /// [NEW] Public Helper for Efficiency Calculation
   /// Supports both int and double inputs for Trust Score
   double calculateEfficiency(num trustScore) {
-    if (trustScore <= 0) return 0.0;
+    if (trustScore < 11) return 0.0;
+    if (trustScore >= 91) return 1.0;
 
-    // Logic: (Score / 10).ceil() * 0.10
-    // Example: 91 / 10 = 9.1 -> ceil 10 -> 1.0 (100%)
-    // Example: 85 / 10 = 8.5 -> ceil 9 -> 0.9 (90%)
-    double efficiency = (trustScore / 10).ceil() / 10.0;
-
-    // Cap at 1.0
-    if (efficiency > 1.0) efficiency = 1.0;
-
-    return efficiency;
+    final cappedScore = trustScore.clamp(0, 100);
+    return cappedScore / 100.0;
   }
 
   /// [NEW] Returns the trust-slider color for a given trust score (0–100).
@@ -189,13 +183,13 @@ class EpochService {
     );
   }
 
-  /// [NEW] Calculates the next TGE event milestone (10% of epoch total)
+  /// [NEW] Calculates the next TDE milestone (10% of epoch total)
   int getNextCommunityMilestone(int cumulativeEarnings, int memberCount) {
     final epoch = getCurrentCommunityEpoch(cumulativeEarnings, memberCount);
     // Milestone = 10% of dspTarget
     final int step = (epoch.dspTarget / 10).round();
 
-    // TGE completion is determined by distributed DSP milestones.
+    // TDE completion is determined by distributed DSP milestones.
     final int completedSteps = getCompletedTgeEvents(
       cumulativeEarnings,
       memberCount,
@@ -205,9 +199,9 @@ class EpochService {
     return (completedSteps + 1) * step;
   }
 
-  /// Returns the number of fully completed TGE events (0 to 10)
-  /// TGE progression is based on DSP supply target only.
-  /// Population is tracked for display but does not gate TGE events.
+  /// Returns the number of fully completed TDE releases (0 to 10)
+  /// TDE progression is based on DSP supply target only.
+  /// Population is tracked for display but does not gate TDE releases.
   int getCompletedTgeEvents(int cumulativeEarnings, int memberCount) {
     final epoch = getCurrentCommunityEpoch(cumulativeEarnings, memberCount);
     final prevEpoch = getPreviousCommunityEpoch(epoch.level);
@@ -224,7 +218,7 @@ class EpochService {
     return completedSteps;
   }
 
-  /// [NEW] Returns the current TGE Event number (1 to 10) within the current Epoch
+  /// [NEW] Returns the current TDE number (1 to 10) within the current Epoch
   int getCurrentTgeEventNumber(int cumulativeEarnings, int memberCount) {
     final int completedSteps = getCompletedTgeEvents(
       cumulativeEarnings,
@@ -249,7 +243,7 @@ class CommunityEpochDefinition {
     required this.memberTarget,
   });
 
-  // TGE progress is based on distributed DSP. Member growth is informational.
+  // TDE progress is based on distributed DSP. Member growth is informational.
   double calculateProgress(int currentDsp, int currentMembers) {
     return (currentDsp / dspTarget).clamp(0.0, 1.0);
   }

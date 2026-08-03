@@ -24,23 +24,23 @@ The total global supply is minted based on human activity validation (Proof of S
 | **Investors & Partners** | 5% of Total Mint (1 Slot) | 10% of System Match, strategic liquidity. |
 | **Fixed Burn** | 5% of Total Mint (1 Slot) | 10% of System Match, immediate deflation. |
 
-## 3. TGE Minting: The Epoch System
-The smart contract mints and distributes supply based on the Diaspora Protocol's 10-Epoch growth model.
+## 3. TGE Premint + TDE Distribution: The Epoch System
+The smart contract pre-mints epoch supply at TGE and distributes it through TDE releases based on the Diaspora Protocol's 10-Epoch growth model.
 
 - **Epoch 1 Supply Target**: **1,000,000 $DIASPORA** (One Million).
 - **Each Epoch**: 10x the previous Epoch's supply target, up to 1 Quadrillion at Epoch 10.
-- **TGE Events Per Epoch**: 10 events, each distributing 10% of the Epoch's supply target.
+- **TDE Releases Per Epoch**: 10 Token Distribution Events, each triggered at a 10% distributed-DSP milestone inside the epoch and distributing that decile of the epoch supply target.
 - **Distribution Mechanism**: Batch distribution to wallet addresses based on the final Firebase snapshot.
-- **Burn Mechanism**: Any tokens from the TGE mint that are **unclaimed** (e.g., users below the 10,000 $DIASPORA gate or communities below the 1,000,000 $DIASPORA floor) MUST BE **BURNED** by the contract.
+- **Burn Mechanism**: Any tokens from the epoch premint that are **unclaimed** (e.g., users below the 10,000 $DIASPORA gate or communities below the 1,000,000 $DIASPORA floor) MUST BE **BURNED** by the contract.
 
 ## 4. TGE "Great Reset" Prerequisites
 Before executing a TGE, the following system-wide actions occur:
-1. **DSP Supply Trigger**: The TGE fires when cumulative distributed DSP crosses the next supply milestone. Population targets are informational and do not gate execution.
+1. **DSP Supply Trigger**: The TGE happens once per epoch. TDEs then distribute supply as cumulative distributed DSP crosses each 10% decile milestone. For a 1,000,000 DSP epoch, TDEs occur at 100,000, 200,000, and every additional 100,000 DSP through 1,000,000. Population targets are informational and do not gate execution.
 2. **Snapshot Generation**: A final immutable snapshot of Firebase is captured, providing a list of:
    - **Eligible Users**: Users with **>= 10,000 $DIASPORA** balance.
    - **Communities**: Community treasury balances (**>= 1,000,000 $DIASPORA** gate).
    - **System Wallets**: Founders/Team, Investors/Partners, and Burn addresses.
-3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA at a **1:1 ratio**, adjusted by the user's P.o.C.T Decile Efficiency.
+3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA at a **1:1 ratio**, adjusted by the user's PCT efficiency. Scores 1-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%.
 4. **Cleanup**: All off-chain $DIASPORA balances in the application are reset to **0**.
 
 ## 5. Economic Governance: 10-Epoch Scaling
@@ -62,7 +62,7 @@ The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in t
 ## 6. Token Utility Sinks
 - **Community Penalties**: Spam, fraud, no-shows, and other bad behaviors result in DSP deductions.
 - **Protocol Burns**: 10% fixed expansion burn, unassigned slot burn, unclaimed TGE burn.
-- **P.o.C.T Efficiency**: Low trust scores reduce TGE conversion rates, effectively burning unconverted DSP.
+- **PCT Efficiency**: Low trust scores reduce TDE distribution rates, effectively burning unconverted DSP. Scores 1-10 convert at 0%.
 
 > **Note:** All economic activity fees (marketplace, events, travel, business) have been permanently removed. The economy is frictionless — DSP is only removed through penalties and protocol-level burns.
 

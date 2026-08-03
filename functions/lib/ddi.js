@@ -19,6 +19,8 @@ const VALID_LOAN_TYPES = new Set([
   "Agriculture & Farming Business",
   "Healthcare Business",
   "Other Local Business",
+  "Investments",
+  "Education and Training",
 ]);
 const VALID_REPAYMENT_PERIODS = new Set([
   "3 months",
@@ -55,25 +57,30 @@ function documentMemberIds(community) {
   return Array.isArray(members) ? members : [];
 }
 
-function isHostCommunityMember(user, community, userId, communityId) {
+function isEligiblePhysicalCommunity(user, community, userId, communityId) {
   const memberships = Array.isArray(user.communityMemberships) ?
     user.communityMemberships : [];
-  return community.locationType === "host" &&
-    (memberships.includes(communityId) ||
-      documentMemberIds(community).includes(userId));
+  
+  const isMember = memberships.includes(communityId) || 
+                   documentMemberIds(community).includes(userId);
+  if (!isMember) return false;
+
+  const hasHostCommunity = memberships.some(id => id.startsWith("host_"));
+  
+  if (hasHostCommunity) {
+    // Diaspora users can only apply in their host communities
+    return community.locationType === "host";
+  } else {
+    // Local users can only apply in their home communities
+    return community.locationType === "home";
+  }
 }
 
-function assertHostCommunityMember(user, community, userId, communityId) {
-  if (community.locationType !== "host") {
+function assertEligiblePhysicalCommunity(user, community, userId, communityId) {
+  if (!isEligiblePhysicalCommunity(user, community, userId, communityId)) {
     throw new functions.https.HttpsError(
         "failed-precondition",
-        "DDI loans are available only through your host community.",
-    );
-  }
-  if (!isHostCommunityMember(user, community, userId, communityId)) {
-    throw new functions.https.HttpsError(
-        "permission-denied",
-        "You must be a member of this host community to participate.",
+        "DDI loans are available only for the town where you physically live.",
     );
   }
 }
@@ -167,7 +174,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
       if (!VALID_LOAN_TYPES.has(loanType)) {
         throw new functions.https.HttpsError(
             "invalid-argument",
-            "Select a supported host-community business loan type.",
+            "Select a supported loan type.",
         );
       }
       if (!VALID_REPAYMENT_PERIODS.has(repaymentPeriod)) {
@@ -176,10 +183,10 @@ exports.submitDdiLoanApplication = functions.https.onCall(
             "Select a supported repayment period.",
         );
       }
-      if (input.confirmsHostBusiness !== true) {
+      if (input.confirmsLocalInvestment !== true && input.confirmsHostBusiness !== true) {
         throw new functions.https.HttpsError(
             "failed-precondition",
-            "Confirm that the business operates in the selected host community.",
+            "Confirm that the loan will be used locally in the selected community.",
         );
       }
 
@@ -191,6 +198,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
       );
       const userRef = db.collection("users").doc(applicantId);
       const trustRef = db.collection("trust_data").doc(applicantId);
+      const userPointsRef = db.collection("user_points").doc(applicantId);
       const communityRef = db.collection("communities").doc(communityId);
       const chatRef = db.collection("chats").doc(discussion.chatId);
       const discoverableRef = db.collection("discoverableChats")
@@ -200,11 +208,13 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           .doc("application_created");
 
       return db.runTransaction(async (transaction) => {
-        const [userSnap, trustSnap, communitySnap] = await Promise.all([
-          transaction.get(userRef),
-          transaction.get(trustRef),
-          transaction.get(communityRef),
-        ]);
+        const [userSnap, trustSnap, userPointsSnap, communitySnap] =
+            await Promise.all([
+              transaction.get(userRef),
+              transaction.get(trustRef),
+              transaction.get(userPointsRef),
+              transaction.get(communityRef),
+            ]);
         if (!userSnap.exists) {
           throw new functions.https.HttpsError(
               "failed-precondition",
@@ -220,7 +230,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
 
         const user = userSnap.data();
         const community = communitySnap.data();
-        assertHostCommunityMember(user, community, applicantId, communityId);
+        assertEligiblePhysicalCommunity(user, community, applicantId, communityId);
 
         const trustData = trustSnap.exists ? trustSnap.data() : {};
         const poctScore = Number(trustData.trustScore || 0);
@@ -228,8 +238,50 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           const shownScore = Number.isFinite(poctScore) ? poctScore : 0;
           throw new functions.https.HttpsError(
               "failed-precondition",
-              `A PoCT score of ${MINIMUM_POCT_SCORE}+ is required to apply. ` +
+              `A PCT score of ${MINIMUM_POCT_SCORE}+ is required to apply. ` +
               `Your current score is ${shownScore}.`,
+          );
+        }
+
+        // Enforce 7 Genesis Milestones + 100+ Days Active
+        const familyOk = Number(trustData.uniqueFamilyCount || 0) >= 10;
+        const friendOk = Number(trustData.uniqueFriendCount || 0) >= 10;
+        const qrOk = Number(trustData.uniqueQrCount || 0) >= 10;
+        const vouchOk = Number(trustData.uniqueVouchCount || 0) >= 10;
+        const verifyOk = Number(trustData.uniqueVerificationCount || 0) >= 10;
+        const milestones = Array.isArray(trustData.awardedQualificationMilestones) ? trustData.awardedQualificationMilestones : [];
+        const profileOk = milestones.includes("profile_complete") || milestones.includes("profileComplete");
+
+        let daysActive = 0;
+        if (user && user.createdAt) {
+          const created = user.createdAt.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
+          daysActive = Math.floor((Date.now() - created.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        const isGenesisComplete = familyOk && friendOk && qrOk && vouchOk && verifyOk && profileOk;
+        const isSeniorityMet = daysActive >= 100;
+        const isDdiEligible = trustData.isDdiEligible === true || (isGenesisComplete && isSeniorityMet && poctScore >= MINIMUM_POCT_SCORE);
+
+        if (!isDdiEligible) {
+          throw new functions.https.HttpsError(
+              "failed-precondition",
+              `Applying for a DDI loan requires completing all 7 Genesis Milestones ` +
+              `and being an active member for 100+ days (Your current active days: ${daysActive}).`,
+          );
+        }
+
+        // 10% Token Collateral Check (Option A)
+        const userPointsData = userPointsSnap.exists ? userPointsSnap.data() : {};
+        const availableBalance = Number(
+            userPointsData.availablePoints || userPointsData.points || 0,
+        );
+        const requiredCollateral = Math.ceil(requestedAmount * 0.10);
+        if (availableBalance < requiredCollateral) {
+          throw new functions.https.HttpsError(
+              "failed-precondition",
+              `Insufficient token balance for 10% collateral requirement. ` +
+              `You need at least ${requiredCollateral} $DIASPORA balance as collateral ` +
+              `for a ${requestedAmount} $DIASPORA loan request. (Your current balance: ${availableBalance}).`,
           );
         }
 
@@ -253,8 +305,8 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           votingCommunityId: communityId,
         };
         const publicDescription =
-          `Public discussion for ${businessName}'s host-community DDI ` +
-          `application in ${community.name || "this community"}.`;
+              `Public discussion for ${businessName}'s DDI ` +
+              `loan application in the ${community.name} community.`;
         const lastMessage = {
           id: "application_created",
           content: "DDI application submitted. Community discussion and voting are open.",
@@ -273,6 +325,10 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           fullLegalName,
           loanType,
           requestedAmount,
+          collateralAmount: requiredCollateral,
+          collateralPercentage: 10,
+          collateralStatus: "locked",
+          repaymentMechanism: "open_market_buyback_to_treasury",
           currency: "DIASPORA",
           purpose,
           businessName,
@@ -287,8 +343,10 @@ exports.submitDdiLoanApplication = functions.https.onCall(
             minimumPoctScore: MINIMUM_POCT_SCORE,
             applicantPoctScore: poctScore,
             poctPassed: true,
-            hostCommunityMemberPassed: true,
-            hostBusinessConfirmed: true,
+            eligibleCommunityMemberPassed: true,
+            localInvestmentConfirmed: true,
+            collateralRequired: requiredCollateral,
+            collateralPassed: true,
             tokenCollateralCapacityReview: "required_after_tge",
           },
           createdAt: now,
@@ -299,7 +357,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           type: "group",
           isPublic: true,
           communityId,
-          locationType: "host",
+          locationType: community.locationType,
           name: discussion.name,
           description: publicDescription,
           category: "Business & Entrepreneurship",
@@ -316,7 +374,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           type: "group",
           isPublic: true,
           communityId,
-          locationType: "host",
+          locationType: community.locationType,
           name: discussion.name,
           description: publicDescription,
           category: "Business & Entrepreneurship",
@@ -329,7 +387,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           chatId: discussion.chatId,
           content:
             `Public discussion opened for ${businessName}. The applicant ` +
-            `requested ${requestedAmount} $DIASPORA for a host-community ` +
+            `requested ${requestedAmount} $DIASPORA for a community ` +
             "business. Cast Yay, Nay, or Abstain from the DDI Loans screen.",
         });
         transaction.set(userChatRef, {
@@ -394,10 +452,10 @@ exports.joinDdiDiscussion = functions.https.onCall(async (data, context) => {
     if (!communitySnap.exists) {
       throw new functions.https.HttpsError(
           "not-found",
-          "The host community could not be found.",
+          "The community could not be found.",
       );
     }
-    assertHostCommunityMember(
+    assertEligiblePhysicalCommunity(
         userSnap.data(),
         communitySnap.data(),
         userId,
@@ -473,7 +531,7 @@ exports.castDdiLoanVote = functions.https.onCall(async (data, context) => {
     if (!communitySnap.exists) {
       throw new functions.https.HttpsError("not-found", "Community not found.");
     }
-    assertHostCommunityMember(
+    assertEligiblePhysicalCommunity(
         voterSnap.data(),
         communitySnap.data(),
         voterId,
@@ -550,7 +608,7 @@ exports.resolveDdiLoanVoting = functions.https.onCall(async (data, context) => {
     if (!communitySnap.exists) {
       throw new functions.https.HttpsError("not-found", "Community not found.");
     }
-    assertHostCommunityMember(
+    assertEligiblePhysicalCommunity(
         userSnap.data(),
         communitySnap.data(),
         userId,

@@ -1,20 +1,38 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 
 enum ViewMode { home, global }
 
 // Notifier for managing view mode state
 class ViewModeNotifier extends Notifier<ViewMode> {
   @override
-  ViewMode build() => ViewMode.home;
+  ViewMode build() {
+    final isUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
+    if (!isUnlocked) return ViewMode.home;
+    return ViewMode.home;
+  }
 
   // Default to home view
   void toggleView() {
+    final isUnlocked = ref.read(isGlobalUnlockedSyncProvider);
+    if (!isUnlocked) {
+      state = ViewMode.home;
+      return;
+    }
     state = state == ViewMode.home ? ViewMode.global : ViewMode.home;
   }
 
   void setHome() => state = ViewMode.home;
 
-  void setGlobal() => state = ViewMode.global;
+  void setGlobal() {
+    final isUnlocked = ref.read(isGlobalUnlockedSyncProvider);
+    if (!isUnlocked) {
+      state = ViewMode.home;
+      return;
+    }
+    state = ViewMode.global;
+  }
+
   bool get isGlobal => state == ViewMode.global;
   bool get isHome => state == ViewMode.home;
 }
@@ -41,4 +59,3 @@ final chatsViewModeProvider = NotifierProvider<ViewModeNotifier, ViewMode>(() {
   return ViewModeNotifier();
 });
 
-// Deprecated: generic provider (removed)

@@ -14,7 +14,7 @@
 *   **Features:** Phone Auth, Profile Creation, Hometown/Host-town/Path selection, QR generation.
 *   **Refinement:** Unified `UserProfileForm`, Profile Completeness tracking, Identity Levels 1-3.
 
-### 3. DSP Economy & Trust System (P.o.S.A/P.o.C.T)
+### 3. DSP Economy & Trust System (PSA/PCT)
 *   **Status:** Refined Model Implementation
 *   **Features:** Points earning (messaging, referrals, shares, streaks), 6-Tier Trust Score (0-100) with 5 normalized factors (20 pts each).
 *   **Refinement:** Constant 1.0x rewards, Genesis Gate (10,000 DSP), TGE Efficiency tiers (10-step decile scale: 10% per 10 points).

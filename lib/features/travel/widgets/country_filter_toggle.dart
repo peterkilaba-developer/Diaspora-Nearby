@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:diaspora_nearby/core/data/countries.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 
 /// A reusable All / Host-country / Home-country segmented toggle.
 ///
 /// Used in Stay search, Car Rental search, and potentially Hotel search
 /// to filter listings by geographic scope.
-class CountryFilterToggle extends StatelessWidget {
+class CountryFilterToggle extends ConsumerWidget {
   const CountryFilterToggle({
     super.key,
     required this.selected,
@@ -24,9 +26,11 @@ class CountryFilterToggle extends StatelessWidget {
   final String? homeCountryCode;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
 
     final hostCountry = hostCountryCode != null
         ? getCountryByCode(hostCountryCode!)
@@ -50,7 +54,8 @@ class CountryFilterToggle extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _chip(context, theme, isDark, 'All', 'all', LucideIcons.globe),
+            if (isGlobalUnlocked)
+              _chip(context, theme, isDark, 'All', 'all', LucideIcons.globe),
             _chip(
               context,
               theme,

@@ -400,7 +400,7 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
     );
     _drawText(
       canvas,
-      'Pulse TGE events occur as we grow.',
+      'Pulse TDE releases occur as we grow.',
       w / 2,
       636,
       fontSize: 17,

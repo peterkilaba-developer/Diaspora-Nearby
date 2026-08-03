@@ -11,7 +11,7 @@ const upgrades = await createUpgrades(hre, connection);
  *
  * Covers the high-value paths that previously had ZERO coverage:
  *   - mintEpochSupply: locked-supply accounting
- *   - executeTGE: efficiency math, burn behavior, epoch rollover after 10 events
+ *   - executeTGE: efficiency math, burn behavior, epoch rollover after 10 TDE releases
  *   - distributeWelcomeBonus: doesn't advance event counter, BURN_ADDRESS handling
  *   - Integer-division edge cases (the source of the 1,000 DIASPORA drift on mainnet)
  *   - Access control: only TGE_ORACLE_ROLE can call privileged functions
@@ -108,7 +108,7 @@ describe("DiasporaTGEController", function () {
         await tge.connect(oracle).executeTGE([alice.address], [ONE], [100]);
         expect(await tge.currentEpoch()).to.equal(1);
       }
-      // 10th event rolls the epoch
+      // 10th TDE release rolls the epoch
       await tge.connect(oracle).executeTGE([alice.address], [ONE], [100]);
       expect(await tge.currentEpoch()).to.equal(2);
       expect(await tge.currentTgeEvent()).to.equal(0);

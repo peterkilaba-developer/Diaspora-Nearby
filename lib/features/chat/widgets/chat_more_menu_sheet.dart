@@ -125,6 +125,19 @@ class ChatMoreMenuSheet extends ConsumerWidget {
 
     final nameToUse = isDirect ? displayName.split(' ').first : displayName;
 
+    final isCountry = community?.type == 'country' ||
+        chat.id.contains('_country_') ||
+        (community?.id.contains('_country_') ?? false);
+    final isHostLocation = community?.locationType == 'host' ||
+        chat.id.contains('_host_') ||
+        (community?.id.contains('_host_') ?? false);
+    final isHomeLocation = community?.locationType == 'home' ||
+        chat.id.contains('_home_') ||
+        (community?.id.contains('_home_') ?? false);
+    final ddiTitle = isCountry
+        ? (isHostLocation ? 'Host Country DDI' : 'Home Country DDI')
+        : (isHostLocation ? 'Host Town DDI' : 'Home Town DDI');
+
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
@@ -357,8 +370,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     onTap: onCreateCommunityOrg,
                   ),
                   // Diaspora Direct Investments: limited to home and host communities
-                  if (community?.locationType == 'host' ||
-                      community?.locationType == 'home')
+                  if (isHostLocation || isHomeLocation) ...[
                     AppBottomSheetItem(
                       icon: LucideIcons.landmark,
                       iconColor: Colors.orange,
@@ -368,12 +380,11 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                         width: 22,
                         height: 22,
                       ),
-                      title: community?.locationType == 'host'
-                          ? 'Host Town DDI'
-                          : 'Home Country DDI',
+                      title: ddiTitle,
                       subtitle: 'Apply for community-backed investment loans',
                       onTap: onDDILoans,
                     ),
+                  ],
                   AppBottomSheetItem(
                     icon: LucideIcons.vote,
                     iconColor: AppTheme.accent,

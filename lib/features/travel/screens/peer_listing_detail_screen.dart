@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/features/travel/widgets/travel_stepper.dart';
 import 'package:diaspora_nearby/features/travel/screens/create_hotel_listing_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/create_car_listing_screen.dart';
 import 'package:diaspora_nearby/features/travel/screens/create_stay_listing_screen.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 /// Detail screen for a peer-to-peer stay, car, or hotel listing,
 /// with booking capability for guests.
@@ -196,6 +197,13 @@ class _PeerListingDetailScreenState
       final user = ref.read(authRepositoryProvider).currentUser;
       final profile = ref.read(userProfileProvider).value;
       if (user == null || profile == null) throw Exception('Not logged in');
+
+      if (widget.listing.isPeerHosting) {
+        final trustData = ref.read(userTrustProvider(user.uid)).value;
+        if (trustData == null || trustData.trustScore < 91) {
+          throw Exception('You need a Trust Score of 91+ to book a free Peer Hosting stay.');
+        }
+      }
 
       final repo = ref.read(peerListingRepositoryProvider);
 
@@ -450,7 +458,7 @@ class _PeerListingDetailScreenState
                                       : _isHotel
                                       ? 'Community Hotel'
                                       : _isStay
-                                      ? listing.propertyType ?? 'Stay'
+                                      ? (listing.isPeerHosting ? 'Peer Hosting' : (listing.propertyType ?? 'Stay'))
                                       : 'Car Rental',
                                   style: const TextStyle(
                                     fontSize: 12,

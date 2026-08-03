@@ -13,7 +13,7 @@ import "./DiasporaToken.sol";
  * Architecture:
  * - Each epoch's total token supply is PRE-MINTED to this contract via mintEpochSupply().
  * - Users can verify on-chain that the exact epoch supply exists and is locked here.
- * - When a DSP milestone is reached, the Cloud Function oracle:
+ * - When a DSP decile milestone is reached, the Cloud Function oracle:
  *   1. Creates a snapshot of all user/treasury balances + PoCT scores
  *   2. Calls executeTGE() with the snapshot
  *   3. Contract distributes from its pre-minted balance by PoCT efficiency, burns the rest
@@ -21,9 +21,9 @@ import "./DiasporaToken.sol";
  * Welcome Bonus Distribution:
  * - On user signup, the oracle calls distributeWelcomeBonus() to instantly convert
  *   the user's DSP welcome bonus (and tribute) to $DIASPORA at 100% efficiency.
- * - This does NOT advance TGE event counters — it's a separate distribution channel.
+ * - This does NOT advance TDE counters — it's a separate distribution channel.
  *
- * Each Epoch has 10 TGE events. After 10 events, the epoch advances.
+ * Each Epoch has 1 TGE and 10 TDE releases. After 10 releases, the epoch advances.
  * Upgradable via UUPS Proxy.
  */
 contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSUpgradeable {
@@ -40,7 +40,7 @@ contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSU
     uint256 public totalMinted;
     uint256 public totalDistributed;
     uint256 public totalBurned;
-    uint256 public tgeCount; // Total TGE events executed
+    uint256 public tgeCount; // Total TDE releases executed; name retained for ABI compatibility
 
     // Epoch supply tracking
     uint256 public epochLockedSupply;   // Total pre-minted for current epoch
@@ -94,7 +94,7 @@ contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSU
 
     /**
      * @dev Pre-mint the epoch's token supply and lock it in this contract.
-     * Called by admin/oracle BEFORE TGE events begin for each epoch.
+     * Called by admin/oracle at epoch TGE before TDE releases begin.
      * Users can verify on-chain that the exact epoch supply exists here.
      *
      * @param amount The total epoch supply to mint (e.g. 1,000,000 * 10^18 for Epoch 1)
@@ -113,15 +113,15 @@ contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSU
     }
 
     /**
-     * @dev Execute a Token Generation Event from a Firestore snapshot.
+     * @dev Execute a Token Distribution Event from a Firestore snapshot.
      * Distributes from the pre-minted epoch supply (no fresh minting).
      *
-     * Called by the Cloud Function oracle when a DSP milestone is reached.
+     * Called by the Cloud Function oracle when a DSP decile milestone is reached.
      * The snapshot includes ALL addresses to receive tokens — users, community
      * treasuries, founders, investors — with their earned DSP and efficiency.
      *
      * For system addresses (treasuries, founders, investors), set efficiency to 100.
-     * For users, efficiency is derived from PoCT score (decile scale: 0-100).
+     * For users, efficiency is derived from PoCT score as an exact whole percent.
      *
      * @param recipients Array of wallet addresses (smart wallets)
      * @param amounts Array of DSP amounts earned (in smallest unit, 18 decimals)
@@ -180,7 +180,7 @@ contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSU
 
         emit TGEExecuted(currentEpoch, currentTgeEvent, batchTotal, batchBurned, recipients.length);
 
-        // Advance TGE event counter
+        // Advance TDE counter
         currentTgeEvent++;
         if (currentTgeEvent >= 10) {
             currentTgeEvent = 0;
@@ -196,12 +196,12 @@ contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSU
      *
      * Called by the Cloud Function oracle on user signup. Mirrors the DSP
      * welcome bonus + tribute distribution, but converts to $DIASPORA at
-     * 100% efficiency immediately (rather than waiting for a TGE milestone).
+     * 100% efficiency immediately (rather than waiting for a TDE milestone).
      *
      * Recipients include the user's wallet AND all treasury wallets
      * (community treasuries, founders, investors, burn) — same pattern as TGE.
      *
-     * Does NOT advance TGE event counters — this is a separate distribution
+     * Does NOT advance TDE counters — this is a separate distribution
      * channel that draws from the same pre-minted epoch supply.
      *
      * @param recipients Array of wallet addresses (user + treasury wallets)
@@ -237,7 +237,7 @@ contract DiasporaTGEController is Initializable, AccessControlUpgradeable, UUPSU
             }
         }
 
-        // Update stats (does NOT advance TGE event counter or epoch)
+        // Update stats (does NOT advance TDE counter or epoch)
         totalDistributed += batchTotal;
         totalWelcomeBonuses += batchTotal;
         epochDistributed += batchTotal;

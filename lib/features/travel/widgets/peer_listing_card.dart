@@ -138,6 +138,8 @@ class PeerListingCard extends StatelessWidget {
                                 ? LucideIcons.hotel
                                 : _isCar
                                 ? LucideIcons.car
+                                : listing.isPeerHosting
+                                ? LucideIcons.plane
                                 : LucideIcons.home,
                             size: 10,
                             color: Colors.white.withValues(alpha: 0.9),
@@ -145,12 +147,14 @@ class PeerListingCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text(
                             _isApiHotel
-                                ? 'Partner'
+                                ? 'Partner Hotel'
                                 : _isHotel
-                                ? 'Community'
+                                ? 'Community Hotel'
                                 : _isCar
                                 ? 'Car Rental'
-                                : listing.propertyType ?? 'Stay',
+                                : listing.isPeerHosting
+                                ? 'Free Peer Host'
+                                : 'Paid Peer Stay (Airbnb Alt)',
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w600,

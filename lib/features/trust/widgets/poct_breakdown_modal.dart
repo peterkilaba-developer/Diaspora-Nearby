@@ -8,7 +8,7 @@ import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 
-/// P.o.C.T breakdown modal showing how a user earned their trust score.
+/// PCT breakdown modal showing how a user earned their trust score.
 /// Opened by tapping the Community Status card on profile page.
 class PoctBreakdownModal extends ConsumerWidget {
   final String userId;
@@ -83,7 +83,7 @@ class PoctBreakdownModal extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
               children: [
-                // P.o.C.T Score Ring
+                // PCT Score Ring
                 SizedBox(
                   width: 56,
                   height: 56,
@@ -120,7 +120,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "$displayName's P.o.C.T Score",
+                        "$displayName's PCT Score",
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -168,7 +168,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Genesis Milestones',
-                        'One-time +10 P.o.C.T at first 10 unique',
+                        'One-time +10 PCT at first 10 unique',
                         LucideIcons.award,
                       ),
                       const SizedBox(height: 12),
@@ -254,7 +254,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Community Participation',
-                        'One-time +10 P.o.C.T per milestone',
+                        'One-time +10 PCT per milestone',
                         LucideIcons.users2,
                       ),
                       const SizedBox(height: 12),
@@ -278,11 +278,11 @@ class PoctBreakdownModal extends ConsumerWidget {
 
                       const SizedBox(height: 24),
 
-                      // === SECTION 4: Trust Slider (Ongoing P.o.C.T) ===
+                      // === SECTION 4: Trust Slider (Ongoing PCT) ===
                       _buildSectionHeader(
                         theme,
                         'Trust Slider Vouches',
-                        '+1 P.o.C.T per 10 unique full-trust (>90) voters',
+                        '+1 PCT per 10 unique full-trust (>90) voters',
                         LucideIcons.heartHandshake,
                       ),
                       const SizedBox(height: 12),
@@ -295,7 +295,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Economic Transactions',
-                        '+1 P.o.C.T per 10 completed P2P/B2B/C2B transactions',
+                        '+1 PCT per 10 completed P2P/B2B/C2B transactions',
                         LucideIcons.arrowLeftRight,
                       ),
                       const SizedBox(height: 12),
@@ -308,7 +308,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Seniority',
-                        '+1 P.o.C.T per 100 days active',
+                        '+1 PCT per 100 days active',
                         LucideIcons.calendar,
                       ),
                       const SizedBox(height: 12),
@@ -321,7 +321,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                       _buildSectionHeader(
                         theme,
                         'Penalties',
-                        '-10 P.o.C.T per 10 occurrences',
+                        '-10 PCT per 10 occurrences',
                         LucideIcons.shieldAlert,
                       ),
                       const SizedBox(height: 12),
@@ -511,7 +511,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
                 if (achieved)
                   Text(
-                    '+$poct P.o.C.T',
+                    '+$poct PCT',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppTheme.accent,
@@ -616,7 +616,7 @@ class PoctBreakdownModal extends ConsumerWidget {
               const SizedBox(width: 12),
               _buildStatChip(
                 theme,
-                'P.o.C.T from Vouches',
+                'PCT from Vouches',
                 '+$poctFromVouches',
                 LucideIcons.award,
                 highlight: poctFromVouches > 0,
@@ -625,7 +625,7 @@ class PoctBreakdownModal extends ConsumerWidget {
           ),
           if (fullTrustVoters > 0) ...[
             const SizedBox(height: 10),
-            // Progress to next P.o.C.T
+            // Progress to next PCT
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
@@ -637,7 +637,7 @@ class PoctBreakdownModal extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${fullTrustVoters % 10} / 10 toward next P.o.C.T',
+              '${fullTrustVoters % 10} / 10 toward next PCT',
               style: TextStyle(
                 fontSize: 11,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -740,7 +740,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${daysActive % 100} / 100 toward next P.o.C.T',
+                  '${daysActive % 100} / 100 toward next PCT',
                   style: TextStyle(
                     fontSize: 11,
                     color: theme.colorScheme.onSurfaceVariant,
@@ -751,7 +751,7 @@ class PoctBreakdownModal extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
           Text(
-            '+$seniorityPoCT P.o.C.T',
+            '+$seniorityPoCT PCT',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -770,7 +770,7 @@ class PoctBreakdownModal extends ConsumerWidget {
       _PenaltyItem('Blocked by users', t?.blockedByCount ?? 0),
       _PenaltyItem('Flagged messages', t?.flaggedMessagesCount ?? 0),
       _PenaltyItem('Reported fraud', t?.reportedFraudCount ?? 0),
-      _PenaltyItem('Fake verifications', t?.fakeVerificationsCount ?? 0),
+
       _PenaltyItem('Event no-shows', t?.eventNoShowCount ?? 0),
       _PenaltyItem(
         'Rejected family requests',
@@ -852,7 +852,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
               ),
               Text(
-                '-$totalPenaltyPoCT P.o.C.T',
+                '-$totalPenaltyPoCT PCT',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -913,7 +913,7 @@ class PoctBreakdownModal extends ConsumerWidget {
               ),
             ),
             Text(
-              achieved ? '+$poct P.o.C.T' : '0 / 1',
+              achieved ? '+$poct PCT' : '0 / 1',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
@@ -955,7 +955,7 @@ class PoctBreakdownModal extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Every 10 completed P2P/B2B/C2B transactions earns +1 P.o.C.T',
+                  'Every 10 completed P2P/B2B/C2B transactions earns +1 PCT',
                   style: TextStyle(
                     fontSize: 11,
                     color: theme.colorScheme.onSurfaceVariant,

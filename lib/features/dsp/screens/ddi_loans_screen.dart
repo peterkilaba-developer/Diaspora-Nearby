@@ -8,6 +8,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -36,9 +37,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
   final _businessNameController = TextEditingController();
   final _businessDescriptionController = TextEditingController();
   final _repaymentPlanController = TextEditingController();
-  String _loanType = 'Business Investment';
+  String _loanType = 'Investments';
   String _repaymentPeriod = '6 months';
-  bool _confirmsHostBusiness = false;
+  bool _confirmsLocalInvestment = false;
 
   @override
   void initState() {
@@ -71,13 +72,24 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final communityName = widget.community?.name ?? 'Your Community';
-    final isHome = widget.community?.locationType == 'home';
-    final title = isHome ? 'Home Country DDI Loans' : 'Host Town DDI Loans';
+    final isHome = widget.community?.locationType == 'home' ||
+        (widget.communityId?.contains('_home_') ?? false) ||
+        (widget.community?.id.contains('_home_') ?? false);
+    final isCountry = widget.community?.type == 'country' ||
+        (widget.communityId?.contains('_country_') ?? false) ||
+        (widget.community?.id.contains('_country_') ?? false);
+    final String title;
+    if (isCountry) {
+      title = isHome ? 'Home Country DDI Loans' : 'Host Country DDI Loans';
+    } else {
+      title = isHome ? 'Home Town DDI Loans' : 'Host Town DDI Loans';
+    }
 
     // Retrieve user trust score
     final uid = ref.watch(authRepositoryProvider).currentUser?.uid ?? '';
     final userPoints = ref.watch(userPointsProvider(uid)).value;
     final trustScore = userPoints?.trustScore ?? 0;
+    final userBalance = userPoints?.availablePoints ?? userPoints?.totalPoints ?? 0;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -129,7 +141,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               if (!_showApplicationForm)
                 _buildApplyButton(theme, isDark)
               else
-                _buildApplicationForm(theme, isDark, isHome, trustScore),
+                _buildApplicationForm(theme, isDark, isHome, trustScore, userBalance),
 
               const SizedBox(height: 28),
               _buildApplicationsSection(theme),
@@ -170,7 +182,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            isHome ? 'Home Country\nDDI Loans' : 'Host Town\nDDI Loans',
+            isHome ? 'Home Town\nDDI Loans' : 'Host Town\nDDI Loans',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 22,
@@ -231,6 +243,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           const SizedBox(height: 14),
           Text(
             'Community-powered, interest-free lending backed by \$DIASPORA tokens. '
+            'Borrowers repay by buying \$DIASPORA on the open market (DEX) and depositing tokens back to the Community Treasury. '
             'Loans cascade from local → country → continental → global treasury.',
             style: TextStyle(
               fontSize: 13,
@@ -244,9 +257,9 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             runSpacing: 10,
             children: [
               _buildTermBadge(theme, '0%', 'Interest'),
-              _buildTermBadge(theme, '\$DIASPORA', 'Collateral'),
-              _buildTermBadge(theme, '3–24 mo', 'Repayment'),
-              _buildTermBadge(theme, 'P.o.C.T 91+', 'Required'),
+              _buildTermBadge(theme, '10% Token', 'Collateral'),
+              _buildTermBadge(theme, 'DEX Buyback', 'Repayment'),
+              _buildTermBadge(theme, 'PCT 91+', 'Required'),
             ],
           ),
         ],
@@ -325,9 +338,31 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
     bool isDark,
     bool isHome,
     int trustScore,
+    int userBalance,
   ) {
     final communityName = widget.community?.name ?? 'this community';
-    final isQualified = trustScore >= 91;
+    final currentUser = ref.watch(authRepositoryProvider).currentUser;
+    final trustData = ref.watch(userTrustProvider(currentUser?.uid ?? '')).value;
+    final profile = ref.watch(userProfileProvider).value;
+    final daysActive = profile?.createdAt != null
+        ? DateTime.now().difference(profile!.createdAt!).inDays
+        : 0;
+
+    final has7Genesis = (trustData?.uniqueFamilyCount ?? 0) >= 10 &&
+        (trustData?.uniqueFriendCount ?? 0) >= 10 &&
+        (trustData?.uniqueQrCount ?? 0) >= 10 &&
+        (trustData?.uniqueVerificationCount ?? 0) >= 10 &&
+        (trustData?.uniqueVouchCount ?? 0) >= 10 &&
+        (trustData?.awardedQualificationMilestones.contains('profile_complete') == true ||
+         trustData?.awardedQualificationMilestones.contains('profileComplete') == true);
+
+    final is100DaysActive = daysActive >= 100;
+    final isPctQualified = trustScore >= 91;
+    final isQualified = trustData?.isDdiEligible ?? (isPctQualified && has7Genesis && is100DaysActive);
+
+    final requestedVal = int.tryParse(_amountController.text.trim()) ?? 0;
+    final requiredCollateral = (requestedVal * 0.10).ceil();
+    final hasSufficientCollateral = userBalance >= requiredCollateral;
 
     return Form(
       key: _formKey,
@@ -387,6 +422,14 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               decoration: _inputDecoration(theme, ''),
               items: const [
                 DropdownMenuItem(
+                  value: 'Investments',
+                  child: Text('Investments'),
+                ),
+                DropdownMenuItem(
+                  value: 'Education and Training',
+                  child: Text('Education and Training'),
+                ),
+                DropdownMenuItem(
                   value: 'Business Investment',
                   child: Text('Business Investment'),
                 ),
@@ -420,14 +463,62 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _amountController,
-              decoration: _inputDecoration(theme, 'e.g. 5000'),
+              decoration: _inputDecoration(theme, 'e.g. 100000'),
               keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Amount is required';
                 final n = int.tryParse(v.trim());
                 if (n == null || n <= 0) return 'Enter a valid amount';
+                final reqCol = (n * 0.10).ceil();
+                if (userBalance < reqCol) {
+                  return 'Needs $reqCol \$DIASPORA collateral (Your balance: $userBalance)';
+                }
                 return null;
               },
+            ),
+            const SizedBox(height: 8),
+
+            // Live 10% Collateral Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: (requestedVal > 0 && !hasSufficientCollateral)
+                    ? Colors.red.withValues(alpha: 0.1)
+                    : AppTheme.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (requestedVal > 0 && !hasSufficientCollateral)
+                      ? Colors.red.withValues(alpha: 0.4)
+                      : AppTheme.accent.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    (requestedVal > 0 && !hasSufficientCollateral)
+                        ? LucideIcons.alertCircle
+                        : LucideIcons.shieldCheck,
+                    size: 14,
+                    color: (requestedVal > 0 && !hasSufficientCollateral)
+                        ? Colors.red
+                        : AppTheme.accent,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '10% Collateral Required: ${requiredCollateral > 0 ? requiredCollateral : 0} \$DIASPORA | Your Balance: $userBalance \$DIASPORA',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: (requestedVal > 0 && !hasSufficientCollateral)
+                            ? Colors.red
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -494,13 +585,13 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             const SizedBox(height: 16),
 
             // Repayment Plan
-            _buildLabel(theme, 'Repayment Plan'),
+            _buildLabel(theme, 'Repayment Plan (Option A — DEX Buyback)'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _repaymentPlanController,
               decoration: _inputDecoration(
                 theme,
-                'How do you plan to repay the loan?',
+                'Describe your revenue & repayment schedule. Repayments buy \$DIASPORA on open market (DEX) and deposit to Treasury.',
               ),
               maxLines: 3,
               validator: (v) => (v == null || v.trim().isEmpty)
@@ -509,49 +600,33 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             ),
             const SizedBox(height: 24),
 
-            if (!isHome) ...[
-              CheckboxListTile(
-                value: _confirmsHostBusiness,
-                onChanged: _isSubmitting
-                    ? null
-                    : (value) => setState(
-                        () => _confirmsHostBusiness = value ?? false,
-                      ),
-                contentPadding: EdgeInsets.zero,
-                activeColor: AppTheme.accent,
-                title: Text(
-                  'This business is based in $communityName',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-                subtitle: Text(
-                  'Host-community DDI loans require P.o.C.T 91+ and are only '
-                  'for businesses operating in this community.',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-              const SizedBox(height: 12),
-            ] else ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: Text(
-                  'Home-country DDI loans require P.o.C.T 91+. '
-                  'While we suggest impactful usage, the community can use the fund however they see fit.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    fontStyle: FontStyle.italic,
-                  ),
+            CheckboxListTile(
+              value: _confirmsLocalInvestment,
+              onChanged: _isSubmitting
+                  ? null
+                  : (value) => setState(
+                      () => _confirmsLocalInvestment = value ?? false,
+                    ),
+              contentPadding: EdgeInsets.zero,
+              activeColor: AppTheme.accent,
+              title: Text(
+                'I confirm this loan will be used locally in $communityName and that I currently live in this community',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
-            ],
+              subtitle: Text(
+                'DDI loans require 91+ PCT, completion of all 7 Genesis Milestones, 100+ days active membership, local investment, and local residence.',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 12),
 
             // Submit Button
             SizedBox(
@@ -572,13 +647,13 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
                     : const Icon(LucideIcons.send, size: 16),
                 label: Text(
                   !isQualified
-                      ? 'Not Qualified (Requires 91+ P.o.C.T)'
+                      ? 'Not Qualified (Requires 91+ PCT, 7 Genesis Milestones & 100+ Days Active)'
                       : _isSubmitting
                       ? 'Saving Application...'
                       : 'Submit Application',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    fontSize: 13,
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -964,16 +1039,15 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
 
   Future<void> _submitApplication() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_confirmsHostBusiness) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Confirm that this business operates in your host community.',
-          ),
-        ),
-      );
-      return;
-    }
+      if (!_confirmsLocalInvestment) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Please confirm that the loan will be used locally.')),
+        );
+        setState(() => _isSubmitting = false);
+        return;
+      }
 
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) {
@@ -1000,7 +1074,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
             'businessDescription': _businessDescriptionController.text.trim(),
             'repaymentPeriod': _repaymentPeriod,
             'repaymentPlan': _repaymentPlanController.text.trim(),
-            'confirmsHostBusiness': _confirmsHostBusiness,
+            'confirmsLocalInvestment': _confirmsLocalInvestment,
           });
       final resultData = Map<String, dynamic>.from(result.data as Map);
       discussionChatId = resultData['discussionChatId'] as String?;
@@ -1043,7 +1117,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           ],
         ),
         content: const Text(
-          'Your P.o.C.T and host-community eligibility gates passed. Your loan '
+          'Your PCT and host-community eligibility gates passed. Your loan '
           'application has been saved, its public discussion group is live, '
           'and the 10-day community vote is open.\n\n'
           'Any community approval remains pending the Token Generation Event '
@@ -1070,7 +1144,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               _businessNameController.clear();
               _businessDescriptionController.clear();
               _repaymentPlanController.clear();
-              _confirmsHostBusiness = false;
+              _confirmsLocalInvestment = false;
             },
             child: const Text(
               'Done',

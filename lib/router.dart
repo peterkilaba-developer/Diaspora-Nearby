@@ -585,6 +585,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return OTPVerificationScreen(
             verificationId: extras['verificationId'] as String,
             phoneNumber: extras['phoneNumber'] as String,
+            isWhatsApp: extras['isWhatsApp'] as bool? ?? false,
           );
         },
       ),

@@ -413,6 +413,12 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _buildEligibilityCriterion(
+                  '7 Genesis Milestones Completed',
+                  isMet:
+                      (trustData?.awardedQualificationMilestones.length ?? 0) >=
+                      7,
+                ),
+                _buildEligibilityCriterion(
                   '100+ Days on App',
                   isMet:
                       profile?.createdAt != null &&
@@ -424,8 +430,8 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
                   isMet: trustData?.isCouncilEligible ?? false,
                 ),
                 _buildEligibilityCriterion(
-                  'P.o.C.T Score ≥ 90',
-                  isMet: (trustData?.trustScore ?? 0) >= 90,
+                  'PCT Score ≥ 91',
+                  isMet: (trustData?.trustScore ?? 0) >= 91,
                 ),
               ],
             );
@@ -666,8 +672,8 @@ class _LeaderSelectionScreenState extends ConsumerState<LeaderSelectionScreen> {
               title: 'No Qualified Candidates',
               message:
                   'No members currently meet all eligibility criteria. '
-                  'Members must be on the app for 100+ days, be an admin of a '
-                  'group chat with 100+ members, and have a P.o.C.T score of 90+.',
+                  'Members must complete all 7 Genesis Milestones, be on the app for 100+ days, be an admin of a '
+                  'group chat with 100+ members, and have a PCT score of 91+.',
             );
           }
 
@@ -1279,7 +1285,7 @@ class _LeaderTile extends ConsumerWidget {
                               Text(
                                 isSigner
                                     ? 'Treasury Key Holder'
-                                    : '${up?.trustScore ?? 0} P.o.C.T',
+                                    : '${up?.trustScore ?? 0} PCT',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: isSigner
@@ -1510,7 +1516,7 @@ class _QualifiedCandidateTile extends ConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${up?.trustScore ?? 0} P.o.C.T · Qualified',
+                                '${up?.trustScore ?? 0} PCT · Qualified',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface.withValues(

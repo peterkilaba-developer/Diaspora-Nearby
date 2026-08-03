@@ -188,10 +188,12 @@ exports.evaluateGovernanceVote = functions.https.onCall(
       for (const memberId of currentCouncil) {
         const memberRole = (unit.councilRoles || {})[memberId];
         if (!memberRole) continue;
-        const memberTally = await getVoteTally(unitId, memberId, memberRole);
-        const loses = memberTally.decisive >= 3 &&
-          (memberTally.yay / memberTally.decisive) < 0.5;
-        if (loses) {
+        // Continuous position in leadership is tracked by PCT (trust slider score),
+        // not actual votes (which are only used to elect candidates into office).
+        const trustSnap = await db.collection("trust_data").doc(memberId).get();
+        const isEligibleByTrustSlider =
+          trustSnap.exists && trustSnap.data().isCouncilEligible === true;
+        if (!isEligibleByTrustSlider) {
           removals.push({userId: memberId, role: memberRole});
         }
       }

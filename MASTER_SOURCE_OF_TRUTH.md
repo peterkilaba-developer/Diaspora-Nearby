@@ -7,12 +7,12 @@ This document is the definitive, multi-dimensional guide to the **Diaspora Nearb
 ## 🌎 1. EXECUTIVE VISION: THE DIASPORA REVOLUTION
 *By Peter Swai*
 
-**Diaspora Nearby** is not just an app; it is a **Reputation-to-Asset Engine**. It is designed to solve the fundamental isolation and economic fragmentation felt by the **Diaspora**.
+**Diaspora Nearby** is not just an app; it is a **Trust-to-Asset Engine**. It is designed to solve the fundamental isolation and economic fragmentation felt by the **Diaspora**.
 
 ### 1.1 The Problem
 - **Digital Fragmentation**: Diaspora communities are scattered across disconnected Silos (WhatsApp groups, Facebook pages, Telegram).
 - **Economic Inefficiency**: Billions in remittances are sent home, but they rarely build sustainable community wealth or infrastructure.
-- **Trust Scarcity**: In a new host country, "who you are" is often lost, forcing you to start your social reputation from zero.
+- **Trust Scarcity**: In a new host country, "who you are" is often lost, forcing you to start your social trust from zero.
 
 ### 1.2 The Solution: The Economic Bridge
 - **The Core Mission**: Fostering global connection while building the economic path for a "Return Home."
@@ -21,7 +21,7 @@ This document is the definitive, multi-dimensional guide to the **Diaspora Nearb
 
 ---
 
-## ⚙️ 2. THE THREE PROTOCOLS (PoI, P.o.S.A, P.o.C.T)
+## ⚙️ 2. THE THREE PROTOCOLS (PoI, PSA, PCT)
 The economy is powered by three interlinking validation protocols.
 
 ### 2.1 Mechanism 1: Proof of Identity (PoI)
@@ -44,12 +44,12 @@ This document is the definitive, multi-dimensional guide to the **Diaspora Nearb
 ## 🌎 1. EXECUTIVE VISION: THE DIASPORA REVOLUTION
 *By Peter Swai*
 
-**Diaspora Nearby** is not just an app; it is a **Reputation-to-Asset Engine**. It is designed to solve the fundamental isolation and economic fragmentation felt by the **Diaspora**.
+**Diaspora Nearby** is not just an app; it is a **Trust-to-Asset Engine**. It is designed to solve the fundamental isolation and economic fragmentation felt by the **Diaspora**.
 
 ### 1.1 The Problem
 - **Digital Fragmentation**: Diaspora communities are scattered across disconnected Silos (WhatsApp groups, Facebook pages, Telegram).
 - **Economic Inefficiency**: Billions in remittances are sent home, but they rarely build sustainable community wealth or infrastructure.
-- **Trust Scarcity**: In a new host country, "who you are" is often lost, forcing you to start your social reputation from zero.
+- **Trust Scarcity**: In a new host country, "who you are" is often lost, forcing you to start your social trust from zero.
 
 ### 1.2 The Solution: The Economic Bridge
 - **The Core Mission**: Fostering global connection while building the economic path for a "Return Home."
@@ -58,7 +58,7 @@ This document is the definitive, multi-dimensional guide to the **Diaspora Nearb
 
 ---
 
-## ⚙️ 2. THE THREE PROTOCOLS (PoI, P.o.S.A, P.o.C.T)
+## ⚙️ 2. THE THREE PROTOCOLS (PoI, P.O.A, PCT)
 The economy is powered by three interlinking validation protocols.
 
 ### 2.1 Mechanism 1: Proof of Identity (PoI)
@@ -74,22 +74,24 @@ Before a user can extract value (TGE), they must prove their humanity and reach 
     - A cryptographic handshake performed via QR code when two users meet in person.
     - This is the "Gold Standard" of identity, awarding the highest trust and point bonuses (10,000 $DIASPORA each).
 
-### 2.2 Mechanism 2: Proof of Social Activities (P.o.S.A)
-**Status**: The Engine.
-Users generate points by participating in the social and economic graph.
+---
+
+### 2.2 Mechanism 2: Proof of Activity (P.O.A) — The DSP Engine
+**Status**: The Activity Engine.
+**DSP (Diaspora Social Points)** represents **Proof of Activity (P.O.A)**. Users generate DSP points by actively participating in the social and economic graph.
 
 | Activity Category | Action | Reward (DSP) | Logic |
 | :--- | :--- | :--- | :--- |
 | **Growth** | New Signup | 1,000 | Baseline entry. |
 | **Viral** | Referral (Both) | 1,000 | Rewarding the expansion of the network. |
 | **Social** | Relationship Accepted | 1,000 | Validating the social graph. |
-| **Chat** | New DM Conversation | 100 | Starting new connections. |
+| **Chat** | New DM Conversation (Both) | 100 each | Starting new connections. |
 | **Chat** | Community Post | 100 | Community engagement. |
-| **Chat** | Message Sent | 10 | Maintaining family ties. |
-| **Utility** | In-App Share | 100 | Sharing diaspora content internally. |
+| **Chat** | Message Sent (Both in DMs) | 10 each | Maintaining family ties. |
+| **Utility** | In-App Share (Both) | 100 each | Sharing diaspora content internally. |
 | **Utility** | Third-Party Share | 100 | Sharing content to external apps. |
-| **Utility** | Link Opened | 10 | When someone opens your shared link. |
-| **Utility** | Content Reactions | 10 | Micro-interactions on posts and messages. |
+| **Utility** | Link Opened (Both) | 10 each | When someone opens your shared link. |
+| **Utility** | Content Reactions (Both) | 10 each | Micro-interactions on posts and messages. |
 | **Utility** | Profile Updates | 10 | Keeping bio and photos fresh. |
 | **Consistency**| Daily Check-in | 10 | Reward for daily app usage. |
 | **Exploration**| Explore Features | 10 | App discovery reward. |
@@ -101,28 +103,57 @@ Users generate points by participating in the social and economic graph.
 | **Streaks** | 10-Day Sharing Streak | +1,000 | Consistency bonus. |
 | **Streaks** | 100-Day Sharing Streak | +10,000 | Long-term commitment bonus. |
 
-### 2.3 Mechanism 3: Proof of Community Trust (P.o.C.T)
-**Status**: The Filter.
-A user's **Trust Score (0-100)** is a mathematical representation of their community standing.
+---
+
+### 2.3 Mechanism 3: Proof of Community Trust (PCT) — The Trust Engine
+**Status**: The Universal Reputation & Governance Filter.
+**$DIASPORA** represents **Proof of Trust (PCT)**, which is derived directly from continuous Proof of Activity (P.O.A). A user's **Trust Score (0-100 PCT)** measures their verified community standing.
+
+#### 🛡️ 1. The Full Prerequisite Gate (7 Genesis Milestones + 91+ PCT)
+To unlock high-trust privileges, a member **must complete all 7 Genesis Milestones AND possess a 91+ PCT score**. This dual qualification is mandatory for:
+1. **Peer Hosting**: Hosting fellow community members in your home.
+2. **Peer Stay**: Staying as a guest in host homes within the network.
+3. **Leadership Candidacy**: Running for or holding an elected Community Leader position.
+4. **Voting Rights**: Voting on Community Leaders and Community Loan Applications.
+
+#### ⏱️ 2. The 100-Day P.O.A Health Index & Status Pause
+- **Active Standing**: Members must perform at least 1 Proof of Activity (P.O.A) action every **100 days** to maintain active 91+ PCT standing.
+- **100-Day Status Pause**: Members can activate a 100-day freeze (max 1 per year) for travel, health, or off-grid periods to pause missed-vote penalties without forfeiting status.
+
+#### 🗳️ 3. Mandatory Governance Voting & Base-10 Penalties
+To maintain active governance and prevent community apathy:
+- **Notification Stop Rule**: Qualified voters receive **1 daily digest notification UNTIL they vote**. Notifications stop immediately once pending ballots are cast or abstained.
+- **Leadership Voting Cadence**: Members must vote for leadership across their hierarchical locations at least **1 time per year**.
+- **Auto-Exemption**: Unqualified members (who have not completed the 7 Genesis Milestones) are exempt from missed-vote penalties.
+- **"Abstain / Reviewed" Option**: Ballots feature an "Abstain" choice, allowing members to satisfy mandatory participation without forcing uneducated decisions.
+- **Base-10 Missed-Vote Penalties**:
+  - Standard Qualified Member: **-1 PCT point** per missed loan application or leadership election vote.
+  - Community Leader: **-10 PCT points** per missed vote (*triggers automatic suspension of leadership privileges until PCT is restored to 91+*).
+- **Civic Recovery Streak**: Voting on **10 consecutive proposals/elections** awards a **+1 PCT Recovery Bonus** (up to original baseline).
+
+#### 🏠 4. Peer Hosting Feedback Loop
+- **Successful Stay (Mutual 5-Star Reviews)**: Awards **+1 PCT point** to both host and guest.
+- **Verified Misconduct Violation**: Triggers a **-10 PCT points penalty**, immediately dropping bad actors below the 91+ threshold.
+
+#### 🏷️ 5. Dual Profile Trust Badges
+- 🛡️ **Genesis Verified**: Completed all 7 Genesis Milestones.
+- 👑 **PCT 91+ Sovereign**: Unlocked Peer Host, Peer Stay, & Leadership Candidacy.
 
 - **The HTS Ledger (Human Trust System)**:
     - Points and Score are tracked in a verifiable ledger.
-    - **Genesis Milestones (One-Time +10 P.o.C.T)**: Each of the 5 Genesis categories awards **+10 P.o.C.T once** when reaching **10 unique users/fields** (Family, Friends, QR Exchange, Vouch/Verify, Profile). After the first 10, activities continue to earn DSP but **no more P.o.C.T**. Max from Genesis Milestones = **50 P.o.C.T** (5 × 10).
-    - **Connection DSP**: For connections (Family, Friends, QR, Trust), you earn 1,000 DSP **instantly** per connection, regardless of milestone status.
-    - **Profile Completion (The Genesis Exception)**: The only milestone that delays both DSP and P.o.C.T. It pays nothing until fully complete (10 fields), then releases 10,000 DSP + 10 P.o.C.T at once.
-    - **Trust Slider Staking (The Two-Sided Prediction Market)**: Users rate others via a 1-100 trust slider. Rating anyone earns **1,000 DSP**.
-        - **No Trust (1-10)**: The 1,000 DSP is instantly locked as a **Stake against** the user.
-        - **Standard Trust (11-90)**: The 1,000 DSP is earned **free and clear** (no stake).
-        - **Full Trust (91-100)**: The 1,000 DSP is instantly locked as a **Stake for** the user.
-    - **P.o.C.T Impact**: P.o.C.T is calculated based on **Net Vouches** (Total Full Trust - Total No Trust). Every +10 Net = **+1 P.o.C.T**. Every -10 Net = **-1 P.o.C.T**.
+    - **Genesis Milestones (One-Time +10 PCT)**: Each Genesis category awards **+10 PCT once** upon reaching 10 unique verifications/fields. Max from Genesis Milestones = **70 PCT** (7 × 10).
+    - **Connection DSP**: For connections (Family, Friends, QR, Trust), you earn 1,000 DSP **instantly** per connection.
+    - **Profile Completion (The Genesis Exception)**: Pays nothing until fully complete (10 fields), then releases 10,000 DSP + 10 PCT at once.
+    - **Trust Slider Staking (Two-Sided Prediction Market)**: Users rate others via a 1-100 trust slider (No Trust 1-10 locks stake against; Full Trust 91-100 locks stake for).
+    - **Net Vouches**: Every +10 Net Vouches = **+1 PCT**. Every -10 Net = **-1 PCT**.
 
 ---
 
-## 🏦 3. ECONOMIC ARCHITECTURE (1:1 EXPANSION)
-We utilize a **Constant-Earning, Variable-Scarcity** model.
+## 🏦 3. ECONOMIC ARCHITECTURE: THE UBUNTU PROTOCOL (1:1 EXPANSION)
+We utilize a **Constant-Earning, Variable-Scarcity** model based on the philosophy of *Ubuntu* ("I am because we are"). This philosophy powers both the 1:1 Matching Expansion and the separate Community Emergency Fund.
 
-### 3.1 The 1:1 Expansion Rule
-For every **1.0 DSP** earned by a user through P.o.S.A, the system mints an additional **1.0 DSP** in "Matching Supply" for treasuries.
+### 3.1 The Ubuntu Protocol (1:1 Expansion)
+For every **1.0 DSP** earned by a user through PSA, the system mints an additional **1.0 DSP** in "Matching Supply" for the hierarchical dual geographic community treasuries.
 - **User Reward (50%)**: Direct liquidity for the contributor.
 - **System Match (50%)**: Collective wealth divided into 10 Slots.
 
@@ -236,25 +267,27 @@ All in-app economic activities are **completely free of DSP fees**:
 
 This design decision reflects the principle that **spending money to spend more money is not appealing**. The economy grows through activity, not taxation.
 
-### 7.2 Community-Driven Penalties
-| Penalty | Cost ($DIASPORA) | Trigger |
+### 7.2 Community-Driven Penalties & Governance Slashing
+| Penalty | Cost / Effect | Trigger |
 | :--- | :--- | :--- |
-| **Spam Report** | -100 | Per report |
-| **Chat Ad Penalty** | -1,000 | 10 unique reports |
-| **Relationship Rejection** | -1,000 | Rejected request |
-| **Event No-Show** | -1,000 | Confirmed absence |
-| **Misinformation** | -1,000 | Community flagged |
-| **Fake Verification** | -1,000 | False identity claim |
-| **Vouching Bad Actor** | -1,000 | Backed a fraudster |
-| **Unresponsive Liaison** | -100 | Failed community duties |
-| **Deceptive Org** | -10,000 | Fraudulent business |
-| **Confirmed Fraud** | -10,000 | Proven fraud |
+| **Spam Report** | -100 DSP | Per report |
+| **Chat Ad Penalty** | -1,000 DSP | 10 unique reports |
+| **Relationship Rejection** | -1,000 DSP | Rejected request |
+| **Event No-Show** | -1,000 DSP | Confirmed absence |
+| **Misinformation** | -1,000 DSP | Community flagged |
+| **Vouching Bad Actor** | -1,000 DSP | Backed a fraudster |
+| **Unresponsive Liaison** | -100 DSP | Failed community duties |
+| **Deceptive Org** | -10,000 DSP | Fraudulent business |
+| **Confirmed Fraud** | -10,000 DSP | Proven fraud |
+| **Missed Governance Vote (Member)** | **-1 PCT** | Skipping loan/election vote |
+| **Missed Governance Vote (Leader)** | **-10 PCT** | Skipping loan/election vote (triggers auto-suspension) |
+| **Peer Host Violation** | **-10 PCT** | Verified host/guest misconduct |
 
 ### 7.3 Protocol Burns
 - **10% Fixed Expansion Burn**: 10% of every 1:1 system match is permanently destroyed.
 - **Unassigned Slot Burn**: Community slots without members are burned.
 - **Unclaimed TGE Burn**: Tokens below gates (user < 10,000 or community < 1,000,000) are burned on-chain.
-- **P.o.C.T Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
+- **PCT Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
 
 ---
 

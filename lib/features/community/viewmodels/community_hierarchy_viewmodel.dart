@@ -6,6 +6,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/community/models/hierarchy_item.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
@@ -528,6 +529,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
 
     // Combine for final children
     final hierarchyChildren = [...continentHierarchy, ...orphanHomeCountries];
+
+    final isGlobalUnlocked = ref.read(isGlobalUnlockedSyncProvider);
+    if (!isGlobalUnlocked) {
+      return hierarchyChildren;
+    }
 
     return [
       HierarchyItem(

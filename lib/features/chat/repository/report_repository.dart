@@ -48,7 +48,7 @@ class ReportRepository {
       });
 
       // 3. Every unique new report on this user contributes 1 to
-      //    profile.flaggedMessagesCount. P.o.C.T loss = -10 per 10 unique flags
+      //    profile.flaggedMessagesCount. PCT loss = -10 per 10 unique flags
       //    (see TrustService.recalculateTrustScore).
       await _ref
           .read(trustServiceProvider)
@@ -105,7 +105,7 @@ class ReportRepository {
       });
 
       // 3. Every unique new report contributes 1 to
-      //    profile.flaggedMessagesCount. P.o.C.T loss = -10 per 10 unique flags
+      //    profile.flaggedMessagesCount. PCT loss = -10 per 10 unique flags
       //    (see TrustService.recalculateTrustScore).
       await _ref
           .read(trustServiceProvider)
