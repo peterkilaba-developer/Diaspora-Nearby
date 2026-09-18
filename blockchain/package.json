@@ -17,7 +17,7 @@
         "@openzeppelin/hardhat-upgrades": "^4.0.2",
         "chai": "^6.2.2",
         "ethers": "^6.17.0",
-        "hardhat": "^3.9.1",
+        "hardhat": "^3.17.0",
         "mocha": "^11.7.6"
     },
     "dependencies": {
