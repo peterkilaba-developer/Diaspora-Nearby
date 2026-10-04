@@ -20,7 +20,7 @@
         "firebase-functions": "^7.2.5",
         "geofire-common": "^6.0.0",
         "googleapis": "^171.4.0",
-        "libphonenumber-js": "^1.11.7",
+        "libphonenumber-js": "^1.13.8",
         "stripe": "^20.4.0"
     },
     "devDependencies": {
