@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -68,16 +67,16 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Interested Hosts',
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
                         '${hostIds.length} host${hostIds.length == 1 ? '' : 's'} responded',
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 13,
                           color: Theme.of(
                             context,
@@ -115,7 +114,7 @@ class _InterestedHostsSheetState extends ConsumerState<InterestedHostsSheet> {
                   const SizedBox(height: 12),
                   Text(
                     'No hosts have shown interest yet',
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       fontSize: 15,
                       color: Theme.of(
                         context,
@@ -353,7 +352,7 @@ class _HostTile extends ConsumerWidget {
                           profile.firstName.isNotEmpty
                               ? profile.firstName[0].toUpperCase()
                               : '?',
-                          style: GoogleFonts.outfit(
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppTheme.accent,
                           ),
@@ -372,7 +371,7 @@ class _HostTile extends ConsumerWidget {
                     children: [
                       Text(
                         profile.fullName,
-                        style: GoogleFonts.outfit(
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
@@ -382,7 +381,7 @@ class _HostTile extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Tap to view profile',
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 12,
                           color: AppTheme.accent.withValues(alpha: 0.7),
                         ),
@@ -422,9 +421,9 @@ class _HostTile extends ConsumerWidget {
                             color: Colors.white,
                           ),
                         )
-                      : Text(
+                      : const Text(
                           'Select',
-                          style: GoogleFonts.outfit(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),

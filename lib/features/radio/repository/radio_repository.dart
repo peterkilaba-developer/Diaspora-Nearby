@@ -124,6 +124,7 @@ class RadioRepository {
       final snapshot = await _firestore
           .collection('radio_station_health')
           .where('failureCount', isGreaterThan: 3)
+          .limit(200)
           .get();
 
       _unreliableStationsCache = snapshot.docs.map((d) => d.id).toSet();
@@ -212,6 +213,7 @@ class RadioRepository {
           .doc(userId)
           .collection('radio_favorites')
           .orderBy('addedAt', descending: true)
+          .limit(500)
           .get();
 
       return snapshot.docs

@@ -187,7 +187,8 @@ class _MediaPreviewScreenState extends ConsumerState<MediaPreviewScreen>
               onSendAudioFile: (_, _) {},
               onSendDocument: (_, _) {},
               // onSendLocation: null, // Optional now
-              onSendDSP: (_, _, _) {},
+              onSendToken: (_, _) {},
+              onSendFiat: (_, _, _, _, _, _) {},
               onCancelReply: () {},
               showAttachmentButton: false, // Hide attachments
               showAudioRecording: false, // Hide audio

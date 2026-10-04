@@ -14,8 +14,8 @@ void main() {
     print('Scenario 1 (2200 DSP, 2 Members): $steps Steps');
 
     // Scenario 2: Target Met
-    steps = service.getCompletedTgeEvents(1000000, 100);
-    print('Scenario 2 (1M DSP, 100 Members): $steps Steps');
+    steps = service.getCompletedTgeEvents(1000000, 10);
+    print('Scenario 2 (1M DSP, 10 Members): $steps Steps');
 
     // Scenario 3: Small
     steps = service.getCompletedTgeEvents(1000, 1);

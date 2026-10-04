@@ -90,11 +90,8 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             '✅ Auto-filled phone: ${bestMatch.dialCode} $remainingNumber',
           );
 
-          // Auto-submit for "One Tap" experience
-          // Use a small delay to ensure state and UI are ready
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) _submit();
-          });
+          // Do not auto-submit SMS here. The phone hint should populate the
+          // form while still allowing the user to choose SMS or WhatsApp.
         } else {
           // Fallback: Just set the text if we can't parse country
           // But usually 'hint' returns E.164 format
@@ -157,8 +154,13 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     );
   }
 
-  void _submit() {
-    if (_phoneController.text.trim().isEmpty) return;
+  String? _validatedPhoneNumber() {
+    if (_phoneController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your phone number.')),
+      );
+      return null;
+    }
 
     // Combine dial code + user-entered digits, then run through libphonenumber
     // to validate against country metadata.
@@ -182,7 +184,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid phone number.')),
       );
-      return;
+      return null;
     }
     if (!normalized.isValid) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,10 +194,24 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
           ),
         ),
       );
-      return;
+      return null;
     }
 
+    return e164;
+  }
+
+  void _submit() {
+    final e164 = _validatedPhoneNumber();
+    if (e164 == null) return;
+
     ref.read(authControllerProvider.notifier).signInWithPhone(context, e164);
+  }
+
+  void _submitWhatsApp() {
+    final e164 = _validatedPhoneNumber();
+    if (e164 == null) return;
+
+    ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, e164);
   }
 
   @override
@@ -372,14 +388,18 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                           color: theme.colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'Country: ${_selectedCountry.name}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.primary,
+                        Expanded(
+                          child: Text(
+                            'Country: ${_selectedCountry.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         GestureDetector(
                           onTap: _showCountryPicker,
                           child: Text(
@@ -428,11 +448,15 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                                     ),
                                   ),
                                   SizedBox(width: 12),
-                                  const Text(
-                                    'Securing connection...',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                  Flexible(
+                                    child: Text(
+                                      'Securing connection...',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -447,33 +471,33 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // WhatsApp Fallback Button
-                    if (!isLoading)
-                      SizedBox(
-                        height: 56,
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            // Extract phone number in E.164
-                            final e164Number = '${_selectedCountry.dialCode}${_phoneController.text.trim()}';
-                            ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, e164Number);
-                          },
-                          icon: const Icon(LucideIcons.messageCircle, color: Colors.green),
-                          label: const Text(
-                            'Sign in with WhatsApp',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
+                    // Keep the alternative visible while an auth request is
+                    // active so the available sign-in methods do not appear
+                    // to change or disappear.
+                    SizedBox(
+                      height: 56,
+                      child: OutlinedButton.icon(
+                        onPressed: isLoading ? null : _submitWhatsApp,
+                        icon: const Icon(LucideIcons.messageCircle),
+                        label: const Text(
+                          'Sign in with WhatsApp',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.green, width: 2),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.green,
+                          disabledForegroundColor: Colors.green.withValues(
+                            alpha: 0.45,
+                          ),
+                          side: const BorderSide(color: Colors.green, width: 2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
+                    ),
                     const SizedBox(height: 16),
 
                     // Terms of Service & Privacy Policy

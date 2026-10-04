@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:intl/intl.dart';
@@ -47,23 +46,59 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/chats');
+            }
+          },
+        ),
+        title: const Text(
           'Notifications',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 20),
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
         ),
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(LucideIcons.moreVertical, size: 20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             onSelected: (value) {
-              if (value == 'mark_all_read') _markAllRead();
-              if (value == 'clear_all') _clearAll();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                if (value == 'mark_all_read') _markAllRead();
+                if (value == 'clear_all') _clearAll();
+              });
             },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
+            itemBuilder: (context) => [
+              PopupMenuItem(
                 value: 'mark_all_read',
-                child: Text('Mark all as read'),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.checkCheck,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Mark all as read'),
+                  ],
+                ),
               ),
-              const PopupMenuItem(value: 'clear_all', child: Text('Clear all')),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'clear_all',
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.trash2, size: 16, color: AppTheme.error),
+                    SizedBox(width: 8),
+                    Text('Clear all', style: TextStyle(color: AppTheme.error)),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -71,11 +106,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           controller: _tabController,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          labelStyle: GoogleFonts.outfit(
+          labelStyle: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
-          unselectedLabelStyle: GoogleFonts.outfit(
+          unselectedLabelStyle: const TextStyle(
             fontWeight: FontWeight.w400,
             fontSize: 14,
           ),
@@ -137,17 +172,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                     ).colorScheme.onSurface.withValues(alpha: 0.3),
                   ),
                   const SizedBox(height: 12),
-                  Text(
+                  const Text(
                     'Error loading notifications',
-                    style: GoogleFonts.outfit(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '$e',
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(
                         context,
@@ -224,7 +256,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       padding: const EdgeInsets.only(left: 6),
       child: Text(
         '$count',
-        style: GoogleFonts.outfit(
+        style: const TextStyle(
           color: AppTheme.error,
           fontSize: 11,
           fontWeight: FontWeight.w700,
@@ -254,7 +286,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           const SizedBox(height: 12),
           Text(
             title,
-            style: GoogleFonts.outfit(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
               color: Theme.of(
@@ -265,7 +297,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: GoogleFonts.outfit(
+            style: TextStyle(
               fontSize: 13,
               color: Theme.of(
                 context,
@@ -313,22 +345,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       ref.read(notificationsRepositoryProvider).markAsRead(userId, item.id);
     }
 
+    String? route;
+    bool isGoRoute = false;
+
     // Navigate based on type
     switch (item.type) {
       case NotificationType.hostingInterest:
-        // Tap card → open the host's full profile
         final hostId = item.payload['hostId'] as String?;
-        if (hostId != null) {
-          context.push('/profile/$hostId');
+        if (hostId != null && hostId.isNotEmpty) {
+          route = '/profile/$hostId';
         }
         break;
       case NotificationType.hostingSelected:
       case NotificationType.hostingSessionEvent:
         final chatId = item.payload['chatId'] as String?;
-        if (chatId != null) {
-          context.push('/chats/$chatId');
+        if (chatId != null && chatId.isNotEmpty) {
+          route = '/chats/$chatId';
         }
-        // Mark as completed when tapped
         if (userId != null && item.actionRequired && !item.actionCompleted) {
           ref
               .read(notificationsRepositoryProvider)
@@ -338,16 +371,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.relationshipRequest:
         final fromUserId = item.payload['fromUserId'] as String?;
         final requestId = item.payload['requestId'] as String?;
-        if (fromUserId != null) {
-          context.push(
-            '/profile/$fromUserId?requestId=${requestId ?? ''}&action=review',
-          );
+        if (fromUserId != null && fromUserId.isNotEmpty) {
+          route =
+              '/profile/$fromUserId?requestId=${requestId ?? ''}&action=review';
         }
         break;
       case NotificationType.relationshipAccepted:
         final chatId = item.payload['chatId'] as String?;
-        if (chatId != null) {
-          context.push('/chats/$chatId');
+        if (chatId != null && chatId.isNotEmpty) {
+          route = '/chats/$chatId';
         }
         if (userId != null && item.actionRequired && !item.actionCompleted) {
           ref
@@ -357,12 +389,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
       case NotificationType.groupInvitation:
         final chatId = item.payload['chatId'] as String?;
-        if (chatId != null) {
-          context.push('/chats/$chatId/info');
+        if (chatId != null && chatId.isNotEmpty) {
+          route = '/chats/$chatId/info';
         }
         break;
       case NotificationType.proxyRequest:
-        context.push('/dsp/emergency-fund');
+        route = '/dsp/emergency-fund';
         if (userId != null && item.actionRequired && !item.actionCompleted) {
           ref
               .read(notificationsRepositoryProvider)
@@ -371,10 +403,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         break;
       case NotificationType.dspTransfer:
         final chatId = item.payload['chatId'] as String?;
-        if (chatId != null) {
-          context.push('/chats/$chatId');
+        if (chatId != null && chatId.isNotEmpty) {
+          route = '/chats/$chatId';
         } else {
-          context.push('/dsp/points');
+          route = '/dsp/points';
         }
         break;
 
@@ -386,9 +418,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.travelTripReminder:
         final chatId = item.payload['chatId'] as String?;
         if (chatId != null && chatId.isNotEmpty) {
-          context.push('/chats/$chatId');
+          route = '/chats/$chatId';
         } else {
-          context.push('/dsp/travel/stays');
+          route = '/dsp/travel/stays';
         }
         if (userId != null && item.actionRequired && !item.actionCompleted) {
           ref
@@ -404,10 +436,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.eventCancelled:
       case NotificationType.eventNewAttendee:
         final eventId = item.payload['eventId'] as String?;
-        if (eventId != null) {
-          context.push('/events/$eventId');
+        if (eventId != null && eventId.isNotEmpty) {
+          route = '/events/$eventId';
         } else {
-          context.push('/events');
+          route = '/events';
+          isGoRoute = true;
         }
         break;
 
@@ -415,7 +448,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.electionStarted:
       case NotificationType.electionEndingSoon:
       case NotificationType.electionResults:
-        context.push('/communities');
+        route = '/communities';
+        isGoRoute = true;
         if (userId != null && item.actionRequired && !item.actionCompleted) {
           ref
               .read(notificationsRepositoryProvider)
@@ -427,13 +461,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.marketplaceInquiry:
         final chatId = item.payload['chatId'] as String?;
         if (chatId != null && chatId.isNotEmpty) {
-          context.push('/chats/$chatId');
+          route = '/chats/$chatId';
         } else {
           final listingId = item.payload['listingId'] as String?;
-          if (listingId != null) {
-            context.push('/marketplace/listing/$listingId');
+          if (listingId != null && listingId.isNotEmpty) {
+            route = '/marketplace/listing/$listingId';
           } else {
-            context.push('/marketplace');
+            route = '/marketplace';
+            isGoRoute = true;
           }
         }
         if (userId != null && item.actionRequired && !item.actionCompleted) {
@@ -445,10 +480,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.marketplaceStatusChange:
       case NotificationType.marketplacePriceDrop:
         final listingId = item.payload['listingId'] as String?;
-        if (listingId != null) {
-          context.push('/marketplace/listing/$listingId');
+        if (listingId != null && listingId.isNotEmpty) {
+          route = '/marketplace/listing/$listingId';
         } else {
-          context.push('/marketplace');
+          route = '/marketplace';
+          isGoRoute = true;
         }
         break;
 
@@ -456,9 +492,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.realEstateInquiry:
         final chatId = item.payload['chatId'] as String?;
         if (chatId != null && chatId.isNotEmpty) {
-          context.push('/chats/$chatId');
+          route = '/chats/$chatId';
         } else {
-          context.push('/dsp/real-estate/buy');
+          route = '/dsp/real-estate/buy';
         }
         if (userId != null && item.actionRequired && !item.actionCompleted) {
           ref
@@ -469,7 +505,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.realEstateMatch:
       case NotificationType.realEstatePriceChange:
       case NotificationType.realEstateStatusChange:
-        context.push('/dsp/real-estate/buy');
+        route = '/dsp/real-estate/buy';
         break;
 
       // ── Trust & Verification ──
@@ -478,33 +514,47 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.trustFullTrustReceived:
         final fromUserId = item.payload['fromUserId'] as String?;
         if (fromUserId != null && fromUserId.isNotEmpty) {
-          context.push('/profile/$fromUserId');
+          route = '/profile/$fromUserId';
         }
         break;
       case NotificationType.trustMilestone:
-        break; // Just informational
+        break;
 
       // ── Community ──
       case NotificationType.communityJoined:
       case NotificationType.communityNewMember:
-        context.push('/communities');
+        route = '/communities';
+        isGoRoute = true;
         break;
 
       // ── Organization ──
       case NotificationType.orgInvitation:
       case NotificationType.orgAnnouncement:
-        break; // Future: navigate to org detail
+        break;
 
       // ── Emergency Fund ──
       case NotificationType.emergencyFundStaked:
       case NotificationType.emergencyFundPaymentSuccess:
       case NotificationType.emergencyFundMembershipActive:
       case NotificationType.emergencyFundDspRefunded:
-        context.push('/dsp/emergency-fund');
+        route = '/dsp/emergency-fund';
         break;
 
       case NotificationType.system:
         break;
+    }
+
+    if (route != null) {
+      final targetRoute = route;
+      final targetIsGo = isGoRoute;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (targetIsGo) {
+          context.go(targetRoute);
+        } else {
+          context.push(targetRoute);
+        }
+      });
     }
   }
 
@@ -512,16 +562,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
 
+    String? route;
+    bool isGoRoute = false;
+
     switch (action) {
       case 'select_host':
         _selectHost(item);
-        break;
+        return;
       case 'reject_host':
         _rejectHost(item);
-        break;
+        return;
       case 'view_chat':
         final chatId = item.payload['chatId'] as String?;
-        if (chatId != null && chatId.isNotEmpty) context.push('/chats/$chatId');
+        if (chatId != null && chatId.isNotEmpty) {
+          route = '/chats/$chatId';
+        }
         ref
             .read(notificationsRepositoryProvider)
             .markActionCompleted(userId, item.id);
@@ -530,33 +585,51 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         final profileId =
             item.payload['fromUserId'] as String? ??
             item.payload['hostId'] as String?;
-        if (profileId != null) context.push('/profile/$profileId');
+        if (profileId != null && profileId.isNotEmpty) {
+          route = '/profile/$profileId';
+        }
         break;
       case 'view_event':
         final eventId = item.payload['eventId'] as String?;
-        if (eventId != null) context.push('/events/$eventId');
+        if (eventId != null && eventId.isNotEmpty) {
+          route = '/events/$eventId';
+        }
         ref
             .read(notificationsRepositoryProvider)
             .markActionCompleted(userId, item.id);
         break;
       case 'view_listing':
         final listingId = item.payload['listingId'] as String?;
-        if (listingId != null) {
-          context.push('/marketplace/listing/$listingId');
+        if (listingId != null && listingId.isNotEmpty) {
+          route = '/marketplace/listing/$listingId';
         }
         ref
             .read(notificationsRepositoryProvider)
             .markActionCompleted(userId, item.id);
         break;
       case 'view_election':
-        context.push('/communities');
+        route = '/communities';
+        isGoRoute = true;
         ref
             .read(notificationsRepositoryProvider)
             .markActionCompleted(userId, item.id);
         break;
       case 'dismiss':
         _dismissNotification(item);
-        break;
+        return;
+    }
+
+    if (route != null) {
+      final targetRoute = route;
+      final targetIsGo = isGoRoute;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (targetIsGo) {
+          context.go(targetRoute);
+        } else {
+          context.push(targetRoute);
+        }
+      });
     }
   }
 
@@ -660,8 +733,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             content: Text('${hostProfile.fullName} selected as your host!'),
           ),
         );
-        // Navigate to the DM
-        context.push('/chats/${chat.id}');
+        final targetChatId = chat.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            context.push('/chats/$targetChatId');
+          }
+        });
       }
     } catch (e) {
       debugPrint('Error selecting host: $e');
@@ -734,13 +811,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         .deleteNotification(userId, item.id);
   }
 
-  void _markAllRead() {
+  Future<void> _markAllRead() async {
     final userId = ref.read(authRepositoryProvider).currentUser?.uid;
     if (userId == null) return;
-    ref.read(notificationsRepositoryProvider).markAllAsRead(userId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('All notifications marked as read')),
-    );
+    try {
+      await ref.read(notificationsRepositoryProvider).markAllAsRead(userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All notifications marked as read')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error marking read: $e')));
+      }
+    }
   }
 
   void _clearAll() {
@@ -749,18 +836,33 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Clear all notifications?'),
         content: const Text('This cannot be undone.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.read(notificationsRepositoryProvider).clearAll(userId);
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              try {
+                await ref
+                    .read(notificationsRepositoryProvider)
+                    .clearAll(userId);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('All notifications cleared')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error clearing notifications: $e')),
+                  );
+                }
+              }
             },
             child: const Text('Clear', style: TextStyle(color: AppTheme.error)),
           ),
@@ -834,7 +936,7 @@ class _NotificationCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             item.title,
-                            style: GoogleFonts.outfit(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: item.isRead
                                   ? FontWeight.w500
@@ -844,7 +946,7 @@ class _NotificationCard extends StatelessWidget {
                         ),
                         Text(
                           timeago.format(item.createdAt, allowFromNow: true),
-                          style: GoogleFonts.outfit(
+                          style: TextStyle(
                             fontSize: 11,
                             color: Theme.of(
                               context,
@@ -858,7 +960,7 @@ class _NotificationCard extends StatelessWidget {
                     // Body
                     Text(
                       item.body,
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(
                           context,
@@ -878,17 +980,17 @@ class _NotificationCard extends StatelessWidget {
                     // ── Completed badge ──
                     if (item.actionRequired && item.actionCompleted) ...[
                       const SizedBox(height: 8),
-                      Row(
+                      const Row(
                         children: [
-                          const Icon(
+                          Icon(
                             LucideIcons.checkCircle,
                             size: 14,
                             color: AppTheme.success,
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4),
                           Text(
                             'Completed',
-                            style: GoogleFonts.outfit(
+                            style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.success,
                               fontWeight: FontWeight.w500,
@@ -1231,7 +1333,7 @@ class _NotificationCard extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 label,
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: color,

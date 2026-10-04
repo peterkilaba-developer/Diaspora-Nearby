@@ -104,7 +104,11 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
      * @dev Called via `upgrades.upgradeProxy(..., { call: { fn: 'initializeV2', args: [...] } })`.
      *      Reinitializer(2) makes it callable exactly once on an upgraded proxy.
      */
-    function initializeV2(uint256 _maxWelcomeBonusPerRecipient) reinitializer(2) external {
+    function initializeV2(uint256 _maxWelcomeBonusPerRecipient)
+        reinitializer(2)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(_maxWelcomeBonusPerRecipient > 0, "TGE: zero max");
         maxWelcomeBonusPerRecipient = _maxWelcomeBonusPerRecipient;
         emit MaxWelcomeBonusUpdated(0, _maxWelcomeBonusPerRecipient);

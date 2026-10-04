@@ -118,16 +118,16 @@
     <!-- HERO -->
     <section class="wp-hero">
         <div class="container">
-            <div class="section-label orange"><i data-lucide="file-text" style="width:14px;height:14px"></i> Token Whitepaper</div>
+            <div class="section-label orange"><i data-lucide="shield-check" style="width:14px;height:14px"></i> Technical Specification · Live Deployed Protocol</div>
             <h1>The <span class="accent-orange">$DIASPORA</span> Token</h1>
             <p>
-                A comprehensive overview of the world's first Trust-to-Asset Engine — covering tokenomics, 
-                smart contracts, the dynamic valuation model, epoch-based scaling, governance, and the team building it.
+                The formal technical specification of the deployed $DIASPORA protocol — covering live smart contracts on Ethereum Base Blockchain, 
+                self-custodial smart wallet infrastructure, real-time valuation, epoch scaling, and production economic engine.
             </p>
             <div class="wp-meta">
-                <div class="wp-meta-item"><i data-lucide="calendar" style="width:14px;height:14px"></i> Last Updated: March 12, 2026</div>
-                <div class="wp-meta-item"><i data-lucide="layers" style="width:14px;height:14px"></i> Version 1.0</div>
-                <div class="wp-meta-item"><i data-lucide="shield-check" style="width:14px;height:14px"></i> Coinbase L2 Base Blockchain (Chain ID: 8453)</div>
+                <div class="wp-meta-item"><i data-lucide="check-circle-2" style="width:14px;height:14px;color:var(--sage)"></i> Status: Fully Implemented &amp; Live Deployed</div>
+                <div class="wp-meta-item"><i data-lucide="layers" style="width:14px;height:14px"></i> Version 1.0 (Production)</div>
+                <div class="wp-meta-item"><i data-lucide="shield-check" style="width:14px;height:14px"></i> Ethereum Base Blockchain (Chain ID: 8453)</div>
             </div>
         </div>
     </section>
@@ -144,7 +144,7 @@
                 <li><a href="#dsp-vs-diaspora">DSP vs $DIASPORA</a></li>
                 <li><a href="#earning-model">How You Earn</a></li>
                 <li><a href="#distribution">Token Distribution Model</a></li>
-                <li><a href="#epoch-scaling">Epoch Scaling & TGE</a></li>
+                <li><a href="#epoch-scaling">Epoch Scaling, TGE, TDE & The Great Reset</a></li>
                 <li><a href="#valuation">Dynamic Valuation Model</a></li>
                 <li><a href="#smart-contracts">Smart Contracts</a></li>
                 <li><a href="#security">Security Architecture</a></li>
@@ -160,18 +160,31 @@
         <div class="wp-section" id="abstract">
             <h2>1. Abstract</h2>
             <p>
-                Diaspora Nearby is the world's first <strong>Trust-to-Asset Engine</strong> — a platform that converts 
-                social capital and community participation into liquid, on-chain assets. The $DIASPORA token (ERC-20 on Coinbase L2 Base Blockchain) 
-                represents the economic layer of a social network purpose-built for the global diaspora community.
+                Diaspora Nearby is the world's first <strong>Trust-to-Asset Engine</strong> — a deployed, live sovereign platform that converts 
+                social capital and community participation into liquid, on-chain assets. Unlike conceptual whitepaper projects, 
+                every smart contract, algorithm, and economic mechanism documented here is <strong>fully implemented, audited, and running in production code</strong> 
+                across the Ethereum Base Blockchain, mobile apps, and global infrastructure.
             </p>
             <p>
-                Unlike traditional tokens that are purchased, $DIASPORA is primarily <strong>earned</strong> through daily social activity — 
-                making it one of the few tokens whose value is directly derived from genuine human engagement rather than speculation.
+                Unlike traditional tokens that rely on speculative pre-sales or ICOs, $DIASPORA is exclusively <strong>earned</strong> through daily human engagement, 
+                verified trust, and real economic activity across our dual-geographic diaspora network.
             </p>
             <div class="highlight-box orange-border">
-                <p><strong>Core Thesis:</strong> Every connection you build and every trust you earn is minting your future liquid assets. 
-                The community controls the value through real economic activity.</p>
+                <p><strong>Core Principle:</strong> This is not an unbuilt concept. The contracts are deployed on Base (Chain ID: 8453), the web &amp; mobile apps are live, and the community mints real sovereign wealth through verified daily activity.</p>
             </div>
+
+            <h3>1.1 Foundational Profile: Dual Geographic Identity</h3>
+            <p>
+                Every member on Diaspora Nearby possesses a <strong>Dual Geographic Identity</strong>, existing simultaneously across their <strong>Home Country</strong> (roots, lineage &amp; long-term sovereign return) and their <strong>Host Country</strong> (presence, work, and mobility). The platform is universally inclusive of both <strong>temporary diaspora</strong> (corporate expats, international diplomats, business professionals, travelers, and exchange students) and <strong>permanent diaspora</strong> (naturalized citizens, permanent residents, and settled diaspora communities).
+            </p>
+            <p>
+                This dual identity serves as the foundation for our <strong>complete global digital sovereign economy</strong>:
+            </p>
+            <ul>
+                <li><strong>7-Tier Nested Matching Treasuries:</strong> Every action mints 1:1 matching tokens distributed across 7 geographic community levels covering both Home and Host jurisdictions.</li>
+                <li><strong>Sovereign Trust &amp; Real-World Discovery:</strong> Members find peers from their exact home roots living near their host location, unlocking verified peer hosting, authentic services, and mutual emergency protection.</li>
+                <li><strong>Diaspora Direct Investment (DDI):</strong> Over $900 billion flows globally each year; DDI transforms these flows into permanent community wealth, enterprise acquisitions, healthcare, and sovereign infrastructure.</li>
+            </ul>
         </div>
 
         <!-- 2. Token Identity -->
@@ -184,7 +197,7 @@
                 </div>
                 <div class="wp-stat-card">
                     <div class="value">Base</div>
-                    <div class="label">Blockchain (Coinbase L2)</div>
+                    <div class="label">Ethereum Base Blockchain</div>
                 </div>
                 <div class="wp-stat-card">
                     <div class="value">1 Quadrillion</div>
@@ -205,7 +218,7 @@
             </div>
             <p>
                 $DIASPORA is a <strong>utility token</strong> used within the Diaspora Nearby platform. 
-                The primary method of token distribution is community participation through the epoch-based TGE (Token Generation Event) system.
+                The primary method of token distribution is community participation through the epoch-based TDE (Token Distribution Event) system.
                 A Liquidity Treasury allocates 5% of total epoch supply to provide DEX liquidity for open market access.
                 There is no public sale, ICO, or IEO.
             </p>
@@ -224,22 +237,22 @@
                 <li><strong>Off-chain</strong> trust score stored in Firestore</li>
                 <li>Earned through daily social activity (verifying, vouching, messaging, transacting)</li>
                 <li>Tracks your social contribution to the community</li>
-                <li>Accumulates until the next TGE milestone is triggered</li>
+                <li>Accumulates until the next TDE milestone is triggered</li>
                 <li>The Ubuntu Protocol (1:1 matching) — for every 1 DSP earned, another 1 DSP is created for geographic community treasuries</li>
             </ul>
 
             <h3>$DIASPORA Token</h3>
             <ul>
-                <li><strong>On-chain</strong> ERC-20 on Coinbase L2 Base Blockchain — a real, liquid asset you own</li>
+                <li><strong>On-chain</strong> ERC-20 on Ethereum Base Blockchain — a real, liquid asset you own</li>
                 <li>Pre-minted and locked per epoch by the TGE Controller contract</li>
-                <li>Conversion rate at TGE depends on your PCT (Proof of Community Trust) score</li>
+                <li>Conversion rate at TDE depends on your PCT (Proof of Community Trust) score</li>
                 <li>Fully verifiable on <a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color:var(--orange);">Basescan</a></li>
                 <li>Burns are permanent — sent to address zero, verifiable on-chain</li>
             </ul>
 
             <div class="highlight-box sage-border">
-                <p><strong>TGE Conversion:</strong> A TGE fires when globally distributed DSP crosses the next supply
-                milestone. Member counts are informational growth benchmarks, not TGE gates. Eligible off-chain DSP
+                <p><strong>TDE Conversion:</strong> A TDE fires when globally distributed DSP crosses the next supply
+                milestone. Member counts are informational growth benchmarks, not TDE gates. Eligible off-chain DSP
                 converts into liquid $DIASPORA tokens at each participant's PCT efficiency rate.</p>
             </div>
 
@@ -248,16 +261,16 @@
                 Your PCT score (0-100) dictates how efficiently your DSP converts to $DIASPORA at each TDE. Scores 1-10 convert at 0%, 11-90 convert at exact percentage, and 91-100 convert at 100%.
             </p>
             <p>
-                The foundation of trust is established through the <strong>7 Genesis Milestones</strong>, each worth up to 10 PCT (70 Max):
+                The foundation of trust is established across the <strong>4 Pillars of Proof of Humanity (PoH)</strong>, each milestone worth <strong>10,000 DSP and 10 PCT</strong> (70,000 DSP and 70 PCT Base Max). Upon completing all 7 PoH milestones, the protocol automatically executes the <strong>Proof of Humanity Genesis Distribution: converting 7,000 DSP into 7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase</strong> (the only pre-TDE on-chain distribution), while the remaining 63,000 DSP converts at the scheduled global TDE epoch:
             </p>
             <ul>
-                <li><strong>1. Current Location Transparency:</strong> Must be enabled at every TGE/TDE participation check. Turning it off permanently forfeits its 10 PCT.</li>
-                <li><strong>2. Profile Completion:</strong> Complete every required field. (Also required for first TGE).</li>
-                <li><strong>3. QR Identity Exchanges:</strong> Complete 10 unique in-person exchanges. (Also required for first TGE).</li>
-                <li><strong>4. Family Connections:</strong> Establish 10 unique family connections.</li>
-                <li><strong>5. Friend Connections:</strong> Establish 10 unique friend connections.</li>
-                <li><strong>6. Vouched by Peers:</strong> Receive 10 unique full-trust peer vouches.</li>
-                <li><strong>7. Verified by Peers:</strong> Receive 10 unique peer verifications.</li>
+                <li><strong>1. Current Location Transparency:</strong> Real-time live location. Turning it off permanently forfeits the 10 PCT and burns the awarded 10,000 DSP.</li>
+                <li><strong>2. Profile Completion:</strong> Complete all 10 required fields for 10,000 DSP and 10 PCT.</li>
+                <li><strong>3. QR Identity Exchanges:</strong> 10 unique in-person exchanges for 10,000 DSP and 10 PCT (1,000 DSP per scan 11+).</li>
+                <li><strong>4. Family Connections (Circle of Trust):</strong> 10 verified family connections (10,000 DSP and 10 PCT). Requires bilateral chat history; mutual slashing contagion applies.</li>
+                <li><strong>5. Friend Connections (Circle of Trust):</strong> 10 verified friend connections (10,000 DSP and 10 PCT). Requires bilateral chat history; mutual slashing contagion applies.</li>
+                <li><strong>6. Verified by Peers:</strong> 10 unique peer profile field verifications (10,000 DSP and 10 PCT). Verifiers must be in Circle of Trust or QR-met with bilateral chat.</li>
+                <li><strong>7. Ubuntu Emergency Fund:</strong> Contribution to the mutual catastrophe protection pool for 10,000 DSP and 10 PCT.</li>
             </ul>
         </div>
 
@@ -265,38 +278,41 @@
         <div class="wp-section" id="earning-model">
             <h2>4. How You Earn DSP</h2>
             <p>
-                DSP is earned through <strong>Proof of Social Activities</strong> — genuine social actions within the Diaspora Nearby platform.
+                DSP is earned through <strong>Proof of Social Activities (PSA)</strong> — genuine social actions within the Diaspora Nearby platform.
                 There is no way to buy DSP. Every point reflects actual community contribution.
             </p>
             <div class="wp-table-scroll">
             <table class="wp-epoch-table">
                 <tr><th>Activity</th><th>Reward / Penalty</th></tr>
-                <tr><td>Welcome Bonus</td><td><strong>+1,000 DSP</strong></td></tr>
-                <tr><td>Complete Profile</td><td><strong>+10,000 DSP</strong></td></tr>
-                <tr><td>Refer a Friend</td><td><strong>+1,000 DSP each</strong></td></tr>
-                <tr><td>QR Identity Exchange</td><td><strong>+1,000 DSP</strong></td></tr>
-                <tr><td>Family Connection</td><td><strong>+1,000 DSP</strong></td></tr>
-                <tr><td>Verify a Profile</td><td><strong>+1,000 DSP</strong></td></tr>
-                <tr><td>Vouch for Trust</td><td><strong>+1,000 DSP</strong></td></tr>
-                <tr><td>Community Event</td><td><strong>+1,000 DSP</strong></td></tr>
-                <tr><td>Host a Traveler</td><td><strong>+1,000 DSP each</strong></td></tr>
+                <tr><td>New Signup (Welcome Bonus)</td><td><strong>10,000 DSP</strong> (+ 1:1 Ubuntu Protocol expansion)</td></tr>
+                <tr><td>Complete Profile (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 fields)</td></tr>
+                <tr><td>Location Transparency (PoH)</td><td><strong>10,000 DSP</strong> (Dual Home/Host Community Attribution)</td></tr>
+                <tr><td>QR Identity Exchanges (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 scans) + <strong>1,000 DSP / scan (11+)</strong></td></tr>
+                <tr><td>Family Circle (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 connections)</td></tr>
+                <tr><td>Friend Circle (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 connections)</td></tr>
+                <tr><td>Peer Profile Verification (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 verifications)</td></tr>
+                <tr><td>Ubuntu Emergency Fund (PoH)</td><td><strong>10,000 DSP</strong></td></tr>
+                <tr><td>Refer a Friend (Both Inviter & Invitee)</td><td><strong>10,000 DSP each</strong></td></tr>
+                <tr><td>Trust Slider Rating</td><td><strong>1,000 DSP</strong> (Free rating 11-90; Staked rating locks 1,000 DSP)</td></tr>
+                <tr><td>Community Event Attendance</td><td><strong>1,000 DSP</strong></td></tr>
+                <tr><td>Host a Traveler</td><td><strong>1,000 DSP each</strong></td></tr>
                 <tr><td>Economy Transaction</td><td><strong>$1 = 1 DSP</strong></td></tr>
                 <tr class="active-row"><td colspan="2"><strong>Accountability & Penalties</strong></td></tr>
-                <tr><td>Chat Advertising</td><td><strong>-1,000 DSP</strong> (10 unique spam reports)</td></tr>
-                <tr><td>Relationship Rejection</td><td><strong>-1,000 DSP</strong> (Send request to people you know)</td></tr>
-                <tr><td>Event No-Show</td><td><strong>-1,000 DSP</strong> (Confirmed absence)</td></tr>
+                <tr><td>Chat Advertising</td><td><strong>1,000 DSP</strong> (10 unique spam reports)</td></tr>
+                <tr><td>Relationship Rejection</td><td><strong>1,000 DSP</strong> (Send request to people you know)</td></tr>
+                <tr><td>Event No-Show</td><td><strong>1,000 DSP</strong> (Confirmed absence)</td></tr>
 
-                <tr><td>Vouching Bad Actor</td><td><strong>-1,000 DSP</strong> (Backing a fraudster)</td></tr>
+                <tr><td>Vouching Bad Actor</td><td><strong>1,000 DSP</strong> (Backing a fraudster)</td></tr>
             </table>
             </div>
         </div>
 
         <!-- 5. Token Distribution -->
         <div class="wp-section" id="distribution">
-            <h2>5. Token Distribution Model — The Ubuntu Protocol</h2>
+            <h2>5. Token Distribution Model — The 1:1 Ubuntu Community Match</h2>
             <p>
-                For every <strong>1 DSP</strong> earned by a user, the protocol creates a <strong>matching 1 DSP</strong> — 
-                a concept rooted in the philosophy of <em>"I am because we are."</em> The matching DSP is distributed across 10 equal slots for hierarchical geographic treasuries. This ensures that community value creation simultaneously funds all ecosystem layers. (This same philosophy powers our separate Community Emergency Fund).
+                For every <strong>1 DSP</strong> earned by a user, the protocol creates a <strong>1:1 Ubuntu Community Match of 1 DSP</strong> — 
+                a concept rooted in the philosophy of <em>"I am because we are."</em> The matching DSP is distributed across 10 equal slots for hierarchical geographic treasuries and system reserves. This ensures that community value creation simultaneously funds all ecosystem layers. (This same philosophy powers our separate Ubuntu Emergency Fund).
             </p>
 
             <div class="wp-dist-bar">
@@ -317,42 +333,57 @@
                 The 70% Community Treasuries allocation flows into <strong>7 treasury slots</strong>:
             </p>
             <ul>
-                <li><strong>Global Reserve</strong> — funds zero fee value transfer subsidies, salaries and benefits for community leaders and chambers of commerce staff, global charitable contributions, and all other costs associated with running the platform</li>
-                <li><strong>Home Continent</strong> — user's country of origin continent</li>
-                <li><strong>Home Country</strong> — user's country of origin</li>
-                <li><strong>Home City</strong> — user's city of origin</li>
-                <li><strong>Host Continent</strong> — where user currently lives</li>
-                <li><strong>Host Country</strong> — current country of residence</li>
-                <li><strong>Host City</strong> — current city of residence</li>
+                <li><strong>Global Reserve</strong> — funds zero-fee value transfer subsidies, leadership & chamber operations, global charitable contributions, platform upkeep, and the final global liquidity backstop (100% TDE efficiency)</li>
+                <li><strong>Home Continent Reserve Treasury</strong> — regional liquidity reserve &amp; upward loan backstop</li>
+                <li><strong>Home Country DDI Treasury</strong> — large-scale sovereign projects &amp; infrastructure investments ($1,000,000+)</li>
+                <li><strong>Home Town DDI Treasury &amp; State Reserve Treasury</strong> — local community business loans (up to $1,000,000) and state liquidity backstop</li>
+                <li><strong>Host Continent Reserve Treasury</strong> — regional liquidity reserve &amp; upward loan backstop</li>
+                <li><strong>Host Country DDI Treasury</strong> — large-scale sovereign investments, franchises &amp; commercial real estate ($1,000,000+)</li>
+                <li><strong>Host Town DDI Treasury &amp; State Reserve Treasury</strong> — local business loans (up to $1,000,000) and state liquidity backstop</li>
             </ul>
             <p>
-                These treasuries power <strong>Diaspora Direct Investments</strong> (DDI) — community-governed loans and investments 
-                that fund businesses, large infrastructure projects, education grants, and economic development in both home and host communities.
+                These treasuries power <strong>Diaspora Direct Investments</strong> (DDI) — sovereign community investments and 10% collateral loans across <strong>Host Town DDI (Up to $1,000,000)</strong>, <strong>Home Town DDI (Up to $1,000,000)</strong>, <strong>Host Country DDI (Exceeding $1,000,000+)</strong>, and <strong>Home Country DDI (Exceeding $1,000,000+)</strong>.
+            </p>
+            <p>
+                <strong>Upward Cascading Liquidity Protocol:</strong> When an approved community loan exceeds the balance in a local Town DDI Treasury, the protocol executes an automated upward cascade: <strong>Town DDI Treasury → State Reserve Treasury → Country DDI Treasury → Continent Reserve Treasury → Global Reserve</strong>. This ensures qualified community businesses always access necessary funding.
             </p>
         </div>
 
         <!-- 6. Epoch Scaling -->
         <div class="wp-section" id="epoch-scaling">
-            <h2>6. Epoch Scaling & Token Generation Events</h2>
+            <h2>6. Epoch Scaling, TGE, TDE &amp; The Great Reset</h2>
             <p>
-                The $DIASPORA ecosystem follows a <strong>10-epoch scaling model</strong>. Each epoch represents a 10x
-                distributed-DSP supply milestone. Crossing each DSP milestone triggers a Token Generation Event (TGE);
-                member growth is tracked alongside the epoch but does not gate it.
+                The $DIASPORA ecosystem follows a <strong>10-epoch scaling model</strong> governed by a transparent, predictable 3-step economic lifecycle:
             </p>
+
+            <div class="wp-grid-2" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div class="wp-stat-card" style="text-align: left; border: 1px solid rgba(239, 108, 0, 0.25);">
+                    <div style="font-weight: 700; color: var(--orange); margin-bottom: 6px;"><i data-lucide="lock" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> 1. TGE (Generation)</div>
+                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>1 per Epoch:</strong> The smart contract pre-mints and locks that epoch's fixed supply on Ethereum Base Blockchain, guaranteeing 100% cryptographic backing before distribution starts.</p>
+                </div>
+                <div class="wp-stat-card" style="text-align: left; border: 1px solid rgba(78, 124, 110, 0.25);">
+                    <div style="font-weight: 700; color: var(--sage); margin-bottom: 6px;"><i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> 2. TDE (Distribution)</div>
+                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>10 Releases per Epoch:</strong> Every 10% milestone of distributed DSP triggers a decile release, converting off-chain DSP to on-chain $DIASPORA based on your PCT trust score and seeding DEX liquidity.</p>
+                </div>
+                <div class="wp-stat-card" style="text-align: left; border: 1px solid rgba(100, 149, 237, 0.25);">
+                    <div style="font-weight: 700; color: cornflowerblue; margin-bottom: 6px;"><i data-lucide="refresh-cw" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> 3. The Great Reset</div>
+                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>Epoch Completion:</strong> Reaching 100% of an epoch's DSP resets off-chain DSP to 0 while members keep all on-chain $DIASPORA and PCT scores, unlocking the next 10x epoch tier.</p>
+                </div>
+            </div>
 
             <div class="wp-table-scroll">
             <table class="wp-epoch-table">
-                <tr><th>Epoch</th><th>Milestone</th><th>$DIASPORA Pre-Minted</th><th>Name</th></tr>
-                <tr class="active-row"><td><strong>1</strong></td><td>1,000,000 DSP</td><td>1,000,000</td><td>"Genesis Believer"</td></tr>
-                <tr><td>2</td><td>10,000,000 DSP</td><td>10,000,000</td><td>"Growth Partner"</td></tr>
-                <tr><td>3</td><td>100,000,000 DSP</td><td>100,000,000</td><td>"Scale Investor"</td></tr>
-                <tr><td>4</td><td>1,000,000,000 DSP</td><td>1,000,000,000</td><td>"Institutional Partner"</td></tr>
-                <tr><td>5</td><td>10,000,000,000 DSP</td><td>10,000,000,000</td><td>"Strategic Partner"</td></tr>
-                <tr><td>6</td><td>100,000,000,000 DSP</td><td>100,000,000,000</td><td>"Sovereign Fund"</td></tr>
-                <tr><td>7</td><td>1,000,000,000,000 DSP</td><td>1,000,000,000,000</td><td>"Global Reserve"</td></tr>
-                <tr><td>8</td><td>10,000,000,000,000 DSP</td><td>10,000,000,000,000</td><td>"Planetary"</td></tr>
-                <tr><td>9</td><td>100,000,000,000,000 DSP</td><td>100,000,000,000,000</td><td>"Universal"</td></tr>
-                <tr><td>10</td><td>1,000,000,000,000,000 DSP</td><td>1,000,000,000,000,000</td><td>"Infinite"</td></tr>
+                <tr><th>Epoch</th><th>DSP Milestone</th><th>Population Benchmark</th><th>$DIASPORA Pre-Minted</th><th>Name</th></tr>
+                <tr class="active-row"><td><strong>1</strong></td><td>1,000,000 DSP</td><td>10 Users</td><td>1,000,000</td><td>"Genesis Believer"</td></tr>
+                <tr><td>2</td><td>10,000,000 DSP</td><td>100 Users</td><td>10,000,000</td><td>"Growth Partner"</td></tr>
+                <tr><td>3</td><td>100,000,000 DSP</td><td>1,000 Users</td><td>100,000,000</td><td>"Scale Investor"</td></tr>
+                <tr><td>4</td><td>1,000,000,000 DSP</td><td>10,000 Users</td><td>1,000,000,000</td><td>"Institutional Partner"</td></tr>
+                <tr><td>5</td><td>10,000,000,000 DSP</td><td>100,000 Users</td><td>10,000,000,000</td><td>"Strategic Partner"</td></tr>
+                <tr><td>6</td><td>100,000,000,000 DSP</td><td>1,000,000 Users (1M)</td><td>100,000,000,000</td><td>"Sovereign Fund"</td></tr>
+                <tr><td>7</td><td>1,000,000,000,000 DSP</td><td>10,000,000 Users (10M)</td><td>1,000,000,000,000</td><td>"Global Reserve"</td></tr>
+                <tr><td>8</td><td>10,000,000,000,000 DSP</td><td>100,000,000 Users (100M)</td><td>10,000,000,000,000</td><td>"Planetary"</td></tr>
+                <tr><td>9</td><td>100,000,000,000,000 DSP</td><td>1,000,000,000 Users (1B)</td><td>100,000,000,000,000</td><td>"Universal"</td></tr>
+                <tr><td>10</td><td>1,000,000,000,000,000 DSP</td><td>10,000,000,000 Users (10B)</td><td>1,000,000,000,000,000</td><td>"Infinite"</td></tr>
             </table>
             </div>
 
@@ -395,9 +426,9 @@
 
         <!-- 8. Smart Contracts -->
         <div class="wp-section" id="smart-contracts">
-            <h2>8. Smart Contracts (Coinbase L2 Base Blockchain)</h2>
+            <h2>8. Smart Contracts (Ethereum Base Blockchain)</h2>
             <p>
-                All contracts are deployed on <strong>Coinbase L2 Base Blockchain</strong> (Chain ID: 8453). They are upgradeable 
+                All contracts are deployed on <strong>Ethereum Base Blockchain</strong> (Chain ID: 8453). They are upgradeable 
                 via the UUPS proxy pattern and secured with OpenZeppelin role-based access control.
             </p>
 
@@ -420,7 +451,7 @@
                 </div>
                 <div class="contract-row">
                     <span class="contract-label">Network</span>
-                    <span class="contract-value neutral">Coinbase L2 Base Blockchain (Chain ID: 8453)</span>
+                    <span class="contract-value neutral">Ethereum Base Blockchain (Chain ID: 8453)</span>
                 </div>
                 <div class="contract-row">
                     <span class="contract-label">Token Name / Symbol</span>
@@ -465,7 +496,7 @@
 
             <h3>Smart Wallet Architecture</h3>
             <p>
-                Users interact with the blockchain through <strong>non-custodial Smart Wallets</strong> based on Account Abstraction. 
+                Users interact with the blockchain through <strong>Self-Custodial Smart Wallets</strong> based on Account Abstraction. 
                 These wallets are deterministically generated from phone numbers using CREATE2, enabling <strong>gasless transactions</strong> 
                 where the platform sponsors gas fees on behalf of users.
             </p>
@@ -482,7 +513,7 @@
             <div class="wp-grid-2" style="grid-template-columns:repeat(4,1fr);">
                 <div class="wp-stat-card">
                     <div class="value">Base</div>
-                    <div class="label">Blockchain (Coinbase L2)</div>
+                    <div class="label">Ethereum Base Blockchain</div>
                 </div>
                 <div class="wp-stat-card">
                     <div class="value">$0</div>
@@ -532,9 +563,10 @@
 
             <h3>Governance Types</h3>
             <ul>
-                <li><strong>Diaspora Direct Investments - Host Town:</strong> 51% vote required, 10-day window — for starting, expanding, or operating businesses, and education grants. Applicant must live in the host town they apply for a loan from.</li>
-                <li><strong>Diaspora Direct Investments - Home Town:</strong> 51% vote required, 10-day window — for starting, expanding, or operating businesses, and education grants. Applicant must live in the home town they apply for a loan from.</li>
-                <li><strong>Diaspora Direct Investments - Home Country:</strong> 67% supermajority, 100-day window — for $1M+ capital expansions, infrastructure, and education grants</li>
+                <li><strong>Host Town DDI:</strong> 51% vote required, 10-day window — members can pool collateral to fund up to $1,000,000 with 10% $DIASPORA collateral. Applicant must live in the host town they apply from.</li>
+                <li><strong>Home Town DDI:</strong> 51% vote required, 10-day window — members can pool collateral to fund up to $1,000,000 with 10% $DIASPORA collateral. Applicant must live in the home town they apply from.</li>
+                <li><strong>Host Country DDI (Exceeding $1,000,000+):</strong> 67% supermajority, 100-day window — for $1,000,000+ enterprise acquisitions, commercial real estate, or any community-voted investment in the host nation.</li>
+                <li><strong>Home Country DDI (Exceeding $1,000,000+):</strong> 67% supermajority, 100-day window — for $1,000,000+ infrastructure, agriculture, or any community-voted sovereign investment in the home country.</li>
             </ul>
 
             <div class="highlight-box sage-border">

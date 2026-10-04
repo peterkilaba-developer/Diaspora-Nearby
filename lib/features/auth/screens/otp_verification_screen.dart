@@ -147,7 +147,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.isWhatsApp 
+                    widget.isWhatsApp
                         ? 'We sent a 6-digit WhatsApp message to ${widget.phoneNumber}'
                         : 'We sent a 6-digit SMS to ${widget.phoneNumber}',
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -276,21 +276,36 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                     const SizedBox(height: 16),
                     TextButton.icon(
                       onPressed: () {
-                        ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, widget.phoneNumber);
+                        ref
+                            .read(authControllerProvider.notifier)
+                            .signInWithWhatsApp(context, widget.phoneNumber);
                       },
-                      icon: const Icon(LucideIcons.messageCircle, size: 16, color: Colors.green),
+                      icon: const Icon(
+                        LucideIcons.messageCircle,
+                        size: 16,
+                        color: Colors.green,
+                      ),
                       label: const Text(
                         'Didn\'t receive SMS? Send via WhatsApp',
-                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ] else ...[
                     const SizedBox(height: 16),
                     TextButton.icon(
                       onPressed: () {
-                        ref.read(authControllerProvider.notifier).signInWithWhatsApp(context, widget.phoneNumber);
+                        ref
+                            .read(authControllerProvider.notifier)
+                            .signInWithWhatsApp(context, widget.phoneNumber);
                       },
-                      icon: const Icon(LucideIcons.refreshCw, size: 16, color: Colors.green),
+                      icon: const Icon(
+                        LucideIcons.refreshCw,
+                        size: 16,
+                        color: Colors.green,
+                      ),
                       label: const Text(
                         'Resend WhatsApp Message',
                         style: TextStyle(color: Colors.green),

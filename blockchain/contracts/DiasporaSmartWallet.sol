@@ -9,12 +9,12 @@ import "@openzeppelin/contracts/utils/Create2.sol";
 /**
  * @title DiasporaSmartWallet
  * @dev Minimal smart wallet for Diaspora users. Uses phone-number-derived
- *      deterministic addresses via CREATE2.
+ *      deterministic addresses via CREATE2 and an opaque server-derived salt.
  * 
  * Account Abstraction Lite:
  * - No private keys needed by the user
  * - Backend (Cloud Function) acts as the authorized executor
- * - Phone number hash is used as CREATE2 salt for deterministic addresses
+ * - A keyed, non-reversible user identifier is used as the CREATE2 salt
  * - Supports ERC-20 token transfers (gasless for the user)
  * - Owner can be rotated (for phone number changes)
  */
@@ -114,10 +114,10 @@ contract DiasporaSmartWallet {
 /**
  * @title DiasporaWalletFactory
  * @dev Factory that deploys DiasporaSmartWallet instances using CREATE2.
- *      The salt is derived from the user's phone number hash, making
- *      wallet addresses deterministic and predictable.
+ *      The salt is a keyed opaque identifier, making wallet addresses
+ *      deterministic without publishing a dictionary-attackable phone hash.
  * 
- * Key invariant: keccak256(phoneNumber) → same address every time.
+ * Key invariant: the same opaque identifier → the same address every time.
  */
 contract DiasporaWalletFactory is AccessControl {
     bytes32 public constant DEPLOYER_ROLE = keccak256("DEPLOYER_ROLE");
@@ -232,6 +232,35 @@ contract DiasporaWalletFactory is AccessControl {
         
         emit BackendSignerUpdated(backendSigner, newSigner);
         backendSigner = newSigner;
+    }
+
+    /**
+     * @dev Rotate one existing wallet after the backend signer changes.
+     * Kept explicit so operators can migrate in bounded, auditable batches.
+     */
+    function rotateWalletOwner(address wallet, address newSigner)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(wallet != address(0) && newSigner != address(0), "DWF: zero address");
+        require(walletToPhoneHash[wallet] != bytes32(0), "DWF: unknown wallet");
+        require(newSigner == backendSigner, "DWF: signer mismatch");
+        DiasporaSmartWallet(payable(wallet)).changeOwner(newSigner);
+    }
+
+    /** @dev Batch variant capped to prevent an unbounded-gas transaction. */
+    function rotateWalletOwners(address[] calldata walletList, address newSigner)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        require(newSigner != address(0), "DWF: zero address");
+        require(walletList.length > 0 && walletList.length <= 100, "DWF: invalid batch");
+        require(newSigner == backendSigner, "DWF: signer mismatch");
+        for (uint256 i = 0; i < walletList.length; i++) {
+            address wallet = walletList[i];
+            require(walletToPhoneHash[wallet] != bytes32(0), "DWF: unknown wallet");
+            DiasporaSmartWallet(payable(wallet)).changeOwner(newSigner);
+        }
     }
 
     /**

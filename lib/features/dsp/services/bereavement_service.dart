@@ -236,6 +236,7 @@ class BereavementService {
         .collection('bereavement_claims')
         .where('userId', isEqualTo: userId)
         .orderBy('submittedDate', descending: true)
+        .limit(100)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs

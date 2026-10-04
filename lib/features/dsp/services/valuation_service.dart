@@ -113,7 +113,9 @@ class ValuationService {
 
     // --- Network Baseline Valuation ---
     final double networkBaseline =
-        basePriceUsd * (1.0 + networkMultiplier + deflationRatio) * epochScarcity;
+        basePriceUsd *
+        (1.0 + networkMultiplier + deflationRatio) *
+        epochScarcity;
 
     // --- Factor 4: Additive Fiat GDP Floor per Token ---
     final int effectiveCirculating = circulatingSupply > 0

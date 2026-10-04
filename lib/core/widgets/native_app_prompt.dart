@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -142,14 +142,10 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
     setState(() => _isSubmitting = true);
 
     try {
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-
-      await FirebaseFirestore.instance.collection('app_requests').add({
+      await FirebaseFunctions.instance.httpsCallable('submitAppRequest').call({
         'email': _emailController.text.trim(),
         'feature': widget.feature,
         'platform': _detectedPlatform,
-        'userId': userId,
-        'createdAt': FieldValue.serverTimestamp(),
       });
 
       // Mark as submitted

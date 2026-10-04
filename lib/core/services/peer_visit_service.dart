@@ -1,25 +1,20 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 final peerVisitServiceProvider = Provider<PeerVisitService>((ref) {
-  return PeerVisitService(
-    FirebaseFirestore.instance,
-    ref.read(pointsServiceProvider),
-  );
+  return PeerVisitService(ref.read(pointsServiceProvider));
 });
 
 class PeerVisitService {
-  final FirebaseFirestore _firestore;
   final PointsService _pointsService;
 
   // Active visit tracking memory: Key -> "visitorUid_hostUid", Value -> DateTime start
   final Map<String, DateTime> _activeVisitSessions = {};
 
-  PeerVisitService(this._firestore, this._pointsService);
+  PeerVisitService(this._pointsService);
 
   /// Called during background location updates to evaluate if user [visitorUid]
   /// is visiting member [hostUid] at [hostLat],[hostLng] for >60 minutes.

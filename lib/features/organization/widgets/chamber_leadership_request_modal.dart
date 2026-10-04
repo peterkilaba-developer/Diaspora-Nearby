@@ -69,10 +69,10 @@ class _ChamberLeadershipRequestModalState
 
   String _pinHint(String role) {
     if (ChamberRoles.homePinned.contains(role)) {
-      return 'Requires home country: ${widget.homeCountryCode}';
+      return 'Requires candidate residing in ${widget.homeCountryCode} (1+ year tenure)';
     }
     if (ChamberRoles.hostPinned.contains(role)) {
-      return 'Requires lived experience in ${widget.hostCountryCode}';
+      return 'Requires candidate residing in ${widget.hostCountryCode} (1+ year tenure)';
     }
     return ChamberRoles.description(role);
   }

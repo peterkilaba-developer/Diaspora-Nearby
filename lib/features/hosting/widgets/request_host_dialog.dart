@@ -118,13 +118,17 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
 
     // Validate 91+ Trust Score to Request Peer Hosting
     final trustService = ref.read(trustServiceProvider);
-    final trustScore = await trustService.calculateTrustScore(null); // Passing null uses current user
+    final trustScore = await trustService.calculateTrustScore(
+      null,
+    ); // Passing null uses current user
     if (trustScore < 91) {
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Trust Score of 91+ required to request Peer Hosting.'),
+            content: Text(
+              'Trust Score of 91+ required to request Peer Hosting.',
+            ),
             backgroundColor: Colors.red,
           ),
         );

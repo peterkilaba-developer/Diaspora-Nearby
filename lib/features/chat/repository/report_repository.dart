@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
-import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 final reportRepositoryProvider = Provider((ref) => ReportRepository(ref));
 
@@ -12,49 +12,31 @@ enum ReportResult { success, duplicate, failed }
 
 class ReportRepository {
   final cf.FirebaseFirestore _firestore = cf.FirebaseFirestore.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
   final Ref _ref;
 
   ReportRepository(this._ref);
 
   Future<ReportResult> reportMessage({
     required String reporterId,
+    required String chatId,
     required String messageId,
     required String senderId,
     required String reason,
   }) async {
     try {
-      // 1. Check if this reporter already reported this message to avoid duplicates
-      final existing = await _firestore
-          .collection('reports')
-          .where('type', isEqualTo: 'message')
-          .where('messageId', isEqualTo: messageId)
-          .where('reporterId', isEqualTo: reporterId)
-          .get();
-
-      if (existing.docs.isNotEmpty) {
-        debugPrint('ℹ️ [ReportRepository] User already reported this message.');
-        return ReportResult.duplicate;
-      }
-
-      // 2. Add the report record
-      await _firestore.collection('reports').add({
+      final result = await _functions.httpsCallable('submitReport').call({
+        'type': 'message',
         'reporterId': reporterId,
+        'chatId': chatId,
         'messageId': messageId,
         'reportedUserId': senderId,
         'reason': reason,
-        'timestamp': cf.FieldValue.serverTimestamp(),
-        'type': 'message',
-        'status': 'pending',
       });
-
-      // 3. Every unique new report on this user contributes 1 to
-      //    profile.flaggedMessagesCount. PCT loss = -10 per 10 unique flags
-      //    (see TrustService.recalculateTrustScore).
-      await _ref
-          .read(trustServiceProvider)
-          .recordActivity(senderId, HTSActivityType.flaggedMessage);
-
-      return ReportResult.success;
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return data['duplicate'] == true
+          ? ReportResult.duplicate
+          : ReportResult.success;
     } catch (e) {
       debugPrint('Error reporting message: $e');
       return ReportResult.failed;
@@ -81,37 +63,16 @@ class ReportRepository {
     required String reason,
   }) async {
     try {
-      // 1. Check for duplicate report by this reporter
-      final existing = await _firestore
-          .collection('reports')
-          .where('type', isEqualTo: 'user')
-          .where('reportedUserId', isEqualTo: reportedUserId)
-          .where('reporterId', isEqualTo: reporterId)
-          .get();
-
-      if (existing.docs.isNotEmpty) {
-        debugPrint('ℹ️ [ReportRepository] User already reported this sender.');
-        return ReportResult.duplicate;
-      }
-
-      // 2. Add the report record
-      await _firestore.collection('reports').add({
+      final result = await _functions.httpsCallable('submitReport').call({
+        'type': 'user',
         'reporterId': reporterId,
         'reportedUserId': reportedUserId,
         'reason': reason,
-        'timestamp': cf.FieldValue.serverTimestamp(),
-        'type': 'user',
-        'status': 'pending',
       });
-
-      // 3. Every unique new report contributes 1 to
-      //    profile.flaggedMessagesCount. PCT loss = -10 per 10 unique flags
-      //    (see TrustService.recalculateTrustScore).
-      await _ref
-          .read(trustServiceProvider)
-          .recordActivity(reportedUserId, HTSActivityType.flaggedMessage);
-
-      return ReportResult.success;
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return data['duplicate'] == true
+          ? ReportResult.duplicate
+          : ReportResult.success;
     } catch (e) {
       debugPrint('Error reporting user: $e');
       return ReportResult.failed;

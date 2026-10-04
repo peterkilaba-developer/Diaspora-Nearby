@@ -143,7 +143,9 @@ class _CreateStayListingScreenState
       if (_isPeerHosting) {
         final trustData = ref.read(userTrustProvider(user.uid)).value;
         if (trustData == null || trustData.trustScore < 91) {
-          throw Exception('You need a Trust Score of 91+ to host in Peer Hosting.');
+          throw Exception(
+            'You need a Trust Score of 91+ to host in Peer Hosting.',
+          );
         }
       }
 
@@ -156,7 +158,9 @@ class _CreateStayListingScreenState
         ownerPhoto: profile.profileImage,
         title: _titleC.text.trim(),
         description: _descC.text.trim(),
-        pricePerUnit: _isPeerHosting ? 0 : (double.tryParse(_priceC.text.trim()) ?? 0),
+        pricePerUnit: _isPeerHosting
+            ? 0
+            : (double.tryParse(_priceC.text.trim()) ?? 0),
         city: _cityC.text.trim(),
         country: profile.hostCountry,
         countryCode: profile.hostCountryCode,

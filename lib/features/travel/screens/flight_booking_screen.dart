@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
@@ -62,6 +61,10 @@ class _TravelerData {
 
 class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
   static const _radius = 15.0;
+  static const _bookingEnabled = bool.fromEnvironment(
+    'ENABLE_FLIGHT_BOOKING',
+    defaultValue: false,
+  );
   final _travelerFormKey = GlobalKey<FormState>();
   final _paymentFormKey = GlobalKey<FormState>();
   int _currentStep = 0;
@@ -342,8 +345,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       );
 
       if (context.mounted) {
-        // ── Save booking to Firestore ──
-        final uid = ref.read(authRepositoryProvider).currentUser?.uid;
         final departureDate =
             widget.offer.itineraries.isNotEmpty &&
                 widget.offer.itineraries.first.segments.isNotEmpty
@@ -353,36 +354,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         final currency = (_confirmedOffer ?? widget.offer).currency;
         final passengerName =
             '${primary.firstNameC.text} ${primary.lastNameC.text}${_travelers.length > 1 ? ' +${_travelers.length - 1}' : ''}';
-
-        if (uid != null) {
-          try {
-            await FirebaseFirestore.instance
-                .collection('flight_bookings')
-                .doc(order.id)
-                .set({
-                  'userId': uid,
-                  'orderId': order.id,
-                  'pnrReference': order.pnrReference ?? 'N/A',
-                  'passengerName': passengerName,
-                  'passengerNames': _travelers
-                      .map(
-                        (t) =>
-                            '${t.firstNameC.text.trim()} ${t.lastNameC.text.trim()}',
-                      )
-                      .toList(),
-                  'route': widget.offer.routeSummary,
-                  'departureDate': departureDate,
-                  'totalPrice': totalPrice,
-                  'currency': currency,
-                  'status': 'confirmed',
-                  'bookingType': 'flight',
-                  'travelerCount': _travelers.length,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
-          } catch (e) {
-            debugPrint('⚠️ Failed to save booking to Firestore: $e');
-          }
-        }
 
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -489,6 +460,41 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final offer = _confirmedOffer ?? widget.offer;
+
+    if (!_bookingEnabled) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Flight booking')),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.shieldAlert,
+                    size: 48,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Secure booking is not available yet',
+                    style: theme.textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Flight search remains available. Ticket purchase will be enabled only after the live fulfillment and PCI-reviewed payment flow is configured.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.elevationColor(context, 0),

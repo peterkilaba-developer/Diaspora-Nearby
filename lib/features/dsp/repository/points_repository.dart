@@ -9,7 +9,6 @@ import 'package:diaspora_nearby/features/dsp/models/points_transaction.dart';
 import 'package:diaspora_nearby/features/dsp/models/corridor_model.dart';
 import 'package:diaspora_nearby/core/data/countries.dart'
     hide getContinentByCountryCode;
-import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 final pointsRepositoryProvider = Provider<PointsRepository>((ref) {
   return PointsRepository(
@@ -55,6 +54,19 @@ final userTransactionsProvider =
       return ref.watch(pointsRepositoryProvider).streamUserTransactions(userId);
     });
 
+final p2pUserTransactionsProvider =
+    StreamProvider.family<
+      List<PointsTransaction>,
+      ({String userId, String recipientId})
+    >((ref, args) {
+      return ref
+          .watch(pointsRepositoryProvider)
+          .streamP2PUserTransactions(
+            currentUserId: args.userId,
+            recipientId: args.recipientId,
+          );
+    });
+
 final internalGdpProvider = StreamProvider<int>((ref) {
   return ref.watch(pointsRepositoryProvider).streamInternalGdp();
 });
@@ -82,6 +94,8 @@ class PointsRepository {
         .collection('communities')
         .where('type', isEqualTo: 'country')
         .where('locationType', isEqualTo: 'home')
+        .orderBy('points', descending: true)
+        .limit(200)
         .snapshots()
         .map((snapshot) {
           // Fetch data and sort in Dart for better precision/secondary criteria without complex composite indices
@@ -155,23 +169,14 @@ class PointsRepository {
 
   /// Streams the total internal GDP from system stats.
   ///
-  /// Reconciled source: this used to read `system_stats/treasury.totalInternalGdp`,
-  /// which was independently incremented by `transferDiaspora` and could
-  /// drift from the per-chamber rollups. We now derive it from the same
-  /// source as the per-corridor view — the sum of `gdpTotal` across all
-  /// chamber docs — so there's only one authoritative number.
+  /// The backend transaction updates this materialized global counter with
+  /// every accepted economic operation, avoiding a platform-wide chamber scan.
   Stream<int> streamInternalGdp() {
     return _firestore
-        .collection('organizations')
-        .where('kind', isEqualTo: 'corridor_chamber')
+        .collection('system_stats')
+        .doc('treasury')
         .snapshots()
-        .map((snap) {
-          var total = 0;
-          for (final doc in snap.docs) {
-            total += (doc.data()['gdpTotal'] as num? ?? 0).toInt();
-          }
-          return total;
-        })
+        .map((doc) => (doc.data()?['totalInternalGdp'] as num? ?? 0).toInt())
         .onErrorReturn(0)
         .startWith(0);
   }
@@ -214,7 +219,7 @@ class PointsRepository {
     }
   }
 
-  /// Streams all bilateral corridors.
+  /// Streams the 200 most economically active bilateral corridors.
   ///
   /// Source of truth is now the chamber doc (`organizations` where
   /// `kind == 'corridor_chamber'`). Each chamber projects into a
@@ -225,6 +230,8 @@ class PointsRepository {
     return _firestore
         .collection('organizations')
         .where('kind', isEqualTo: 'corridor_chamber')
+        .orderBy('gdpTotal', descending: true)
+        .limit(200)
         .snapshots()
         .map((snapshot) {
           final corridors = snapshot.docs.map((doc) {
@@ -359,7 +366,9 @@ class PointsRepository {
   Future<List<UserPoints>> getPillars({String? countryCode}) async {
     Query query = _firestore
         .collection('user_points')
-        .where('totalPoints', isGreaterThanOrEqualTo: 10000);
+        .where('totalPoints', isGreaterThanOrEqualTo: 10000)
+        .orderBy('totalPoints', descending: true)
+        .limit(100);
 
     final snapshot = await query.get();
 
@@ -394,16 +403,47 @@ class PointsRepository {
   }
 
   // [NEW] Stream user transactions history
-  Stream<List<PointsTransaction>> streamUserTransactions(String userId) {
+  Stream<List<PointsTransaction>> streamUserTransactions(
+    String userId, {
+    int limit = 100,
+  }) {
     return _firestore
         .collection('points_transactions')
         .where('userId', isEqualTo: userId)
         .orderBy('timestamp', descending: true)
-        .limit(20)
+        .limit(limit)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
             return PointsTransaction.fromMap(doc.data(), doc.id);
+          }).toList();
+        })
+        .onErrorReturn(const <PointsTransaction>[])
+        .startWith(const <PointsTransaction>[]);
+  }
+
+  // Stream P2P transfer transactions between two users
+  Stream<List<PointsTransaction>> streamP2PUserTransactions({
+    required String currentUserId,
+    required String recipientId,
+    int limit = 100,
+  }) {
+    return _firestore
+        .collection('points_transactions')
+        .where('userId', isEqualTo: currentUserId)
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) {
+          final all = snapshot.docs.map((doc) {
+            return PointsTransaction.fromMap(doc.data(), doc.id);
+          }).toList();
+
+          return all.where((tx) {
+            final meta = tx.metadata ?? {};
+            final toUser = meta['toUserId'] as String?;
+            final fromUser = meta['fromUserId'] as String?;
+            return toUser == recipientId || fromUser == recipientId;
           }).toList();
         })
         .onErrorReturn(const <PointsTransaction>[])
@@ -429,6 +469,7 @@ class PointsRepository {
     final snapshot = await _firestore
         .collection('points_transactions')
         .where('userId', isEqualTo: userId)
+        .limit(500)
         .get();
 
     return snapshot.docs.where((doc) {
@@ -448,6 +489,18 @@ class PointsRepository {
     } catch (e) {
       debugPrint('[initializeUserPoints] Cloud Function error: $e');
       rethrow;
+    }
+  }
+
+  /// Evaluates 7 Proof of Humanity milestones and auto-credits 7,000 $DIASPORA token distribution if met.
+  Future<Map<String, dynamic>> evaluateWelcomeBonus() async {
+    try {
+      final callable = _functions.httpsCallable('evaluateWelcomeBonus');
+      final result = await callable.call({});
+      return Map<String, dynamic>.from(result.data as Map);
+    } catch (e) {
+      debugPrint('[evaluateWelcomeBonus] Cloud Function error: $e');
+      return {'success': false, 'error': e.toString()};
     }
   }
 
@@ -570,61 +623,36 @@ class PointsRepository {
     String firstName,
     String countryCode,
   ) async {
-    final random = Random();
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-
-    String generateRandomId() {
-      return List.generate(
-        4,
-        (_) => chars[random.nextInt(chars.length)],
-      ).join();
+    final response = await _functions
+        .httpsCallable('getOrCreateReferralCode')
+        .call<Map<String, dynamic>>({});
+    final code = response.data['code'] as String?;
+    if (code == null || code.isEmpty) {
+      throw StateError('Referral service returned no code.');
     }
-
-    String code;
-    bool isUnique = false;
-    int attempts = 0;
-
-    do {
-      final randomId = generateRandomId();
-      code =
-          '${firstName.toUpperCase()}-${countryCode.toUpperCase()}-$randomId';
-
-      final existing = await _firestore
-          .collection('referral_codes')
-          .doc(code)
-          .get();
-      isUnique = !existing.exists;
-      attempts++;
-    } while (!isUnique && attempts < 10);
-
-    if (!isUnique) throw Exception('Failed to generate unique referral code');
-
-    // Persist the referral code to Firestore
-    await _firestore.collection('referral_codes').doc(code).set({
-      'code': code,
-      'userId': userId,
-      'firstName': firstName,
-      'countryCode': countryCode.toUpperCase(),
-      'usedCount': 0,
-      'createdAt': DateTime.now().toUtc().toIso8601String(),
-    });
-
     return code;
   }
 
-  // Transfer asset (Points or Tokens) via Cloud Function
+  // Transfer liquid on-chain tokens ($DIASPORA) via Cloud Function
   Future<void> transferAsset({
     required String fromUserId,
     required String toUserId,
     required int amount,
-    required String assetType, // 'points' | 'token'
+    required String assetType, // 'token'
   }) async {
+    if (assetType == 'points') {
+      throw ArgumentError(
+        'DSP points cannot be transferred between users to preserve Proof of Community Trust (PCT) integrity.',
+      );
+    }
     try {
       final callable = _functions.httpsCallable('transferDiaspora');
       await callable.call({
         'toUserId': toUserId, // [FIX] param name match with Cloud Function
         'amount': amount,
         'assetType': assetType,
+        'idempotencyKey':
+            '${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}',
       });
       // The function handles the logic. We just await success.
     } catch (e) {
@@ -830,92 +858,27 @@ class PointsRepository {
   }
 
   /// Updates the PCT score in the user_points collection.
-  Future<void> updateTrustScore(String userId, double score) async {
-    await _firestore.collection('user_points').doc(userId).update({
-      'trustScore': score,
-      'lastUpdated': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
+  Future<void> updateTrustScore(String userId, double score) =>
+      Future<void>.error(
+        UnsupportedError('Trust projections are server-owned.'),
+      );
 
   /// Calculates and updates the average PCT score of ALL users in a country.
-  Future<void> updateCommunityOverallAveragePoCT(String countryCode) async {
-    final countryId = 'home_country_${countryCode.toLowerCase()}';
-    final snapshot = await _firestore
-        .collection('user_points')
-        .where('homeCountryCode', isEqualTo: countryCode)
-        .get();
-    if (snapshot.docs.isEmpty) return;
-
-    double totalScore = 0;
-    for (var doc in snapshot.docs) {
-      totalScore += (doc.data()['trustScore'] as num? ?? 0).toDouble();
-    }
-    final double average = totalScore / snapshot.docs.length;
-
-    await _firestore.collection('communities').doc(countryId).update({
-      'averagePoCT': average,
-      'lastUpdatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-    });
-  }
+  Future<void> updateCommunityOverallAveragePoCT(String countryCode) =>
+      Future<void>.error(
+        UnsupportedError('Community trust aggregates are server-owned.'),
+      );
 
   /// Calculates and updates the average PCT score of ALL users in a continent.
-  Future<void> updateContinentOverallAveragePoCT(String continentCode) async {
-    final continentName = getContinentName(continentCode);
-    final continentId = generateCommunityId(
-      locationType: 'home',
-      type: 'continent',
-      continent: continentName,
-    );
-
-    final countriesSnap = await _firestore
-        .collection('communities')
-        .where('type', isEqualTo: 'country')
-        .where('continent', isEqualTo: continentName)
-        .get();
-
-    if (countriesSnap.docs.isEmpty) return;
-
-    double weightedSum = 0;
-    int totalMembers = 0;
-    for (var doc in countriesSnap.docs) {
-      final data = doc.data();
-      final double avg = (data['averagePoCT'] as num? ?? 0).toDouble();
-      final int count = data['memberCount'] as int? ?? 0;
-      weightedSum += avg * count;
-      totalMembers += count;
-    }
-
-    if (totalMembers == 0) return;
-    await _firestore.collection('communities').doc(continentId).update({
-      'averagePoCT': weightedSum / totalMembers,
-      'lastUpdatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-    });
-  }
+  Future<void> updateContinentOverallAveragePoCT(String continentCode) =>
+      Future<void>.error(
+        UnsupportedError('Continent trust aggregates are server-owned.'),
+      );
 
   /// Calculates and updates the global average PCT score.
-  Future<void> updateGlobalOverallAveragePoCT() async {
-    final countriesSnap = await _firestore
-        .collection('communities')
-        .where('type', isEqualTo: 'country')
-        .get();
-    if (countriesSnap.docs.isEmpty) return;
-
-    double weightedSum = 0;
-    int totalMembers = 0;
-    for (var doc in countriesSnap.docs) {
-      final data = doc.data();
-      final double avg = (data['averagePoCT'] as num? ?? 0).toDouble();
-      final int count = data['memberCount'] as int? ?? 0;
-      weightedSum += avg * count;
-      totalMembers += count;
-    }
-
-    if (totalMembers == 0) return;
-    await _firestore.collection('communities').doc('global_community').update({
-      'averagePoCT': weightedSum / totalMembers,
-      'lastUpdatedAt': DateTime.now().toUtc().millisecondsSinceEpoch,
-    });
-  }
+  Future<void> updateGlobalOverallAveragePoCT() => Future<void>.error(
+    UnsupportedError('Global trust aggregates are server-owned.'),
+  );
 
   // [NEW] Increment Verified Count (for Trust/Milestones)
   Future<void> incrementVerifiedCount(String userId) async {
@@ -1006,7 +969,10 @@ class PointsRepository {
       return _parseDateTime(ts);
     }
 
-    final reverseDoc = await _firestore.collection('peer_visits').doc(reversePairId).get();
+    final reverseDoc = await _firestore
+        .collection('peer_visits')
+        .doc(reversePairId)
+        .get();
     if (reverseDoc.exists && reverseDoc.data() != null) {
       final ts = reverseDoc.data()!['lastVisitTimestamp'];
       return _parseDateTime(ts);

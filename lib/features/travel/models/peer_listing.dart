@@ -6,7 +6,8 @@ import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
 class PeerListing {
   final String id;
   final String type; // 'stay', 'car', or 'hotel'
-  final bool isPeerHosting; // True if free community hosting, false if paid stay
+  final bool
+  isPeerHosting; // True if free community hosting, false if paid stay
   final String ownerId;
   final String ownerName;
   final String ownerPhoto;

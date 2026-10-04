@@ -111,5 +111,51 @@ void main() {
         );
       },
     );
+
+    test(
+      'transferAsset throws ArgumentError when assetType is points',
+      () async {
+        expect(
+          () => pointsService.transferAsset(
+            fromUserId: userId,
+            toUserId: 'recipient_123',
+            amount: 500,
+            assetType: 'points',
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
+        verifyZeroInteractions(mockRepository);
+      },
+    );
+
+    test(
+      'transferAsset allows token transfer and proxies to repository',
+      () async {
+        when(
+          mockRepository.transferAsset(
+            fromUserId: userId,
+            toUserId: 'recipient_123',
+            amount: 500,
+            assetType: 'token',
+          ),
+        ).thenAnswer((_) async => {});
+
+        await pointsService.transferAsset(
+          fromUserId: userId,
+          toUserId: 'recipient_123',
+          amount: 500,
+          assetType: 'token',
+        );
+
+        verify(
+          mockRepository.transferAsset(
+            fromUserId: userId,
+            toUserId: 'recipient_123',
+            amount: 500,
+            assetType: 'token',
+          ),
+        ).called(1);
+      },
+    );
   });
 }

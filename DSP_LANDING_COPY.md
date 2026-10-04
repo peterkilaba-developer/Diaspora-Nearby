@@ -17,6 +17,12 @@ In the traditional economy, you are just a user. In Diaspora Nearby, you are an 
 
 $DIASPORA is the world's first "Social Equity" asset. It is not something you buy on a whim; it is something you **earn** through Proof of Activity (P.O.A) and Proof of Community Trust (PCT).
 
+**Built for Dual Geographic Identity**:
+Diaspora Nearby is architected specifically for **diaspora people** positioned between their Home Country and another country (Host Country)—whether that host status is **temporary** (corporate expats, international diplomats, business professionals, international travelers, exchange students, temporary workers) or **permanent** (naturalized citizens, permanent residents, settled diaspora communities). In essence, it serves **anyone with a dual geographic identity, temporarily or permanently**.
+
+**Nested Hierarchical Community Architecture**:
+Users navigate and connect across a **Nested Hierarchical Community** structure (Global → Continent → Country → State/Province → City/Town), ensuring their social, trust, and economic interactions fund community treasuries at every geographic tier.
+
 Every time you share a resource, send a message to family back home, book a trip, or start a new trade conversation, you are banking social capital that the world can finally see.
 
 ---
@@ -43,17 +49,18 @@ You don't need a mining rig. You just need to be an active human.
 1.  **Proof of Activity (P.O.A)**: Earn daily for opening the app, messaging in communities, booking travel, and sharing diaspora news. High activity users earn **500–1,500 $DIASPORA per day**.
 2.  **Proof of Community Trust (PCT)**: Your trust is your multiplier. Complete all **7 Genesis Milestones** and reach **91+ PCT** to unlock Peer Hosting, Peer Stay, Leadership Candidacy, and Community Voting rights.
 3.  **Grassroots Home Social Gatherings**: Community pillars who open their homes to host fellow members (>1hr visits) generate high-trust physical signals. Automatically verified via GPS or Google Plus Codes — awarding **1,000 DSP** to both host and visitor while boosting the host's PCT score (+1 PCT for mutual 5-star reviews).
-4.  **The 10,000 $DIASPORA Gate**: Reach the 10K milestone to ensure your seat at the TGE table.
+4.  **Facebook & WhatsApp Group Admins**: Are you an admin or leader of an existing diaspora Facebook group, WhatsApp chat, or community association? Stop building engagement for Web2 platforms for $0 equity. Share your invitation code with your members—**both you and each joining member earn 1,000 DSP instantly**, plus massive referral streak bonuses (+10,000 DSP). Administering a 100+ member group chat unlocks the key prerequisite for running for elected Community Leadership!
+5.  **Token Distribution Events (TDE)**: Convert your active DSP into liquid on-chain $DIASPORA at each scheduled 10% milestone based on your PCT efficiency score.
 
 ---
 
-## [SECTION 4: THE 10% COLLECTIVE TRIBUTE]
-### **Wealth for You. Wealth for Family & Home.**
+## [SECTION 4: THE 1:1 UBUNTU COMMUNITY MATCH]
+### **Wealth for You. Wealth for Family & Community.**
 We believe individual success should fuel community resilience and family support. 
 
-Through our **Collective Tribute System**, every time you earn $DIASPORA, the protocol mints a **matching amount** and distributes it across your **7 Community Treasuries** — from your Global Community down to your Home City.
+Through our **1:1 Ubuntu Community Match**, every time you earn $DIASPORA, the protocol mints a **matching amount** and distributes it across your **Community Treasuries & Reserves** — from the Global Reserve down to your local town and sovereign home country.
 
-In configured three-tier countries, such as the U.S. and Canada, the country-level tribute remains one 10% allocation slot, but that 10% is split 50/50 between the country treasury and the state/province treasury. If no state or province is set, the full country slot stays with the country treasury.
+In configured three-tier jurisdictions, such as the U.S. and Canada, the local state or province acts as a dynamic reserve backstop to ensure local initiatives and business loans are always fully funded.
 
 **Compete on the Leaderboard**: See your nation rise in the global rankings. Your success directly enables community-led development back home.
 ---
@@ -87,7 +94,7 @@ The Epoch 1 milestone is being earned right now. Will you be a **Community Pilla
 **Current Snapshot Pulse:**
 *   **Total $DIASPORA Earned**: Progress / 1,000,000
 *   **Epoch**: 1 (EARLY ACCESS)
-*   **Blockchain**: Base (Coinbase L2)
+*   **Blockchain**: Ethereum Base Blockchain by Coinbase
 
 **[ Download on the App Store ]**  
 **[ Get it on Google Play ]**

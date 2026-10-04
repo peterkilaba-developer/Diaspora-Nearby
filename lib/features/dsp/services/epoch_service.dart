@@ -6,12 +6,8 @@ final epochServiceProvider = Provider((ref) => EpochService());
 
 class EpochDefinition {
   final int epochNumber;
-  final int minDspRequired;
 
-  const EpochDefinition({
-    required this.epochNumber,
-    required this.minDspRequired,
-  });
+  const EpochDefinition({required this.epochNumber});
 }
 
 class EpochService {
@@ -19,16 +15,16 @@ class EpochService {
   // Each Epoch has 1 TGE and 10 TDE releases (10% supply each)
   // Epochs are identified by number only — labels deprecated.
   static const List<EpochDefinition> _epochSchedule = [
-    EpochDefinition(epochNumber: 1, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 2, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 3, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 4, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 5, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 6, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 7, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 8, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 9, minDspRequired: 10000),
-    EpochDefinition(epochNumber: 10, minDspRequired: 10000),
+    EpochDefinition(epochNumber: 1),
+    EpochDefinition(epochNumber: 2),
+    EpochDefinition(epochNumber: 3),
+    EpochDefinition(epochNumber: 4),
+    EpochDefinition(epochNumber: 5),
+    EpochDefinition(epochNumber: 6),
+    EpochDefinition(epochNumber: 7),
+    EpochDefinition(epochNumber: 8),
+    EpochDefinition(epochNumber: 9),
+    EpochDefinition(epochNumber: 10),
   ];
 
   static const double constantRewardMultiplier = 1.0;
@@ -44,33 +40,24 @@ class EpochService {
     );
   }
 
-  /// Returns true if the user meets the minimum DSP requirement for TGE.
+  /// Returns true if the user has positive DSP for TGE/TDE conversion.
   /// Trust score is NOT a gate — it only affects swap efficiency via the
-  /// no-trust / standard-trust / full-trust rule (see [calculateEfficiency]).
+  /// PCT rule: <11 -> 0%, 11-90 -> exact %, 91+ -> 100% (see [calculateEfficiency]).
   bool isEligibleForTGE({
     required int epochNumber,
     required double userTotalDsp,
   }) {
-    final epoch = getEpoch(epochNumber);
-    return userTotalDsp >= epoch.minDspRequired;
+    return userTotalDsp > 0;
   }
 
-  /// Calculates the TGE distribution for a user
-  /// If eligible: Returns their full DSP balance * Efficiency
-  /// If ineligible (low DSP): Returns 0
+  /// Calculates the TGE/TDE distribution for a user
+  /// Returns their eligible DSP balance * PCT Efficiency
   double calculateTGESwap({
     required int epochNumber,
     required double currentDspBalance,
     required int trustScore,
   }) {
-    // 1. Check Gated Eligibility (Min DSP only)
-    if (!isEligibleForTGE(
-      epochNumber: epochNumber,
-      userTotalDsp: currentDspBalance,
-    )) {
-      return 0.0;
-    }
-
+    if (currentDspBalance <= 0) return 0.0;
     final double efficiency = calculateEfficiency(trustScore);
     return currentDspBalance * efficiency;
   }
@@ -102,58 +89,58 @@ class EpochService {
   // Community Epoch Logic (10-Base Scaling)
   // ------------------------------------------------------------------------
 
-  // Community Epoch Scaling (10x User/Supply Growth)
+  // Community Epoch Scaling (10x User/Supply Growth: 10 users to 10B users)
   static const List<CommunityEpochDefinition> _communityEpochSchedule = [
     CommunityEpochDefinition(
       level: 1,
       dspTarget: 1000000,
-      memberTarget: 100,
-    ), // 1M / 100 users
+      memberTarget: 10,
+    ), // 1M / 10 users
     CommunityEpochDefinition(
       level: 2,
       dspTarget: 10000000,
-      memberTarget: 1000,
-    ), // 10M / 1k users
+      memberTarget: 100,
+    ), // 10M / 100 users
     CommunityEpochDefinition(
       level: 3,
       dspTarget: 100000000,
-      memberTarget: 10000,
-    ), // 100M / 10k
+      memberTarget: 1000,
+    ), // 100M / 1k
     CommunityEpochDefinition(
       level: 4,
       dspTarget: 1000000000,
-      memberTarget: 100000,
-    ), // 1B / 100k
+      memberTarget: 10000,
+    ), // 1B / 10k
     CommunityEpochDefinition(
       level: 5,
       dspTarget: 10000000000,
-      memberTarget: 1000000,
-    ), // 10B / 1M
+      memberTarget: 100000,
+    ), // 10B / 100k
     CommunityEpochDefinition(
       level: 6,
       dspTarget: 100000000000,
-      memberTarget: 10000000,
-    ), // 100B / 10M
+      memberTarget: 1000000,
+    ), // 100B / 1M
     CommunityEpochDefinition(
       level: 7,
       dspTarget: 1000000000000,
-      memberTarget: 100000000,
-    ), // 1T / 100M
+      memberTarget: 10000000,
+    ), // 1T / 10M
     CommunityEpochDefinition(
       level: 8,
       dspTarget: 10000000000000,
-      memberTarget: 1000000000,
-    ), // 10T / 1B
+      memberTarget: 100000000,
+    ), // 10T / 100M
     CommunityEpochDefinition(
       level: 9,
       dspTarget: 100000000000000,
-      memberTarget: 10000000000,
-    ), // 100T / 10B
+      memberTarget: 1000000000,
+    ), // 100T / 1B
     CommunityEpochDefinition(
       level: 10,
       dspTarget: 1000000000000000,
-      memberTarget: 100000000000,
-    ), // 1QD / 100B
+      memberTarget: 10000000000,
+    ), // 1QD / 10B
   ];
 
   static const int absoluteSupplyCap = 1000000000000000; // 1 Quadrillion (1QD)

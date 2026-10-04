@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -24,6 +23,7 @@ import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/screens/listing_detail_screen.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 class CreateListingScreen extends ConsumerStatefulWidget {
   final MarketplaceListing? existingListing;
@@ -1658,9 +1658,9 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Scan VIN Number',
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.accent,
@@ -1733,7 +1733,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                     : const Icon(LucideIcons.search, size: 16),
                 label: Text(
                   _vinLookupLoading ? 'Looking up...' : 'Lookup',
-                  style: GoogleFonts.outfit(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -3130,6 +3130,27 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
       final profile = ref.read(userProfileProvider).value;
       if (user == null || profile == null) throw Exception('Not logged in');
 
+      // Gate: Members offering services MUST have completed Proof of Humanity (PoH)
+      if (_listingType == ListingType.service) {
+        final trustData = await ref
+            .read(trustServiceProvider)
+            .getTrustData(user.uid);
+        final isPoHComplete =
+            (trustData?.uniqueFamilyCount ?? 0) >= 10 &&
+            (trustData?.uniqueFriendCount ?? 0) >= 10 &&
+            (trustData?.uniqueQrCount ?? 0) >= 10 &&
+            (trustData?.uniqueVerificationCount ?? 0) >= 10 &&
+            (profile.isComplete) &&
+            (profile.showCurrentLocationName != false &&
+                profile.currentLocation != null &&
+                profile.cityVisibilityForfeited != true);
+        if (!isPoHComplete) {
+          throw Exception(
+            'Providing services requires completing all 7 Proof of Humanity (PoH) milestones to protect community trust.',
+          );
+        }
+      }
+
       // Upload images
       final imageUrls = <String>[];
       for (int i = 0; i < _selectedImages.length; i++) {
@@ -4045,14 +4066,11 @@ class _ModelSearchSheetState extends State<_ModelSearchSheet> {
           ),
           const SizedBox(height: 16),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               'Add Compatible Models',
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(height: 12),

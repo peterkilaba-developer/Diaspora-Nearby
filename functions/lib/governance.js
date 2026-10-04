@@ -4,6 +4,11 @@
  * cannot appoint or remove leaders by writing governance documents directly.
  */
 const {functions, admin, db} = require("./shared");
+const {
+  requireAppCheck,
+  consumeRateLimit,
+  stableHash,
+} = require("./security");
 
 const VALID_ROLES = new Set([
   "president",
@@ -31,32 +36,8 @@ function validateRole(role) {
   }
 }
 
-function tallyVotes(snapshot) {
-  let yay = 0;
-  let nay = 0;
-  let abstain = 0;
-  snapshot.docs.forEach((doc) => {
-    switch (doc.data().verdict) {
-      case "yay":
-        yay += 1;
-        break;
-      case "nay":
-        nay += 1;
-        break;
-      case "abstain":
-        abstain += 1;
-        break;
-      default:
-        break;
-    }
-  });
-  return {
-    yay,
-    nay,
-    abstain,
-    total: yay + nay + abstain,
-    decisive: yay + nay,
-  };
+function validId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(value);
 }
 
 /**
@@ -64,9 +45,11 @@ function tallyVotes(snapshot) {
  */
 exports.nominateForGovernanceRole = functions.https.onCall(
     async (data, context) => {
+      requireAppCheck(context);
       const userId = requireAuth(context);
       const {unitId, role} = data || {};
-      if (typeof unitId !== "string" || unitId.length === 0) {
+      await consumeRateLimit("governance-nomination", userId, 10, 24 * 60 * 60 * 1000);
+      if (!validId(unitId) || unitId === "global_community") {
         throw new functions.https.HttpsError(
             "invalid-argument",
             "A governance unit is required.",
@@ -121,22 +104,96 @@ exports.nominateForGovernanceRole = functions.https.onCall(
 );
 
 async function getVoteTally(unitId, candidateId, role) {
-  const snapshot = await db.collection("governance_votes")
+  const base = db.collection("governance_votes")
       .where("unitId", "==", unitId)
       .where("candidateId", "==", candidateId)
-      .where("role", "==", role)
-      .get();
-  return tallyVotes(snapshot);
+      .where("role", "==", role);
+  const [yaySnapshot, naySnapshot, abstainSnapshot] = await Promise.all([
+    base.where("verdict", "==", "yay").count().get(),
+    base.where("verdict", "==", "nay").count().get(),
+    base.where("verdict", "==", "abstain").count().get(),
+  ]);
+  const yay = yaySnapshot.data().count;
+  const nay = naySnapshot.data().count;
+  const abstain = abstainSnapshot.data().count;
+  return {yay, nay, abstain, total: yay + nay + abstain, decisive: yay + nay};
 }
+
+/** Records one immutable, authenticated vote for a registered candidate. */
+exports.castGovernanceVote = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  const voterId = requireAuth(context);
+  await consumeRateLimit("governance-vote", voterId, 100, 24 * 60 * 60 * 1000);
+  const {unitId, candidateId, role, verdict} = data || {};
+  if (!validId(unitId) || unitId === "global_community" || !validId(candidateId) ||
+      !["yay", "nay", "abstain"].includes(verdict)) {
+    throw new functions.https.HttpsError("invalid-argument", "Invalid governance vote.");
+  }
+  validateRole(role);
+
+  const unitRef = db.collection("governance").doc(unitId);
+  const unitSnapshot = await unitRef.get();
+  if (!unitSnapshot.exists) {
+    throw new functions.https.HttpsError("not-found", "Governance unit not found.");
+  }
+  const unit = unitSnapshot.data();
+  const candidates = unit.roleCandidates || {};
+  if (!Array.isArray(candidates[role]) || !candidates[role].includes(candidateId)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition", "The candidate is not registered for this role.");
+  }
+  if (!validId(unit.communityId)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition", "The governance unit has no valid community.");
+  }
+
+  const [profileSnapshot, communitySnapshot] = await Promise.all([
+    db.collection("users").doc(voterId).get(),
+    db.collection("communities").doc(unit.communityId).get(),
+  ]);
+  const memberships = profileSnapshot.exists &&
+    Array.isArray(profileSnapshot.data().communityMemberships) ?
+    profileSnapshot.data().communityMemberships : [];
+  const community = communitySnapshot.exists ? communitySnapshot.data() : {};
+  const legacyMembers = [
+    ...(Array.isArray(community.members) ? community.members : []),
+    ...(Array.isArray(community.memberIds) ? community.memberIds : []),
+  ];
+  if (!memberships.includes(unit.communityId) && !legacyMembers.includes(voterId)) {
+    throw new functions.https.HttpsError(
+        "permission-denied", "Only community members may vote.");
+  }
+
+  const voteId = stableHash(`${unitId}:${role}:${candidateId}:${voterId}`);
+  const voteRef = db.collection("governance_votes").doc(voteId);
+  try {
+    await voteRef.create({
+      unitId,
+      voterId,
+      candidateId,
+      role,
+      verdict,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    if (error && (error.code === 6 || error.code === "already-exists")) {
+      throw new functions.https.HttpsError("already-exists", "You already voted.");
+    }
+    throw error;
+  }
+  return {success: true};
+});
 
 /**
  * Reconciles council state after a vote using persisted vote documents.
  */
 exports.evaluateGovernanceVote = functions.https.onCall(
     async (data, context) => {
-      requireAuth(context);
+      requireAppCheck(context);
+      const callerId = requireAuth(context);
+      await consumeRateLimit("governance-evaluate", callerId, 100, 24 * 60 * 60 * 1000);
       const {unitId, candidateId, role} = data || {};
-      if (typeof unitId !== "string" || typeof candidateId !== "string") {
+      if (!validId(unitId) || unitId === "global_community" || !validId(candidateId)) {
         throw new functions.https.HttpsError(
             "invalid-argument",
             "Governance unit and candidate are required.",

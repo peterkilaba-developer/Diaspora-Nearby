@@ -464,6 +464,16 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
+  _i3.Future<Map<String, dynamic>> evaluateWelcomeBonus() =>
+      (super.noSuchMethod(
+            Invocation.method(#evaluateWelcomeBonus, []),
+            returnValue: _i3.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i3.Future<Map<String, dynamic>>);
+
+  @override
   _i3.Future<void> trackDailyShare(String? userId, bool? isIncoming) =>
       (super.noSuchMethod(
             Invocation.method(#trackDailyShare, [userId, isIncoming]),
@@ -473,9 +483,13 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
-  _i3.Future<void> trackMessageSent(String? userId) =>
+  _i3.Future<void> trackMessageSent(String? userId, {String? receiverId}) =>
       (super.noSuchMethod(
-            Invocation.method(#trackMessageSent, [userId]),
+            Invocation.method(
+              #trackMessageSent,
+              [userId],
+              {#receiverId: receiverId},
+            ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
@@ -500,9 +514,16 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
-  _i3.Future<void> trackVerifierReward(String? userId) =>
+  _i3.Future<void> trackVerifierReward(
+    String? userId, {
+    String? verifiedUserId,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#trackVerifierReward, [userId]),
+            Invocation.method(
+              #trackVerifierReward,
+              [userId],
+              {#verifiedUserId: verifiedUserId},
+            ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
@@ -532,9 +553,17 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<bool>);
 
   @override
-  _i3.Future<void> trackIncomingShare(String? userId, String? contentType) =>
+  _i3.Future<void> trackIncomingShare(
+    String? userId,
+    String? contentType, {
+    String? sharerId,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#trackIncomingShare, [userId, contentType]),
+            Invocation.method(
+              #trackIncomingShare,
+              [userId, contentType],
+              {#sharerId: sharerId},
+            ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
@@ -601,15 +630,6 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
-  _i3.Future<void> recordFakeVerificationPenalty(String? userId) =>
-      (super.noSuchMethod(
-            Invocation.method(#recordFakeVerificationPenalty, [userId]),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
   _i3.Future<void> recordFraudPenalty(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#recordFraudPenalty, [userId]),
@@ -664,6 +684,41 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
+  _i3.Future<void> trackContentReaction(
+    String? userId,
+    String? targetId, {
+    String? receiverId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #trackContentReaction,
+              [userId, targetId],
+              {#receiverId: receiverId},
+            ),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> trackEventCreation(String? userId, String? eventId) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackEventCreation, [userId, eventId]),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
+  _i3.Future<void> trackProfileUpdate(String? userId) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackProfileUpdate, [userId]),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
+
+  @override
   _i3.Future<void> trackChatAdPenalty(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#trackChatAdPenalty, [userId]),
@@ -688,9 +743,17 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
-  _i3.Future<void> trackHostATraveler(String? userId, String? guestUserId) =>
+  _i3.Future<void> trackHostATraveler(
+    String? userId,
+    String? guestUserId, {
+    int? nights = 1,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#trackHostATraveler, [userId, guestUserId]),
+            Invocation.method(
+              #trackHostATraveler,
+              [userId, guestUserId],
+              {#nights: nights},
+            ),
             returnValue: _i3.Future<void>.value(),
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
@@ -945,6 +1008,22 @@ class MockPointsService extends _i1.Mock implements _i5.PointsService {
           as _i3.Future<void>);
 
   @override
+  _i3.Future<bool> trackPeerVisitReward({
+    required String? hostUserId,
+    required String? visitorUserId,
+    String? locationAddress,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#trackPeerVisitReward, [], {
+              #hostUserId: hostUserId,
+              #visitorUserId: visitorUserId,
+              #locationAddress: locationAddress,
+            }),
+            returnValue: _i3.Future<bool>.value(false),
+          )
+          as _i3.Future<bool>);
+
+  @override
   _i3.Future<void> trackHostLocationMove(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#trackHostLocationMove, [userId]),
@@ -1051,29 +1130,6 @@ class MockRelationshipRepository extends _i1.Mock
           as _i3.Future<List<_i8.Relationship>>);
 
   @override
-  _i3.Future<void> addRelationship({
-    required String? userId,
-    required String? relatedUserId,
-    required String? type,
-    required String? name,
-    String? status = 'active',
-    String? flag,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#addRelationship, [], {
-              #userId: userId,
-              #relatedUserId: relatedUserId,
-              #type: type,
-              #name: name,
-              #status: status,
-              #flag: flag,
-            }),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
   _i3.Future<void> sendRelationshipRequest({
     required String? fromUserId,
     required String? fromUserName,
@@ -1154,12 +1210,6 @@ class MockRelationshipRepository extends _i1.Mock
             returnValue: _i3.Future<_i9.RelationshipRequest?>.value(),
           )
           as _i3.Future<_i9.RelationshipRequest?>);
-
-  @override
-  void syncAcceptedSentRequests(String? userId) => super.noSuchMethod(
-    Invocation.method(#syncAcceptedSentRequests, [userId]),
-    returnValueForMissingStub: null,
-  );
 
   @override
   _i3.Future<void> acceptRequest(
@@ -1597,10 +1647,15 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
 
   @override
   _i3.Stream<List<_i17.PointsTransaction>> streamUserTransactions(
-    String? userId,
-  ) =>
+    String? userId, {
+    int? limit = 100,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#streamUserTransactions, [userId]),
+            Invocation.method(
+              #streamUserTransactions,
+              [userId],
+              {#limit: limit},
+            ),
             returnValue: _i3.Stream<List<_i17.PointsTransaction>>.empty(),
           )
           as _i3.Stream<List<_i17.PointsTransaction>>);
@@ -1621,6 +1676,16 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
           as _i3.Future<void>);
+
+  @override
+  _i3.Future<Map<String, dynamic>> evaluateWelcomeBonus() =>
+      (super.noSuchMethod(
+            Invocation.method(#evaluateWelcomeBonus, []),
+            returnValue: _i3.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i3.Future<Map<String, dynamic>>);
 
   @override
   _i3.Future<void> addPoints(
@@ -2020,4 +2085,35 @@ class MockPointsRepository extends _i1.Mock implements _i14.PointsRepository {
             returnValue: _i3.Future<bool>.value(false),
           )
           as _i3.Future<bool>);
+
+  @override
+  _i3.Future<DateTime?> getLastPeerVisitTime({
+    required String? hostUserId,
+    required String? visitorUserId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getLastPeerVisitTime, [], {
+              #hostUserId: hostUserId,
+              #visitorUserId: visitorUserId,
+            }),
+            returnValue: _i3.Future<DateTime?>.value(),
+          )
+          as _i3.Future<DateTime?>);
+
+  @override
+  _i3.Future<void> recordPeerVisit({
+    required String? hostUserId,
+    required String? visitorUserId,
+    String? locationAddress,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#recordPeerVisit, [], {
+              #hostUserId: hostUserId,
+              #visitorUserId: visitorUserId,
+              #locationAddress: locationAddress,
+            }),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 }

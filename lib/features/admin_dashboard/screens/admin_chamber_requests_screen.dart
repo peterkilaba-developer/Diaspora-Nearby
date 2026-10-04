@@ -16,6 +16,7 @@ final _allPendingRequestsProvider =
       return FirebaseFirestore.instance
           .collection('leadershipRequests')
           .where('status', isEqualTo: ChamberLeadershipRequest.statusPending)
+          .limit(200)
           .snapshots()
           .map(
             (snap) =>

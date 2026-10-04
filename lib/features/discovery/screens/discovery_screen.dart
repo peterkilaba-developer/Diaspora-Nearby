@@ -1,96 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/discovery/services/discovery_service.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/chat/screens/chats_list_screen.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 // Providers
 
-final userLocationProvider = FutureProvider<GeoPoint>((ref) async {
-  final position = await Geolocator.getCurrentPosition();
-  return GeoPoint(position.latitude, position.longitude);
-});
-
-final nearbyUsersStreamProvider = StreamProvider.autoDispose<List<ProfileData>>((
-  ref,
-) {
-  // Fixed large radius for "automatic" filtering (50000km covers effective proximity logic - global)
-  const double fixedRadius = 50000.0;
-
-  final centerAsync = ref.watch(userLocationProvider);
-  final currentUser = ref.watch(authRepositoryProvider).currentUser;
-
-  return centerAsync.when(
-    data: (center) {
-      return DiscoveryService()
-          .getUsersNearby(
-            center: center,
-            radiusInKm: fixedRadius,
-            excludeUserId: currentUser?.uid,
-          )
-          .map((snapshots) {
-            final users = snapshots
-                .map((doc) {
-                  final data = doc.data();
-                  if (data == null) return null;
-
-                  double? distance;
-                  try {
-                    // We need to safely extract the geopoint.
-                    // Structure is: geo: { geopoint: GeoPoint(...), geohash: "..." }
-                    if (data['geo'] != null && data['geo'] is Map) {
-                      final geoMap = data['geo'] as Map<String, dynamic>;
-                      if (geoMap['geopoint'] is GeoPoint) {
-                        final gp = geoMap['geopoint'] as GeoPoint;
-                        final distInMeters = Geolocator.distanceBetween(
-                          center.latitude,
-                          center.longitude,
-                          gp.latitude,
-                          gp.longitude,
-                        );
-                        distance = distInMeters / 1000.0;
-                      }
-                    }
-                  } catch (e) {
-                    debugPrint('Error calculating distance: $e');
-                  }
-
-                  final profile = ProfileData.fromJson({
-                    ...data,
-                    'uid': doc.id,
-                  });
-                  if (distance != null) {
-                    return profile.copyWith(distance: distance);
-                  }
-                  return profile;
-                })
-                .whereType<ProfileData>()
-                .toList();
-
-            // Sort by distance (closest first)
-            // Null distances push to the end
-            users.sort((a, b) {
-              final distA = a.distance ?? double.infinity;
-              final distB = b.distance ?? double.infinity;
-              return distA.compareTo(distB);
-            });
-
-            return users;
-          });
-    },
-    loading: () => Stream.value(<ProfileData>[]),
-    error: (error, stackTrace) => Stream.value(<ProfileData>[]),
-  );
-});
+final nearbyUsersStreamProvider = StreamProvider.autoDispose<List<ProfileData>>(
+  (ref) {
+    return DiscoveryService().getUsersNearby().map(
+      (users) => users.map(ProfileData.fromJson).toList(growable: false),
+    );
+  },
+);
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
@@ -122,38 +53,114 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   Widget build(BuildContext context) {
     final nearbyUsersAsync = ref.watch(nearbyUsersStreamProvider);
     final userProfileAsync = ref.watch(userProfileProvider);
+    final chatsAsync = ref.watch(userChatsStreamProvider);
+    final currentUser = ref.watch(authRepositoryProvider).currentUser;
+
     final homeCountry =
         userProfileAsync.value?.homeCountry ?? 'your home country';
+
+    // Extract UIDs of users with whom the current user already has active direct chats
+    final Set<String> activeChatUserIds = {};
+    if (currentUser != null && chatsAsync.value != null) {
+      for (final chat in chatsAsync.value!) {
+        if (chat.isDirect) {
+          final otherId = chat.getOtherParticipantId(currentUser.uid);
+          if (otherId != null && otherId.isNotEmpty) {
+            activeChatUserIds.add(otherId);
+          }
+        }
+      }
+    }
 
     return Column(
       children: [
         // Results List
         Expanded(
           child: nearbyUsersAsync.when(
-            data: (users) {
+            data: (rawUsers) {
+              // Exclude users with whom an active direct chat already exists
+              final users = rawUsers
+                  .where((user) => !activeChatUserIds.contains(user.uid))
+                  .toList();
+
               if (users.isEmpty) {
+                // If nearby members exist but ALL of them are already in active chats
+                final allConnected =
+                    rawUsers.isNotEmpty && activeChatUserIds.isNotEmpty;
+
+                if (allConnected) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.messagesSquare,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'All Nearby Members Connected',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'You are already in active chats with all nearby community members in your area.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(context).hintColor,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: () => context.go('/chats'),
+                            icon: const Icon(
+                              LucideIcons.messageSquare,
+                              size: 18,
+                            ),
+                            label: const Text('View Active Chats'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Default empty state when no nearby members are found
                 return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.location_off_outlined,
-                        size: 48,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'There are no other community members from $homeCountry nearby',
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () {
-                          // Force refresh location
-                          ref.invalidate(userLocationProvider);
-                        },
-                        child: const Text('Refresh Location'),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.location_off_outlined,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'There are no other community members from $homeCountry nearby',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: () {
+                            // Force refresh location
+                            ref.invalidate(nearbyUsersStreamProvider);
+                          },
+                          icon: const Icon(LucideIcons.refreshCw, size: 16),
+                          label: const Text('Refresh Location'),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }

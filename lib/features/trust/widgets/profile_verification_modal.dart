@@ -1,7 +1,6 @@
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -521,8 +520,6 @@ class _ProfileVerificationModalState
 
     try {
       final trustService = ref.read(trustServiceProvider);
-      final pointsService = ref.read(pointsServiceProvider);
-
       final toUserId = widget.targetUser.uid;
       if (toUserId == null) throw Exception("Target user ID is missing.");
 
@@ -545,11 +542,6 @@ class _ProfileVerificationModalState
         );
       }
 
-      await pointsService.trackVerifierReward(
-        widget.currentUserId,
-        verifiedUserId: toUserId,
-      );
-
       if (!mounted) return;
       Navigator.pop(context);
 
@@ -557,8 +549,7 @@ class _ProfileVerificationModalState
         context,
         type: VerificationAlertType.success,
         title: 'Verification Success',
-        message:
-            'Thank you for contributing to the community trust! You have earned 1,000 DSP.',
+        message: 'Thank you for contributing to the community trust.',
       );
     } catch (e) {
       if (!mounted) return;

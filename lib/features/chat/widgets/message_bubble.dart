@@ -16,6 +16,7 @@ import 'message_content/audio_message_content.dart';
 import 'message_content/document_message_content.dart';
 import 'message_content/location_message_content.dart';
 import 'message_content/dsp_transfer_message_content.dart'; // [NEW]
+import 'message_content/money_transfer_message_content.dart';
 import 'message_content/hosting_request_message_content.dart'; // [NEW] Hosting
 import 'message_content/hosting_arrangement_message_content.dart'; // [NEW] Hosting DM
 
@@ -704,10 +705,7 @@ class MessageBubble extends ConsumerWidget {
       case 'dsp_transfer': // [NEW]
         return DSPTransferMessageContent(message: message, isOwn: isOwn);
       case 'money-transfer':
-        return TextMessageContent(
-          message: message,
-          isOwn: isOwn,
-        ); // Placeholder
+        return MoneyTransferMessageContent(message: message, isOwn: isOwn);
       case 'system':
         // Check for hosting request system messages
         if (message.metadata?['systemType'] == 'hosting_request') {

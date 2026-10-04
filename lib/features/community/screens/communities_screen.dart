@@ -13,6 +13,7 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 import 'package:diaspora_nearby/features/hosting/widgets/request_host_dialog.dart'; // [NEW] Hosting
+import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class CommunitiesScreen extends ConsumerStatefulWidget {
@@ -197,7 +198,10 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
         item.children.isNotEmpty && item.isExpandable == false;
 
     // 1. Global Community (Special Card)
-    if (item.type == 'global') {
+    if (item.type == 'global' || item.id == 'global_community') {
+      if (!ref.watch(isGlobalUnlockedSyncProvider)) {
+        return const SizedBox.shrink();
+      }
       return Column(
         children: [
           Card(
@@ -342,23 +346,6 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                   '${item.totalMembers} members',
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
-                if (item.type == 'city' || item.type == 'community') ...[
-                  const SizedBox(width: 8),
-                  const Icon(
-                    LucideIcons.plane,
-                    size: 12,
-                    color: AppTheme.accent,
-                  ),
-                  const SizedBox(width: 2),
-                  const Text(
-                    'Free Peer Host',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.accent,
-                    ),
-                  ),
-                ],
               ],
             ),
             onTap: () {
@@ -382,61 +369,8 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
               }
               _openMembersList(context);
             },
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Free Peer Host action button — available in any host or home town community
-                if (item.type == 'city' || item.type == 'community')
-                  Tooltip(
-                    message: 'Free Peer Host Available',
-                    child: InkWell(
-                      onTap: () {
-                        RequestHostDialog.show(
-                          context,
-                          communityId: item.id,
-                          communityName: item.name,
-                          communityChatId: 'chat_${item.id}',
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        margin: const EdgeInsets.only(right: 6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppTheme.accent.withValues(alpha: 0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              LucideIcons.plane,
-                              size: 14,
-                              color: AppTheme.accent,
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Free Host',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.accent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                if (hasChildren)
-                  (isPreExpanded
+            trailing: hasChildren
+                ? (isPreExpanded
                       ? const SizedBox(width: 16)
                       : IconButton(
                           padding: EdgeInsets.zero,
@@ -476,9 +410,27 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
                               _isExpanded = !_isExpanded;
                             });
                           },
-                        )),
-              ],
-            ),
+                        ))
+                : (item.type == 'city' || item.type == 'community'
+                      ? IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Request Free Peer Host',
+                          icon: const Icon(
+                            LucideIcons.plane,
+                            color: AppTheme.accent,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            RequestHostDialog.show(
+                              context,
+                              communityId: item.id,
+                              communityName: item.name,
+                              communityChatId: 'chat_${item.id}',
+                            );
+                          },
+                        )
+                      : null),
           ),
 
           // Show children if expanded OR if pre-expanded

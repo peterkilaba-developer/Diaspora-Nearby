@@ -19,7 +19,9 @@ class PlusCodeService {
     final tail = parts[1];
 
     // Head length must be even and <= 8
-    if (head.isEmpty || head.length > _separatorPosition || head.length % 2 != 0) {
+    if (head.isEmpty ||
+        head.length > _separatorPosition ||
+        head.length % 2 != 0) {
       return false;
     }
 
@@ -42,7 +44,11 @@ class PlusCodeService {
   }
 
   /// Encodes a latitude and longitude into a full Plus Code (10 characters + '+').
-  static String encode(double latitude, double longitude, {int codeLength = 10}) {
+  static String encode(
+    double latitude,
+    double longitude, {
+    int codeLength = 10,
+  }) {
     double lat = latitude.clamp(-90.0, 90.0);
     double lng = longitude;
 
@@ -136,10 +142,7 @@ class PlusCodeService {
     double lat = latVal - 90.0 + (latResolution / 2.0);
     double lng = lngVal - 180.0 + (lngResolution / 2.0);
 
-    return {
-      'latitude': lat.clamp(-90.0, 90.0),
-      'longitude': lng,
-    };
+    return {'latitude': lat.clamp(-90.0, 90.0), 'longitude': lng};
   }
 
   /// Formats a raw location or Plus Code for UI display.

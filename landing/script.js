@@ -190,82 +190,42 @@ async function submitEarlyAccess(formPrefix) {
     if (btnText) btnText.textContent = 'Signing up\u2026';
 
     try {
-        const db = window._firestoreDb;
-        const addDoc = window._addDoc;
-        const collection = window._collection;
-        const serverTimestamp = window._serverTimestamp;
         const addPlayStoreTester = window._addPlayStoreTester;
 
-        if (!db || !addDoc || !collection) {
-            throw new Error('Firebase not loaded');
+        if (!addPlayStoreTester) {
+            throw new Error('Secure signup service is unavailable');
         }
 
         // Capture referral code from invite link (if any)
         const referralCode = localStorage.getItem('dn_referral_code') || null;
 
+        const signupType = detectedPlatform === 'android'
+            ? 'play_store_closed_test'
+            : detectedPlatform === 'ios' ? 'testflight' : 'early_access';
+        const result = await addPlayStoreTester({
+            email,
+            platform: detectedPlatform,
+            signupType,
+            referralCode,
+        });
+        const response = result.data;
+
         if (detectedPlatform === 'android') {
-            // ── Android: Record signup & guide to Google Group + Play Store ──
-            showMessage(msgEl, 'Signing you up…', 'info');
-
-            // Record via Cloud Function if available, otherwise direct Firestore
-            if (addPlayStoreTester) {
-                try {
-                    const result = await addPlayStoreTester({ email });
-                    const response = result.data;
-                    if (response.alreadyTester) {
-                        showMessage(msgEl, '✓ You\'re already signed up!', 'success');
-                        emailInput.value = '';
-                        hideFormAfterSignup(formPrefix);
-                        showTesterSteps(msgEl);
-                        return;
-                    }
-                } catch (fnErr) {
-                    console.warn('Cloud Function call failed, falling back:', fnErr);
-                    await addDoc(collection(db, 'tester_signups'), {
-                        email,
-                        platform: detectedPlatform,
-                        source: 'landing_page',
-                        signup_type: 'play_store_closed_test',
-                        referred_by: referralCode,
-                        timestamp: serverTimestamp(),
-                    });
-                }
-            } else {
-                await addDoc(collection(db, 'tester_signups'), {
-                    email,
-                    platform: detectedPlatform,
-                    source: 'landing_page',
-                    signup_type: 'play_store_closed_test',
-                    referred_by: referralCode,
-                    timestamp: serverTimestamp(),
-                });
-            }
-
-            showMessage(msgEl, '✓ Signed up! Follow the steps below to install:', 'success');
+            showMessage(
+                msgEl,
+                response.alreadyTester
+                    ? '✓ You\'re already signed up!'
+                    : '✓ Signup recorded! Follow the steps below to install:',
+                'success'
+            );
             emailInput.value = '';
             hideFormAfterSignup(formPrefix);
             showTesterSteps(msgEl);
         } else if (detectedPlatform === 'ios') {
-            await addDoc(collection(db, 'tester_signups'), {
-                email,
-                platform: detectedPlatform,
-                source: 'landing_page',
-                signup_type: 'testflight',
-                referred_by: referralCode,
-                timestamp: serverTimestamp(),
-            });
             showMessage(msgEl, 'You\u2019re in! We\u2019ll send your TestFlight invite to ' + email + ' shortly.', 'success');
             emailInput.value = '';
             hideFormAfterSignup(formPrefix);
         } else {
-            await addDoc(collection(db, 'tester_signups'), {
-                email,
-                platform: detectedPlatform,
-                source: 'landing_page',
-                signup_type: 'early_access',
-                referred_by: referralCode,
-                timestamp: serverTimestamp(),
-            });
             showMessage(msgEl, 'You\u2019re in! We\u2019ll notify you when the native app is ready for your platform.', 'success');
             emailInput.value = '';
             hideFormAfterSignup(formPrefix);

@@ -7,7 +7,7 @@ Connect with your diaspora community nearby. Find friends, events, and groups.
 
 **Distance doesn't have to mean disconnection.**
 
-**Diaspora Nearby** is the ultimate social network designed to bridge the gap between you and your home community, no matter where you are in the world. Whether you’ve just moved to a new city or have been living abroad for years, Diaspora Nearby helps you find your people, discover local cultural events, and stay connected to your roots.
+**Diaspora Nearby** is the social sovereign platform designed for anyone with a **dual geographic identity** positioned between their home country and another country (host country). Whether your host status is **temporary** (as a corporate expat, international diplomat, business professional, traveler, or student) or **permanent** (as a naturalized citizen, permanent resident, or settled diaspora member), Diaspora Nearby helps you navigate **nested hierarchical communities** (Global → Continent → Country → State/Province → City/Town), discover local compatriots, access peer hosting and stays, and build portable trust.
 
 **Key Features:**
 

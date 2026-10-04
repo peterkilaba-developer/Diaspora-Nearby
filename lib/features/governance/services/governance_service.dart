@@ -10,7 +10,6 @@ import '../models/governance_roles.dart';
 import '../models/election_result.dart';
 import '../repository/governance_repository.dart';
 import '../../trust/models/trust_data.dart';
-import '../../dsp/services/points_service.dart';
 import '../../trust/services/trust_service.dart';
 import '../../trust/repository/trust_repository.dart';
 import '../../chat/services/chat_messaging_service.dart';
@@ -113,12 +112,8 @@ class GovernanceService {
       verdict: VoteVerdict.yay,
     );
 
-    // 5. Record HTS activity
-    await _ref
-        .read(trustServiceProvider)
-        .recordActivity(userId, HTSActivityType.vote);
-
-    // 6. Send system message to community chat
+    // 5. Send system message to community chat. Trust metrics are updated only
+    // by backend workflows; a client vote is not allowed to mutate them.
     await _sendCandidacyAnnouncement(unit, userId, role);
 
     debugPrint(
@@ -208,12 +203,7 @@ class GovernanceService {
       verdict: verdict,
     );
 
-    // 3. Record HTS governance activity
-    await _ref
-        .read(trustServiceProvider)
-        .recordActivity(voterId, HTSActivityType.vote);
-
-    // 4. Check if winner can be declared or vote-out applies
+    // 3. Check if winner can be declared or vote-out applies
     await _evaluateManagedRoleStatus(unitId, candidateId, role);
 
     debugPrint(
@@ -232,14 +222,6 @@ class GovernanceService {
     final data = Map<String, dynamic>.from(result.data as Map);
 
     if (data['promoted'] == true) {
-      await _ref
-          .read(pointsServiceProvider)
-          .awardManualPoints(
-            candidateId,
-            10000,
-            'Governance Achievement: Elected as ${GovernanceRoles.displayName(role)}',
-          );
-      await _ref.read(trustServiceProvider).updateTrustForUser(candidateId);
       debugPrint('$candidateId elected as $role in $unitId.');
     }
 
@@ -515,6 +497,7 @@ class GovernanceService {
       final snapshot = await FirebaseFirestore.instance
           .collection('governance')
           .where('level', isEqualTo: level.index)
+          .limit(200)
           .get();
       final units = snapshot.docs
           .map((doc) => GovernanceUnit.fromJson(doc.data()))

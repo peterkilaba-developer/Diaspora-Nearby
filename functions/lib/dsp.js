@@ -15,6 +15,7 @@ const { assertOnChainConfig, readOptionalConfig } = require("./on_chain_config")
 
 const TGE_CONTROLLER_ABI = [
   "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
+  "function mintEpochSupply(uint256 amount) external",
   // V2 signature: explicit user vs treasury split with Merkle root commitment.
   // (Pre-V2 deployment: the old signature was `(address[] recipients, uint256[] amounts)`.)
   "function distributeWelcomeBonus(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
@@ -34,13 +35,15 @@ const TGE_CONTROLLER_ABI = [
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * Calculate PoCT efficiency on a decile scale (matches EpochService.calculateEfficiency)
- * Score 0 = 0%, 1-10 = 10%, 11-20 = 20%, ... 91-100 = 100%
+ * Calculate PCT (Proof of Community Trust) efficiency.
+ * Score < 11 (0-10) = 0%, 11-90 = exact percent (11%-90%), 91+ = 100%
+ * Matches EpochService.calculateEfficiency in Dart.
  */
 function calculateEfficiency(trustScore) {
-  if (!trustScore || trustScore <= 0) return 0;
-  const efficiency = Math.ceil(trustScore / 10) * 10; // Decile: 0-100
-  return Math.min(efficiency, 100);
+  const score = Number(trustScore) || 0;
+  if (score < 11) return 0;
+  if (score >= 91) return 100;
+  return Math.round(Math.min(Math.max(score, 0), 100));
 }
 
 // ── Epoch Schedule (mirrors EpochService in Dart) ──────────────────────
@@ -93,6 +96,79 @@ function getEpochState(cumulativeEarnings) {
  * Core TGE execution logic — shared by both auto-trigger and manual callable.
  * Creates snapshot of all DSP balances + PoCT, calls on-chain contract.
  */
+/**
+ * Check if a user has completed the 7 Proof of Humanity (PoH) Genesis Milestones.
+ * Qualification grants access to TDE macro distributions.
+ */
+async function isPohQualified(userId, userDocData, pointsDocData) {
+  if (userDocData && (userDocData.hasReceivedPohTokenDistribution === true ||
+      (userDocData.welcomeBonusMilestonesStatus && userDocData.welcomeBonusMilestonesStatus.allMilestonesMet === true))) {
+    return true;
+  }
+
+  const [userDoc, pointsDoc, trustDoc] = await Promise.all([
+    userDocData ? Promise.resolve({ exists: true, data: () => userDocData }) : db.collection("users").doc(userId).get(),
+    pointsDocData ? Promise.resolve({ exists: true, data: () => pointsDocData }) : db.collection("user_points").doc(userId).get(),
+    db.collection("trust_scores").doc(userId).get(),
+  ]);
+
+  const userData = userDoc.exists ? userDoc.data() : {};
+  const pointsData = pointsDoc.exists ? pointsDoc.data() : {};
+  const trustData = trustDoc.exists ? trustDoc.data() : {};
+
+  // 1. Location Milestone (Active live location sharing)
+  const hasLocation = !!(
+    userData.homeCountryCode ||
+    pointsData.homeCountryCode ||
+    userData.locationEnabled ||
+    userData.currentCity ||
+    userData.homeCity
+  );
+
+  // 2. Profile Complete Milestone (All 10 profile fields completed)
+  const completedFields = Number(userData.completedMilestoneFieldCount || 0);
+  const totalFields = Number(userData.totalMilestoneFields || 10);
+  const isProfileComplete = !!(
+    userData.isProfileComplete ||
+    userData.isComplete ||
+    (completedFields >= totalFields && totalFields > 0)
+  );
+
+  // 3. 10 QR Exchanges Milestone
+  const qrCount = Number(trustData.uniqueQrCount || pointsData.qrConnectionCount || 0);
+  const hasTenQr = qrCount >= 10;
+
+  // 4. Family Circle (10 Family Connections)
+  const familyCount = Number(trustData.uniqueFamilyCount || 0);
+  const hasTenFamily = familyCount >= 10;
+
+  // 5. Friend Circle (10 Friend Connections)
+  const friendCount = Number(trustData.uniqueFriendCount || 0);
+  const hasTenFriends = friendCount >= 10;
+
+  // 6. Peer Verifications (10 Peer Profile Field Verifications)
+  const verificationCount = Number(trustData.uniqueVerificationCount || 0);
+  const hasTenVerifications = verificationCount >= 10;
+
+  // 7. Ubuntu Emergency Fund Contribution
+  const hasEmergencyFund = !!(
+    userData.hasStakedEmergencyFund ||
+    userData.emergencyFundStaked ||
+    pointsData.emergencyFundStaked ||
+    (trustData.awardedQualificationMilestones && trustData.awardedQualificationMilestones.includes("EmergencyFund"))
+  );
+
+  return (
+    hasLocation &&
+    isProfileComplete &&
+    hasTenQr &&
+    hasTenFamily &&
+    hasTenFriends &&
+    hasTenVerifications &&
+    hasEmergencyFund
+  );
+}
+
 async function performTGE(triggerSource) {
   // Fail loud if any required env is missing. Previously this returned null
   // silently which could be confused with "no users to TGE" by callers.
@@ -136,51 +212,14 @@ async function performTGE(triggerSource) {
       continue;
     }
 
-    // TGE participation gates:
-    //   Every TGE → current-location transparency must be active.
-    //   First TGE → additionally require a complete profile and >= 10 unique
-    //   Identity QR Exchanges.
-    const profileDoc = await db.collection("users").doc(doc.id).get();
-    const profile = profileDoc.exists ? profileDoc.data() : null;
-    const hasCurrentLocation = !!(profile && profile.currentLocation);
-    const locationTransparencyOn =
-      !!profile &&
-      profile.showCurrentLocationName !== false &&
-      hasCurrentLocation;
-    if (!locationTransparencyOn) {
+    // TDE participation gate: User must complete all 7 Proof of Humanity (PoH) Milestones
+    const userDoc = await db.collection("users").doc(doc.id).get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    const isPohMet = await isPohQualified(doc.id, userData, d);
+
+    if (!isPohMet) {
       usersSkipped++;
       continue;
-    }
-
-    const hasFirstTge = !!d.firstTgeReceivedAt;
-    if (!hasFirstTge) {
-      const trustScoresDoc = await db.collection("trust_scores").doc(doc.id).get();
-      const uniqueQrCount = trustScoresDoc.exists
-        ? Number(trustScoresDoc.data().uniqueQrCount || 0)
-        : 0;
-      const requiredProfileFields = [
-        "bio",
-        "occupation",
-        "yearsInHostCountry",
-        "industry",
-        "profession",
-        "languages",
-        "meetingPreferences",
-        "availability",
-        "interests",
-        "servicesOffered",
-        "lookingFor",
-        "education",
-      ];
-      const isFilled = (value) =>
-        Array.isArray(value) ? value.length > 0 : value != null && String(value).trim().length > 0;
-      const isProfileComplete =
-        !!profile && requiredProfileFields.every((field) => isFilled(profile[field]));
-
-      if (!isProfileComplete || uniqueQrCount < 10) {
-        usersSkipped++;
-        continue;
-      }
     }
 
     const efficiency = calculateEfficiency(trustScore);
@@ -196,7 +235,7 @@ async function performTGE(triggerSource) {
       dsp: dspBalance,
       trustScore,
       efficiency,
-      alreadyHadFirstTge: hasFirstTge,
+      pohQualified: true,
     });
   }
 
@@ -204,9 +243,9 @@ async function performTGE(triggerSource) {
   //
   // FAIL-LOUD (post-TGE-1 hardening, 2026-06):
   //   Before this change, governance docs with missing walletAddress or
-  //   missing averagePoCT were silently dropped/zeroed. In TGE 1 (block
+  //   missing averagePct/averagePoCT were silently dropped/zeroed. In TGE 1 (block
   //   44,914,723) that resulted in 17 of 24 "recipients" receiving 0 DSP
-  //   because their averagePoCT field was unset → eff=0 → 100% burned, and
+  //   because their averagePct/averagePoCT field was unset → eff=0 → 100% burned, and
   //   the Founders / Liquidity treasuries received NOTHING (they weren't
   //   even in the recipients list — their governance docs lacked
   //   walletAddress, so the silent-skip below dropped them).
@@ -236,7 +275,7 @@ async function performTGE(triggerSource) {
       continue;
     }
 
-    // APoCT: Average PoCT of community members → decile efficiency.
+    // CPCT: Average PCT of community members → decile efficiency.
     // Hard-fail on missing field — silent default to 0 burns the entire tribute.
     // System treasuries (founders / liquidity / burn) are exempt:
     // they're handled separately below with efficiency=100 per whitepaper.
@@ -246,16 +285,20 @@ async function performTGE(triggerSource) {
     const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
     if (SYSTEM_DOC_IDS.has(doc.id)) continue;
 
-    if (d.averagePoCT === undefined || d.averagePoCT === null) {
-      treasuryConfigErrors.push(
-        `governance/${doc.id} (treasuryBalance=${treasuryDsp}, wallet=${walletAddress}) ` +
-        `is missing averagePoCT — would silently burn 100% of tribute`
-      );
-      continue;
-    }
+    const isGlobalCommunity = doc.id === "global_community";
+    let treasuryEfficiency = 100;
+    const avgTrustScore = d.averagePoCT != null ? d.averagePoCT : (d.averagePct != null ? d.averagePct : 100);
 
-    const avgPoCT = d.averagePoCT;
-    const treasuryEfficiency = Math.min(Math.ceil(avgPoCT / 10) * 10, 100);
+    if (!isGlobalCommunity) {
+      if (d.averagePoCT === undefined && d.averagePct === undefined) {
+        treasuryConfigErrors.push(
+          `governance/${doc.id} (treasuryBalance=${treasuryDsp}, wallet=${walletAddress}) ` +
+          `is missing averagePoCT / averagePct — would silently burn 100% of tribute`
+        );
+        continue;
+      }
+      treasuryEfficiency = calculateEfficiency(avgTrustScore);
+    }
 
     recipients.push(walletAddress);
     amounts.push(ethers.parseUnits(Math.floor(treasuryDsp).toString(), 18));
@@ -269,7 +312,7 @@ async function performTGE(triggerSource) {
       wallet: walletAddress,
       dsp: Math.floor(treasuryDsp),
       efficiency: treasuryEfficiency,
-      averagePoCT: avgPoCT,
+      averagePct: avgPct, averagePoCT: avgPct,
     });
   }
 
@@ -289,7 +332,7 @@ async function performTGE(triggerSource) {
   // Whitepaper guarantees 10% per slot per TGE for the system treasuries
   // (Founders, Liquidity, Burn). The V1 executeTGE signature has no built-in
   // concept of these slots, so we must append them explicitly with
-  // efficiency=100 (no PoCT burn — these are administered, not earned).
+  // efficiency=100 (no penalty burn — these are administered, not earned).
   //
   // Wallet resolution priority:
   //   1. env override (FOUNDERS_TREASURY_ADDRESS / LIQUIDITY_TREASURY_ADDRESS)
@@ -333,7 +376,7 @@ async function performTGE(triggerSource) {
 
     recipients.push(wallet);
     amounts.push(ethers.parseUnits(Math.floor(bal).toString(), 18));
-    efficiencies.push(100); // system slot — no PoCT burn
+    efficiencies.push(100); // system slot — no penalty burn
     totalDsp += Math.floor(bal);
     systemSlotsIncluded++;
 
@@ -368,6 +411,25 @@ async function performTGE(triggerSource) {
 
   console.log(`[TGE Oracle] On-chain: Epoch ${epochBefore}, Event ${eventBefore}`);
 
+  // Verify controller has sufficient locked tokens for this batch; auto-mint if new epoch requires pre-mint
+  let batchTotalNeeded = 0n;
+  for (const amt of amounts) {
+    batchTotalNeeded += amt;
+  }
+
+  const lockedBalance = await tgeController.getLockedBalance();
+  if (lockedBalance < batchTotalNeeded) {
+    const epochEntry = EPOCH_SCHEDULE.find(e => e.level === epochBefore) || EPOCH_SCHEDULE[0];
+    const epochSupplyTokens = epochEntry.dspTarget;
+    console.log(
+      `[TGE Oracle] Locked balance (${ethers.formatUnits(lockedBalance, 18)}) < batch needed (${ethers.formatUnits(batchTotalNeeded, 18)}). ` +
+      `Auto-minting Epoch ${epochBefore} supply (${epochSupplyTokens} tokens)...`
+    );
+    const mintTx = await tgeController.mintEpochSupply(ethers.parseUnits(epochSupplyTokens.toString(), 18));
+    await mintTx.wait();
+    console.log(`[TGE Oracle] ✅ Pre-minted Epoch ${epochBefore} supply: ${mintTx.hash}`);
+  }
+
   const tx = await tgeController.executeTGE(recipients, amounts, efficiencies);
   const receipt = await tx.wait();
 
@@ -379,10 +441,6 @@ async function performTGE(triggerSource) {
   console.log(`[TGE Oracle] Epoch ${epochBefore}→${epochAfter}, Event ${eventBefore}→${eventAfter}`);
 
   // ── Step 4: Record TGE event in Firestore (deterministic doc ID by epoch/event) ──
-  // Using a deterministic ID prevents a re-trigger of this function from
-  // recording the same TGE event twice. If we ever get here for an event that
-  // already exists in tge_events, it means a previous execution succeeded
-  // on-chain but failed mid-Firestore-write — DO NOT re-call on-chain.
   const tgeEventDocId = `epoch${epochBefore}_event${eventBefore}`;
   const tgeRecord = {
     epoch: epochBefore,
@@ -396,30 +454,18 @@ async function performTGE(triggerSource) {
     triggerSource,
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     snapshot: snapshotDetails,
-    status: "tx_complete_dsp_pending", // updated to "complete" after step 5
+    status: "tx_complete_dsp_pending",
   };
   await db.collection("tge_events").doc(tgeEventDocId).set(tgeRecord);
 
   // ── Step 5: Deduct DSP from snapshotted participants ───────────────
-  // CRITICAL: If this step fails after the on-chain TX succeeded, users
-  // would have DIASPORA AND still hold their DSP — double-paid. We mark
-  // the tge_events doc as `dspDeductionPending: true` so the healing
-  // function `retryPendingTGEDeductions` can complete it.
-  const batch = db.batch();
+  const operations = [];
   for (const snap of snapshotDetails) {
     if (snap.userId) {
       const userRef = db.collection("user_points").doc(snap.userId);
-      // Stamp `firstTgeReceivedAt` if not present so subsequent TGEs for
-      // this user skip the 10-QR gate. Safe to write unconditionally —
-      // server-side functions may merge but we want the original timestamp
-      // preserved on later TGEs, so only set when missing.
       const userPatch = {
-        availablePoints: admin.firestore.FieldValue.increment(-snap.dsp),
+        availablePoints: 0,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        // Append the per-user TGE distribution record so the in-app
-        // "TGE Schedule" can show each event's actual $DIASPORA payout
-        // and on-chain efficiency. Without this, the user-facing schedule
-        // falls back to a 0 $DIASPORA placeholder.
         tgeHistory: admin.firestore.FieldValue.arrayUnion({
           epoch: epochBefore,
           tgeNumber: eventBefore,
@@ -433,28 +479,37 @@ async function performTGE(triggerSource) {
         userPatch.firstTgeReceivedAt = admin.firestore.FieldValue.serverTimestamp();
         userPatch.firstTgeEventId = tgeEventDocId;
       }
-      batch.set(userRef, userPatch, { merge: true });
+      operations.push({ ref: userRef, patch: userPatch });
     } else if (snap.unitId) {
       const govRef = db.collection("governance").doc(snap.unitId);
-      batch.set(govRef, {
-        treasuryBalance: admin.firestore.FieldValue.increment(-snap.dsp),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      operations.push({
+        ref: govRef,
+        patch: {
+          treasuryBalance: 0,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
     }
   }
 
   let dspDeductionStatus = "complete";
   let dspDeductionError = null;
   try {
-    await batch.commit();
+    const BATCH_SIZE = 400; // Chunk to stay safely under Firestore's 500 limit
+    for (let i = 0; i < operations.length; i += BATCH_SIZE) {
+      const chunk = operations.slice(i, i + BATCH_SIZE);
+      const chunkBatch = db.batch();
+      for (const op of chunk) {
+        chunkBatch.set(op.ref, op.patch, { merge: true });
+      }
+      await chunkBatch.commit();
+    }
     await db.collection("tge_events").doc(tgeEventDocId).update({ status: "complete" });
     console.log(`[TGE Oracle] Successfully reset DSP points for ${snapshotDetails.length} participants.`);
   } catch (resetErr) {
     dspDeductionStatus = "tx_complete_dsp_pending";
     dspDeductionError = (resetErr.message || "unknown").slice(0, 500);
     console.error(`[TGE Oracle] ❌ DSP deduction failed AFTER on-chain TX. Recording pending state for healing.`, resetErr);
-    // Update the tge_events doc with the failure reason — leaves status as
-    // "tx_complete_dsp_pending" for retryPendingTGEDeductions to pick up.
     await db.collection("tge_events").doc(tgeEventDocId).update({
       dspDeductionError,
       dspDeductionErrorAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1042,17 +1097,145 @@ exports.deductPoints = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * initializeUserPoints — Sets up a new user's points doc with welcome bonus.
- * Called once during signup. Handles both fresh users and partial docs.
+ * Helper to distribute 1:1 Ubuntu Protocol matching supply for an awarded DSP amount.
+ * When a user receives `userPointsAmount` DSP, the system mints an equal matching supply (2x total)
+ * and distributes it:
+ *   - 10% to Founders Treasury
+ *   - 10% to Liquidity Treasury (Aerodrome DEX)
+ *   - 10% Deflationary Burn
+ *   - 70% split across the user's dual geographic community slots (and global community)
  */
-exports.initializeUserPoints = functions
-  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
-  .https.onCall(async (data, context) => {
+async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, now, reason = "ubuntu_match") {
+  const totalMinted = userPointsAmount * 2; // 1:1 match
+  const unit = Math.round(totalMinted * 0.10); // 10% of total (20% of userPointsAmount)
+  const points = userPointsAmount;
+
+  // 1. Supply increment
+  batch.set(db.collection("system_stats").doc("dsp_supply"), {
+    totalMinted: admin.firestore.FieldValue.increment(totalMinted),
+    lastUpdated: now,
+  }, { merge: true });
+
+  // 2. System stats treasury
+  batch.set(db.collection("system_stats").doc("treasury"), {
+    foundersPoints: admin.firestore.FieldValue.increment(unit),
+    liquidityPoints: admin.firestore.FieldValue.increment(unit),
+    burnedPoints: admin.firestore.FieldValue.increment(unit),
+    lastUpdated: now,
+  }, { merge: true });
+
+  // 3. Governance docs
+  batch.set(db.collection("governance").doc("founders"), {
+    id: "founders",
+    name: "Founders & Core Team",
+    type: "system",
+    treasuryBalance: admin.firestore.FieldValue.increment(unit),
+    title: "Founders Treasury",
+    updatedAt: now,
+  }, { merge: true });
+
+  batch.set(db.collection("governance").doc("liquidity"), {
+    id: "liquidity",
+    name: "Liquidity (DEX)",
+    type: "system",
+    treasuryBalance: admin.firestore.FieldValue.increment(unit),
+    updatedAt: now,
+  }, { merge: true });
+
+  // 4. Dual geographic community slots
+  try {
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (userDoc.exists) {
+      const memberships = userDoc.data().communityMemberships || [];
+      const findMembership = (prefix) => memberships.find((id) => id.startsWith(prefix)) || "";
+
+      const homeContinent = findMembership("home_continent_");
+      const homeCountry = findMembership("home_country_");
+      const homeState = findMembership("home_state_");
+      const homeCity = findMembership("home_city_");
+      const hostContinent = findMembership("host_continent_");
+      const hostCountry = findMembership("host_country_");
+      const hostState = findMembership("host_state_");
+      const hostCity = findMembership("host_city_");
+
+      const fractions = {};
+      const addSlot = (id, fraction) => {
+        const targetId = id || "global_community";
+        fractions[targetId] = (fractions[targetId] || 0) + fraction;
+      };
+
+      addSlot("global_community", 1.0);
+
+      // Home hierarchy
+      addSlot(homeContinent, 1.0);
+      if (homeState) {
+        addSlot(homeCountry, 0.5);
+        addSlot(homeState, 0.5);
+      } else {
+        addSlot(homeCountry, 1.0);
+      }
+      addSlot(homeCity, 1.0);
+
+      // Host hierarchy
+      addSlot(hostContinent, 1.0);
+      if (hostState) {
+        addSlot(hostCountry, 0.5);
+        addSlot(hostState, 0.5);
+      } else {
+        addSlot(hostCountry, 1.0);
+      }
+      addSlot(hostCity, 1.0);
+
+      for (const [commId, fraction] of Object.entries(fractions)) {
+        const slotUnit = Math.round(unit * fraction);
+        const slotBasis = Math.round(points * fraction);
+
+        const tRef = db.collection("communities").doc(commId)
+          .collection("treasury").doc("current");
+        batch.set(tRef, {
+          cumulativeEarnings: admin.firestore.FieldValue.increment(slotBasis + slotUnit),
+          memberPoints: admin.firestore.FieldValue.increment(slotBasis),
+          points: admin.firestore.FieldValue.increment(slotUnit),
+          awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
+          updatedAt: now,
+        }, { merge: true });
+
+        batch.set(db.collection("communities").doc(commId), {
+          cumulativeEarnings: admin.firestore.FieldValue.increment(slotBasis + slotUnit),
+          memberPoints: admin.firestore.FieldValue.increment(slotBasis),
+          points: admin.firestore.FieldValue.increment(slotUnit),
+          awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
+          updatedAt: now,
+        }, { merge: true });
+
+        const govId = commId === "global_community"
+          ? "global_community"
+          : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+        batch.set(db.collection("governance").doc(govId), {
+          id: govId,
+          communityId: commId,
+          type: "community",
+          treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
+          updatedAt: now,
+        }, { merge: true });
+      }
+    }
+  } catch (commErr) {
+    console.warn(`[distributeUbuntuMatchingSupply] Community distribution warning for ${userId}: ${commErr.message}`);
+  }
+}
+
+/**
+ * initializeUserPoints — Sets up a new user's points doc with 10,000 DSP welcome bonus.
+ * Called once during signup. 1:1 Ubuntu Protocol expansion triggers automatically.
+ */
+exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
   }
 
   const userId = context.auth.uid;
+  const WELCOME_BONUS = 10000;
 
   try {
     const userPointsRef = db.collection("user_points").doc(userId);
@@ -1060,7 +1243,7 @@ exports.initializeUserPoints = functions
     const docData = doc.exists ? doc.data() : null;
 
     // Already fully initialized
-    if (doc.exists && docData && docData.signupDate && docData.userId) {
+    if (doc.exists && docData && docData.signupDate && docData.userId && docData.lifetimeEarnings?.welcome_bonus) {
       return { success: true, alreadyInitialized: true };
     }
 
@@ -1072,11 +1255,11 @@ exports.initializeUserPoints = functions
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     if (!doc.exists) {
-      // Fresh user — full initialization with 1000 DSP welcome bonus
+      // Fresh user — full initialization with 10,000 DSP welcome bonus
       batch.set(userPointsRef, {
         userId,
-        totalPoints: 1000,
-        availablePoints: 1000,
+        totalPoints: WELCOME_BONUS,
+        availablePoints: WELCOME_BONUS,
         currentStreak: 0,
         dailyMessageCount: 0,
         dailyShareCount: 0,
@@ -1089,18 +1272,18 @@ exports.initializeUserPoints = functions
         qrConnectionCount: 0,
         trustScore: 0,
         tgeHistory: [],
-        lifetimeEarnings: { welcome_bonus: 1000 },
+        lifetimeEarnings: { welcome_bonus: WELCOME_BONUS },
         ...(countryCode ? { homeCountryCode: countryCode } : {}),
       });
     } else {
       // Partial doc — backfill missing fields + award welcome bonus if missing
       const existingLifetime = docData.lifetimeEarnings || {};
       const welcomeBonusMissing = !existingLifetime.welcome_bonus;
-      const bonusToAdd = welcomeBonusMissing ? 1000 : 0;
+      const bonusToAdd = welcomeBonusMissing ? WELCOME_BONUS : 0;
 
       const updates = {
         userId,
-        signupDate: now,
+        signupDate: docData.signupDate || now,
         currentStreak: docData.currentStreak || 0,
         dailyMessageCount: docData.dailyMessageCount || 0,
         dailyShareCount: docData.dailyShareCount || 0,
@@ -1125,410 +1308,23 @@ exports.initializeUserPoints = functions
       batch.set(userPointsRef, updates, { merge: true });
     }
 
-    // Check if welcome bonus should be awarded
+    // Check if welcome bonus transaction should be recorded
     const existingLifetime = docData ? (docData.lifetimeEarnings || {}) : {};
     const shouldAwardBonus = !doc.exists || !existingLifetime.welcome_bonus;
 
     if (shouldAwardBonus) {
-      // Record transaction
       const txRef = db.collection("points_transactions").doc();
       batch.set(txRef, {
         userId,
         type: "earn",
         action: "welcome_bonus",
-        points: 1000,
+        points: WELCOME_BONUS,
         timestamp: now,
         metadata: { description: "Welcome to Diaspora!" },
       });
 
-      // 2x expansion: 1000 user DSP → 2000 totalMinted
-      batch.set(db.collection("system_stats").doc("dsp_supply"), {
-        totalMinted: admin.firestore.FieldValue.increment(2000),
-        lastUpdated: now,
-      }, { merge: true });
-
-      // Treasury distribution: 10% of TOTAL each to founders, liquidity, burn
-      const unit = 200; // 10% of totalMinted (2000)
-      const points = 1000;
-      batch.set(db.collection("system_stats").doc("treasury"), {
-        foundersPoints: admin.firestore.FieldValue.increment(unit),
-        liquidityPoints: admin.firestore.FieldValue.increment(unit),
-        burnedPoints: admin.firestore.FieldValue.increment(unit),
-        lastUpdated: now,
-      }, { merge: true });
-
-      // Governance docs for system treasuries
-      batch.set(db.collection("governance").doc("founders"), {
-        id: "founders",
-        name: "Founders & Core Team",
-        type: "system",
-        treasuryBalance: admin.firestore.FieldValue.increment(unit),
-        title: "Founders Treasury",
-        updatedAt: now,
-      }, { merge: true });
-
-      batch.set(db.collection("governance").doc("liquidity"), {
-        id: "liquidity",
-        name: "Liquidity (DEX)",
-        type: "system",
-        treasuryBalance: admin.firestore.FieldValue.increment(unit),
-        updatedAt: now,
-      }, { merge: true });
-
-      // ── Community treasury distribution ──
-      // Look up user's community memberships (may not exist yet for brand-new users)
-      if (unit > 0) {
-        try {
-          const initUserDoc = userDoc.exists ? userDoc : await db.collection("users").doc(userId).get();
-          if (initUserDoc.exists) {
-            const memberships = initUserDoc.data().communityMemberships || [];
-
-            const findMembership = (prefix) =>
-              memberships.find((id) => id.startsWith(prefix)) || "";
-
-            const homeContinent = findMembership("home_continent_");
-            const homeCountry = findMembership("home_country_");
-            const homeState = findMembership("home_state_");
-            const homeCity = findMembership("home_city_");
-            const hostContinent = findMembership("host_continent_");
-            const hostCountry = findMembership("host_country_");
-            const hostState = findMembership("host_state_");
-            const hostCity = findMembership("host_city_");
-
-            const fractions = {};
-            const addSlot = (id, fraction) => {
-              if (!id) return;
-              fractions[id] = (fractions[id] || 0) + fraction;
-            };
-
-            addSlot("global_community", 1.0);
-
-            // Home hierarchy
-            addSlot(homeContinent, 1.0);
-            if (homeState) {
-              addSlot(homeCountry, 0.5);
-              addSlot(homeState, 0.5);
-            } else {
-              addSlot(homeCountry, 1.0);
-            }
-            addSlot(homeCity, 1.0);
-
-            // Host hierarchy
-            addSlot(hostContinent, 1.0);
-            if (hostState) {
-              addSlot(hostCountry, 0.5);
-              addSlot(hostState, 0.5);
-            } else {
-              addSlot(hostCountry, 1.0);
-            }
-            addSlot(hostCity, 1.0);
-
-            for (const [commId, fraction] of Object.entries(fractions)) {
-              const slotUnit = Math.round(unit * fraction);
-              const slotBasis = Math.round(points * fraction);
-
-              // Community treasury subcollection
-              const tRef = db.collection("communities").doc(commId)
-                .collection("treasury").doc("current");
-              batch.set(tRef, {
-                cumulativeEarnings: admin.firestore.FieldValue.increment(slotBasis + slotUnit),
-                memberPoints: admin.firestore.FieldValue.increment(slotBasis),
-                points: admin.firestore.FieldValue.increment(slotUnit),
-                awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
-                updatedAt: now,
-              }, { merge: true });
-
-              // Mirror to top-level community doc
-              batch.set(db.collection("communities").doc(commId), {
-                cumulativeEarnings: admin.firestore.FieldValue.increment(slotBasis + slotUnit),
-                memberPoints: admin.firestore.FieldValue.increment(slotBasis),
-                points: admin.firestore.FieldValue.increment(slotUnit),
-                awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
-                updatedAt: now,
-              }, { merge: true });
-
-              // Governance doc
-              const govId = commId === "global_community"
-                ? "global_community"
-                : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
-              batch.set(db.collection("governance").doc(govId), {
-                id: govId,
-                communityId: commId,
-                type: "community",
-                treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
-                updatedAt: now,
-              }, { merge: true });
-            }
-          }
-        } catch (communityErr) {
-          // Don't fail initialization if community distribution fails
-          console.warn(`[initializeUserPoints] Community distribution warning: ${communityErr.message}`);
-        }
-      }
-
-      // ── Token Welcome Bonus: Instant DSP→$DIASPORA conversion ──
-      // Mirrors the DSP distribution above but converts to on-chain tokens
-      // at 100% efficiency immediately, rather than waiting for TGE milestone.
-      //
-      // Fail-loud contract: every error path below sets `tokenWelcomeBonusPending`
-      // on the user doc so the healing function `retryPendingWelcomeBonuses`
-      // can pick it up. NO path silently succeeds without distributing.
-      {
-        // Fail loud at the top — if config is missing, the function throws and
-        // the outer initializeUserPoints catch will surface it to the caller.
-        const { backendSignerKey, tokenAddress, tgeControllerAddress, walletFactoryAddress } =
-          assertOnChainConfig("initializeUserPoints/welcomeBonus");
-        try {
-          // Idempotency: skip if already sent (prevents double-distribution on retry)
-          const preCheck = await db.collection("users").doc(userId).get();
-          if (preCheck.exists && preCheck.data().tokenWelcomeBonusSent === true) {
-            console.log(`[Token Welcome Bonus] Already sent for user ${userId}, skipping.`);
-          } else {
-            // Wait for smart wallet to be created by onUserWrite trigger (race condition)
-            let userWalletAddress = preCheck.exists ? preCheck.data().walletAddress : null;
-            if (!userWalletAddress) {
-              // Retry up to 3 times with 2s delay for async wallet creation
-              for (let attempt = 1; attempt <= 3 && !userWalletAddress; attempt++) {
-                console.log(`[Token Welcome Bonus] Wallet not ready, waiting 2s (attempt ${attempt}/3)...`);
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                const retryDoc = await db.collection("users").doc(userId).get();
-                userWalletAddress = retryDoc.exists ? retryDoc.data().walletAddress : null;
-              }
-            }
-
-            if (!userWalletAddress) {
-              // Wallet creation hasn't caught up. Mark pending so the healing
-              // function can retry. NO silent skip — this used to fall through.
-              console.warn(`[Token Welcome Bonus] User ${userId} has no wallet address after 3 retries. Marking pending.`);
-              batch.set(db.collection("users").doc(userId), {
-                tokenWelcomeBonusPending: true,
-                tokenWelcomeBonusError: "wallet_not_ready_after_retries",
-                tokenWelcomeBonusErrorAt: now,
-              }, { merge: true });
-            } else {
-              const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
-              const provider = new ethers.JsonRpcProvider(RPC_URL);
-              const signer = new ethers.Wallet(backendSignerKey, provider);
-              const tge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
-
-              const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
-              const DEPLOYER_FALLBACK = signer.address; // Fallback if treasury wallet not created yet
-
-              // Look up system treasury wallet addresses from governance docs.
-              // Post-2026-06-04: founders, liquidity, and global_community are
-              // Safe-controlled — see [[project-treasury-safe-addresses]].
-              // The old "governance/investors" doc is deprecated; the live
-              // Liquidity treasury lives at governance/liquidity.
-              const [foundersGov, liquidityGov] = await Promise.all([
-                db.collection("governance").doc("founders").get(),
-                db.collection("governance").doc("liquidity").get(),
-              ]);
-              const foundersWallet = foundersGov.exists ? foundersGov.data().walletAddress : null;
-              const liquidityWallet = liquidityGov.exists ? liquidityGov.data().walletAddress : null;
-
-              // V2 contract signature splits the user recipient (capped + deduped)
-              // from treasury recipients (uncapped). Build them separately.
-              const userAmountWei = ethers.parseUnits("1000", 18);
-              const userRecipient = userWalletAddress;
-
-              const treasuryRecipients = [];
-              const treasuryAmounts = [];
-              let totalTokens = userAmountWei;
-
-              // 1. Burn: 100 $DIASPORA (10% of tribute)
-              treasuryRecipients.push(BURN_ADDRESS);
-              treasuryAmounts.push(ethers.parseUnits("100", 18));
-              totalTokens += ethers.parseUnits("100", 18);
-
-              // 2. Founders: 100 $DIASPORA (10% of tribute)
-              treasuryRecipients.push(foundersWallet || DEPLOYER_FALLBACK);
-              treasuryAmounts.push(ethers.parseUnits("100", 18));
-              totalTokens += ethers.parseUnits("100", 18);
-              if (!foundersWallet) console.warn("[Token Welcome Bonus] Founders wallet not found, using deployer fallback");
-
-              // 3. Liquidity (Treasury): 100 $DIASPORA (10% of tribute)
-              //    Source of truth is the landing page tokenomics — see whitepaper.html § Liquidity Treasury.
-              treasuryRecipients.push(liquidityWallet || DEPLOYER_FALLBACK);
-              treasuryAmounts.push(ethers.parseUnits("100", 18));
-              totalTokens += ethers.parseUnits("100", 18);
-              if (!liquidityWallet) console.warn("[Token Welcome Bonus] Liquidity wallet not found, using deployer fallback");
-
-              // 5. Community treasuries: 700 $DIASPORA (70% of tribute)
-              //    Mirror exact same fractions as DSP distribution (unit=100 per slot)
-              const initUserDoc2 = preCheck; // Already fetched above
-              const memberships2 = initUserDoc2.exists ? (initUserDoc2.data().communityMemberships || []) : [];
-              const findMembership2 = (prefix) => memberships2.find((id) => id.startsWith(prefix)) || "";
-
-              const communitySlots = {};
-              const addCommunitySlot = (id, fraction) => {
-                if (!id) return;
-                communitySlots[id] = (communitySlots[id] || 0) + fraction;
-              };
-
-              addCommunitySlot("global_community", 1.0);
-              const hcont = findMembership2("home_continent_");
-              const hcountry = findMembership2("home_country_");
-              const hstate = findMembership2("home_state_");
-              const hcity = findMembership2("home_city_");
-              const xcont = findMembership2("host_continent_");
-              const xcountry = findMembership2("host_country_");
-              const xstate = findMembership2("host_state_");
-              const xcity = findMembership2("host_city_");
-
-              addCommunitySlot(hcont, 1.0);
-              if (hstate) { addCommunitySlot(hcountry, 0.5); addCommunitySlot(hstate, 0.5); }
-              else { addCommunitySlot(hcountry, 1.0); }
-              addCommunitySlot(hcity, 1.0);
-
-              addCommunitySlot(xcont, 1.0);
-              if (xstate) { addCommunitySlot(xcountry, 0.5); addCommunitySlot(xstate, 0.5); }
-              else { addCommunitySlot(xcountry, 1.0); }
-              addCommunitySlot(xcity, 1.0);
-
-              // Look up wallet addresses for each community
-              let communityTokensDistributed = 0n;
-              for (const [commId, fraction] of Object.entries(communitySlots)) {
-                const slotAmount = Math.round(100 * fraction); // unit=100 (10% of 1000)
-                if (slotAmount <= 0) continue;
-
-                const commDoc = await db.collection("communities").doc(commId).get();
-                const commWallet = commDoc.exists ? commDoc.data().walletAddress : null;
-
-                if (commWallet) {
-                  treasuryRecipients.push(commWallet);
-                  treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
-                  communityTokensDistributed += ethers.parseUnits(slotAmount.toString(), 18);
-                  totalTokens += ethers.parseUnits(slotAmount.toString(), 18);
-                } else {
-                  // Community wallet not yet created — send to deployer as fallback
-                  console.warn(`[Token Welcome Bonus] Community ${commId} has no wallet, using system treasury`);
-                  treasuryRecipients.push(DEPLOYER_FALLBACK);
-                  treasuryAmounts.push(ethers.parseUnits(slotAmount.toString(), 18));
-                  totalTokens += ethers.parseUnits(slotAmount.toString(), 18);
-                }
-              }
-
-              // Commitment hash over the full distribution (user + treasuries).
-              // Stored on-chain by the V2 contract so auditors can verify any user's
-              // allocation against the published off-chain log. Backend can later
-              // upgrade this to a true Merkle root if proof-checking is added on-chain.
-              const distributionCommitment = ethers.solidityPackedKeccak256(
-                ["address", "uint256", "address[]", "uint256[]"],
-                [userRecipient, userAmountWei, treasuryRecipients, treasuryAmounts]
-              );
-
-              // Check TGEController has enough supply
-              const lockedBalance = await tge.getLockedBalance();
-
-              if (lockedBalance >= totalTokens) {
-                console.log(`[Token Welcome Bonus] Distributing ${ethers.formatUnits(totalTokens, 18)} $DIASPORA for user ${userId} (1 user + ${treasuryRecipients.length} treasuries)...`);
-
-                // Retry loop for nonce collisions — the same backend signer is
-                // used by both onCommunityWrite (wallet creation) and this bonus
-                // distribution. When they run concurrently the signer nonce can
-                // be stale. We retry with a fresh provider/signer so ethers
-                // re-fetches the latest nonce from the network.
-                const MAX_TX_RETRIES = 3;
-                let txHash = null;
-                for (let attempt = 1; attempt <= MAX_TX_RETRIES; attempt++) {
-                  try {
-                    // Create a fresh signer each attempt so ethers fetches the
-                    // current nonce from the network (no stale cache).
-                    const retryProvider = new ethers.JsonRpcProvider(RPC_URL);
-                    const retrySigner = new ethers.Wallet(backendSignerKey, retryProvider);
-                    const retryTge = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, retrySigner);
-
-                    const tx = await retryTge.distributeWelcomeBonus(
-                      userRecipient,
-                      userAmountWei,
-                      treasuryRecipients,
-                      treasuryAmounts,
-                      distributionCommitment
-                    );
-                    const receipt = await tx.wait();
-                    txHash = receipt.hash;
-                    console.log(`[Token Welcome Bonus] ✅ Distributed on attempt ${attempt}! TX: ${txHash}`);
-                    break; // success — exit retry loop
-                  } catch (nonceErr) {
-                    const msg = (nonceErr.message || "").toLowerCase();
-                    const isNonceError = nonceErr.code === "NONCE_EXPIRED" ||
-                      nonceErr.code === "REPLACEMENT_UNDERPRICED" ||
-                      msg.includes("nonce") ||
-                      msg.includes("already known") ||
-                      msg.includes("replacement");
-                    if (isNonceError && attempt < MAX_TX_RETRIES) {
-                      const waitSec = attempt * 5; // 5s, 10s
-                      console.warn(`[Token Welcome Bonus] Nonce collision on attempt ${attempt}, retrying in ${waitSec}s...`);
-                      await new Promise((r) => setTimeout(r, waitSec * 1000));
-                    } else {
-                      throw nonceErr; // Not a nonce error, or last attempt — propagate
-                    }
-                  }
-                }
-
-                if (!txHash) {
-                  throw new Error("distributeWelcomeBonus failed after all retries");
-                }
-
-                // Record token welcome bonus transaction in Firestore
-                const tokenBonusTxRef = db.collection("points_transactions").doc();
-                batch.set(tokenBonusTxRef, {
-                  userId,
-                  type: "earn",
-                  action: "token_welcome_bonus",
-                  assetType: "token",
-                  points: 1000,
-                  txHash,
-                  timestamp: now,
-                  metadata: {
-                    description: "Welcome Bonus — 1,000 $DIASPORA",
-                    totalDistributed: Number(ethers.formatUnits(totalTokens, 18)),
-                    userAmount: 1000,
-                    burnAmount: 100,
-                    foundersAmount: 100,
-                    investorsAmount: 100,
-                    communityAmount: Number(ethers.formatUnits(communityTokensDistributed, 18)),
-                    recipientCount: 1 + treasuryRecipients.length, // user + treasuries
-                  },
-                });
-
-                // Mark user as having received token welcome bonus
-                batch.set(db.collection("users").doc(userId), {
-                  tokenWelcomeBonusSent: true,
-                  tokenWelcomeBonusTx: txHash,
-                }, { merge: true });
-
-                // Deduct DSP balance (consumed by conversion)
-                batch.set(userPointsRef, {
-                  totalPoints: admin.firestore.FieldValue.increment(-1000),
-                  availablePoints: admin.firestore.FieldValue.increment(-1000),
-                }, { merge: true });
-
-                console.log(`[Token Welcome Bonus] User ${userId} DSP deducted, token bonus recorded.`);
-              } else {
-                // Insufficient locked supply — mark pending for healing
-                const msg = `insufficient_locked_supply: locked=${ethers.formatUnits(lockedBalance, 18)} needed=${ethers.formatUnits(totalTokens, 18)}`;
-                console.error(`[Token Welcome Bonus] ${msg}`);
-                batch.set(db.collection("users").doc(userId), {
-                  tokenWelcomeBonusPending: true,
-                  tokenWelcomeBonusError: msg,
-                  tokenWelcomeBonusErrorAt: now,
-                }, { merge: true });
-              }
-            } // end else (wallet address present)
-          } // end else (idempotency check)
-        } catch (tokenBonusErr) {
-          // Failure path — mark pending so healing function retries.
-          // Previously this silently swallowed the error and returned success.
-          console.error(`[Token Welcome Bonus] Error for ${userId}:`, tokenBonusErr.message, tokenBonusErr.stack);
-          batch.set(db.collection("users").doc(userId), {
-            tokenWelcomeBonusPending: true,
-            tokenWelcomeBonusError: `exception: ${(tokenBonusErr.message || "unknown").slice(0, 500)}`,
-            tokenWelcomeBonusErrorAt: now,
-          }, { merge: true });
-        }
-      }
-    } // end if (shouldAwardBonus)
+          await distributeUbuntuMatchingSupply(batch, userId, WELCOME_BONUS, now, "welcome_bonus_match");
+    }
 
     await batch.commit();
 
@@ -2095,7 +1891,7 @@ exports.syncTreasuryBalances = functions
       const communityPointsMap = {};
       const communityBasisMap = {};
       const communityMemberPointsMap = {};
-      const communityPoCTs = {};
+      const communityPCTs = {};
 
       let totalUserPoints = 0;
       let totalFoundersPoints = 0;
@@ -2172,8 +1968,8 @@ exports.syncTreasuryBalances = functions
           communityPointsMap[cid] = (communityPointsMap[cid] || 0) + slotUnit;
           communityBasisMap[cid] = (communityBasisMap[cid] || 0) + slotBasis + slotUnit;
           communityMemberPointsMap[cid] = (communityMemberPointsMap[cid] || 0) + slotBasis;
-          if (!communityPoCTs[cid]) communityPoCTs[cid] = [];
-          communityPoCTs[cid].push(trustScore);
+          if (!communityPCTs[cid]) communityPCTs[cid] = [];
+          communityPCTs[cid].push(trustScore);
         }
       });
 
@@ -2228,8 +2024,8 @@ exports.syncTreasuryBalances = functions
       for (const commId of Object.keys(communityPointsMap)) {
         await commitIfNeeded();
 
-        const pocts = communityPoCTs[commId] || [];
-        const avgPoCT = pocts.length > 0 ? pocts.reduce((a, b) => a + b, 0) / pocts.length : 0;
+        const pcts = communityPCTs[commId] || [];
+        const avgPct = pcts.length > 0 ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0;
 
         const treasuryRef = db.collection("communities").doc(commId).collection("treasury").doc("current");
         batch.set(treasuryRef, {
@@ -2237,7 +2033,8 @@ exports.syncTreasuryBalances = functions
           cumulativeEarnings: communityBasisMap[commId],
           memberPoints: communityMemberPointsMap[commId],
           awardedBalance: communityPointsMap[commId],
-          averagePoCT: avgPoCT,
+          averagePct: avgPct,
+          averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         opCount++;
@@ -2542,21 +2339,36 @@ exports.retryPendingTGEDeductions = functions
           continue;
         }
 
-        const batch = db.batch();
+        const operations = [];
         for (const s of ev.snapshot) {
           if (s.userId) {
-            batch.set(db.collection("user_points").doc(s.userId), {
-              availablePoints: admin.firestore.FieldValue.increment(-s.dsp),
-              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
+            operations.push({
+              ref: db.collection("user_points").doc(s.userId),
+              data: {
+                availablePoints: admin.firestore.FieldValue.increment(-s.dsp),
+                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+              },
+            });
           } else if (s.unitId) {
-            batch.set(db.collection("governance").doc(s.unitId), {
-              treasuryBalance: admin.firestore.FieldValue.increment(-s.dsp),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
+            operations.push({
+              ref: db.collection("governance").doc(s.unitId),
+              data: {
+                treasuryBalance: admin.firestore.FieldValue.increment(-s.dsp),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+            });
           }
         }
-        await batch.commit();
+
+        const BATCH_SIZE = 400;
+        for (let i = 0; i < operations.length; i += BATCH_SIZE) {
+          const chunk = operations.slice(i, i + BATCH_SIZE);
+          const chunkBatch = db.batch();
+          for (const op of chunk) {
+            chunkBatch.set(op.ref, op.data, { merge: true });
+          }
+          await chunkBatch.commit();
+        }
         await db.collection("tge_events").doc(id).update({
           status: "complete",
           dspDeductionRetriedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2719,22 +2531,6 @@ exports.onVouchWrite = functions.firestore
             let agree = false;
             if ((isNowNoTrust && otherIsNoTrust) || (isNowFullTrust && otherIsFullTrust)) {
                agree = true;
-            }
-
-            if (agree) {
-                // Award 100 DSP to the other staker
-                batch.set(db.collection("user_points").doc(vouch.fromUserId), {
-                    availablePoints: admin.firestore.FieldValue.increment(100),
-                    totalPoints: admin.firestore.FieldValue.increment(100),
-                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-                }, {merge: true});
-                batch.set(db.collection("points_transactions").doc(), {
-                    userId: vouch.fromUserId,
-                    amount: 100,
-                    action: "trust_stake_agreement_reward",
-                    type: "earn",
-                    timestamp: admin.firestore.FieldValue.serverTimestamp()
-                });
             } else {
                 // Deduct 100 DSP from the other staker
                 const otherRemaining = vouch.remainingStake - 100;
@@ -2766,3 +2562,271 @@ exports.onVouchWrite = functions.firestore
     await batch.commit();
     return null;
   });
+
+/**
+ * getOrCreateReferralCode — Generates or retrieves the authenticated user's referral code.
+ */
+exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const userId = context.auth.uid;
+  const userDoc = await db.collection("users").doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "User profile not found.");
+  }
+  const userData = userDoc.data();
+  if (userData.referralCode) {
+    return { code: userData.referralCode, isNew: false };
+  }
+
+  const existingSnap = await db.collection("referral_codes")
+    .where("userId", "==", userId)
+    .limit(1)
+    .get();
+
+  if (!existingSnap.empty) {
+    const code = existingSnap.docs[0].id;
+    await db.collection("users").doc(userId).update({ referralCode: code });
+    return { code, isNew: false };
+  }
+
+  const firstName = (userData.firstName || "MEMBER").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 8);
+  const countryCode = (userData.homeCountryCode || "DN").toUpperCase().slice(0, 2);
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const code = `${firstName}-${countryCode}-${randomSuffix}`;
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  batch.set(db.collection("referral_codes").doc(code), {
+    userId,
+    code,
+    firstName: userData.firstName || "",
+    countryCode,
+    usesCount: 0,
+    createdAt: now,
+  });
+  batch.update(db.collection("users").doc(userId), { referralCode: code });
+  await batch.commit();
+
+  return { code, isNew: true };
+});
+
+/**
+ * redeemReferralCode — Redeems a referral code, awarding 10,000 DSP to both referee and referrer,
+ * and triggering dual 1:1 Ubuntu Protocol matching supply expansions.
+ */
+exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const userId = context.auth.uid;
+  const code = typeof data?.code === "string" ? data.code.trim().toUpperCase() : "";
+
+  if (!code) {
+    throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
+  }
+
+  const codeDoc = await db.collection("referral_codes").doc(code).get();
+  if (!codeDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "Invalid referral code.");
+  }
+
+  const codeData = codeDoc.data();
+  const referrerId = codeData.userId;
+
+  if (referrerId === userId) {
+    throw new functions.https.HttpsError("failed-precondition", "You cannot redeem your own referral code.");
+  }
+
+  const userPointsDoc = await db.collection("user_points").doc(userId).get();
+  const userPointsData = userPointsDoc.exists ? userPointsDoc.data() : {};
+  if (userPointsData.referredBy || (userPointsData.lifetimeEarnings && userPointsData.lifetimeEarnings.referral_reward_referee)) {
+    return { success: true, alreadyRedeemed: true, referrerId };
+  }
+
+  const REFERRAL_BONUS = 10000;
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+
+  // 1. Award referee 10,000 DSP
+  const refereePointsRef = db.collection("user_points").doc(userId);
+  batch.set(refereePointsRef, {
+    userId,
+    referredBy: referrerId,
+    referralCodeUsed: code,
+    totalPoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+    availablePoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+    ["lifetimeEarnings.referral_reward_referee"]: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+    lastUpdated: now,
+  }, { merge: true });
+
+  const refereeTxRef = db.collection("points_transactions").doc();
+  batch.set(refereeTxRef, {
+    userId,
+    type: "earn",
+    action: "referral_reward_referee",
+    points: REFERRAL_BONUS,
+    timestamp: now,
+    metadata: {
+      description: `Referral bonus for joining via ${code}`,
+      referrerId,
+      code,
+    },
+  });
+
+  // 2. Award referrer 10,000 DSP
+  const referrerPointsRef = db.collection("user_points").doc(referrerId);
+  batch.set(referrerPointsRef, {
+    totalPoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+    availablePoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+    ["lifetimeEarnings.referral_reward_referrer"]: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+    lastUpdated: now,
+  }, { merge: true });
+
+  const referrerTxRef = db.collection("points_transactions").doc();
+  batch.set(referrerTxRef, {
+    userId: referrerId,
+    type: "earn",
+    action: "referral_reward_referrer",
+    points: REFERRAL_BONUS,
+    timestamp: now,
+    metadata: {
+      description: `Referral bonus: invited new member`,
+      refereeId: userId,
+      code,
+    },
+  });
+
+  // 3. Increment code usage
+  batch.update(codeDoc.ref, {
+    usesCount: admin.firestore.FieldValue.increment(1),
+    lastUsedAt: now,
+  });
+
+  // 4. Fire 1:1 Ubuntu expansion for BOTH referee (10,000 DSP) and referrer (10,000 DSP)
+  await distributeUbuntuMatchingSupply(batch, userId, REFERRAL_BONUS, now, "referral_referee_match");
+  await distributeUbuntuMatchingSupply(batch, referrerId, REFERRAL_BONUS, now, "referral_referrer_match");
+
+  await batch.commit();
+
+  return {
+    success: true,
+    referrerId,
+    pointsAwarded: REFERRAL_BONUS,
+  };
+});
+
+/**
+ * evaluateWelcomeBonus — Checks welcome bonus qualification status.
+ */
+exports.evaluateWelcomeBonus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const userId = context.auth.uid;
+  const userPointsDoc = await db.collection("user_points").doc(userId).get();
+  const data_ = userPointsDoc.exists ? userPointsDoc.data() : {};
+  const lifetime = data_.lifetimeEarnings || {};
+  const awarded = !!lifetime.welcome_bonus;
+
+  return {
+    eligible: !awarded,
+    bonusAmount: 10000,
+    awarded,
+  };
+});
+
+/**
+ * recordDailyCheckIn — Records daily check-in, tracking streaks and awarding retention rewards.
+ */
+exports.recordDailyCheckIn = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const userId = context.auth.uid;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const nowTimestamp = admin.firestore.FieldValue.serverTimestamp();
+
+  let awardedBonus = 0;
+  let streak = 1;
+  let isFirstToday = false;
+
+  await db.runTransaction(async (transaction) => {
+    const userPointsRef = db.collection("user_points").doc(userId);
+    const userPointsSnap = await transaction.get(userPointsRef);
+
+    if (!userPointsSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "User points document not found.");
+    }
+
+    const d = userPointsSnap.data();
+    const lastDateStr = d.lastCheckInDate;
+    let isSameDay = false;
+    let isConsecutive = false;
+
+    if (lastDateStr) {
+      const lastDate = new Date(lastDateStr);
+      isSameDay = (
+        lastDate.getUTCFullYear() === now.getUTCFullYear() &&
+        lastDate.getUTCMonth() === now.getUTCMonth() &&
+        lastDate.getUTCDate() === now.getUTCDate()
+      );
+
+      const diffMs = now.getTime() - lastDate.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      isConsecutive = !isSameDay && diffHours <= 48;
+    }
+
+    if (isSameDay) {
+      isFirstToday = false;
+      streak = d.currentStreak || 1;
+      return;
+    }
+
+    isFirstToday = true;
+    streak = isConsecutive ? (d.currentStreak || 0) + 1 : 1;
+
+    let dailyPoints = 10;
+    awardedBonus = dailyPoints;
+
+    // 10-day streak bonus: 1,000 DSP
+    if (streak === 10) {
+      awardedBonus += 1000;
+    }
+    // 100-day super streak bonus: 10,000 DSP
+    if (streak === 100) {
+      awardedBonus += 10000;
+    }
+
+    transaction.update(userPointsRef, {
+      currentStreak: streak,
+      lastCheckInDate: nowIso,
+      totalPoints: admin.firestore.FieldValue.increment(awardedBonus),
+      availablePoints: admin.firestore.FieldValue.increment(awardedBonus),
+      lastUpdated: nowTimestamp,
+    });
+
+    const txRef = db.collection("points_transactions").doc();
+    transaction.set(txRef, {
+      userId,
+      type: "earn",
+      action: "daily_check_in",
+      points: awardedBonus,
+      streak,
+      timestamp: nowTimestamp,
+      metadata: {
+        description: `Daily Check-In (Day ${streak})`,
+        streak,
+      },
+    });
+  });
+
+  return {
+    success: true,
+    isFirstToday,
+    currentStreak: streak,
+    pointsAwarded: awardedBonus,
+  };
+});

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -136,7 +135,7 @@ class _HostingArrangementMessageContentState
                 Expanded(
                   child: Text(
                     'Hosting Confirmed',
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: onSurface,
@@ -246,7 +245,7 @@ class _HostingArrangementMessageContentState
                 Expanded(
                   child: Text(
                     _nextStepsText(sessionStatus, isTraveler),
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       fontSize: 12,
                       color: onSurface.withValues(alpha: 0.5),
                       height: 1.4,
@@ -292,7 +291,7 @@ class _HostingArrangementMessageContentState
         const SizedBox(height: 6),
         Text(
           label,
-          style: GoogleFonts.outfit(
+          style: TextStyle(
             fontSize: 11,
             color: onSurface.withValues(alpha: 0.5),
             fontWeight: FontWeight.w500,
@@ -303,7 +302,7 @@ class _HostingArrangementMessageContentState
           isMe ? 'You' : name.split(' ').first,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.outfit(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: onSurface,
@@ -328,7 +327,7 @@ class _HostingArrangementMessageContentState
         const SizedBox(width: 6),
         Text(
           '$label: ',
-          style: GoogleFonts.outfit(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: onSurface.withValues(alpha: 0.5),
@@ -337,7 +336,7 @@ class _HostingArrangementMessageContentState
         Expanded(
           child: Text(
             value,
-            style: GoogleFonts.outfit(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: valueColor ?? onSurface,
@@ -398,7 +397,7 @@ class _HostingArrangementMessageContentState
         const SizedBox(width: 4),
         Text(
           text,
-          style: GoogleFonts.outfit(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: color,
@@ -462,7 +461,7 @@ class _HostingArrangementMessageContentState
                 ),
                 label: Text(
                   isHost ? 'Show Check-in QR' : 'Scan to Check In',
-                  style: GoogleFonts.outfit(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -490,7 +489,7 @@ class _HostingArrangementMessageContentState
                 icon: const Icon(LucideIcons.logOut, size: 16),
                 label: Text(
                   _isProcessing ? 'Processing...' : 'End Stay',
-                  style: GoogleFonts.outfit(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -526,7 +525,7 @@ class _HostingArrangementMessageContentState
                 child: Center(
                   child: Text(
                     'Waiting for ${isTraveler ? 'host' : 'traveler'} to confirm...',
-                    style: GoogleFonts.outfit(
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.accent,
@@ -545,7 +544,7 @@ class _HostingArrangementMessageContentState
                   icon: const Icon(LucideIcons.checkCircle, size: 16),
                   label: Text(
                     _isProcessing ? 'Processing...' : 'Confirm End of Stay',
-                    style: GoogleFonts.outfit(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -572,7 +571,7 @@ class _HostingArrangementMessageContentState
                 icon: const Icon(LucideIcons.checkCircle, size: 16),
                 label: Text(
                   _isProcessing ? 'Processing...' : 'Complete Stay',
-                  style: GoogleFonts.outfit(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -608,14 +607,14 @@ class _HostingArrangementMessageContentState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(
+        title: const Text(
           'End Stay?',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+          style: TextStyle(fontWeight: FontWeight.w700),
         ),
-        content: Text(
+        content: const Text(
           'Are you sure you want to end this stay? '
           'The other party will need to confirm to complete the session.',
-          style: GoogleFonts.outfit(),
+          style: TextStyle(),
         ),
         actions: [
           TextButton(

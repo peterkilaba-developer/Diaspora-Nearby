@@ -4,9 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 class ShareDestinationScreen extends ConsumerStatefulWidget {
   final List<SharedMediaFile>? sharedFiles;
@@ -176,23 +173,12 @@ class _ShareDestinationScreenState
     BuildContext context,
     String destinationType,
   ) async {
-    // [NEW] Track Incoming Share Reward
-    try {
-      final pointsService = ref.read(pointsServiceProvider);
-      await pointsService.trackIncomingShare(
-        ref.read(authRepositoryProvider).currentUser?.uid ?? '',
-        widget.sharedFiles != null ? 'media' : 'text',
-      );
-    } catch (e) {
-      debugPrint("Error tracking share reward: $e");
-    }
-
     // TODO: Implement actual sharing logic
     if (context.mounted) {
-      showExplorationRewardToast(
-        context,
-        message: 'Personal Stake increased!',
-        points: 100,
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sharing to this destination is not available yet.'),
+        ),
       );
     }
 

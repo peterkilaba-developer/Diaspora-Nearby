@@ -35,12 +35,21 @@ class FakeEmergencyFundService extends Fake implements EmergencyFundService {
 
 class FakeChatRepository extends Fake implements ChatRepository {
   final Set<String> largeGroupAdmins = {};
+  final Set<String> bilateralPairs = {};
 
   @override
   Future<bool> isAdminOfLargeGroupChat(
     String uid, {
     int minMembers = 100,
   }) async => largeGroupAdmins.contains(uid);
+
+  @override
+  Future<bool> hasBilateralDialogue(
+    String firstUserId,
+    String secondUserId,
+  ) async =>
+      bilateralPairs.contains('$firstUserId:$secondUserId') ||
+      bilateralPairs.contains('$secondUserId:$firstUserId');
 }
 
 void main() {
@@ -209,9 +218,9 @@ void main() {
         mockTrustRepo.getQrExchangeUserIds(userId),
       ).thenAnswer((_) async => qrIds);
 
-      // Vouches (Ratings): 10 Non-Family/Non-QR users with score 100
+      // Vouches (Ratings): 90 Non-Family/Non-QR users with score 100 for dynamic staking (+9 PCT)
       final ratings = List.generate(
-        10,
+        90,
         (i) => {'fromUserId': 'vouch-$i', 'toUserId': userId, 'score': 100.0},
       );
       when(
@@ -257,7 +266,7 @@ void main() {
 
       expect(savedData.uniqueFamilyCount, 10);
       expect(savedData.uniqueQrCount, 10);
-      expect(savedData.uniqueVouchCount, 10);
+      expect(savedData.uniqueVouchCount, 90);
       expect(savedData.isCouncilEligible, true);
     });
 
@@ -315,5 +324,60 @@ void main() {
 
       expect(savedData.isCouncilEligible, false);
     });
+  });
+
+  group('TrustService - Verification Eligibility', () {
+    test('allows verification when mutual chat dialogue exists', () async {
+      final userA = 'user-A';
+      final userB = 'user-B';
+
+      fakeChatRepo.bilateralPairs.add('$userA:$userB');
+      when(
+        mockTrustRepo.hasVerifiedUser(userA, userB),
+      ).thenAnswer((_) async => false);
+      when(
+        mockTrustRepo.getLastVerificationTime(userA),
+      ).thenAnswer((_) async => null);
+      when(
+        mockRelRepo.getRelationship(userId: userA, relatedUserId: userB),
+      ).thenAnswer((_) async => null);
+      when(
+        mockTrustRepo.getQrExchangeUserIds(userA),
+      ).thenAnswer((_) async => []);
+
+      final error = await trustService.checkVerificationEligibility(
+        userA,
+        userB,
+      );
+      expect(error, isNull);
+    });
+
+    test(
+      'denies verification when stranger with no chat dialogue, no QR, and no relationship',
+      () async {
+        final userA = 'user-A';
+        final userB = 'user-C';
+
+        when(
+          mockTrustRepo.hasVerifiedUser(userA, userB),
+        ).thenAnswer((_) async => false);
+        when(
+          mockTrustRepo.getLastVerificationTime(userA),
+        ).thenAnswer((_) async => null);
+        when(
+          mockRelRepo.getRelationship(userId: userA, relatedUserId: userB),
+        ).thenAnswer((_) async => null);
+        when(
+          mockTrustRepo.getQrExchangeUserIds(userA),
+        ).thenAnswer((_) async => []);
+
+        final error = await trustService.checkVerificationEligibility(
+          userA,
+          userB,
+        );
+        expect(error, isNotNull);
+        expect(error, contains('Circle of Trust'));
+      },
+    );
   });
 }

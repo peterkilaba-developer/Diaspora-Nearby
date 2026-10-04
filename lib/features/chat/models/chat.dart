@@ -3,6 +3,36 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'chat.g.dart';
 
+String _resolveChatType(String id, Map<String, dynamic> data) {
+  final rawType = data['type'] as String?;
+  final metadata = data['metadata'];
+  final isFamilyGroup =
+      metadata is Map &&
+      (metadata['isFamilyGroupImmediate'] == true ||
+          metadata['isFamilyGroupExtended'] == true);
+  if (rawType != null && rawType.isNotEmpty && rawType != 'direct') {
+    return rawType;
+  }
+
+  if (id.startsWith('chat_') ||
+      id.startsWith('home_') ||
+      id.startsWith('host_') ||
+      id.startsWith('past_') ||
+      id.startsWith('community_') ||
+      id.contains('community') ||
+      id == 'global_community' ||
+      data['communityId'] != null ||
+      data['locationType'] != null) {
+    return 'community';
+  }
+  if (id.startsWith('group_') || id.contains('group') || isFamilyGroup) {
+    return 'group';
+  }
+  if (id.startsWith('org_')) return 'organization';
+  if (id.startsWith('event_') || data['eventId'] != null) return 'event';
+  return rawType ?? 'direct';
+}
+
 /// Profile image for community chats
 @JsonSerializable()
 class ChatProfileImage {
@@ -241,7 +271,7 @@ class Chat {
       homeCountryCode: data['homeCountryCode'] as String?,
       hostCountryCode: data['hostCountryCode'] as String?,
       locationType: data['locationType'] as String?,
-      type: data['type'] as String? ?? 'direct',
+      type: _resolveChatType(id, data),
       name: data['name'] as String? ?? 'Chat',
       photoUrl: data['photoUrl'] as String?,
       profileImage: (data['profileImage'] is Map)
@@ -315,23 +345,53 @@ class Chat {
     'joinedAt': FieldValue.serverTimestamp(),
   };
 
-  /// Check if this is a direct chat
-  bool get isDirect => type == 'direct' || id.startsWith('direct_');
+  /// Check if this is a direct chat (strictly 1-on-1 DM between two users)
+  bool get isDirect =>
+      (type == 'direct' || id.startsWith('direct_') || id.startsWith('dm_')) &&
+      !isCommunity &&
+      !isGroup &&
+      !isEvent &&
+      !isOrganization &&
+      !isChannel &&
+      communityId == null &&
+      locationType == null &&
+      !id.contains('community') &&
+      !id.contains('group') &&
+      !id.startsWith('chat_') &&
+      !id.startsWith('home_') &&
+      !id.startsWith('host_') &&
+      !id.startsWith('past_') &&
+      id != 'global_community';
+
+  /// Value transfer is intentionally limited to a real one-to-one DM.
+  bool get supportsValueTransfer => isDirect && participants.length == 2;
 
   /// Check if this is a community chat
   bool get isCommunity =>
       type == 'community' ||
+      communityId != null ||
+      locationType != null ||
       id.startsWith('chat_') ||
       id.startsWith('home_') ||
       id.startsWith('host_') ||
       id.startsWith('past_') ||
+      id.startsWith('community_') ||
+      id.contains('community') ||
+      name.toLowerCase().contains('community') ||
       id == 'global_community';
 
   /// Check if this is a group chat
-  bool get isGroup => type == 'group' || id.startsWith('group_');
+  bool get isGroup =>
+      type == 'group' ||
+      id.startsWith('group_') ||
+      id.contains('group') ||
+      (metadata != null &&
+          (metadata!['isFamilyGroupImmediate'] == true ||
+              metadata!['isFamilyGroupExtended'] == true));
 
   /// Check if this is an event chat
-  bool get isEvent => type == 'event' || eventId != null;
+  bool get isEvent =>
+      type == 'event' || eventId != null || id.startsWith('event_');
 
   /// Check if this is an organization chat
   bool get isOrganization => type == 'organization' || id.startsWith('org_');
@@ -377,13 +437,16 @@ class Chat {
       return [];
     }
 
+    final String? communityId = data['communityId'] as String?;
+    final String? locationType = data['locationType'] as String?;
+
     return Chat(
       id: id,
-      communityId: data['communityId'] as String?,
+      communityId: communityId,
       homeCountryCode: data['homeCountryCode'] as String?,
       hostCountryCode: data['hostCountryCode'] as String?,
-      locationType: data['locationType'] as String?,
-      type: data['type'] as String? ?? 'direct',
+      locationType: locationType,
+      type: _resolveChatType(id, data),
       name: data['name'] as String? ?? 'Chat',
       photoUrl:
           data['photoUrl'] as String? ??

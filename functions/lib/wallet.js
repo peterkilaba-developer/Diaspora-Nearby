@@ -5,13 +5,15 @@
  * EOA wallet generation has been fully removed to eliminate MSB/VASP exposure.
  * 
  * Architecture:
- * - Phone number → keccak256 hash → CREATE2 salt → deterministic wallet address
+ * - Phone number → HMAC with server secret → CREATE2 salt → deterministic wallet address
  * - No private keys stored per-user (backend signer controls all wallets)
  * - Gasless transactions for users (backend pays gas)
  * - Wallet addresses can be computed BEFORE deployment
  */
 const { functions, admin, db } = require("./shared");
+const { requireAdmin, requireAppCheck, requireAuth } = require("./security");
 const { ethers } = require("ethers");
+const crypto = require("crypto");
 const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
 // ── Smart Wallet Factory ABI (minimal interface) ──
@@ -69,7 +71,7 @@ function getSmartWalletInfra() {
 }
 
 /**
- * Compute the phone hash used as CREATE2 salt.
+ * Compute a keyed, opaque wallet identifier used as the CREATE2 salt.
  *
  * Normalizes via libphonenumber-js to canonical E.164 so that the salt is
  * insensitive to client-side formatting variations (spaces, dashes, retained
@@ -96,14 +98,15 @@ function computePhoneHash(phoneNumber) {
     // Fall back to the legacy minimal normalization so an unparseable but
     // pre-existing string still hashes the same as before. Loud-log so we
     // can investigate any production occurrences.
-    console.warn(
-      `[computePhoneHash] libphonenumber could not validate ${trimmed}; ` +
-        "falling back to whitespace-strip + '+' prefix"
-    );
+    console.warn("[computePhoneHash] Invalid stored phone format; using normalized fallback");
     normalized = trimmed.replace(/\s+/g, "");
     if (!normalized.startsWith("+")) normalized = "+" + normalized;
   }
-  return ethers.keccak256(ethers.toUtf8Bytes(normalized));
+  const pepper = process.env.WALLET_ID_PEPPER;
+  if (!pepper || pepper.length < 32) {
+    throw new Error("computePhoneHash: WALLET_ID_PEPPER is missing or too short");
+  }
+  return `0x${crypto.createHmac("sha256", pepper).update(normalized).digest("hex")}`;
 }
 
 /**
@@ -257,7 +260,7 @@ exports.onCommunityWrite = functions
 
 // ── 2. Auto-create Smart Wallet for Users (Phone-based) ──
 exports.onUserWrite = functions
-  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY", "WALLET_ID_PEPPER"] })
   .firestore
   .document("users/{userId}")
   .onWrite(async (change, context) => {
@@ -293,6 +296,7 @@ exports.onUserWrite = functions
           walletGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
           walletType: "smart",
           walletPhoneHash: walletResult.phoneHash || null,
+          walletSaltVersion: 2,
         };
         if (walletResult.deploymentPending) {
           update.walletDeploymentPending = true;
@@ -324,13 +328,10 @@ exports.onUserWrite = functions
 // ── 3. Callable: Get or Create Smart Wallet ──
 // Called explicitly from the Flutter app after phone authentication.
 exports.getOrCreateSmartWallet = functions
-  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY", "WALLET_ID_PEPPER"] })
   .https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
-  }
-
-  const userId = context.auth.uid;
+  requireAppCheck(context);
+  const userId = requireAuth(context);
 
   // 1. Check if user already has a SMART wallet (no action needed)
   const userDoc = await db.collection("users").doc(userId).get();
@@ -398,6 +399,7 @@ exports.getOrCreateSmartWallet = functions
     walletGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
     walletType: "smart",
     walletPhoneHash: walletResult.phoneHash || null,
+    walletSaltVersion: 2,
   };
   if (walletResult.deploymentPending) {
     userUpdate.walletDeploymentPending = true;
@@ -475,13 +477,8 @@ async function createSystemTreasuryWallet(infra, label) {
 exports.ensureSystemWallets = functions
   .runWith({ timeoutSeconds: 120, memory: "256MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
-
-    const callerId = context.auth.uid;
-    const callerDoc = await db.collection("users").doc(callerId).get();
-    if (!callerDoc.exists || !callerDoc.data().isAdmin) {
-      throw new functions.https.HttpsError("permission-denied", "Admin access required.");
-    }
+    requireAppCheck(context);
+    const callerId = requireAdmin(context);
 
     // getSmartWalletInfra() throws via assertOnChainConfig if any required
     // env var is missing — surfaces a clear named error to the caller.
@@ -588,13 +585,8 @@ exports.ensureSystemWallets = functions
 exports.ensureCommunityTreasuryWallets = functions
   .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
-
-    const callerId = context.auth.uid;
-    const callerDoc = await db.collection("users").doc(callerId).get();
-    if (!callerDoc.exists || !callerDoc.data().isAdmin) {
-      throw new functions.https.HttpsError("permission-denied", "Admin access required.");
-    }
+    requireAppCheck(context);
+    const callerId = requireAdmin(context);
 
     // getSmartWalletInfra() throws via assertOnChainConfig if any required
     // env var is missing — surfaces a clear named error to the caller.
@@ -602,7 +594,18 @@ exports.ensureCommunityTreasuryWallets = functions
 
     console.log(`[Wallet] ensureCommunityTreasuryWallets triggered by ${callerId}`);
 
-    const commSnap = await db.collection("communities").get();
+    const requestedLimit = Number(data && data.limit || 20);
+    const limit = Number.isInteger(requestedLimit) ?
+      Math.min(Math.max(requestedLimit, 1), 50) : 20;
+    const cursor = data && data.cursor;
+    if (cursor != null && (typeof cursor !== "string" || cursor.length > 1500)) {
+      throw new functions.https.HttpsError("invalid-argument", "Invalid pagination cursor.");
+    }
+    let query = db.collection("communities")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(limit);
+    if (cursor) query = query.startAfter(cursor);
+    const commSnap = await query.get();
     const results = { created: 0, skipped: 0, failed: 0, errors: [] };
 
     for (const doc of commSnap.docs) {
@@ -663,6 +666,8 @@ exports.ensureCommunityTreasuryWallets = functions
     return {
       success: true,
       message: `Community wallets: ${results.created} created, ${results.skipped} already had wallets, ${results.failed} failed`,
+      nextCursor: commSnap.empty ? null : commSnap.docs[commSnap.docs.length - 1].id,
+      hasMore: commSnap.size === limit,
       ...results,
     };
   });
@@ -698,12 +703,8 @@ exports.ensureCommunityTreasuryWallets = functions
 exports.retryPendingWalletDeployments = functions
   .runWith({ timeoutSeconds: 540, memory: "512MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
   .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
-    }
-    if (!context.auth.token || context.auth.token.admin !== true) {
-      throw new functions.https.HttpsError("permission-denied", "Admin only.");
-    }
+    requireAppCheck(context);
+    requireAdmin(context);
 
     const infra = getSmartWalletInfra(); // throws on missing config
     const dryRun = data && data.dryRun === true;

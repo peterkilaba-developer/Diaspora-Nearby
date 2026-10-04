@@ -46,7 +46,8 @@ class MentionMonitorService {
     final userChatsRef = _firestore
         .collection('users')
         .doc(userId)
-        .collection('userChats');
+        .collection('userChats')
+        .limit(100);
 
     // Listen for changes to userChats
     _subscription = userChatsRef.snapshots().listen((snapshot) {

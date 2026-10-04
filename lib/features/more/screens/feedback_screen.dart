@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
-import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 
 class FeedbackScreen extends ConsumerStatefulWidget {
   const FeedbackScreen({super.key});
@@ -26,44 +22,14 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final user = ref.read(authStateProvider).value;
-      final profile = ref.read(userProfileProvider).value;
-
-      await FirebaseFirestore.instance.collection('feedback').add({
+      await FirebaseFunctions.instance.httpsCallable('submitFeedback').call({
         'content': content,
-        'uid': user?.uid,
-        'email': user?.email,
-        'name': profile?.fullName,
-        'timestamp': FieldValue.serverTimestamp(),
-        'type': 'user_feedback',
-        'platform': 'flutter_app',
-        'version': '1.0.0', // TODO: Get from package_info_plus
       });
 
       if (mounted) {
-        // [NEW] Award 100 DSP for every feedback
-        if (user != null) {
-          final success = await ref
-              .read(pointsServiceProvider)
-              .trackFeedbackReward(user.uid);
-
-          if (success && mounted) {
-            showExplorationRewardToast(
-              context,
-              message: 'Feedback Submitted',
-              points: 100,
-            );
-          } else if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Thank you for your feedback!')),
-            );
-          }
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Thank you for your feedback!')),
-          );
-        }
-
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thank you for your feedback!')),
+        );
         if (mounted) Navigator.pop(context);
       }
     } catch (e) {
@@ -119,39 +85,6 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         ),
                       ),
                     ),
-                    // [NEW] Reward Info
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD700).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFFFD700).withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.sparkles,
-                            color: Color(0xFFFFD700),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Earn 100 DSP for every feedback submission!',
-                              style: TextStyle(
-                                color: Colors.orange.shade300,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
                     const SizedBox(height: 24),
                     TextField(
                       controller: _contentController,

@@ -26,7 +26,8 @@
  * Current mode: Firestore-only (Google Group not yet configured)
  */
 
-const { functions, db } = require("./shared");
+const { functions, admin, db } = require("./shared");
+const { consumeRateLimit, stableHash } = require("./security");
 
 /**
  * addPlayStoreTester
@@ -39,24 +40,45 @@ const { functions, db } = require("./shared");
 exports.addPlayStoreTester = functions.https.onCall(async (data, context) => {
   const email = (data.email || "").trim().toLowerCase();
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new functions.https.HttpsError(
       "invalid-argument",
       "A valid email address is required."
     );
   }
+  const rawRequest = context.rawRequest || {};
+  const forwarded = String(rawRequest.headers && rawRequest.headers["x-forwarded-for"] || "")
+      .split(",")[0].trim();
+  const requestSubject = stableHash(
+      forwarded || rawRequest.ip || rawRequest.socket && rawRequest.socket.remoteAddress || "unknown");
+  await Promise.all([
+    consumeRateLimit("play-tester-ip", requestSubject, 20, 24 * 60 * 60 * 1000),
+    consumeRateLimit("play-tester-email", stableHash(email), 3, 24 * 60 * 60 * 1000),
+  ]);
 
   try {
-    // Check if this email has already signed up
-    const existing = await db
-      .collection("tester_signups")
-      .where("email", "==", email)
-      .where("status", "==", "added")
-      .limit(1)
-      .get();
+    const signupRef = db.collection("tester_signups").doc(stableHash(`tester:${email}`));
+    const alreadyTester = await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(signupRef);
+      if (existing.exists) return true;
+      const platform = ["android", "ios", "desktop"].includes(data.platform) ?
+        data.platform : "android";
+      const signupType = String(data.signupType || "early_access").slice(0, 64);
+      transaction.create(signupRef, {
+        email,
+        status: "pending",
+        platform,
+        source: "landing_page",
+        signup_type: signupType,
+        referred_by: typeof data.referralCode === "string" ?
+          data.referralCode.slice(0, 128) : null,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return false;
+    });
 
-    if (!existing.empty) {
-      console.log(`[PlayStore] ${email} is already registered as a tester`);
+    if (alreadyTester) {
+      console.log("[PlayStore] Tester is already registered");
       return {
         success: true,
         alreadyTester: true,
@@ -64,52 +86,17 @@ exports.addPlayStoreTester = functions.https.onCall(async (data, context) => {
       };
     }
 
-    // Record the signup in Firestore
-    await recordTesterSignup(email, "added");
-    console.log(`[PlayStore] Recorded tester signup for ${email}`);
+    console.log("[PlayStore] Recorded tester signup");
 
     return {
       success: true,
       alreadyTester: false,
       message:
-        "You've been registered! Accept the invite on Google Play to download.",
+        "Your request was recorded. Follow the Play Store access steps to download.",
     };
   } catch (err) {
     console.error("[PlayStore] Failed to process tester signup:", err.message || err);
 
-    // Attempt to record the signup even if something else failed
-    try {
-      await recordTesterSignup(email, "error", err.message);
-    } catch (e) {
-      console.error("[PlayStore] Failed to record error signup:", e);
-    }
-
-    return {
-      success: false,
-      fallback: true,
-      message: "We've recorded your signup. You'll be added as a tester shortly.",
-      error: err.message,
-    };
+    throw new functions.https.HttpsError("unavailable", "Tester signup is temporarily unavailable.");
   }
 });
-
-/**
- * Record tester signup in Firestore for tracking.
- */
-async function recordTesterSignup(email, status, errorMsg = null) {
-  try {
-    const docData = {
-      email,
-      status, // "added", "already_tester", or "error"
-      platform: "android",
-      source: "landing_page",
-      signup_type: "play_store_internal_test",
-      timestamp: require("firebase-admin").firestore.FieldValue.serverTimestamp(),
-    };
-    if (errorMsg) docData.error = errorMsg;
-
-    await db.collection("tester_signups").add(docData);
-  } catch (e) {
-    console.error("[PlayStore] Failed to record signup:", e);
-  }
-}

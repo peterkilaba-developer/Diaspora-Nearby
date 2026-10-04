@@ -89,22 +89,13 @@ class _RealEstateDetailScreenState
       final viewerUid = ref.read(authRepositoryProvider).currentUser?.uid;
       if (viewerUid == null || viewerUid == listing.ownerId) return;
 
-      final db = FirebaseFirestore.instance;
-      final viewDoc = db
-          .collection('real_estate_listings')
-          .doc(listing.id)
-          .collection('views')
-          .doc(viewerUid);
-
-      await viewDoc.set({
-        'viewerUid': viewerUid,
-        'country': country,
-        'countryCode': countryCode,
-        'viewedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Also increment the counter field on the listing document
-      ref.read(realEstateRepositoryProvider).incrementViewCount(listing.id);
+      await ref
+          .read(realEstateRepositoryProvider)
+          .incrementViewCount(
+            listing.id,
+            country: country,
+            countryCode: countryCode,
+          );
     } catch (_) {}
   }
 

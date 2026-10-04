@@ -9,6 +9,8 @@ import 'package:diaspora_nearby/features/governance/models/governance_unit.dart'
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/bottom_sheet_item.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
+import 'package:diaspora_nearby/features/profile/widgets/profile_qr_code_dialog.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
 
@@ -41,6 +43,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
   final VoidCallback onCreateCommunityOrg;
   final VoidCallback onDDILoans;
   final VoidCallback onLeaderElections;
+  final VoidCallback? onChamberOfCommerce;
+  final VoidCallback? onChambersOfCommerce;
+  final VoidCallback? onQRExchange;
 
   const ChatMoreMenuSheet({
     super.key,
@@ -70,6 +75,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     required this.onCreateCommunityOrg,
     required this.onDDILoans,
     required this.onLeaderElections,
+    this.onChamberOfCommerce,
+    this.onChambersOfCommerce,
+    this.onQRExchange,
   });
 
   /// Returns true if the existing relationship is a family type
@@ -125,18 +133,37 @@ class ChatMoreMenuSheet extends ConsumerWidget {
 
     final nameToUse = isDirect ? displayName.split(' ').first : displayName;
 
-    final isCountry = community?.type == 'country' ||
+    final isCountry =
+        community?.type == 'country' ||
         chat.id.contains('_country_') ||
         (community?.id.contains('_country_') ?? false);
-    final isHostLocation = community?.locationType == 'host' ||
+    final isTown =
+        community?.type == 'town' ||
+        community?.type == 'city' ||
+        chat.id.contains('_town_') ||
+        chat.id.contains('_city_') ||
+        (community?.id.contains('_town_') ?? false) ||
+        (community?.id.contains('_city_') ?? false);
+    final isHostLocation =
+        community?.locationType == 'host' ||
+        chat.locationType == 'host' ||
         chat.id.contains('_host_') ||
         (community?.id.contains('_host_') ?? false);
-    final isHomeLocation = community?.locationType == 'home' ||
+    final isHomeLocation =
+        community?.locationType == 'home' ||
+        chat.locationType == 'home' ||
         chat.id.contains('_home_') ||
         (community?.id.contains('_home_') ?? false);
+
+    // DDI is ONLY available for host/home town and host/home country communities (NOT state/province, continent, or global)
+    final isDDIAvailable =
+        isCommunity &&
+        (isTown || isCountry) &&
+        (isHostLocation || isHomeLocation);
+
     final ddiTitle = isCountry
-        ? (isHostLocation ? 'Host Country DDI' : 'Home Country DDI')
-        : (isHostLocation ? 'Host Town DDI' : 'Home Town DDI');
+        ? (isHostLocation ? 'Host Country DDI Loans' : 'Home Country DDI Loans')
+        : (isHostLocation ? 'Host Town DDI Loans' : 'Home Town DDI Loans');
 
     return Container(
       decoration: BoxDecoration(
@@ -225,6 +252,40 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       subtitle: 'Define your relationship with $nameToUse',
                       onTap: onAddRelationship,
                     ),
+                  const Divider(height: 1),
+                  AppBottomSheetItem(
+                    icon: LucideIcons.qrCode,
+                    iconColor: theme.colorScheme.primary,
+                    iconBgColor: theme.colorScheme.primary.withValues(
+                      alpha: 0.1,
+                    ),
+                    title: 'Identity QR Exchange',
+                    subtitle: 'Perform in-person QR handshake with $nameToUse',
+                    onTap: () async {
+                      Navigator.pop(context);
+                      if (onQRExchange != null) {
+                        onQRExchange!();
+                      } else {
+                        final user = ref
+                            .read(authRepositoryProvider)
+                            .currentUser;
+                        if (user != null) {
+                          final myProfile =
+                              ref.read(userProfileProvider).value ??
+                              await ref
+                                  .read(profileRepositoryProvider)
+                                  .getUserProfile(user.uid);
+                          if (myProfile != null && context.mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (context) =>
+                                  ProfileQRCodeDialog(profile: myProfile),
+                            );
+                          }
+                        }
+                      }
+                    },
+                  ),
                   const Divider(height: 1),
                 ],
 
@@ -369,8 +430,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     subtitle: 'Register a business in this community',
                     onTap: onCreateCommunityOrg,
                   ),
-                  // Diaspora Direct Investments: limited to home and host communities
-                  if (isHostLocation || isHomeLocation) ...[
+                  // Diaspora Direct Investments: limited to home/host town and home/host country communities
+                  if (isDDIAvailable) ...[
                     AppBottomSheetItem(
                       icon: LucideIcons.landmark,
                       iconColor: Colors.orange,
@@ -383,6 +444,33 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       title: ddiTitle,
                       subtitle: 'Apply for community-backed investment loans',
                       onTap: onDDILoans,
+                    ),
+                  ],
+                  // Bilateral Chamber of Commerce for Host Country
+                  if (isHostLocation &&
+                      isCountry &&
+                      onChamberOfCommerce != null) ...[
+                    AppBottomSheetItem(
+                      icon: LucideIcons.building2,
+                      iconColor: Colors.teal.shade700,
+                      iconBgColor: Colors.teal.shade50,
+                      title: 'Chamber of Commerce',
+                      subtitle: 'Bilateral trade & investment corridor chamber',
+                      onTap: onChamberOfCommerce!,
+                    ),
+                  ],
+                  // Bilateral Chambers of Commerce for Home Country (links to all host corridors)
+                  if (isHomeLocation &&
+                      isCountry &&
+                      onChambersOfCommerce != null) ...[
+                    AppBottomSheetItem(
+                      icon: LucideIcons.network,
+                      iconColor: Colors.teal.shade700,
+                      iconBgColor: Colors.teal.shade50,
+                      title: 'Chambers of Commerce',
+                      subtitle:
+                          'Explore trade corridors with all host countries',
+                      onTap: onChambersOfCommerce!,
                     ),
                   ],
                   AppBottomSheetItem(

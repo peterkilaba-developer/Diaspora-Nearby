@@ -14,6 +14,7 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../services/chat_messaging_service.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
@@ -93,13 +94,27 @@ class ChatRepository {
     // Start Firestore real-time sync → in-memory cache → stream
     _startRealtimeSync(uid);
 
+    // Emit initial cached list immediately so new subscribers don't hang in loading state
+    if (!_chatsController.isClosed) {
+      Future.microtask(() {
+        if (!_chatsController.isClosed) {
+          _chatsController.add(_sortedChatsList());
+        }
+      });
+    }
+
     // Return broadcast stream (populated by Firestore listener)
     return _chatsController.stream;
   }
 
   /// Real-time Sync (Firestore → In-memory cache → StreamController)
   void _startRealtimeSync(String uid) {
-    if (_realtimeSubscription != null) return;
+    if (_realtimeSubscription != null) {
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+      return;
+    }
 
     debugPrint('🔄 Starting Firestore real-time chat sync for $uid');
 
@@ -107,54 +122,57 @@ class ChatRepository {
     // served from Firestore's local cache, so the first emission must not
     // wait on the network: chats are hydrated cache-first and emitted
     // immediately, then refreshed from the server in the background.
-    _realtimeSubscription = _userChatsCol(uid).snapshots().listen(
-      (snapshot) async {
-        // Handle removals and soft-deletes synchronously first
-        for (final change in snapshot.docChanges) {
-          final chatId = change.doc.id;
-          final data = change.doc.data() ?? {};
+    _realtimeSubscription = _userChatsCol(uid)
+        .limit(100)
+        .snapshots()
+        .listen(
+          (snapshot) async {
+            // Handle removals and soft-deletes synchronously first
+            for (final change in snapshot.docChanges) {
+              final chatId = change.doc.id;
+              final data = change.doc.data() ?? {};
 
-          if (change.type == DocumentChangeType.removed ||
-              data['isDeleted'] == true) {
-            _chatsCache.removeWhere((c) => c.id == chatId);
-            _localService.deleteChat(chatId); // fire-and-forget (no-op)
-          }
-        }
+              if (change.type == DocumentChangeType.removed ||
+                  data['isDeleted'] == true) {
+                _chatsCache.removeWhere((c) => c.id == chatId);
+                _localService.deleteChat(chatId); // fire-and-forget (no-op)
+              }
+            }
 
-        final toFetch = snapshot.docChanges.where((c) {
-          if (c.type == DocumentChangeType.removed) return false;
-          return (c.doc.data()?['isDeleted']) != true;
-        }).toList();
-        if (toFetch.isEmpty) {
-          if (!_chatsController.isClosed) {
-            _chatsController.add(_sortedChatsList());
-          }
-          return;
-        }
+            final toFetch = snapshot.docChanges.where((c) {
+              if (c.type == DocumentChangeType.removed) return false;
+              return (c.doc.data()?['isDeleted']) != true;
+            }).toList();
+            if (toFetch.isEmpty) {
+              if (!_chatsController.isClosed) {
+                _chatsController.add(_sortedChatsList());
+              }
+              return;
+            }
 
-        // Fast pass: hydrate from the local cache and emit right away so
-        // the list renders without a network round trip after a restart.
-        await _applyChatChanges(toFetch, uid, preferCache: true);
-        if (!_chatsController.isClosed) {
-          _chatsController.add(_sortedChatsList());
-        }
+            // Fast pass: hydrate from the local cache and emit right away so
+            // the list renders without a network round trip after a restart.
+            await _applyChatChanges(toFetch, uid, preferCache: true);
+            if (!_chatsController.isClosed) {
+              _chatsController.add(_sortedChatsList());
+            }
 
-        // Server pass: refresh the same chats in the background. This
-        // catches chat-doc fields (name, photo, participants) that change
-        // without touching the userChats index, and runs delivery receipts
-        // against fresh data.
-        await _applyChatChanges(toFetch, uid, preferCache: false);
-        if (!_chatsController.isClosed) {
-          _chatsController.add(_sortedChatsList());
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        debugPrint('Error listening to chats for $uid: $error');
-        if (!_chatsController.isClosed) {
-          _chatsController.addError(error, stackTrace);
-        }
-      },
-    );
+            // Server pass: refresh the same chats in the background. This
+            // catches chat-doc fields (name, photo, participants) that change
+            // without touching the userChats index, and runs delivery receipts
+            // against fresh data.
+            await _applyChatChanges(toFetch, uid, preferCache: false);
+            if (!_chatsController.isClosed) {
+              _chatsController.add(_sortedChatsList());
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('Error listening to chats for $uid: $error');
+            if (!_chatsController.isClosed) {
+              _chatsController.addError(error, stackTrace);
+            }
+          },
+        );
   }
 
   /// Fetch the chat docs for a set of userChats changes in parallel and
@@ -361,6 +379,7 @@ class ChatRepository {
       final snapshot = await _firestore
           .collection('chats')
           .where('admins', arrayContains: uid)
+          .limit(200)
           .get();
 
       for (final doc in snapshot.docs) {
@@ -401,7 +420,7 @@ class ChatRepository {
     }
 
     // 2. Fetch Remote if empty (Fallback via Firestore)
-    final userChatsSnap = await _userChatsCol(currentUserId!).get();
+    final userChatsSnap = await _userChatsCol(currentUserId!).limit(100).get();
     if (userChatsSnap.docs.isEmpty) return [];
 
     final List<Chat> chats = [];
@@ -546,7 +565,11 @@ class ChatRepository {
             } else {
               chat = chat.copyWith(type: correctType);
             }
-            _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
+            try {
+              _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
+            } catch (e) {
+              debugPrint('Skipping heal type write due to permissions: $e');
+            }
           }
         }
 
@@ -613,7 +636,13 @@ class ChatRepository {
             } else if (chatId.startsWith('org_')) {
               healData['type'] = 'organization';
             }
-            _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
+            try {
+              _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
+            } catch (e) {
+              debugPrint(
+                'Skipping heal participants write due to permissions: $e',
+              );
+            }
 
             // Rebuild the chat object with healed participants
             chat = chat.copyWith(participants: healedParticipants);
@@ -898,59 +927,84 @@ class ChatRepository {
 
   Future<Chat?> createDirectChat(String otherUserId) async {
     if (currentUserId == null) return null;
-    final existingId = await getExistingDirectChat(otherUserId);
-    if (existingId != null) return getChat(existingId);
-
-    final chatId = 'direct_${_chatsCol.doc().id}';
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    final chatData = {
-      'id': chatId,
-      'type': 'direct',
-      'participants': [currentUserId, otherUserId],
-      'createdAt': now,
-      'updatedAt': now,
-      'createdBy': currentUserId,
-      'adminId': currentUserId,
-    };
-
-    final batch = _firestore.batch();
-    batch.set(_chatsCol.doc(chatId), chatData);
-    batch.set(_userChatsCol(currentUserId!).doc(chatId), {
-      'updatedAt': now,
-      'chatId': chatId,
-    });
-    batch.set(_userChatsCol(otherUserId).doc(chatId), {
-      'updatedAt': now,
-      'chatId': chatId,
-    });
-    await batch.commit();
-
-    return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('ensureDirectChat')
+        .call<Map<String, dynamic>>({'otherUserId': otherUserId});
+    final chatId = result.data['chatId'] as String?;
+    return chatId == null ? null : getChat(chatId);
   }
 
   Future<String?> getExistingDirectChat(String otherUserId) async {
-    if (currentUserId == null) return null;
+    final uid = currentUserId;
+    if (uid == null) return null;
 
-    // Query user's chats for direct chats
-    final myChatsSnap = await _userChatsCol(currentUserId!).get();
-    if (myChatsSnap.docs.isEmpty) return null;
+    // 1. Check in-memory cache first
+    try {
+      final cached = _chatsCache.firstWhere(
+        (c) =>
+            (c.type == 'direct' || c.id.startsWith('direct_')) &&
+            c.participants.contains(otherUserId),
+      );
+      return cached.id;
+    } catch (_) {}
 
-    for (final doc in myChatsSnap.docs) {
-      final chatId = doc.id;
-      final chatDoc = await _chatsCol.doc(chatId).get();
-      if (!chatDoc.exists) continue;
+    // 2. Query Firebase Functions if callable is deployed
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('ensureDirectChat')
+          .call<Map<String, dynamic>>({
+            'otherUserId': otherUserId,
+            'create': false,
+          });
+      if (result.data['exists'] == true) {
+        return result.data['chatId'] as String?;
+      }
+    } catch (e) {
+      debugPrint('ensureDirectChat callable fallback/skipped: $e');
+    }
 
-      final chatData = chatDoc.data()!;
-      if (chatData['type'] == 'direct') {
-        final participants = List<String>.from(chatData['participants'] ?? []);
-        if (participants.contains(otherUserId) &&
-            participants.contains(currentUserId)) {
-          return chatId;
+    // 3. Query user chats subcollection fallback
+    try {
+      final indexSnap = await _userChatsCol(uid).get();
+      for (final doc in indexSnap.docs) {
+        final chatDoc = await _chatsCol.doc(doc.id).get();
+        if (chatDoc.exists) {
+          final data = chatDoc.data() ?? {};
+          final participants = List<String>.from(data['participants'] ?? []);
+          final type = data['type'] as String? ?? '';
+          if ((type == 'direct' || doc.id.startsWith('direct_')) &&
+              participants.contains(otherUserId)) {
+            return doc.id;
+          }
         }
       }
+    } catch (e) {
+      debugPrint('Error looking up direct chat via index: $e');
     }
+
     return null;
+  }
+
+  /// Check if two users have an active direct chat where both have sent at least 1 message
+  Future<bool> hasBilateralDialogue(
+    String firstUserId,
+    String secondUserId,
+  ) async {
+    try {
+      final otherUid = (firstUserId == currentUserId)
+          ? secondUserId
+          : firstUserId;
+      final chatId = await getExistingDirectChat(otherUid);
+      if (chatId == null) return false;
+      final messagesSnap = await _messagesCol(chatId).limit(50).get();
+      final senders = messagesSnap.docs
+          .map((d) => d.data()['senderId'] as String?)
+          .toSet();
+      return senders.contains(firstUserId) && senders.contains(secondUserId);
+    } catch (e) {
+      debugPrint('hasBilateralDialogue error: $e');
+      return false;
+    }
   }
 
   /// Create a Group Chat (Generic)
@@ -962,149 +1016,57 @@ class ChatRepository {
     String type = 'group',
   }) async {
     if (currentUserId == null) return null;
-
-    final chatId = '${type}_${_chatsCol.doc().id}';
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    final finalParticipants = {...participants, currentUserId!}.toList();
-    final finalAdmins = {...admins, currentUserId!}.toList();
-
-    final chatData = {
-      'id': chatId,
-      'type': type,
+    final isBereavement = metadata['isBereavement'] == true;
+    final payload = <String, dynamic>{
+      'mode': isBereavement ? 'bereavement' : 'group',
       'name': name,
-      'participants': finalParticipants,
-      'admins': finalAdmins,
-      'createdAt': now,
-      'updatedAt': now,
-      'createdBy': currentUserId,
-      'metadata': metadata,
-      'memberCount': finalParticipants.length,
-      'lastMessage': {
-        'content': 'Group created',
-        'timestamp': now,
-        'type': 'system',
-        'status': 'sent',
-      },
+      if (isBereavement) 'deceasedUserId': metadata['deceasedId'],
+      if (isBereavement) 'details': metadata['details'],
     };
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createChat')
+        .call<Map<String, dynamic>>(payload);
+    final chatId = result.data['chatId'] as String?;
+    if (chatId == null) return null;
 
-    final batch = _firestore.batch();
-    batch.set(_chatsCol.doc(chatId), chatData);
-
-    for (final uid in finalParticipants) {
-      batch.set(_userChatsCol(uid).doc(chatId), {
-        'chatId': chatId,
-        'updatedAt': now,
-        'lastRead': now,
-        'addedAt': now,
-      });
+    if (!isBereavement) {
+      final invitationTargets = participants
+          .where((userId) => userId != currentUserId)
+          .toSet()
+          .take(99);
+      for (final userId in invitationTargets) {
+        await FirebaseFunctions.instance
+            .httpsCallable('manageChatMembers')
+            .call<void>({'chatId': chatId, 'inviteUserId': userId});
+      }
     }
-    await batch.commit();
-
     return chatId;
   }
 
-  /// Create-or-join a single "Family Group Chat" shared by two users.
+  /// Create-or-join a tiered Family Group Chat (immediate or extended).
   Future<String?> createOrJoinFamilyGroupChat({
     required String userId1,
     required String userId2,
+    required String familyTier, // 'immediate' or 'extended'
   }) async {
-    const familyGroupName = 'Family Group Chat';
-    const familyGroupMetaKey = 'isFamilyGroup';
-
     try {
-      // Helper to search user's chats for existing family group
-      Future<String?> findFamilyChat(String searchUid, String addUid) async {
-        final chatsSnap = await _userChatsCol(searchUid).get();
-        for (final doc in chatsSnap.docs) {
-          final chatDoc = await _chatsCol.doc(doc.id).get();
-          if (!chatDoc.exists) continue;
-          final chatData = chatDoc.data()!;
-
-          final meta = chatData['metadata'];
-          if (meta is! Map || meta[familyGroupMetaKey] != true) continue;
-
-          final parts = List<String>.from(chatData['participants'] ?? []);
-
-          if (parts.contains(addUid)) {
-            debugPrint(
-              '✅ [ChatRepo] Family group already has both users: ${doc.id}',
-            );
-            return doc.id;
-          }
-
-          // Add the missing user
-          final now = DateTime.now().millisecondsSinceEpoch;
-          parts.add(addUid);
-          final batch = _firestore.batch();
-          batch.update(_chatsCol.doc(doc.id), {
-            'participants': parts,
-            'memberCount': parts.length,
-          });
-          batch.set(_userChatsCol(addUid).doc(doc.id), {
-            'chatId': doc.id,
-            'updatedAt': now,
-            'lastRead': now,
-            'addedAt': now,
-          });
-          await batch.commit();
-          debugPrint('✅ [ChatRepo] Added $addUid to family group: ${doc.id}');
-          return doc.id;
-        }
+      if (currentUserId == null ||
+          (userId1 != currentUserId && userId2 != currentUserId)) {
         return null;
       }
-
-      // 1. Search from userId1's side
-      final result1 = await findFamilyChat(userId1, userId2);
-      if (result1 != null) return result1;
-
-      // 2. Search from userId2's side
-      final result2 = await findFamilyChat(userId2, userId1);
-      if (result2 != null) return result2;
-
-      // 3. No family group exists — create one
-      debugPrint(
-        '🆕 [ChatRepo] Creating new Family Group Chat for $userId1 & $userId2',
-      );
-      final chatId = 'group_${_chatsCol.doc().id}';
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final participants = [userId1, userId2];
-
-      final chatData = {
-        'id': chatId,
-        'type': 'group',
-        'name': familyGroupName,
-        'participants': participants,
-        'admins': participants,
-        'createdAt': now,
-        'updatedAt': now,
-        'createdBy': userId1,
-        'memberCount': participants.length,
-        'metadata': {familyGroupMetaKey: true},
-        'lastMessage': {
-          'content': '👨‍👩‍👧‍👦 Family Group Chat created',
-          'timestamp': now,
-          'type': 'system',
-          'status': 'sent',
-        },
-      };
-
-      final batch = _firestore.batch();
-      batch.set(_chatsCol.doc(chatId), chatData);
-      for (final uid in participants) {
-        batch.set(_userChatsCol(uid).doc(chatId), {
-          'chatId': chatId,
-          'updatedAt': now,
-          'lastRead': now,
-          'addedAt': now,
-        });
-      }
-      await batch.commit();
-
-      debugPrint('✅ [ChatRepo] Family Group Chat created: $chatId');
-      return chatId;
+      final otherUserId = userId1 == currentUserId ? userId2 : userId1;
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createChat')
+          .call<Map<String, dynamic>>({
+            'mode': 'family',
+            'otherUserId': otherUserId,
+            'familyTier': familyTier,
+          });
+      return result.data['chatId'] as String?;
     } catch (e) {
-      debugPrint('❌ [ChatRepo] Error in createOrJoinFamilyGroupChat: $e');
+      debugPrint(
+        '❌ [ChatRepo] Error in createOrJoinFamilyGroupChat ($familyTier): $e',
+      );
       return null;
     }
   }
@@ -1117,110 +1079,9 @@ class ChatRepository {
     String initialMessage,
   ) async {
     if (currentUserId == null) return null;
-
-    // Check for existing chat first
-    final existingId = await getExistingDirectChat(otherUserId);
-    if (existingId != null) {
-      // Chat exists — just send the message normally
-      final existingChat = await getChat(existingId);
-      if (existingChat != null) {
-        await sendTextMessage(existingChat.id, initialMessage);
-      }
-      return existingChat;
-    }
-
-    // Generate a new chat ID and timestamp
-    final chatId = 'direct_${_chatsCol.doc().id}';
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final participants = [currentUserId!, otherUserId];
-
-    // Get sender data for the message
-    final userDoc = await _firestore
-        .collection('users')
-        .doc(currentUserId!)
-        .get();
-    final userData = userDoc.data();
-    final firstName = userData?['firstName'] as String? ?? '';
-    final lastName = userData?['lastName'] as String? ?? '';
-    final profileImage = userData?['profileImage'] as String?;
-    final hostCountryCode = userData?['hostCountryCode'] as String?;
-    final homeCountryCode = userData?['homeCountryCode'] as String?;
-    final senderName = '$firstName $lastName'.trim();
-
-    // Prepare the message document
-    final msgRef = _chatsCol.doc(chatId).collection('messages').doc();
-    final messageData = {
-      'senderId': currentUserId,
-      'senderName': senderName.isNotEmpty ? senderName : 'Someone',
-      'senderImage': profileImage,
-      'senderHostCountryCode': hostCountryCode,
-      'senderHomeCountryCode': homeCountryCode,
-      'content': initialMessage,
-      'type': 'text',
-      'timestamp': now,
-      'status': 'sent',
-    };
-
-    final lastMessageData = {
-      'id': msgRef.id,
-      'content': initialMessage,
-      'timestamp': now,
-      'senderId': currentUserId,
-      'senderName': senderName.isNotEmpty ? senderName : 'Someone',
-      'type': 'text',
-      'status': 'sent',
-    };
-
-    // Build the chat document with ALL required fields
-    final chatData = {
-      'id': chatId,
-      'type': 'direct',
-      'participants': participants,
-      'createdAt': now,
-      'updatedAt': now,
-      'createdBy': currentUserId,
-      'adminId': currentUserId,
-      'lastMessage': lastMessageData,
-    };
-
-    // === TWO-STEP WRITE: chat first, then message + userChats ===
-    // Step 1: Create the chat document FIRST so that isChatParticipant()
-    // can resolve when Firestore checks security rules for the message write.
-    await _chatsCol.doc(chatId).set(chatData);
-
-    // Step 2: Batch the message + userChats entries together
-    final batch = _firestore.batch();
-
-    // 2a. Create the message document (now isChatParticipant will succeed)
-    batch.set(msgRef, messageData);
-
-    // 2b. Create userChats entries for both participants
-    for (final userId in participants) {
-      final userChatData = <String, dynamic>{
-        'chatId': chatId,
-        'updatedAt': now,
-        'lastMessage': lastMessageData,
-        'isDeleted': false,
-      };
-      if (userId != currentUserId) {
-        userChatData['unreadCount'] = FieldValue.increment(1);
-      }
-      batch.set(
-        _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('userChats')
-            .doc(chatId),
-        userChatData,
-        SetOptions(merge: true),
-      );
-    }
-
-    await batch.commit();
-
-    debugPrint('✅ Created DM chat + first message: $chatId');
-
-    return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
+    final chat = await createDirectChat(otherUserId);
+    if (chat != null) await sendTextMessage(chat.id, initialMessage);
+    return chat;
   }
 
   Future<Chat?> createListingChat({
@@ -1232,95 +1093,14 @@ class ChatRepository {
     String? listingImageUrl,
   }) async {
     if (currentUserId == null) return null;
-
-    final existingId = await getExistingListingChat(listingId);
-    if (existingId != null) {
-      // Add current user if not already a participant
-      final chatDoc = await _chatsCol.doc(existingId).get();
-      if (chatDoc.exists) {
-        final chatData = chatDoc.data()!;
-        final parts = List<String>.from(chatData['participants'] ?? []);
-
-        if (!parts.contains(currentUserId)) {
-          parts.add(currentUserId!);
-          final now = DateTime.now().millisecondsSinceEpoch;
-          final batch = _firestore.batch();
-          batch.update(_chatsCol.doc(existingId), {
-            'participants': parts,
-            'memberCount': parts.length,
-          });
-          batch.set(_userChatsCol(currentUserId!).doc(existingId), {
-            'chatId': existingId,
-            'updatedAt': now,
-            'lastRead': now,
-            'addedAt': now,
-          });
-          await batch.commit();
-          debugPrint(
-            '✅ [ChatRepo] Added $currentUserId to listing group $existingId',
-          );
-        }
-      }
-      return getChat(existingId);
-    }
-
-    // No existing group — create a new public group chat for this listing
-    final chatId = 'group_${_chatsCol.doc().id}';
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final participants = <String>{currentUserId!, otherUserId}.toList();
-
-    final chatData = {
-      'id': chatId,
-      'type': 'group',
-      'name': listingTitle,
-      'photoUrl': listingImageUrl,
-      'participants': participants,
-      'admins': [otherUserId],
-      'createdAt': now,
-      'updatedAt': now,
-      'createdBy': otherUserId,
-      'isPublic': true,
-      'memberCount': participants.length,
-      'metadata': {
-        'listingId': listingId,
-        'listingType': listingType,
-        'isListingChat': true,
-        'sellerRole': ?sellerRole,
-      },
-      'lastMessage': {
-        'content': '🛒 Listing chat created',
-        'timestamp': now,
-        'type': 'system',
-        'status': 'sent',
-      },
-    };
-
-    final batch = _firestore.batch();
-    batch.set(_chatsCol.doc(chatId), chatData);
-
-    for (final uid in participants) {
-      batch.set(_userChatsCol(uid).doc(chatId), {
-        'chatId': chatId,
-        'updatedAt': now,
-        'lastRead': now,
-        'addedAt': now,
-      });
-    }
-
-    // Index as discoverable public group
-    batch.set(_firestore.collection('discoverableChats').doc(chatId), {
-      'id': chatId,
-      'name': listingTitle,
-      'photoUrl': listingImageUrl,
-      'description': 'Marketplace listing chat',
-      'category': 'marketplace',
-      'createdAt': now,
-      'memberCount': participants.length,
-    });
-
-    await batch.commit();
-
-    debugPrint('✅ [ChatRepo] Created listing group chat: $chatId');
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createChat')
+        .call<Map<String, dynamic>>({
+          'mode': 'listing',
+          'listingId': listingId,
+        });
+    final chatId = result.data['chatId'] as String?;
+    if (chatId == null) return null;
     return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
   }
 
@@ -1328,23 +1108,18 @@ class ChatRepository {
   Future<String?> getExistingListingChat(String listingId) async {
     if (currentUserId == null) return null;
 
-    // First check current user's chats
-    final myChatsSnap = await _userChatsCol(currentUserId!).get();
-    for (final doc in myChatsSnap.docs) {
-      final chatDoc = await _chatsCol.doc(doc.id).get();
-      if (!chatDoc.exists) continue;
-      final chatData = chatDoc.data()!;
-      final meta = chatData['metadata'];
-      if (meta is Map &&
-          meta['isListingChat'] == true &&
-          meta['listingId'] == listingId) {
-        return doc.id;
-      }
-    }
+    // Use the server-maintained discovery index first (one bounded lookup).
+    final discoverSnap = await _firestore
+        .collection('discoverableChats')
+        .where('listingId', isEqualTo: listingId)
+        .limit(1)
+        .get();
+    if (discoverSnap.docs.isNotEmpty) return discoverSnap.docs.first.id;
 
-    // Also check discoverable chats index
-    final discoverSnap = await _firestore.collection('discoverableChats').get();
-    for (final doc in discoverSnap.docs) {
+    // Bounded compatibility fallback for legacy listing chats that predate
+    // the discovery index.
+    final myChatsSnap = await _userChatsCol(currentUserId!).limit(100).get();
+    for (final doc in myChatsSnap.docs) {
       final chatDoc = await _chatsCol.doc(doc.id).get();
       if (!chatDoc.exists) continue;
       final chatData = chatDoc.data()!;
@@ -1461,81 +1236,32 @@ class ChatRepository {
     String? category,
   }) async {
     if (currentUserId == null) return null;
-    final allParticipants = {...userIds, currentUserId!}.toList();
-    final chatId = 'group_${_chatsCol.doc().id}';
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    String? imageUrl;
-    if (groupImage != null) {
-      final fileName = 'group_icon_$now.jpg';
-      final storageRef = _storage.ref().child('groups/$chatId/$fileName');
-
-      final metadata = SettableMetadata(
-        cacheControl: 'public, max-age=31536000',
-      );
-      if (kIsWeb) {
-        final bytes = await groupImage.readAsBytes();
-        await storageRef.putData(bytes, metadata);
-      } else {
-        await storageRef.putFile(File(groupImage.path), metadata);
-      }
-      imageUrl = await storageRef.getDownloadURL();
-    }
-
-    debugPrint('Creating group: $name with participants: $allParticipants');
-    final chatData = {
-      'id': chatId,
-      'type': 'group',
-      'name': name,
-      'photoUrl': imageUrl,
-      'participants': allParticipants,
-      'createdAt': now,
-      'updatedAt': now,
-      'createdBy': currentUserId,
-      'admins': [currentUserId],
-      if (description != null && description.isNotEmpty)
-        'description': description,
-      'communityId': ?communityId,
-      if (isPublic) 'isPublic': true,
-      'category': ?category,
-      'lastMessage': {
-        'content': 'Group created',
-        'timestamp': now,
-        'type': 'system',
-        'status': 'sent',
-      },
-    };
-
     try {
-      final batch = _firestore.batch();
-      batch.set(_chatsCol.doc(chatId), chatData);
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createChat')
+          .call<Map<String, dynamic>>({
+            'mode': 'group',
+            'name': name,
+            'description': description,
+            'communityId': communityId,
+            'isPublic': isPublic,
+            'category': category,
+          });
+      final chatId = result.data['chatId'] as String?;
+      if (chatId == null) return null;
 
-      for (final userId in allParticipants) {
-        batch.set(_userChatsCol(userId).doc(chatId), {
-          'updatedAt': now,
-          'chatId': chatId,
-          'pinned': false,
-          'lastRead': now,
-        });
-        debugPrint('Added userChat for $userId');
+      if (groupImage != null) {
+        final imageUrl = await uploadGroupImage(chatId, groupImage);
+        await updateGroupInfo(chatId, image: imageUrl);
       }
 
-      // Index Public Groups for Discovery
-      if (isPublic) {
-        batch.set(_firestore.collection('discoverableChats').doc(chatId), {
-          'id': chatId,
-          'name': name,
-          'photoUrl': imageUrl,
-          'description': description,
-          'communityId': communityId,
-          'category': category,
-          'createdAt': now,
-          'memberCount': 1,
-        });
+      for (final userId in userIds.toSet().where(
+        (userId) => userId != currentUserId,
+      )) {
+        await FirebaseFunctions.instance
+            .httpsCallable('manageChatMembers')
+            .call<void>({'chatId': chatId, 'inviteUserId': userId});
       }
-
-      await batch.commit();
-      debugPrint('Chat data set for $chatId');
 
       return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
     } catch (e, stack) {
@@ -1547,49 +1273,30 @@ class ChatRepository {
   Future<void> joinGroup(String chatId) async {
     if (currentUserId == null) return;
 
-    // Verify Group is Public
-    final chatDoc = await _chatsCol.doc(chatId).get();
-    if (!chatDoc.exists) return;
-    final chatData = chatDoc.data()!;
-    if (chatData['isPublic'] != true) {
-      throw Exception('Cannot join private group without invitation');
-    }
-    // Chambers and DDI discussions are structural chats: membership is
-    // managed server-side via callables (hardened firestore rules block
-    // direct participant writes for them).
-    final metadata = chatData['metadata'];
-    if (metadata is Map && metadata['isChamber'] == true) {
-      await _ref.read(chamberServiceProvider).joinChamber(chatId);
-      await getChat(chatId, force: true);
-      return;
-    }
-    if (metadata is Map && metadata['isDdiDiscussion'] == true) {
-      await _ref.read(chamberServiceProvider).joinDdiDiscussion(chatId);
-      await getChat(chatId, force: true);
-      return;
+    // Non-members cannot read the canonical chat document. The public index
+    // carries only the routing flags needed to select the trusted join flow.
+    final discoveryDoc = await _firestore
+        .collection('discoverableChats')
+        .doc(chatId)
+        .get();
+    if (discoveryDoc.exists) {
+      final discoveryData = discoveryDoc.data()!;
+      if (discoveryData['isChamber'] == true) {
+        await _ref.read(chamberServiceProvider).joinChamber(chatId);
+        await getChat(chatId, force: true);
+        return;
+      }
+      if (discoveryData['isDdiDiscussion'] == true) {
+        await _ref.read(chamberServiceProvider).joinDdiDiscussion(chatId);
+        await getChat(chatId, force: true);
+        return;
+      }
     }
 
-    // Add to participants using Firestore arrayUnion
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final batch = _firestore.batch();
-    batch.update(_chatsCol.doc(chatId), {
-      'participants': FieldValue.arrayUnion([currentUserId]),
-      'memberCount': FieldValue.increment(1),
-    });
-    batch.set(_userChatsCol(currentUserId!).doc(chatId), {
-      'updatedAt': now,
+    await FirebaseFunctions.instance.httpsCallable('joinChat').call({
       'chatId': chatId,
-      'pinned': false,
-      'lastRead': now,
     });
-    await batch.commit();
-
-    // Update discoverable count (best effort)
-    try {
-      await _firestore.collection('discoverableChats').doc(chatId).update({
-        'memberCount': FieldValue.increment(1),
-      });
-    } catch (_) {}
+    await getChat(chatId, force: true);
   }
 
   // ============================================
@@ -1597,7 +1304,7 @@ class ChatRepository {
   // ============================================
 
   Stream<List<String>> subscribeToTypingIndicators(String chatId) {
-    return _typingCol(chatId).snapshots().map((snapshot) {
+    return _typingCol(chatId).limit(100).snapshots().map((snapshot) {
       final now = DateTime.now().millisecondsSinceEpoch;
       final List<String> userIds = [];
 
@@ -1636,11 +1343,17 @@ class ChatRepository {
     String? image,
     String? description,
   }) async {
-    final updates = <String, Object?>{};
-    if (name != null) updates['name'] = name;
-    if (image != null) updates['photoUrl'] = image;
-    if (description != null) updates['description'] = description;
-    if (updates.isNotEmpty) await _chatsCol.doc(chatId).update(updates);
+    final updates = <String, Object?>{
+      'chatId': chatId,
+      'name': ?name,
+      'photoUrl': ?image,
+      'description': ?description,
+    };
+    if (updates.length > 1) {
+      await FirebaseFunctions.instance
+          .httpsCallable('updateChatMetadata')
+          .call(updates);
+    }
   }
 
   Future<void> manageChamber(
@@ -1669,17 +1382,10 @@ class ChatRepository {
     );
 
     if (!participants.contains(userId)) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final batch = _firestore.batch();
-      batch.update(_chatsCol.doc(chatId), {
-        'participants': FieldValue.arrayUnion([userId]),
-        'memberCount': FieldValue.increment(1),
-      });
-      batch.set(_userChatsCol(userId).doc(chatId), {
-        'updatedAt': now,
+      await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
         'chatId': chatId,
+        'inviteUserId': userId,
       });
-      await batch.commit();
       return true;
     }
     return false;
@@ -1694,21 +1400,19 @@ class ChatRepository {
     );
 
     if (participants.contains(userId)) {
-      final batch = _firestore.batch();
-      batch.update(_chatsCol.doc(chatId), {
-        'participants': FieldValue.arrayRemove([userId]),
-        'memberCount': FieldValue.increment(-1),
+      await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
+        'chatId': chatId,
+        'removeUserId': userId,
       });
-      batch.delete(_userChatsCol(userId).doc(chatId));
-      await batch.commit();
       return true;
     }
     return false;
   }
 
   Future<bool> promoteToAdmin(String chatId, String userId) async {
-    await _chatsCol.doc(chatId).update({
-      'admins': FieldValue.arrayUnion([userId]),
+    await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
+      'chatId': chatId,
+      'promoteUserId': userId,
     });
     return true;
   }
@@ -1946,9 +1650,11 @@ class ChatRepository {
     String emoji,
   ) async {
     if (currentUserId == null) return;
-    await _messagesCol(
-      chatId,
-    ).doc(messageId).update({'reactions.$currentUserId': FieldValue.delete()});
+    await FirebaseFunctions.instance.httpsCallable('reactToMessage').call({
+      'chatId': chatId,
+      'messageId': messageId,
+      'remove': true,
+    });
   }
 
   Future<List<Chat>> searchDiscoverableChats(String query) async {
@@ -1958,7 +1664,9 @@ class ChatRepository {
 
     try {
       // Get IDs of chats the user has already joined
-      final userChatsSnap = await _userChatsCol(currentUserId!).get();
+      final userChatsSnap = await _userChatsCol(
+        currentUserId!,
+      ).limit(500).get();
       final Set<String> joinedChatIds = {};
       for (final doc in userChatsSnap.docs) {
         final data = doc.data();
@@ -2035,7 +1743,11 @@ class ChatRepository {
       }
 
       // 3. Search Public Groups
-      final groupsSnap = await _firestore.collection('discoverableChats').get();
+      final groupsSnap = await _firestore
+          .collection('discoverableChats')
+          .orderBy('name')
+          .limit(100)
+          .get();
       for (final doc in groupsSnap.docs) {
         final groupData = doc.data();
         final name = groupData['name']?.toString() ?? '';
@@ -2111,7 +1823,7 @@ class ChatRepository {
   Future<int> getDeletableChatsCount() async {
     if (currentUserId == null) return 0;
     try {
-      final snapshot = await _userChatsCol(currentUserId!).get();
+      final snapshot = await _userChatsCol(currentUserId!).limit(500).get();
       if (snapshot.docs.isEmpty) return 0;
 
       int count = 0;
@@ -2134,26 +1846,41 @@ class ChatRepository {
   Future<void> clearAllChats() async {
     if (currentUserId == null) return;
     try {
-      final snapshot = await _userChatsCol(currentUserId!).get();
-      if (snapshot.docs.isEmpty) return;
+      DocumentSnapshot<Map<String, dynamic>>? cursor;
+      while (true) {
+        Query<Map<String, dynamic>> query = _userChatsCol(
+          currentUserId!,
+        ).orderBy(FieldPath.documentId).limit(400);
+        if (cursor != null) query = query.startAfterDocument(cursor);
+        final page = await query.get();
+        if (page.docs.isEmpty) break;
 
-      final batch = _firestore.batch();
-      for (final doc in snapshot.docs) {
-        final chatId = doc.id;
-        if (chatId.startsWith('community_')) continue;
-
-        final chat = await getChat(chatId);
-        if (chat != null && !chat.isCommunity) {
-          batch.delete(_userChatsCol(currentUserId!).doc(chatId));
+        final deletedIds = <String>[];
+        for (final chunk in _chunkList(page.docs, 20)) {
+          final chatSnapshots = await Future.wait(
+            chunk.map((indexDoc) => _chatsCol.doc(indexDoc.id).get()),
+          );
+          final batch = _firestore.batch();
+          for (var index = 0; index < chunk.length; index++) {
+            final chatSnapshot = chatSnapshots[index];
+            if (!chatSnapshot.exists) {
+              batch.delete(chunk[index].reference);
+              deletedIds.add(chunk[index].id);
+              continue;
+            }
+            final chat = Chat.fromFirestore(chatSnapshot);
+            if (!chat.isCommunity) {
+              batch.delete(chunk[index].reference);
+              deletedIds.add(chunk[index].id);
+            }
+          }
+          await batch.commit();
         }
-      }
-      await batch.commit();
-
-      // Clear local cache
-      for (final doc in snapshot.docs) {
-        if (!doc.id.startsWith('community_')) {
-          await _localService.deleteChat(doc.id);
+        for (final chatId in deletedIds) {
+          await _localService.deleteChat(chatId);
         }
+        cursor = page.docs.last;
+        if (page.docs.length < 400) break;
       }
     } catch (e) {
       debugPrint('Error clearing all chats: $e');

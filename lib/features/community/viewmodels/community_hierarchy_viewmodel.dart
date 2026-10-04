@@ -43,7 +43,10 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           .get();
       final userData = userDoc.data();
       final userHomeCountryCode = userData != null
-          ? userData['homeCountryCode'] as String?
+          ? (userData['homeCountryCode'] as String? ??
+                userData['countryCode'] as String? ??
+                userData['homeCountry'] as String? ??
+                userData['country'] as String?)
           : null;
 
       // Search Interception
@@ -58,12 +61,12 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       // Normal View Logic
       if (mode == ViewMode.global) {
         return _buildGlobalHierarchy(userHomeCountryCode ?? 'US');
-        // Fallback if null for global build
       } else {
-        if (userHomeCountryCode == null) {
-          return [];
-        }
-        return _buildMyCommunityHierarchy(userHomeCountryCode);
+        final effectiveCountryCode =
+            (userHomeCountryCode != null && userHomeCountryCode.isNotEmpty)
+            ? userHomeCountryCode
+            : 'US';
+        return _buildMyCommunityHierarchy(effectiveCountryCode);
       }
     } catch (e) {
       rethrow;
@@ -82,8 +85,16 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     final normalizedQuery = query.toLowerCase().trim();
     List<Community> communities = [];
 
+    final isGlobalUnlocked = ref.read(isGlobalUnlockedSyncProvider);
+    if (isGlobal && !isGlobalUnlocked) {
+      return [];
+    }
+
     if (isGlobal) {
-      final snapshot = await firestore.collection('communities').get();
+      final snapshot = await firestore
+          .collection('communities')
+          .limit(100)
+          .get();
       communities = snapshot.docs
           .map(
             (d) =>
@@ -98,6 +109,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       final snapshot = await firestore
           .collection('communities')
           .where('homeCountryCode', isEqualTo: userHomeCode)
+          .limit(200)
           .get();
       communities = snapshot.docs
           .map(
@@ -181,17 +193,38 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     // REVERT: Fetch ALL communities for this home code, then filter in memory.
     // This avoids "Missing Index" errors and handles missing/null locationType fields gracefully.
 
-    // Query A: All communities belonging to this Home Country
-    final homeCountrySnapshot = await firestore
+    final uppercaseHomeCode = userHomeCode.trim().toUpperCase();
+    final lowercaseHomeCode = userHomeCode.trim().toLowerCase();
+
+    // Query A: All communities belonging to this Home Country (case-resilient + fallback)
+    var homeCountrySnapshot = await firestore
         .collection('communities')
-        .where('homeCountryCode', isEqualTo: userHomeCode)
+        .where('homeCountryCode', isEqualTo: uppercaseHomeCode)
+        .limit(200)
         .get();
+
+    if (homeCountrySnapshot.docs.isEmpty &&
+        uppercaseHomeCode != lowercaseHomeCode) {
+      homeCountrySnapshot = await firestore
+          .collection('communities')
+          .where('homeCountryCode', isEqualTo: lowercaseHomeCode)
+          .limit(200)
+          .get();
+    }
+
+    if (homeCountrySnapshot.docs.isEmpty) {
+      homeCountrySnapshot = await firestore
+          .collection('communities')
+          .limit(100)
+          .get();
+    }
 
     // Query B: Global/Home Continent structure (Pre-defined nodes)
     // We fetch strict types here as these are usually static/admin defined
     final globalSnapshot = await firestore
         .collection('communities')
         .where('type', whereIn: ['global', 'continent'])
+        .limit(20)
         .get();
 
     // 2. Merge & In-Memory Filter
@@ -751,7 +784,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     final firestore = FirebaseFirestore.instance;
 
     // Fetch all communities
-    final snapshot = await firestore.collection('communities').get();
+    final snapshot = await firestore.collection('communities').limit(500).get();
 
     // Parse
     final allCommunities = snapshot.docs
@@ -1254,6 +1287,11 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     // Build final hierarchy
     final hierarchy = <HierarchyItem>[];
     final globalChildren = [...continentHierarchy, ...orphanCountries];
+
+    final isGlobalUnlocked = ref.read(isGlobalUnlockedSyncProvider);
+    if (!isGlobalUnlocked) {
+      return globalChildren;
+    }
 
     // Add Global Community if it exists
     if (globalCommunity.type == 'global') {

@@ -107,10 +107,9 @@ void main() {
       mockTrustRepo.getAllVerificationsForUser(any),
     ).thenAnswer((_) async => []);
     when(mockTrustRepo.saveTrustData(any)).thenAnswer((_) async {});
-    when(mockPointsRepo.updateTrustScore(any, any)).thenAnswer((_) async {});
     when(
-      mockPointsRepo.markExplorationActionCompleted(any, any),
-    ).thenAnswer((_) async {});
+      mockPointsRepo.getCompletedEconomicTransactionCount(any),
+    ).thenAnswer((_) async => 0);
   }
 
   group('HTS Engine – Governance Genesis Milestones', () {
@@ -150,10 +149,56 @@ void main() {
           mockTrustRepo.saveTrustData(captureAny),
         ).captured;
         final savedData = captured.first as TrustData;
-
-        // The ledger should record that Profile DSP count has been awarded.
         expect(savedData.awardedHtsTracking['Profile_dsp_count'], 12);
         expect(savedData.awardedQualificationMilestones, contains('Profile'));
+      },
+    );
+
+    test(
+      'awards 10,000 DSP lump sum upon reaching 10 family connections',
+      () async {
+        final userId = 'user-1';
+        final profile = _completeProfile(userId);
+        final points = UserPoints(
+          userId: userId,
+          totalPoints: 0,
+          availablePoints: 0,
+          lastUpdated: DateTime.now(),
+          signupDate: DateTime.now(),
+          currentStreak: 0,
+          dailyMessageCount: 0,
+        );
+
+        stubDefaults(userId);
+
+        // 10 active family relationships
+        when(mockRelRepo.getRelationships(any)).thenAnswer(
+          (_) => Stream.value(
+            List.generate(10, (i) => _makeRelationship('fam-$i', 'Brother')),
+          ),
+        );
+
+        await trustService.recalculateTrustScore(
+          userId: userId,
+          profile: profile,
+          points: points,
+        );
+
+        // 10 family connections = 10,000 DSP lump sum
+        verify(
+          mockPointsService.awardManualPoints(
+            userId,
+            10000,
+            'family_connection',
+          ),
+        ).called(1);
+
+        final captured = verify(
+          mockTrustRepo.saveTrustData(captureAny),
+        ).captured;
+        final savedData = captured.first as TrustData;
+        expect(savedData.awardedHtsTracking['Family_dsp_count'], 10);
+        expect(savedData.uniqueFamilyCount, 10);
       },
     );
 
@@ -200,47 +245,50 @@ void main() {
       },
     );
 
-    test('awards 1,000 DSP per new family connection', () async {
-      // The Connection Milestones pay 1,000 DSP per connection.
-      final userId = 'user-1';
-      final profile = _completeProfile(userId);
-      final points = UserPoints(
-        userId: userId,
-        totalPoints: 0,
-        availablePoints: 0,
-        lastUpdated: DateTime.now(),
-        signupDate: DateTime.now(),
-        currentStreak: 0,
-        dailyMessageCount: 0,
-      );
+    test(
+      'awards 0 DSP incrementally until 10 family connections reached',
+      () async {
+        final userId = 'user-1';
+        final profile = _completeProfile(userId);
+        final points = UserPoints(
+          userId: userId,
+          totalPoints: 0,
+          availablePoints: 0,
+          lastUpdated: DateTime.now(),
+          signupDate: DateTime.now(),
+          currentStreak: 0,
+          dailyMessageCount: 0,
+        );
 
-      stubDefaults(userId);
+        stubDefaults(userId);
 
-      // 3 active family relationships
-      when(mockRelRepo.getRelationships(any)).thenAnswer(
-        (_) => Stream.value([
-          _makeRelationship('fam-1', 'Brother'),
-          _makeRelationship('fam-2', 'Sister'),
-          _makeRelationship('fam-3', 'Mother'),
-        ]),
-      );
+        // 3 active family relationships (less than threshold of 10)
+        when(mockRelRepo.getRelationships(any)).thenAnswer(
+          (_) => Stream.value([
+            _makeRelationship('fam-1', 'Brother'),
+            _makeRelationship('fam-2', 'Sister'),
+            _makeRelationship('fam-3', 'Mother'),
+          ]),
+        );
 
-      await trustService.recalculateTrustScore(
-        userId: userId,
-        profile: profile,
-        points: points,
-      );
+        await trustService.recalculateTrustScore(
+          userId: userId,
+          profile: profile,
+          points: points,
+        );
 
-      // 3 new family connections × 1,000 = 3,000 DSP
-      verify(
-        mockPointsService.awardManualPoints(userId, 3000, 'family_connection'),
-      ).called(1);
+        // Option B: 0 DSP awarded until full threshold of 10 is reached
+        verifyNever(
+          mockPointsService.awardManualPoints(userId, any, 'family_connection'),
+        );
 
-      final captured = verify(mockTrustRepo.saveTrustData(captureAny)).captured;
-      final savedData = captured.first as TrustData;
-      expect(savedData.awardedHtsTracking['Family_dsp_count'], 3);
-      expect(savedData.uniqueFamilyCount, 3);
-    });
+        final captured = verify(
+          mockTrustRepo.saveTrustData(captureAny),
+        ).captured;
+        final savedData = captured.first as TrustData;
+        expect(savedData.uniqueFamilyCount, 3);
+      },
+    );
   });
 }
 

@@ -177,8 +177,6 @@ class PointRecord {
 ```dart
 class EpochDefinition {
   final int epochNumber;
-  final int minDspRequired;
-  final int minTrustScore;
 }
 ```
 

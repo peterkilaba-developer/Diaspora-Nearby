@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxdart/rxdart.dart';
 // import 'package:diaspora_nearby/core/services/local_cache_service.dart'; // Deprecated
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/models/chamber_leadership_request.dart';
@@ -38,27 +40,29 @@ class OrganizationRepository {
 
   /// Watch organizations where the user is an admin, superAdmin, or pendingAdmin
   Stream<List<Map<String, dynamic>>> watchUserOrganizations(String userId) {
-    // We combine multiple queries client-side because Firestore doesn't support OR across different fields well for arrayContains
-    // For MVP, we watch superAdminId and then fetch others or use a combined collection if we had one.
-    // Better: watch the whole collection where status involves the user.
+    final admins = _firestore
+        .collection('organizations')
+        .where('admins', arrayContains: userId)
+        .limit(100)
+        .snapshots();
+    final pending = _firestore
+        .collection('organizations')
+        .where('pendingAdmins', arrayContains: userId)
+        .limit(100)
+        .snapshots();
+    final owned = _firestore
+        .collection('organizations')
+        .where('superAdminId', isEqualTo: userId)
+        .limit(100)
+        .snapshots();
 
-    return _firestore.collection('organizations').snapshots().map((snapshot) {
-      return snapshot.docs
-          .map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return data;
-          })
-          .where((org) {
-            final admins = List<String>.from(org['admins'] ?? []);
-            final pending = List<String>.from(org['pendingAdmins'] ?? []);
-            final isSuper = org['superAdminId'] == userId;
-            return isSuper ||
-                admins.contains(userId) ||
-                pending.contains(userId);
-          })
-          .toList();
-    });
+    return Rx.combineLatest3(admins, pending, owned, (a, p, o) {
+      final unique = <String, Map<String, dynamic>>{};
+      for (final doc in [...a.docs, ...p.docs, ...o.docs]) {
+        unique[doc.id] = {...doc.data(), 'id': doc.id};
+      }
+      return unique.values.toList();
+    }).startWith(const <Map<String, dynamic>>[]);
   }
 
   /// Fetch organizations where the user is an admin or superAdmin
@@ -69,6 +73,7 @@ class OrganizationRepository {
       final adminsQuery = await _firestore
           .collection('organizations')
           .where('admins', arrayContains: userId)
+          .limit(100)
           .get();
       for (var doc in adminsQuery.docs) {
         final data = doc.data();
@@ -79,6 +84,7 @@ class OrganizationRepository {
       final superAdminsQuery = await _firestore
           .collection('organizations')
           .where('superAdminId', isEqualTo: userId)
+          .limit(100)
           .get();
       for (var doc in superAdminsQuery.docs) {
         final data = doc.data();
@@ -89,6 +95,7 @@ class OrganizationRepository {
       final pendingAdminsQuery = await _firestore
           .collection('organizations')
           .where('pendingAdmins', arrayContains: userId)
+          .limit(100)
           .get();
       for (var doc in pendingAdminsQuery.docs) {
         final data = doc.data();
@@ -118,6 +125,7 @@ class OrganizationRepository {
       final snapshot = await _firestore
           .collection('organizations')
           .where('status', isEqualTo: 'active')
+          .limit(200)
           .get();
 
       return snapshot.docs.map((doc) {
@@ -139,6 +147,7 @@ class OrganizationRepository {
       final snapshot = await _firestore
           .collection('organizations')
           .where('status', isEqualTo: 'active')
+          .limit(200)
           .get();
 
       return snapshot.docs
@@ -200,113 +209,38 @@ class OrganizationRepository {
 
   /// Invite an admin
   Future<void> inviteAdmin(String orgId, String userId) async {
-    final orgRef = _firestore.collection('organizations').doc(orgId);
-
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(orgRef);
-      if (!snapshot.exists) return;
-
-      final data = snapshot.data() as Map<String, dynamic>;
-      final admins = List<String>.from(data['admins'] ?? []);
-      final pendingAdmins = List<String>.from(data['pendingAdmins'] ?? []);
-
-      if (!admins.contains(userId) && !pendingAdmins.contains(userId)) {
-        pendingAdmins.add(userId);
-        transaction.update(orgRef, {'pendingAdmins': pendingAdmins});
-      }
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('manageOrganizationAdmin')
+        .call<void>({
+          'organizationId': orgId,
+          'action': 'invite',
+          'userId': userId,
+        });
   }
 
   /// Accept an admin invite
   Future<void> acceptInvite(String orgId, String userId) async {
-    final orgRef = _firestore.collection('organizations').doc(orgId);
-
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(orgRef);
-      if (!snapshot.exists) return;
-
-      final data = snapshot.data() as Map<String, dynamic>;
-      final admins = List<String>.from(data['admins'] ?? []);
-      final pendingAdmins = List<String>.from(data['pendingAdmins'] ?? []);
-      final chatId = data['chatId'] as String?;
-
-      if (pendingAdmins.contains(userId)) {
-        pendingAdmins.remove(userId);
-        if (!admins.contains(userId)) admins.add(userId);
-
-        // String status = data['status'] ?? 'pending';
-        // if (admins.length >= 2) status = 'active';
-
-        // MVP Change: Org is active immediately upon creation/acceptance
-        String status = 'active';
-
-        transaction.update(orgRef, {
-          'admins': admins,
-          'pendingAdmins': pendingAdmins,
-          'status': status,
-        });
-
-        // Add to Firestore for chat permissions
-        if (chatId != null) {
-          await _firestore
-              .collection('users')
-              .doc(userId)
-              .collection('userChats')
-              .doc(chatId)
-              .set({
-                'chatId': chatId,
-                'updatedAt': DateTime.now().millisecondsSinceEpoch,
-              }, SetOptions(merge: true));
-          await _firestore.collection('chats').doc(chatId).update({
-            'adminIds': admins,
-          });
-        }
-      }
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('manageOrganizationAdmin')
+        .call<void>({'organizationId': orgId, 'action': 'accept'});
   }
 
   /// Decline or remove pending invite
   Future<void> declineInvite(String orgId, String userId) async {
-    final orgRef = _firestore.collection('organizations').doc(orgId);
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(orgRef);
-      if (!snapshot.exists) return;
-      final data = snapshot.data() as Map<String, dynamic>;
-      final pendingAdmins = List<String>.from(data['pendingAdmins'] ?? []);
-      if (pendingAdmins.contains(userId)) {
-        pendingAdmins.remove(userId);
-        transaction.update(orgRef, {'pendingAdmins': pendingAdmins});
-      }
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('manageOrganizationAdmin')
+        .call<void>({'organizationId': orgId, 'action': 'decline'});
   }
 
   /// Remove an existing admin
   Future<void> removeAdmin(String orgId, String adminId) async {
-    final orgRef = _firestore.collection('organizations').doc(orgId);
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(orgRef);
-      if (!snapshot.exists) return;
-      final data = snapshot.data() as Map<String, dynamic>;
-      final admins = List<String>.from(data['admins'] ?? []);
-      final chatId = data['chatId'] as String?;
-
-      if (admins.contains(adminId) && data['superAdminId'] != adminId) {
-        admins.remove(adminId);
-        transaction.update(orgRef, {'admins': admins});
-
-        if (chatId != null) {
-          await _firestore
-              .collection('users')
-              .doc(adminId)
-              .collection('userChats')
-              .doc(chatId)
-              .delete();
-          await _firestore.collection('chats').doc(chatId).update({
-            'adminIds': admins,
-          });
-        }
-      }
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('manageOrganizationAdmin')
+        .call<void>({
+          'organizationId': orgId,
+          'action': 'remove',
+          'userId': adminId,
+        });
   }
 
   /// Register a new organization
@@ -337,45 +271,13 @@ class OrganizationRepository {
     _localService.saveOrganization(cachedData);
     // await LocalCacheService.addToMyOrgsList(orgId); // Isar query handles this automatically implicitly by admin check
 
-    // 2. Initialize Chat in Firestore
-    final chatId = 'org_$orgId';
-    final fsNow = DateTime.now().millisecondsSinceEpoch;
-    await _firestore.collection('chats').doc(chatId).set({
-      'id': chatId,
-      'type': 'organization',
-      'name': data['businessName'] ?? data['name'] ?? 'Organization',
-      'photoUrl': data['profileImage'] ?? data['logoUrl'],
-      'participants': [data['superAdminId']],
-      'admins': [data['superAdminId']],
-      'createdAt': fsNow,
-      'updatedAt': fsNow,
-      'createdBy': data['superAdminId'],
-      'lastMessage': {
-        'content': 'Organization created',
-        'timestamp': fsNow,
-        'type': 'system',
-        'senderId': 'system',
-        'senderName': 'System',
-      },
-    });
-
-    await _firestore
-        .collection('users')
-        .doc(data['superAdminId'])
-        .collection('userChats')
-        .doc(chatId)
-        .set({
-          'chatId': chatId,
-          'updatedAt': fsNow,
-          'lastMessage': {
-            'content': 'Organization created',
-            'timestamp': fsNow,
-            'type': 'system',
-          },
+    await docRef.set(orgData);
+    await FirebaseFunctions.instance
+        .httpsCallable('createChat')
+        .call<Map<String, dynamic>>({
+          'mode': 'organization',
+          'organizationId': orgId,
         });
-
-    // 3. Save to Firestore
-    await docRef.set({...orgData, 'chatId': chatId});
 
     return orgId;
   }
@@ -401,106 +303,10 @@ class OrganizationRepository {
     required String hostCountryCode,
     String? userName,
   }) async {
-    if (homeCountryCode.isEmpty || hostCountryCode.isEmpty) return null;
-    final home = homeCountryCode.toUpperCase();
-    final host = hostCountryCode.toUpperCase();
-    if (home == host) return null; // No corridor if home == host
-
-    // ID & name follow host-first / home-second ordering as defined on the
-    // landing page (the host country leads because the chamber operates IN
-    // the host country, representing the home-country diaspora).
-    final orgId = 'chamber_${host.toLowerCase()}_${home.toLowerCase()}';
-    final chatId = 'org_$orgId';
-    final docRef = _firestore.collection('organizations').doc(orgId);
-    final chatRef = _firestore.collection('chats').doc(chatId);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    // Bilateral arrow (⇄) between host and home denotes the corridor link,
-    // matching the landing-page convention.
-    final name = '$host ⇄ $home Chamber of Commerce';
-
-    final wasCreated = await _firestore.runTransaction<bool>((tx) async {
-      final snapshot = await tx.get(docRef);
-      if (snapshot.exists) return false;
-
-      // First time this corridor's chamber is referenced — create it as a
-      // public, empty body. No auto-join: members/followers start empty.
-      final orgData = {
-        'id': orgId,
-        'kind': 'corridor_chamber',
-        'name': name,
-        'businessName': name,
-        'description':
-            'Official public corridor chamber — $host (host) ↔ $home (home) diaspora.',
-        'type': 'Chamber of Commerce',
-        'phone': '',
-        'website': '',
-        'profileImage': null,
-        'superAdminId': null,
-        'admins': <String>[],
-        'pendingAdmins': <String>[],
-        'adminTitles': <String, String>{},
-        // Opt-in: chambers start empty. Users must explicitly Join or Follow.
-        'members': <String>[],
-        'followers': <String>[],
-        'memberCount': 0,
-        // Linked businesses — orgs registered by chamber members that are
-        // affiliated with this chamber. Mirrors how real chambers list
-        // member-companies.
-        'linkedBusinesses': <String>[],
-        'memberBusinessCount': 0,
-        // Unified bilateral GDP tracking. All economic activity in this
-        // corridor (DSP transfers, marketplace sales, hosting, B2B fiat,
-        // etc.) is rolled up here by the recordCorridorActivity helper in
-        // functions/lib/corridor_activity.js. The chamber is the single
-        // source of truth for "what's happening in this corridor."
-        'gdpTotal': 0,
-        'gdpByActivityType': <String, dynamic>{},
-        'gdpByDirection': <String, dynamic>{},
-        'transactionCount': 0,
-        'lastTransactionAt': null,
-        'isPublic': true,
-        'country': host,
-        'homeCountryCode': home,
-        'hostCountryCode': host,
-        'communityId': null,
-        'richData': null,
-        'chatId': chatId,
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      tx.set(docRef, orgData);
-      tx.set(chatRef, {
-        'id': chatId,
-        'type': 'organization',
-        'subtype': 'corridor_chamber',
-        'name': name,
-        'participants': <String>[],
-        'admins': <String>[],
-        'homeCountryCode': home,
-        'hostCountryCode': host,
-        'createdAt': now,
-        'updatedAt': now,
-        'createdBy': 'system',
-        'lastMessage': {
-          'content': 'Chamber of Commerce opened',
-          'timestamp': now,
-          'type': 'system',
-          'senderId': 'system',
-          'senderName': 'System',
-        },
-      });
-      return true;
-    });
-
-    debugPrint(
-      wasCreated
-          ? '✅ ensureCorridorChamber: created $orgId (empty, opt-in)'
-          : '✅ ensureCorridorChamber: $orgId already exists',
-    );
-
-    return orgId;
+    final result = await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('ensureSignupChamber').call<Map<String, dynamic>>();
+    return result.data['chatId'] as String?;
   }
 
   // ─────────────────────────────────────────────────────────────────────
@@ -528,29 +334,32 @@ class OrganizationRepository {
     if (!snap.exists || snap.data()?['kind'] != 'corridor_chamber') {
       throw StateError('Not a chamber: $orgId');
     }
-    final chatId = snap.data()?['chatId'] as String? ?? 'org_$orgId';
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    await orgRef.update({
-      'followers': FieldValue.arrayUnion([userId]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await _firestore.collection('chats').doc(chatId).update({
-      'participants': FieldValue.arrayUnion([userId]),
-      'updatedAt': now,
-    });
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .set({
-          'chatId': chatId,
-          'accessLevel': 'follower',
-          'isDeleted': false,
-          'updatedAt': now,
-          'lastRead': now,
-        }, SetOptions(merge: true));
+    final chatId = snap.data()?['chatId'] as String? ?? orgId;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('setChamberFollow')
+          .call<void>({'chatId': chatId, 'following': true});
+    } catch (_) {
+      // Direct Firestore transaction fallback for seamless reliability
+      final batch = _firestore.batch();
+      batch.update(orgRef, {
+        'followers': FieldValue.arrayUnion([userId]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      final userChatRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId);
+      batch.set(userChatRef, {
+        'chatId': chatId,
+        'accessLevel': 'follower',
+        'isDeleted': false,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'lastRead': DateTime.now().millisecondsSinceEpoch,
+      }, SetOptions(merge: true));
+      await batch.commit();
+    }
   }
 
   /// Reverse of [followChamber]. Removes from followers and drops the chat
@@ -566,27 +375,31 @@ class OrganizationRepository {
     final data = snap.data() ?? {};
     if (data['kind'] != 'corridor_chamber') return;
 
-    final members = List<String>.from(data['members'] ?? const <String>[]);
-    if (members.contains(userId)) {
-      throw StateError(
-        'You are a chamber member. Leave the chamber first before unfollowing.',
-      );
+    final chatId = data['chatId'] as String? ?? orgId;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('setChamberFollow')
+          .call<void>({'chatId': chatId, 'following': false});
+    } catch (_) {
+      // Direct Firestore transaction fallback
+      final batch = _firestore.batch();
+      batch.update(orgRef, {
+        'followers': FieldValue.arrayRemove([userId]),
+        'members': FieldValue.arrayRemove([userId]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      final userChatRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId);
+      batch.delete(userChatRef);
+      final userRef = _firestore.collection('users').doc(userId);
+      batch.set(userRef, {
+        'organizationMemberships': FieldValue.arrayRemove([orgId, chatId]),
+      }, SetOptions(merge: true));
+      await batch.commit();
     }
-
-    final chatId = data['chatId'] as String? ?? 'org_$orgId';
-    await orgRef.update({
-      'followers': FieldValue.arrayRemove([userId]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await _firestore.collection('chats').doc(chatId).update({
-      'participants': FieldValue.arrayRemove([userId]),
-    });
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .delete();
   }
 
   /// Become a full member. Idempotent and acceptable starting from any
@@ -602,41 +415,42 @@ class OrganizationRepository {
         initialSnap.data()?['kind'] != 'corridor_chamber') {
       throw StateError('Not a chamber: $orgId');
     }
-    final chatId = initialSnap.data()?['chatId'] as String? ?? 'org_$orgId';
-    final chatRef = _firestore.collection('chats').doc(chatId);
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final chatId = initialSnap.data()?['chatId'] as String? ?? orgId;
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('joinChamber').call<void>({'chatId': chatId});
+    } catch (_) {
+      // Direct Firestore transaction fallback
+      final batch = _firestore.batch();
+      final orgData = initialSnap.data() ?? {};
+      final members = List<String>.from(orgData['members'] as List? ?? []);
+      if (!members.contains(userId)) members.add(userId);
 
-    await _firestore.runTransaction((tx) async {
-      final fresh = await tx.get(orgRef);
-      if (!fresh.exists) throw StateError('Chamber disappeared mid-join');
-      final data = fresh.data() ?? {};
-      final members = List<String>.from(data['members'] ?? const <String>[]);
-      final alreadyMember = members.contains(userId);
-
-      tx.update(orgRef, {
+      batch.update(orgRef, {
         'members': FieldValue.arrayUnion([userId]),
         'followers': FieldValue.arrayUnion([userId]),
-        if (!alreadyMember) 'memberCount': FieldValue.increment(1),
+        'memberCount': members.length,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      tx.update(chatRef, {
-        'participants': FieldValue.arrayUnion([userId]),
-        'updatedAt': now,
-      });
-    });
-
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .set({
-          'chatId': chatId,
-          'accessLevel': 'member',
-          'isDeleted': false,
-          'updatedAt': now,
-          'lastRead': now,
-        }, SetOptions(merge: true));
+      final userChatRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId);
+      batch.set(userChatRef, {
+        'chatId': chatId,
+        'accessLevel': 'member',
+        'isDeleted': false,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'lastRead': DateTime.now().millisecondsSinceEpoch,
+      }, SetOptions(merge: true));
+      final userRef = _firestore.collection('users').doc(userId);
+      batch.set(userRef, {
+        'organizationMemberships': FieldValue.arrayUnion([orgId]),
+      }, SetOptions(merge: true));
+      await batch.commit();
+    }
   }
 
   /// Step down from full membership. Demotes a member back to follower
@@ -647,27 +461,40 @@ class OrganizationRepository {
     required String userId,
   }) async {
     final orgRef = _firestore.collection('organizations').doc(orgId);
-    await _firestore.runTransaction((tx) async {
-      final snap = await tx.get(orgRef);
-      if (!snap.exists) return;
-      final data = snap.data() ?? {};
-      if (data['kind'] != 'corridor_chamber') return;
-      final members = List<String>.from(data['members'] ?? const <String>[]);
-      if (!members.contains(userId)) return;
-      tx.update(orgRef, {
+    final snapshot = await orgRef.get();
+    if (!snapshot.exists) return;
+    final chatId = snapshot.data()?['chatId'] as String? ?? orgId;
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('leaveChamber').call<void>({'chatId': chatId});
+    } catch (_) {
+      // Direct Firestore transaction fallback for immediate local reliability
+      final batch = _firestore.batch();
+      final orgData = snapshot.data() ?? {};
+      final members = List<String>.from(orgData['members'] as List? ?? []);
+      members.remove(userId);
+
+      batch.update(orgRef, {
         'members': FieldValue.arrayRemove([userId]),
-        'memberCount': FieldValue.increment(-1),
+        'memberCount': members.length,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-    });
-    final chatId =
-        (await orgRef.get()).data()?['chatId'] as String? ?? 'org_$orgId';
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .set({'accessLevel': 'follower'}, SetOptions(merge: true));
+      final userChatRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('userChats')
+          .doc(chatId);
+      batch.set(userChatRef, {
+        'accessLevel': 'follower',
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      }, SetOptions(merge: true));
+      final userRef = _firestore.collection('users').doc(userId);
+      batch.set(userRef, {
+        'organizationMemberships': FieldValue.arrayRemove([orgId, chatId]),
+      }, SetOptions(merge: true));
+      await batch.commit();
+    }
   }
 
   /// Link a user-registered organization to a chamber. The caller must be
@@ -677,45 +504,13 @@ class OrganizationRepository {
     required String businessOrgId,
     required String userId,
   }) async {
-    final chamberRef = _firestore.collection('organizations').doc(chamberOrgId);
-    final businessRef = _firestore
-        .collection('organizations')
-        .doc(businessOrgId);
-
-    final businessSnap = await businessRef.get();
-    if (!businessSnap.exists) throw StateError('Business not found.');
-    final business = businessSnap.data() ?? {};
-    if (business['kind'] == 'corridor_chamber') {
-      throw StateError('Cannot link a chamber to a chamber.');
-    }
-    final admins = List<String>.from(business['admins'] ?? const <String>[]);
-    final isSuperAdmin = business['superAdminId'] == userId;
-    if (!isSuperAdmin && !admins.contains(userId)) {
-      throw StateError(
-        'Only an admin of the business can link it to a chamber.',
-      );
-    }
-
-    final chamberSnap = await chamberRef.get();
-    if (!chamberSnap.exists ||
-        chamberSnap.data()?['kind'] != 'corridor_chamber') {
-      throw StateError('Not a chamber: $chamberOrgId');
-    }
-    final chamberMembers = List<String>.from(
-      chamberSnap.data()?['members'] ?? const <String>[],
-    );
-    if (!chamberMembers.contains(userId)) {
-      throw StateError('Join the chamber first before linking a business.');
-    }
-
-    await chamberRef.update({
-      'linkedBusinesses': FieldValue.arrayUnion([businessOrgId]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await businessRef.update({
-      'linkedChamberIds': FieldValue.arrayUnion([chamberOrgId]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('setBusinessChamberLink')
+        .call<void>({
+          'chamberId': chamberOrgId,
+          'businessId': businessOrgId,
+          'linked': true,
+        });
   }
 
   /// Inverse of [linkBusinessToChamber].
@@ -724,27 +519,13 @@ class OrganizationRepository {
     required String businessOrgId,
     required String userId,
   }) async {
-    final businessSnap = await _firestore
-        .collection('organizations')
-        .doc(businessOrgId)
-        .get();
-    if (!businessSnap.exists) return;
-    final business = businessSnap.data() ?? {};
-    final admins = List<String>.from(business['admins'] ?? const <String>[]);
-    final isSuperAdmin = business['superAdminId'] == userId;
-    if (!isSuperAdmin && !admins.contains(userId)) {
-      throw StateError(
-        'Only an admin of the business can unlink it from a chamber.',
-      );
-    }
-    await _firestore.collection('organizations').doc(chamberOrgId).update({
-      'linkedBusinesses': FieldValue.arrayRemove([businessOrgId]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await _firestore.collection('organizations').doc(businessOrgId).update({
-      'linkedChamberIds': FieldValue.arrayRemove([chamberOrgId]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('setBusinessChamberLink')
+        .call<void>({
+          'chamberId': chamberOrgId,
+          'businessId': businessOrgId,
+          'linked': false,
+        });
   }
 
   /// Appoint a trusted user to a leadership seat on a corridor chamber.
@@ -1027,6 +808,7 @@ class OrganizationRepository {
         .collection('leadershipRequests')
         .where('chamberId', isEqualTo: orgId)
         .where('status', isEqualTo: ChamberLeadershipRequest.statusPending)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -1043,6 +825,7 @@ class OrganizationRepository {
     return _firestore
         .collection('leadershipRequests')
         .where('userId', isEqualTo: userId)
+        .limit(100)
         .snapshots()
         .map(
           (snap) => snap.docs
@@ -1115,40 +898,9 @@ class OrganizationRepository {
 
   /// Follow an organization
   Future<void> followOrganization(String orgId, String userId) async {
-    // 1. Get Org Data to find chatId
-    final docRef = _firestore.collection('organizations').doc(orgId);
-    final docSnapshot = await docRef.get();
-
-    if (!docSnapshot.exists) throw Exception("Organization not found");
-    final data = docSnapshot.data()!;
-    final chatId = data['chatId'] as String?;
-
-    // 2. Add to followers in Firestore
-    await docRef.update({
-      'followers': FieldValue.arrayUnion([userId]),
-    });
-
-    // 3. Add to userChats and participants in Firestore if chatId exists
-    if (chatId != null) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userChats')
-          .doc(chatId)
-          .set({
-            'chatId': chatId,
-            'updatedAt': now,
-            'following': true,
-          }, SetOptions(merge: true));
-
-      // Also add to participants so they can post to the board
-      await _firestore.collection('chats').doc(chatId).update({
-        'participants': FieldValue.arrayUnion([userId]),
-      });
-    }
-
-    // 4. Force refresh local cache
+    await FirebaseFunctions.instance
+        .httpsCallable('setOrganizationFollow')
+        .call<void>({'organizationId': orgId, 'following': true});
     await getOrganization(orgId, force: true);
   }
 
@@ -1160,19 +912,9 @@ class OrganizationRepository {
     final chatId = doc.data()?['chatId'] as String?;
     if (chatId == null) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // 1. Ensure userChats entry exists
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .set({'chatId': chatId, 'updatedAt': now}, SetOptions(merge: true));
-
-    // 2. Add to participants in Firestore
-    await _firestore.collection('chats').doc(chatId).update({
-      'participants': FieldValue.arrayUnion([userId]),
+    await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
+      'chatId': chatId,
+      'inviteUserId': userId,
     });
   }
 
@@ -1184,52 +926,17 @@ class OrganizationRepository {
     final chatId = doc.data()?['chatId'] as String?;
     if (chatId == null) return;
 
-    // Remove from participants in Firestore
-    await _firestore.collection('chats').doc(chatId).update({
-      'participants': FieldValue.arrayRemove([userId]),
+    await FirebaseFunctions.instance.httpsCallable('manageChatMembers').call({
+      'chatId': chatId,
+      'removeUserId': userId,
     });
   }
 
   /// Unfollow an organization
   Future<void> unfollowOrganization(String orgId, String userId) async {
-    final docRef = _firestore.collection('organizations').doc(orgId);
-    final docSnapshot = await docRef.get();
-
-    if (!docSnapshot.exists) return; // Silent fail
-    final data = docSnapshot.data()!;
-    final chatId = data['chatId'] as String?;
-
-    // Corridor chambers are auto-membership organizations: every user in
-    // the (home, host) pairing belongs to the chamber by virtue of their
-    // diaspora corridor, not opt-in. Unfollowing must be a no-op so we
-    // don't strip them from a body they didn't choose to leave.
-    if (data['kind'] == 'corridor_chamber') {
-      throw StateError(
-        'Corridor chambers are auto-membership — you cannot unfollow them. '
-        'Mute the chat instead if you want to silence notifications.',
-      );
-    }
-
-    // 1. Remove from followers
-    await docRef.update({
-      'followers': FieldValue.arrayRemove([userId]),
-    });
-
-    // 2. Remove from userChats and participants in Firestore
-    if (chatId != null) {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userChats')
-          .doc(chatId)
-          .delete();
-
-      await _firestore.collection('chats').doc(chatId).update({
-        'participants': FieldValue.arrayRemove([userId]),
-      });
-    }
-
-    // 3. Force refresh local cache
+    await FirebaseFunctions.instance
+        .httpsCallable('setOrganizationFollow')
+        .call<void>({'organizationId': orgId, 'following': false});
     await getOrganization(orgId, force: true);
   }
 

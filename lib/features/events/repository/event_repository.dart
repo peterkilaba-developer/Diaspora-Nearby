@@ -5,6 +5,7 @@ import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
@@ -13,8 +14,6 @@ import 'package:http/http.dart' as http;
 
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:diaspora_nearby/features/events/repository/event_local_service.dart';
-import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
-import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) {
@@ -86,6 +85,7 @@ class EventRepository {
       return _firestore
           .collection('events')
           .where('status', isEqualTo: 'published')
+          .limit(200)
           .snapshots()
           .map((snapshot) {
             final events = snapshot.docs.map((doc) {
@@ -385,29 +385,12 @@ class EventRepository {
 
   Future<String> createEvent(Event event, XFile? imageFile) async {
     try {
-      String? imageUrl;
-
-      // Upload Image if present
-      if (imageFile != null) {
-        final ref = _storage.ref().child('event_images/${event.id}');
-        final metadata = SettableMetadata(
-          cacheControl: 'public, max-age=31536000',
-          contentType: 'image/jpeg',
+      if (event.isPaid == true) {
+        throw UnsupportedError(
+          'Paid events are disabled until verified ticket checkout is configured.',
         );
-
-        if (kIsWeb) {
-          final bytes = await imageFile.readAsBytes();
-          await ref.putData(bytes, metadata);
-        } else {
-          await ref.putFile(File(imageFile.path), metadata);
-        }
-        imageUrl = await ref.getDownloadURL();
       }
-
       final eventData = event.toJson();
-      if (imageUrl != null) {
-        eventData['imageUrl'] = imageUrl;
-      }
 
       // Geo-enrichment (already in original code)
       try {
@@ -425,20 +408,37 @@ class EventRepository {
       eventData['attendeeCount'] = 1;
       eventData['createdAt'] = DateTime.now().toIso8601String();
 
-      // 1. Immediately Cache
-      final eventDataWithId = Event.fromJson(eventData);
-      await _localService.saveEvent(eventDataWithId);
-
-      // 2. Save to Firestore
+      // Create the canonical event first. Storage rules verify ownership by
+      // reading this document, so uploading before this write is denied.
       await _firestore.collection('events').doc(event.id).set(eventData);
 
-      await _createEventChat(
-        event.id,
-        event.title,
-        event.creatorId,
-        imageUrl,
-        event.invitedUserIds,
-      );
+      String? imageUrl;
+      try {
+        if (imageFile != null) {
+          final storageRef = _storage.ref().child('event_images/${event.id}');
+          final metadata = SettableMetadata(
+            cacheControl: 'public, max-age=31536000',
+            contentType: 'image/jpeg',
+          );
+          if (kIsWeb) {
+            final bytes = await imageFile.readAsBytes();
+            await storageRef.putData(bytes, metadata);
+          } else {
+            await storageRef.putFile(File(imageFile.path), metadata);
+          }
+          imageUrl = await storageRef.getDownloadURL();
+          eventData['imageUrl'] = imageUrl;
+          await _firestore.collection('events').doc(event.id).update({
+            'imageUrl': imageUrl,
+          });
+        }
+      } catch (_) {
+        await _firestore.collection('events').doc(event.id).delete();
+        rethrow;
+      }
+
+      await _localService.saveEvent(Event.fromJson(eventData));
+      await _createEventChat(event.id, event.invitedUserIds);
 
       return event.id;
     } catch (e) {
@@ -450,91 +450,21 @@ class EventRepository {
   // Create Event Chat in Firestore
   Future<void> _createEventChat(
     String eventId,
-    String title,
-    String creatorId,
-    String? imageUrl,
     List<String>? invitedUserIds,
   ) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final chatId = 'event_$eventId'; // Deterministic ID
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('createChat')
+        .call<Map<String, dynamic>>({'mode': 'event', 'eventId': eventId});
+    final chatId = result.data['chatId'] as String?;
+    if (chatId == null) throw StateError('Event chat creation failed');
 
-    final allParticipants = <String>[creatorId];
-    if (invitedUserIds != null && invitedUserIds.isNotEmpty) {
-      for (final uid in invitedUserIds) {
-        if (!allParticipants.contains(uid)) allParticipants.add(uid);
-      }
+    for (final userId in (invitedUserIds ?? const <String>[]).toSet().take(
+      99,
+    )) {
+      await FirebaseFunctions.instance
+          .httpsCallable('manageChatMembers')
+          .call<void>({'chatId': chatId, 'inviteUserId': userId});
     }
-
-    // 1. Create chat document in Firestore
-    final chatData = {
-      'id': chatId,
-      'type': 'event',
-      'eventId': eventId,
-      'name': title,
-      'photoUrl': imageUrl,
-      'createdAt': now,
-      'updatedAt': now,
-      'createdBy': creatorId,
-      'memberCount': allParticipants.length,
-      'participants': allParticipants,
-    };
-
-    await _firestore.collection('chats').doc(chatId).set(chatData);
-
-    // 2. Add all participants to their userChats subcollection
-    final batch = _firestore.batch();
-    for (final userId in allParticipants) {
-      final userChatRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userChats')
-          .doc(chatId);
-      batch.set(userChatRef, {'chatId': chatId, 'updatedAt': now});
-    }
-    await batch.commit();
-
-    // 3. Update Event with chatId
-    await _firestore.collection('events').doc(eventId).update({
-      'chatId': chatId,
-    });
-  }
-
-  // Helper to add user to event chat (Firestore)
-  Future<void> _addUserToEventChat(
-    String chatId,
-    String userId,
-    String chatName,
-  ) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // 1. Add to userChats subcollection
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .set({'chatId': chatId, 'updatedAt': now}, cf.SetOptions(merge: true));
-
-    // 2. Add to participants array in chat document
-    await _firestore.collection('chats').doc(chatId).update({
-      'participants': cf.FieldValue.arrayUnion([userId]),
-    });
-  }
-
-  // Helper to remove user from event chat (Firestore)
-  Future<void> _removeUserFromEventChat(String chatId, String userId) async {
-    // 1. Remove from userChats subcollection
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('userChats')
-        .doc(chatId)
-        .delete();
-
-    // 2. Remove from participants array in chat document
-    await _firestore.collection('chats').doc(chatId).update({
-      'participants': cf.FieldValue.arrayRemove([userId]),
-    });
   }
 
   // Attend Event (RSVP)
@@ -544,19 +474,10 @@ class EventRepository {
     if (!eventDoc.exists) throw Exception('Event not found');
     final event = Event.fromJson(eventDoc.data()!);
 
-    // 1. Update Firestore atomically
-    await _firestore.collection('events').doc(eventId).update({
-      'attendees': cf.FieldValue.arrayUnion([userId]),
-      'attendeeCount': cf.FieldValue.increment(1),
+    await FirebaseFunctions.instance.httpsCallable('setEventAttendance').call({
+      'eventId': eventId,
+      'attending': true,
     });
-
-    // 1.1 Track joined event for trust
-    try {
-      final trustRepo = _ref.read(trustRepositoryProvider);
-      await trustRepo.incrementJoinedEventsCount(userId);
-    } catch (e) {
-      debugPrint('Error updating trustJoinedEvents: $e');
-    }
 
     // 1.2 Record fiat GDP for paid events
     if (event.isPaid == true &&
@@ -580,48 +501,16 @@ class EventRepository {
       }
     }
 
-    // 2. Get Event to find chatId
-    final doc = await _firestore.collection('events').doc(eventId).get();
-    if (doc.exists) {
-      final data = doc.data();
-      final chatId = data?['chatId'];
-      final title = data?['title'] ?? 'Event Chat';
-
-      if (chatId != null) {
-        try {
-          await _addUserToEventChat(chatId, userId, title);
-        } catch (e) {
-          debugPrint('JoinEvent Chat Error (Ignored): $e');
-        }
-      }
-    }
-
     // 3. Refresh Local Cache
     await getEvent(eventId, force: true);
   }
 
   // Leave Event
   Future<void> leaveEvent(String eventId, String userId) async {
-    // 1. Update Firestore atomically
-    await _firestore.collection('events').doc(eventId).update({
-      'attendees': cf.FieldValue.arrayRemove([userId]),
-      'attendeeCount': cf.FieldValue.increment(-1),
+    await FirebaseFunctions.instance.httpsCallable('setEventAttendance').call({
+      'eventId': eventId,
+      'attending': false,
     });
-
-    // 2. Get Event to find chatId
-    final doc = await _firestore.collection('events').doc(eventId).get();
-    if (doc.exists) {
-      final data = doc.data();
-      final chatId = data?['chatId'];
-
-      if (chatId != null) {
-        try {
-          await _removeUserFromEventChat(chatId, userId);
-        } catch (e) {
-          debugPrint('LeaveEvent Chat Error (Ignored): $e');
-        }
-      }
-    }
 
     // 3. Refresh Local Cache
     await getEvent(eventId, force: true);
@@ -629,19 +518,19 @@ class EventRepository {
 
   // Toggle Interest
   Future<void> toggleInterest(String eventId, String userId, bool add) async {
-    await _firestore.collection('events').doc(eventId).update({
-      'interested': add
-          ? cf.FieldValue.arrayUnion([userId])
-          : cf.FieldValue.arrayRemove([userId]),
+    await FirebaseFunctions.instance.httpsCallable('setEventInterest').call({
+      'eventId': eventId,
+      'interested': add,
     });
   }
 
   // Generate Attendance Code
   Future<String> generateAttendanceCode(String eventId) async {
-    // In a real app, this should be a signed JWT or similar.
-    // For now, we use a simple format that verifies the event ID.
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    return 'attendance:$eventId:$timestamp';
+    final response = await FirebaseFunctions.instance
+        .httpsCallable('createEventCheckInChallenge')
+        .call({'eventId': eventId});
+    final data = Map<String, dynamic>.from(response.data as Map);
+    return 'attendance:$eventId:${data['token']}';
   }
 
   // Verify and Mark Attendance
@@ -659,37 +548,10 @@ class EventRepository {
         return VerificationResult.invalidCode;
       }
 
-      // 2. Check if already attended
-      final eventDoc = await _firestore.collection('events').doc(eventId).get();
-      if (eventDoc.exists) {
-        final data = eventDoc.data();
-        final confirmed = List<String>.from(data?['confirmedAttendees'] ?? []);
-        if (confirmed.contains(userId)) {
-          debugPrint('⚠️ User already checked in.');
-          return VerificationResult
-              .alreadyCheckedIn; // Prevent duplicate check-in
-        }
-      }
-
-      // 3. Mark Attendance in Firestore
-      // We use arrayUnion to ensure uniqueness
-      await _firestore.collection('events').doc(eventId).update({
-        'confirmedAttendees': cf.FieldValue.arrayUnion([userId]),
-      });
-
-      // 4. Trigger Physical Presence Check-In via TrustService
-      // This awards DSP and updates Trust Score
-      final trustService = _ref.read(trustServiceProvider);
-
-      // We perform the check-in with a placeholder location for now.
-      // In a more advanced implementation, we would verify the user's location matches the event's venue.
-      await trustService.performCheckIn(
-        userId: userId,
-        entityId: eventId,
-        type: 'event',
-        lat: 0.0,
-        lng: 0.0,
-      );
+      final token = code.substring('attendance:$eventId:'.length);
+      await FirebaseFunctions.instance
+          .httpsCallable('completeEventCheckIn')
+          .call({'eventId': eventId, 'token': token});
 
       return VerificationResult.success;
     } catch (e) {
@@ -706,58 +568,10 @@ class EventRepository {
     required double lat,
     required double lng,
   }) async {
-    try {
-      final eventDoc = await _firestore.collection('events').doc(eventId).get();
-      if (!eventDoc.exists) return false;
-
-      final data = eventDoc.data();
-      if (data == null) return false;
-
-      final confirmed = List<String>.from(data['confirmedAttendees'] ?? []);
-      if (confirmed.contains(userId)) {
-        // Already checked in
-        return true;
-      }
-
-      final creatorId = data['creatorId'] as String? ?? '';
-
-      // Mark confirmed in Firestore
-      await _firestore.collection('events').doc(eventId).update({
-        'confirmedAttendees': cf.FieldValue.arrayUnion([userId]),
-      });
-
-      // Award 1,000 DSP to attendee & host via PointsService
-      try {
-        final pointsService = _ref.read(pointsServiceProvider);
-        await pointsService.trackEventAttendance(
-          attendeeUserId: userId,
-          hostUserId: creatorId,
-          eventId: eventId,
-        );
-      } catch (e) {
-        debugPrint('Error awarding geofence event attendance DSP: $e');
-      }
-
-      // Record Trust Check-In
-      try {
-        final trustService = _ref.read(trustServiceProvider);
-        await trustService.performCheckIn(
-          userId: userId,
-          entityId: eventId,
-          type: 'event_geofence',
-          lat: lat,
-          lng: lng,
-        );
-      } catch (e) {
-        debugPrint('Error recording trust check-in: $e');
-      }
-
-      debugPrint('📍 [GEOFENCE] Successfully auto-checked in user $userId for event $eventId');
-      return true;
-    } catch (e) {
-      debugPrint('Error in confirmAttendeeGeofenced: $e');
-      return false;
-    }
+    debugPrint(
+      'Geofenced check-in is disabled until location can be verified server-side.',
+    );
+    return false;
   }
 
   // Fetch events created by a specific user
@@ -782,6 +596,7 @@ class EventRepository {
       final snapshot = await _firestore
           .collection('events')
           .where('creatorId', isEqualTo: uid)
+          .limit(200)
           .get();
 
       final events = snapshot.docs.map((doc) {
@@ -800,6 +615,7 @@ class EventRepository {
       final snapshot = await _firestore
           .collection('events')
           .where('attendees', arrayContains: userId)
+          .limit(200)
           .get();
 
       final events = snapshot.docs
@@ -823,6 +639,11 @@ class EventRepository {
 
   // Update Event
   Future<void> updateEvent(Event event, XFile? newImage) async {
+    if (event.isPaid == true) {
+      throw UnsupportedError(
+        'Paid events are disabled until verified ticket checkout is configured.',
+      );
+    }
     try {
       final data = event.toJson();
 
@@ -842,14 +663,6 @@ class EventRepository {
         }
         final imageUrl = await ref.getDownloadURL();
         data['imageUrl'] = imageUrl;
-
-        // Also update chat image in Firestore if exists
-        final chatId = event.chatId;
-        if (chatId != null) {
-          await _firestore.collection('chats').doc(chatId).update({
-            'photoUrl': imageUrl,
-          });
-        }
       }
 
       // Geo-enrich if location changed
@@ -877,9 +690,13 @@ class EventRepository {
 
       // Update Chat Name in Firestore if title changed
       if (event.chatId != null) {
-        await _firestore.collection('chats').doc(event.chatId).update({
-          'name': event.title,
-        });
+        await FirebaseFunctions.instance
+            .httpsCallable('updateChatMetadata')
+            .call<void>({
+              'chatId': event.chatId,
+              'name': event.title,
+              if (data['imageUrl'] is String) 'photoUrl': data['imageUrl'],
+            });
       }
     } catch (e) {
       rethrow;
@@ -893,41 +710,9 @@ class EventRepository {
       final doc = await _firestore.collection('events').doc(eventId).get();
       if (!doc.exists) return;
 
-      final data = doc.data()!;
-      final chatId = data['chatId'];
-      final imageUrl = data['imageUrl'];
-
-      // 2. Delete Firestore Doc
+      // Related chat indexes and event media are removed by the backend
+      // delete trigger after this canonical document is deleted.
       await _firestore.collection('events').doc(eventId).delete();
-
-      // 3. Delete Image from Storage
-      if (imageUrl != null) {
-        try {
-          await _storage.ref().child('event_images/$eventId').delete();
-        } catch (e) {
-          // Error deleting image
-        }
-      }
-
-      // 4. Delete Chat (Firestore)
-      if (chatId != null) {
-        // Remove chat document
-        await _firestore.collection('chats').doc(chatId).delete();
-
-        // Remove from all attendees' userChats
-        final attendees = List<String>.from(data['attendees'] ?? []);
-        final batch = _firestore.batch();
-        for (var userId in attendees) {
-          batch.delete(
-            _firestore
-                .collection('users')
-                .doc(userId)
-                .collection('userChats')
-                .doc(chatId),
-          );
-        }
-        await batch.commit();
-      }
     } catch (e) {
       rethrow;
     }
@@ -945,6 +730,7 @@ class EventRepository {
       final snapshot = await _firestore
           .collection('events')
           .where('startDate', isGreaterThanOrEqualTo: todayStr)
+          .limit(200)
           .get();
 
       final events = snapshot.docs

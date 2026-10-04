@@ -80,6 +80,20 @@ describe("DiasporaTGEControllerV2", function () {
       await expect(tge.initializeV2(WELCOME_CAP)).to.revert(ethers);
     });
 
+    it("prevents a non-admin from initializing V2 state", async function () {
+      const TGEv2 = await ethers.getContractFactory("DiasporaTGEControllerV2");
+      const fresh = await upgrades.deployProxy(
+        TGEv2,
+        [admin.address, admin.address, await token.getAddress()],
+        { kind: "uups" }
+      );
+      await expect(
+        fresh.connect(attacker).initializeV2(WELCOME_CAP)
+      ).to.revert(ethers);
+      await fresh.connect(admin).initializeV2(WELCOME_CAP);
+      expect(await fresh.maxWelcomeBonusPerRecipient()).to.equal(WELCOME_CAP);
+    });
+
     it("admin can tune the cap with setMaxWelcomeBonusPerRecipient", async function () {
       await tge.setMaxWelcomeBonusPerRecipient(500n * ONE);
       expect(await tge.maxWelcomeBonusPerRecipient()).to.equal(500n * ONE);

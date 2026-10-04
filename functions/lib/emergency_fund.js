@@ -118,27 +118,12 @@ exports.payEmergencyFundInDiaspora = functions
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
     const userId = context.auth.uid;
 
-    // 1. Eligibility re-check (defense in depth)
-    const trustDoc = await db.collection("trust_scores").doc(userId).get();
-    const qrCount = trustDoc.exists ? Number(trustDoc.data().uniqueQrCount || 0) : 0;
-    if (qrCount < 10) {
-      throw new functions.https.HttpsError("failed-precondition",
-        `Eligibility not met: ${qrCount}/10 in-person QR scans`);
-    }
-
-    // 2. Must have staked promissory
-    const stakerDoc = await db.collection("emergency_fund_stakers").doc(userId).get();
-    if (!stakerDoc.exists || stakerDoc.data().status === "contributed") {
-      throw new functions.https.HttpsError("failed-precondition",
-        "You must stake 1,000 DSP promissory first.");
-    }
-
-    // 3. Resolve user wallet
+    // 1. Resolve user wallet
     const userDoc = await db.collection("users").doc(userId).get();
     const userWallet = userDoc.exists ? userDoc.data().walletAddress : null;
     if (!userWallet) throw new functions.https.HttpsError("failed-precondition", "No wallet — verify your phone first.");
 
-    // 4. Quote price + treasury wallet
+    // 2. Quote price + treasury wallet
     const price = await getDiasporaPriceUsd();
     const amountDiaspora = Math.ceil(CONTRIBUTION_USD / price);
     const infra = getSmartWalletInfra();
@@ -478,4 +463,90 @@ exports.slashPromissoryForFraud = functions.https.onCall(async (data, context) =
 
   return { success: true, slashedDsp: PROMISSORY_DSP };
 
+});
+
+/**
+ * stakeEmergencyFundPromissory — Backward compatibility stub.
+ * Promissory staking is deprecated as all users can contribute directly.
+ */
+exports.stakeEmergencyFundPromissory = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
+  return { success: true, legacy: true, message: "Promissory staking is no longer required." };
+});
+
+/**
+ * submitEmergencyClaim — Submits a support claim to the Ubuntu Emergency Fund.
+ * Enforces minimum 100 days active account age and 3-tier limits:
+ *   - Standard Tier: <= $1,000 USD
+ *   - Fast-Track Tier: $1,001 to $50,000 USD (Authorized within 24h by Town & Country Secretaries)
+ *   - Community Vote Tier: Over $50,000 USD (Requires 10 full trust score members, 51% approval in 48h community vote)
+ */
+exports.submitEmergencyClaim = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
+  const userId = context.auth.uid;
+  const input = data || {};
+
+  const userDoc = await db.collection("users").doc(userId).get();
+  if (!userDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "User profile not found.");
+  }
+  const userData = userDoc.data();
+
+  // Enforce minimum 100 days active account age
+  let daysActive = 0;
+  if (userData.createdAt) {
+    const created = userData.createdAt.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt);
+    daysActive = Math.floor((Date.now() - created.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  if (daysActive < 100) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `Emergency Fund claims require a minimum of 100 days of active community membership (Current: ${daysActive} days).`
+    );
+  }
+
+  const requestedAmountUsd = Number(input.requestedAmountUsd || input.amountUsd || 0);
+  if (!Number.isFinite(requestedAmountUsd) || requestedAmountUsd <= 0) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Requested claim amount must be greater than $0."
+    );
+  }
+
+  const tier = requestedAmountUsd <= 1000
+    ? "standard"
+    : (requestedAmountUsd <= 50000 ? "fast_track" : "community_vote");
+
+  const claimRef = db.collection("emergency_fund_claims").doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  await claimRef.set({
+    id: claimRef.id,
+    userId,
+    claimantName: `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Member",
+    claimantWallet: userData.walletAddress || null,
+    emergencyType: input.emergencyType || input.type || "General Emergency",
+    description: String(input.description || "").slice(0, 3000),
+    beneficiaryName: input.beneficiaryName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+    beneficiaryCountry: input.beneficiaryCountry || userData.homeCountry || null,
+    relationship: input.relationship || "Self",
+    requestedAmountUsd,
+    payoutAmountUsd: requestedAmountUsd,
+    tier,
+    status: tier === "community_vote" ? "pending_community_vote" : "pending",
+    requiresCommunityVote: tier === "community_vote",
+    communityVoteQuorum: tier === "community_vote" ? 10 : 0,
+    communityVoteApprovalThreshold: tier === "community_vote" ? 0.51 : 0,
+    communityVoteWindowHours: tier === "community_vote" ? 48 : 0,
+    daysActiveAtSubmission: daysActive,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return {
+    success: true,
+    claimId: claimRef.id,
+    tier,
+    requestedAmountUsd,
+  };
 });

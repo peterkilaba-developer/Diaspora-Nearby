@@ -103,13 +103,13 @@ final chatMessagesProvider = StreamProvider.family<List<Message>, String>((ref, 
 
 ### How Other Features Use Chat
 
-**DSP Feature:**
+**$DIASPORA Token Transfer Feature:**
 ```dart
-// Send DSP transfer message
+// Send $DIASPORA token transfer message (on-chain Smart Wallet transfer)
 await ref.read(chatMessagingServiceProvider).sendMessage(
   chatId: chatId,
   senderId: senderId,
-  content: 'Sent you 10 DSP',
+  content: 'Sent 10 \$DIASPORA',
   type: MessageType.dspTransfer,
 );
 ```

@@ -230,7 +230,12 @@ class TrustRepository {
 
   Future<void> createVouch(Vouch vouch) async {
     try {
-      await _firestore.collection('vouches').doc(vouch.id).set(vouch.toJson());
+      final id = '${vouch.fromUserId}_${vouch.toUserId}';
+      await _firestore.collection('vouches').doc(id).set({
+        ...vouch.toJson(),
+        'id': id,
+        'stakeAmount': 0,
+      });
 
       // Update the "vouchedBy" list in the target user's trust data atomically (if possible)
       // This is best done in the Service via a recalculation, but appending here is good for immediate feedback
@@ -297,17 +302,26 @@ class TrustRepository {
     String? fromUserName,
   }) async {
     final id = '${fromUserId}_$toUserId';
-    final data = <String, dynamic>{
+    final coreData = <String, dynamic>{
       'fromUserId': fromUserId,
       'toUserId': toUserId,
       'score': score,
       'isFullTrust': isFullTrust,
-      'stakedAmount': stakedAmount,
-      'remainingStake': remainingStake,
       'timestamp': DateTime.now().toIso8601String(),
     };
-    if (fromUserName != null) data['fromUserName'] = fromUserName;
-    await _firestore.collection('trust_ratings').doc(id).set(data);
+    if (fromUserName != null) coreData['fromUserName'] = fromUserName;
+    final ref = _firestore.collection('trust_ratings').doc(id);
+    final existing = await ref.get();
+    if (existing.exists) {
+      await ref.update(coreData);
+    } else {
+      await ref.set({
+        ...coreData,
+        // Server derives these values after creation.
+        'stakedAmount': 0,
+        'remainingStake': 0,
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> getTrustRatingsForUser(
@@ -407,8 +421,7 @@ class TrustRepository {
     required String toUserId,
     required Map<String, bool> fields,
   }) async {
-    final id =
-        '${fromUserId}_${toUserId}_${DateTime.now().millisecondsSinceEpoch}';
+    final id = '${fromUserId}_$toUserId';
     await _firestore.collection('field_verifications').doc(id).set({
       'fromUserId': fromUserId,
       'toUserId': toUserId,

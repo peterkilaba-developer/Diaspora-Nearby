@@ -1,17 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/real_estate/models/real_estate_listing.dart';
 
 final realEstateRepositoryProvider = Provider<RealEstateRepository>((ref) {
-  return RealEstateRepository(FirebaseFirestore.instance);
+  return RealEstateRepository(
+    FirebaseFirestore.instance,
+    FirebaseFunctions.instance,
+  );
 });
 
 class RealEstateRepository {
   final FirebaseFirestore _db;
+  final FirebaseFunctions _functions;
   static const _collection = 'real_estate_listings';
 
-  RealEstateRepository(this._db);
+  RealEstateRepository(this._db, this._functions);
 
   CollectionReference get _col => _db.collection(_collection);
 
@@ -219,26 +224,35 @@ class RealEstateRepository {
   // ─── ENGAGEMENT ───────────────────────────────────────
 
   /// Increment view count
-  Future<void> incrementViewCount(String listingId) async {
-    await _col.doc(listingId).update({'viewCount': FieldValue.increment(1)});
+  Future<void> incrementViewCount(
+    String listingId, {
+    String? country,
+    String? countryCode,
+  }) async {
+    await _functions.httpsCallable('recordListingView').call({
+      'listingType': 'real_estate',
+      'listingId': listingId,
+      'country': ?country,
+      'countryCode': ?countryCode,
+    });
   }
 
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
-    final batch = _db.batch();
-    batch.set(_col.doc(listingId).collection('saved_by').doc(userId), {
-      'savedAt': FieldValue.serverTimestamp(),
+    await _functions.httpsCallable('setListingSaved').call({
+      'listingType': 'real_estate',
+      'listingId': listingId,
+      'saved': true,
     });
-    batch.update(_col.doc(listingId), {'savedCount': FieldValue.increment(1)});
-    await batch.commit();
   }
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
-    final batch = _db.batch();
-    batch.delete(_col.doc(listingId).collection('saved_by').doc(userId));
-    batch.update(_col.doc(listingId), {'savedCount': FieldValue.increment(-1)});
-    await batch.commit();
+    await _functions.httpsCallable('setListingSaved').call({
+      'listingType': 'real_estate',
+      'listingId': listingId,
+      'saved': false,
+    });
   }
 
   /// Check if a listing is saved by the user

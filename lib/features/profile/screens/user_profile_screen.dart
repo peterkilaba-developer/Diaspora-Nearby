@@ -98,9 +98,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
     final state = GoRouterState.of(context);
     final src = state.uri.queryParameters['src'];
+    final handshakeToken = state.uri.queryParameters['qrToken'];
     final user = ref.read(authRepositoryProvider).currentUser;
 
-    if (src == 'qr' && user != null && widget.userId != user.uid) {
+    if (src == 'qr' &&
+        handshakeToken != null &&
+        user != null &&
+        widget.userId != user.uid) {
       final currentProfile = ref.read(userProfileProvider).value;
       if (currentProfile == null) return;
 
@@ -116,20 +120,41 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       debugPrint(
         'UserProfileScreen: Detected incoming QR link. Triggering connection.',
       );
-      _triggerQRConnection(user.uid, widget.userId);
+      _triggerQRConnection(user.uid, widget.userId, handshakeToken);
     }
   }
 
-  Future<void> _triggerQRConnection(String fromUid, String toUid) async {
+  Future<void> _triggerQRConnection(
+    String fromUid,
+    String toUid,
+    String handshakeToken,
+  ) async {
     try {
-      // Show a brief loading indicator or overlay if needed, but performQRExchange handles logic
+      String? locationAddress;
+      try {
+        final currentProfile = ref.read(userProfileProvider).value;
+        if (currentProfile != null) {
+          final host = currentProfile.hostLocation;
+          final city = host.city?.trim();
+          final country = host.country?.trim();
+          final state = host.state?.trim();
+          if (city != null && city.isNotEmpty) {
+            locationAddress = state != null && state.isNotEmpty
+                ? '$city, $state${country != null && country.isNotEmpty ? ', $country' : ''}'
+                : (country != null && country.isNotEmpty
+                      ? '$city, $country'
+                      : city);
+          }
+        }
+      } catch (_) {}
+
       await ref
           .read(trustServiceProvider)
           .performQRExchange(
             fromUid: fromUid,
             toUid: toUid,
-            // locationAddress is null here as we don't want to block on geocoding for deep links
-            // TrustService can handle null or we can try a quick fetch if critical.
+            handshakeToken: handshakeToken,
+            locationAddress: locationAddress,
           );
 
       if (mounted) {
@@ -151,7 +176,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         final success = await _showCompleteProfileModal(e.missingFields);
         if (success == true) {
           // Re-trigger connection after profile update
-          _triggerQRConnection(fromUid, toUid);
+          _triggerQRConnection(fromUid, toUid, handshakeToken);
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

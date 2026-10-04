@@ -1,13 +1,14 @@
 /**
  * Server-managed Diaspora Direct Investment loan applications.
  *
- * Host-community DDI loans are gated by membership and PoCT before voting
+ * Host-community DDI loans are gated by membership and PCT before voting
  * opens. During testing, voting and discussion are live while funding remains
  * pending until TGE and token collateral capacity can be evaluated.
  */
 const {functions, db} = require("./shared");
+const {requireAppCheck} = require("./security");
 
-const MINIMUM_POCT_SCORE = 91;
+const MINIMUM_PCT_SCORE = 91;
 const MINIMUM_QUORUM = 10;
 const REQUIRED_APPROVAL_PERCENT = 51;
 const VOTING_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
@@ -63,24 +64,14 @@ function isEligiblePhysicalCommunity(user, community, userId, communityId) {
   
   const isMember = memberships.includes(communityId) || 
                    documentMemberIds(community).includes(userId);
-  if (!isMember) return false;
-
-  const hasHostCommunity = memberships.some(id => id.startsWith("host_"));
-  
-  if (hasHostCommunity) {
-    // Diaspora users can only apply in their host communities
-    return community.locationType === "host";
-  } else {
-    // Local users can only apply in their home communities
-    return community.locationType === "home";
-  }
+  return isMember;
 }
 
 function assertEligiblePhysicalCommunity(user, community, userId, communityId) {
   if (!isEligiblePhysicalCommunity(user, community, userId, communityId)) {
     throw new functions.https.HttpsError(
         "failed-precondition",
-        "DDI loans are available only for the town where you physically live.",
+        "You must be a member of the selected community (Home or Host location) to initiate a DDI loan application.",
     );
   }
 }
@@ -141,6 +132,7 @@ function resolveVotingOutcome(voting) {
  */
 exports.submitDdiLoanApplication = functions.https.onCall(
     async (data, context) => {
+      requireAppCheck(context);
       const applicantId = requireAuth(context);
       const input = data || {};
       const communityId = requiredText(input.communityId, "Community", 200);
@@ -233,24 +225,28 @@ exports.submitDdiLoanApplication = functions.https.onCall(
         assertEligiblePhysicalCommunity(user, community, applicantId, communityId);
 
         const trustData = trustSnap.exists ? trustSnap.data() : {};
-        const poctScore = Number(trustData.trustScore || 0);
-        if (!Number.isFinite(poctScore) || poctScore < MINIMUM_POCT_SCORE) {
-          const shownScore = Number.isFinite(poctScore) ? poctScore : 0;
+        const pctScore = Number(trustData.trustScore || 0);
+        if (!Number.isFinite(pctScore) || pctScore < MINIMUM_PCT_SCORE) {
+          const shownScore = Number.isFinite(pctScore) ? pctScore : 0;
           throw new functions.https.HttpsError(
               "failed-precondition",
-              `A PCT score of ${MINIMUM_POCT_SCORE}+ is required to apply. ` +
+              `A PCT score of ${MINIMUM_PCT_SCORE}+ is required to apply. ` +
               `Your current score is ${shownScore}.`,
           );
         }
 
-        // Enforce 7 Genesis Milestones + 100+ Days Active
+        // Enforce 7 Proof of Humanity (PoH) Genesis Milestones + 100+ Days Active
         const familyOk = Number(trustData.uniqueFamilyCount || 0) >= 10;
         const friendOk = Number(trustData.uniqueFriendCount || 0) >= 10;
         const qrOk = Number(trustData.uniqueQrCount || 0) >= 10;
-        const vouchOk = Number(trustData.uniqueVouchCount || 0) >= 10;
         const verifyOk = Number(trustData.uniqueVerificationCount || 0) >= 10;
         const milestones = Array.isArray(trustData.awardedQualificationMilestones) ? trustData.awardedQualificationMilestones : [];
-        const profileOk = milestones.includes("profile_complete") || milestones.includes("profileComplete");
+        const profileOk = milestones.includes("profile_complete") || milestones.includes("profileComplete") || milestones.includes("Profile");
+        const emergencyFundOk = trustData.emergencyFundContributor === true ||
+          trustData.isEmergencyFundContributor === true ||
+          milestones.includes("emergency_fund") ||
+          milestones.includes("UbuntuEmergencyFund") ||
+          milestones.includes("EmergencyFund");
 
         let daysActive = 0;
         if (user && user.createdAt) {
@@ -258,14 +254,14 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           daysActive = Math.floor((Date.now() - created.getTime()) / (1000 * 60 * 60 * 24));
         }
 
-        const isGenesisComplete = familyOk && friendOk && qrOk && vouchOk && verifyOk && profileOk;
+        const isGenesisComplete = familyOk && friendOk && qrOk && verifyOk && profileOk && emergencyFundOk;
         const isSeniorityMet = daysActive >= 100;
-        const isDdiEligible = trustData.isDdiEligible === true || (isGenesisComplete && isSeniorityMet && poctScore >= MINIMUM_POCT_SCORE);
+        const isDdiEligible = trustData.isDdiEligible === true || (isGenesisComplete && isSeniorityMet && pctScore >= MINIMUM_PCT_SCORE);
 
         if (!isDdiEligible) {
           throw new functions.https.HttpsError(
               "failed-precondition",
-              `Applying for a DDI loan requires completing all 7 Genesis Milestones ` +
+              `Applying for a DDI loan requires completing all 7 Proof of Humanity (PoH) Milestones ` +
               `and being an active member for 100+ days (Your current active days: ${daysActive}).`,
           );
         }
@@ -340,9 +336,9 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           eligibilityStatus: "qualified_for_community_vote",
           voting,
           gates: {
-            minimumPoctScore: MINIMUM_POCT_SCORE,
-            applicantPoctScore: poctScore,
-            poctPassed: true,
+            minimumPctScore: MINIMUM_PCT_SCORE,
+            applicantPctScore: pctScore,
+            pctPassed: true,
             eligibleCommunityMemberPassed: true,
             localInvestmentConfirmed: true,
             collateralRequired: requiredCollateral,
@@ -403,7 +399,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
           applicationId: applicationRef.id,
           discussionChatId: discussion.chatId,
           status: "voting_open",
-          poctScore,
+          pctScore,
           closesAt,
         };
       });
@@ -415,6 +411,7 @@ exports.submitDdiLoanApplication = functions.https.onCall(
  * platform-managed public discussion chat.
  */
 exports.joinDdiDiscussion = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const userId = requireAuth(context);
   const chatId = requiredText(data && data.chatId, "Discussion chat", 240);
   if (!chatId.startsWith("ddi_discussion_")) {
@@ -491,6 +488,7 @@ exports.joinDdiDiscussion = functions.https.onCall(async (data, context) => {
  * Records or updates one community member's vote on an active loan request.
  */
 exports.castDdiLoanVote = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const voterId = requireAuth(context);
   const applicationId = requiredText(
       data && data.applicationId,
@@ -585,6 +583,7 @@ exports.castDdiLoanVote = functions.https.onCall(async (data, context) => {
  * Closes a vote once its ten-day window has elapsed and records its outcome.
  */
 exports.resolveDdiLoanVoting = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const userId = requireAuth(context);
   const applicationId = requiredText(
       data && data.applicationId,
@@ -628,10 +627,21 @@ exports.resolveDdiLoanVoting = functions.https.onCall(async (data, context) => {
 
     const resolved = resolveVotingOutcome(voting);
     const now = Date.now();
+    let cascadeInfo = null;
+    if (resolved.approved) {
+      try {
+        cascadeInfo = await calculateHierarchicalCascade(
+            application.communityId,
+            application.requestedAmount,
+        );
+      } catch (_) {}
+    }
+
     transaction.update(applicationRef, {
       status: resolved.status,
       fundingStatus: resolved.approved ?
         "pending_tge_and_token_capacity" : "not_approved",
+      fundingCascade: cascadeInfo,
       "voting.status": "closed",
       "voting.outcome": resolved.outcome,
       "voting.quorumMet": resolved.quorumMet,
@@ -639,6 +649,149 @@ exports.resolveDdiLoanVoting = functions.https.onCall(async (data, context) => {
       resolvedAt: now,
       updatedAt: now,
     });
-    return {closed: true, outcome: resolved.outcome, tally: resolved};
+    return {
+      closed: true,
+      outcome: resolved.outcome,
+      tally: resolved,
+      fundingCascade: cascadeInfo,
+    };
   });
 });
+
+/**
+ * Calculates the upward cascading treasury breakdown for funding a DDI loan.
+ * Cascade order:
+ *  1. Local Town DDI Treasury
+ *  2. State Reserve Treasury (backstop to Town)
+ *  3. Country DDI Treasury (sovereign DDI pool)
+ *  4. Continent Reserve Treasury (regional backstop)
+ *  5. Global Reserve (final global backstop)
+ */
+async function calculateHierarchicalCascade(communityId, requestedAmount) {
+  const cascadeTiers = [];
+  let remainingNeeded = Number(requestedAmount) || 0;
+
+  // 1. Fetch initial community
+  let commSnap = null;
+  if (communityId && communityId !== "global_community") {
+    commSnap = await db.collection("communities").doc(communityId).get();
+  }
+  const commData = commSnap && commSnap.exists ? commSnap.data() : null;
+
+  // Build hierarchy list
+  const tierPlan = [];
+  if (commData) {
+    const locType = commData.locationType || (communityId.includes("_home_") ? "home" : "host");
+    const city = commData.city || commData.name;
+    const state = commData.state || commData.stateProvince;
+    const country = commData.country || commData.homeCountryCode || commData.countryCode;
+    const continent = commData.continent;
+
+    // Tier 1: Town DDI
+    if (commData.type === "city" || commData.type === "town") {
+      tierPlan.push({
+        tier: "town_ddi",
+        name: `${commData.name || city} DDI Treasury`,
+        communityId: communityId,
+        type: "town",
+      });
+    }
+
+    // Tier 2: State Reserve
+    if (state) {
+      const stateId = `${locType}_state_${state.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+      tierPlan.push({
+        tier: "state_reserve",
+        name: `${state} Reserve Treasury`,
+        communityId: stateId,
+        type: "state_reserve",
+      });
+    }
+
+    // Tier 3: Country DDI
+    if (country) {
+      const countryId = `${locType}_country_${country.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+      tierPlan.push({
+        tier: "country_ddi",
+        name: `${country} DDI Treasury`,
+        communityId: countryId,
+        type: "country",
+      });
+    }
+
+    // Tier 4: Continent Reserve (Final loan cascade tier)
+    if (continent) {
+      const contId = `${locType}_continent_${continent.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+      tierPlan.push({
+        tier: "continent_reserve",
+        name: `${continent} Reserve Treasury`,
+        communityId: contId,
+        type: "continent_reserve",
+      });
+    }
+  }
+
+  // Query balances for each tier and allocate
+  let totalAvailable = 0;
+  for (const item of tierPlan) {
+    let balance = 0;
+    try {
+      const doc = await db.collection("communities").doc(item.communityId).get();
+      if (doc.exists) {
+        const d = doc.data();
+        balance = Number(d.treasuryBalance || d.dspBalance || d.points || 0);
+      }
+    } catch (_) {}
+
+    totalAvailable += balance;
+    const allocated = Math.min(remainingNeeded, balance);
+    remainingNeeded -= allocated;
+
+    cascadeTiers.push({
+      tier: item.tier,
+      name: item.name,
+      communityId: item.communityId,
+      type: item.type,
+      availableBalance: balance,
+      allocatedAmount: allocated,
+    });
+  }
+
+  return {
+    requestedAmount: Number(requestedAmount),
+    totalAvailableAcrossHierarchy: totalAvailable,
+    isFullyFunded: remainingNeeded <= 0,
+    shortfall: Math.max(0, remainingNeeded),
+    cascadeBreakdown: cascadeTiers,
+  };
+}
+
+/**
+ * getDdiFundingCascade — Callable function to evaluate upward cascading
+ * liquidity for a DDI loan application or community.
+ */
+exports.getDdiFundingCascade = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
+  const input = data || {};
+  let communityId = input.communityId;
+  let requestedAmount = Number(input.requestedAmount || 0);
+
+  if (input.applicationId) {
+    const appDoc = await db.collection("ddi_loan_applications").doc(input.applicationId).get();
+    if (appDoc.exists) {
+      const appData = appDoc.data();
+      communityId = communityId || appData.communityId;
+      requestedAmount = requestedAmount || Number(appData.requestedAmount || 0);
+    }
+  }
+
+  if (!communityId) {
+    throw new functions.https.HttpsError("invalid-argument", "communityId or applicationId is required.");
+  }
+
+  return calculateHierarchicalCascade(communityId, requestedAmount);
+});
+
+exports.calculateHierarchicalCascade = calculateHierarchicalCascade;
+

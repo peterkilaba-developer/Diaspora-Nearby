@@ -32,13 +32,17 @@ async function performAppointment({ chamberId, userId, role }) {
     const def = ROLES[role];
     if (!def) throw new Error(`Unknown chamber role "${role}"`);
 
-    const userSnap = await db.collection("users").doc(userId).get();
+    const [userSnap, privateUserSnap] = await Promise.all([
+        db.collection("users").doc(userId).get(),
+        db.collection("user_private").doc(userId).get(),
+    ]);
     if (!userSnap.exists) throw new Error(`User ${userId} not found`);
     const user = userSnap.data() || {};
+    const privateUser = privateUserSnap.exists ? privateUserSnap.data() : {};
     const userHome = upper(user.homeCountryCode);
     const userHost = upper(user.hostCountryCode);
     const pastCountryCodes = new Set(
-        (user.pastLocations || [])
+        (privateUser.pastLocations || [])
             .map((p) => p && p.location && p.location.countryCode)
             .filter(Boolean)
             .map(upper)

@@ -122,11 +122,10 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Current TGE Model:
-  //   Gate  = DSP-only (minDspRequired = 10,000)
-  //   P.o.C.T  = Affects efficiency by exact percent, NOT a gate
-  //           efficiency = 0% for scores 0-10; otherwise trustScore / 100
-  //   Swap  = DSP balance × efficiency
+  // Current TGE/TDE Model:
+  //   Eligibility = Positive DSP (minDspRequired deprecated & removed)
+  //   PCT         = Exact percent swap rate (0% for <11, exact % for 11-90, 100% for 91+)
+  //   Swap        = DSP balance × PCT efficiency
   // ──────────────────────────────────────────────────────────────────────────
 
   ProfileData testProfile(String userId) => ProfileData(
@@ -149,14 +148,10 @@ void main() {
     ),
   );
 
-  group('TGE Eligibility (DSP-Only Gate, 10k minimum)', () {
-    test('User with >= 10k DSP is eligible regardless of P.o.C.T', () async {
+  group('TGE Eligibility (Positive DSP Balance)', () {
+    test('User with positive DSP is eligible regardless of PCT', () async {
       final userId = 'user_dsp_pass';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
-      // Seed a baseline user_points doc — the real client-side initializeUserPoints
-      // routes through a Cloud Function, which the simulated fake can't tie to
-      // an auth context. Tests pre-seed the doc so awardManualPoints' daily-reset
-      // path has something to read.
       await fakeFirestore.collection('user_points').doc(userId).set({
         'totalPoints': 0,
         'availablePoints': 0,
@@ -167,9 +162,9 @@ void main() {
       });
 
       final pointsService = container.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(userId, 10000, 'Grant');
+      await pointsService.awardManualPoints(userId, 500, 'Grant');
 
-      // Low P.o.C.T should NOT block eligibility:
+      // Low PCT should NOT block eligibility (only affects efficiency):
       await trustRepository.saveTrustData(
         TrustData(uid: userId, trustScore: 5.0, lastUpdated: DateTime.now()),
       );
@@ -180,17 +175,13 @@ void main() {
       expect(
         isEligible,
         true,
-        reason: 'DSP >= 10k → eligible (P.o.C.T is not a gate)',
+        reason: 'DSP > 0 → eligible (PCT is not a gate)',
       );
     });
 
-    test('User with < 10k DSP is NOT eligible even with max P.o.C.T', () async {
+    test('User with 0 DSP is NOT eligible', () async {
       final userId = 'user_dsp_fail';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
-      // Seed a baseline user_points doc — the real client-side initializeUserPoints
-      // routes through a Cloud Function, which the simulated fake can't tie to
-      // an auth context. Tests pre-seed the doc so awardManualPoints' daily-reset
-      // path has something to read.
       await fakeFirestore.collection('user_points').doc(userId).set({
         'totalPoints': 0,
         'availablePoints': 0,
@@ -199,9 +190,6 @@ void main() {
         'signupDate': DateTime.now(),
         'lastUpdated': DateTime.now(),
       });
-
-      final pointsService = container.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(userId, 1000, 'Small Grant');
 
       await trustRepository.saveTrustData(
         TrustData(uid: userId, trustScore: 100.0, lastUpdated: DateTime.now()),
@@ -210,16 +198,12 @@ void main() {
       final trustService = container.read(trustServiceProvider);
       final isEligible = await trustService.checkUserTgeEligibility(userId, 1);
 
-      expect(isEligible, false, reason: '1k DSP < 10k → ineligible');
+      expect(isEligible, false, reason: '0 DSP → ineligible');
     });
 
-    test('Epoch parameter has no effect (flat gate across all epochs)', () async {
+    test('Epoch parameter has no effect (flat across all epochs)', () async {
       final userId = 'user_flat_gate';
       await profileRepository.saveUserProfile(userId, testProfile(userId));
-      // Seed a baseline user_points doc — the real client-side initializeUserPoints
-      // routes through a Cloud Function, which the simulated fake can't tie to
-      // an auth context. Tests pre-seed the doc so awardManualPoints' daily-reset
-      // path has something to read.
       await fakeFirestore.collection('user_points').doc(userId).set({
         'totalPoints': 0,
         'availablePoints': 0,
@@ -230,7 +214,7 @@ void main() {
       });
 
       final pointsService = container.read(pointsServiceProvider);
-      await pointsService.awardManualPoints(userId, 10000, 'Grant');
+      await pointsService.awardManualPoints(userId, 1000, 'Grant');
 
       final trustService = container.read(trustServiceProvider);
       for (int epoch = 1; epoch <= 10; epoch++) {
@@ -238,75 +222,101 @@ void main() {
           userId,
           epoch,
         );
-        expect(isEligible, true, reason: 'All epochs use same 10k gate');
+        expect(isEligible, true, reason: 'All epochs allow any positive DSP');
       }
     });
   });
 
-  group('Exact P.o.C.T Efficiency (swap rate, NOT a gate)', () {
-    test('Efficiency maps no-trust to 0, standard trust exactly, full trust to 100', () {
-      final epochService = EpochService();
+  group(
+    'Exact PCT (Proof of Community Trust) Efficiency (swap rate, NOT a gate)',
+    () {
+      test(
+        'Efficiency maps no-trust to 0, standard trust exactly, full trust to 100',
+        () {
+          final epochService = EpochService();
 
-      expect(epochService.calculateEfficiency(0), 0.0);
-      expect(epochService.calculateEfficiency(1), 0.0);
-      expect(epochService.calculateEfficiency(10), 0.0);
-      expect(epochService.calculateEfficiency(11), 0.11);
-      expect(epochService.calculateEfficiency(20), 0.2);
-      expect(epochService.calculateEfficiency(50), 0.5);
-      expect(epochService.calculateEfficiency(51), 0.51);
-      expect(epochService.calculateEfficiency(80), 0.8);
-      expect(epochService.calculateEfficiency(81), 0.81);
-      expect(epochService.calculateEfficiency(90), 0.9);
-      expect(epochService.calculateEfficiency(91), 1.0);
-      expect(epochService.calculateEfficiency(95), 1.0);
-      expect(epochService.calculateEfficiency(100), 1.0);
-      expect(epochService.calculateEfficiency(150), 1.0);
-    });
-
-    test('TGE swap = DSP × efficiency', () {
-      final epochService = EpochService();
-
-      // 10k DSP, trust 50 → efficiency 50% → 5k tokens
-      expect(
-        epochService.calculateTGESwap(
-          epochNumber: 1,
-          currentDspBalance: 10000,
-          trustScore: 50,
-        ),
-        5000.0,
+          expect(epochService.calculateEfficiency(0), 0.0);
+          expect(epochService.calculateEfficiency(1), 0.0);
+          expect(epochService.calculateEfficiency(10), 0.0);
+          expect(epochService.calculateEfficiency(11), 0.11);
+          expect(epochService.calculateEfficiency(20), 0.2);
+          expect(epochService.calculateEfficiency(50), 0.5);
+          expect(epochService.calculateEfficiency(51), 0.51);
+          expect(epochService.calculateEfficiency(80), 0.8);
+          expect(epochService.calculateEfficiency(81), 0.81);
+          expect(epochService.calculateEfficiency(90), 0.9);
+          expect(epochService.calculateEfficiency(91), 1.0);
+          expect(epochService.calculateEfficiency(95), 1.0);
+          expect(epochService.calculateEfficiency(100), 1.0);
+          expect(epochService.calculateEfficiency(150), 1.0);
+        },
       );
 
-      // 10k DSP, trust 10 -> efficiency 0% -> 0 tokens
-      expect(
-        epochService.calculateTGESwap(
-          epochNumber: 1,
-          currentDspBalance: 10000,
-          trustScore: 10,
-        ),
-        0.0,
-      );
+      test('TGE swap = DSP × efficiency', () {
+        final epochService = EpochService();
 
-      // 10k DSP, trust 91 -> full trust efficiency 100% -> 10k tokens
-      expect(
-        epochService.calculateTGESwap(
-          epochNumber: 1,
-          currentDspBalance: 10000,
-          trustScore: 91,
-        ),
-        10000.0,
-      );
+        // 10k DSP, trust 50 → efficiency 50% → 5k tokens
+        expect(
+          epochService.calculateTGESwap(
+            epochNumber: 1,
+            currentDspBalance: 10000,
+            trustScore: 50,
+          ),
+          5000.0,
+        );
 
-      // 5k DSP → below gate → 0 tokens
-      expect(
-        epochService.calculateTGESwap(
-          epochNumber: 1,
-          currentDspBalance: 5000,
-          trustScore: 100,
-        ),
-        0.0,
-      );
-    });
-  });
+        // 10k DSP, trust 10 -> efficiency 0% -> 0 tokens
+        expect(
+          epochService.calculateTGESwap(
+            epochNumber: 1,
+            currentDspBalance: 10000,
+            trustScore: 10,
+          ),
+          0.0,
+        );
+
+        // 10k DSP, trust 91 -> full trust efficiency 100% -> 10k tokens
+        expect(
+          epochService.calculateTGESwap(
+            epochNumber: 1,
+            currentDspBalance: 10000,
+            trustScore: 91,
+          ),
+          10000.0,
+        );
+
+        // 5k DSP, trust 100 -> 5k tokens (no 10k minimum requirement)
+        expect(
+          epochService.calculateTGESwap(
+            epochNumber: 1,
+            currentDspBalance: 5000,
+            trustScore: 100,
+          ),
+          5000.0,
+        );
+
+        // 500 DSP, trust 42 -> 210 tokens (500 * 0.42)
+        expect(
+          epochService.calculateTGESwap(
+            epochNumber: 1,
+            currentDspBalance: 500,
+            trustScore: 42,
+          ),
+          210.0,
+        );
+
+        // 0 DSP -> 0 tokens
+        expect(
+          epochService.calculateTGESwap(
+            epochNumber: 1,
+            currentDspBalance: 0,
+            trustScore: 100,
+          ),
+          0.0,
+        );
+      });
+    },
+  );
 
   group('Treasury Distribution', () {
     test(

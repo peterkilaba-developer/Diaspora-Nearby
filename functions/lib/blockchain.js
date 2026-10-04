@@ -1,41 +1,36 @@
 /**
  * Blockchain query module.
  * Fetches on-chain ERC-20 transfer data using:
- *   1. Routescan API (etherscan-compatible, free for Base)
- *   2. Direct RPC eth_getLogs with 800-block chunks as fallback
+ *   1. Blockscout Base API (fast, reliable, free on Base)
+ *   2. Direct RPC eth_getLogs as fallback
  */
 const { functions, admin, db } = require("./shared");
+const { requireAppCheck, requireAuth, consumeRateLimit } = require("./security");
 
 /**
  * Gets ERC-20 Transfer events for a wallet address from the $DIASPORA token contract.
- * Uses Routescan etherscan-compatible API first, then falls back to RPC.
+ * Uses Blockscout Base API first, then falls back to RPC.
  *
  * Returns an array of transfer objects sorted by block number descending.
  */
 exports.getTokenTransfers = functions
-    .runWith({ timeoutSeconds: 120, memory: '256MB' })
+    .runWith({ timeoutSeconds: 60, memory: '256MB' })
     .https.onCall(async (data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
-        }
+        requireAppCheck(context);
+        const authenticatedUid = requireAuth(context);
+        await consumeRateLimit('token-transfers', authenticatedUid, 60, 60 * 60 * 1000);
 
         try {
-            const userId = context.auth.uid;
-            let walletAddress = data?.walletAddress || null;
+            const userId = authenticatedUid;
+            let walletAddress = null;
 
-            // If no address provided, look up user wallet
-            if (!walletAddress) {
-                const userDoc = await db.collection('users').doc(userId).get();
-                if (!userDoc.exists) return { transfers: [] };
-                walletAddress = userDoc.data().walletAddress;
-            }
+            // Look up user wallet
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (!userDoc.exists) return { transfers: [] };
+            walletAddress = userDoc.data().walletAddress;
 
             if (!walletAddress) return { transfers: [] };
 
-            // Fail loud on missing config. Previously this returned
-            // `{ transfers: [] }`, which is indistinguishable from "user has
-            // never transacted" — would mask a misconfigured deploy and make
-            // users think they have no transaction history.
             const { assertOnChainConfig } = require('./on_chain_config');
             const { tokenAddress: tokenContractAddress } = assertOnChainConfig(
                 'getTokenTransfers',
@@ -44,16 +39,14 @@ exports.getTokenTransfers = functions
 
             console.log(`[getTokenTransfers] Fetching transfers for ${walletAddress}`);
 
-            // ── Strategy 1: Routescan API (etherscan-compatible, free for Base) ──
-            const routescanTransfers = await fetchFromRoutescan(walletAddress, tokenContractAddress);
-            if (routescanTransfers !== null && routescanTransfers.length > 0) {
-                console.log(`[getTokenTransfers] Routescan returned ${routescanTransfers.length} transfers`);
-                return { transfers: routescanTransfers, walletAddress };
+            // ── Strategy 1: Blockscout Base Explorer API ──
+            const explorerTransfers = await fetchFromExplorer(walletAddress, tokenContractAddress);
+            if (explorerTransfers !== null) {
+                console.log(`[getTokenTransfers] Explorer returned ${explorerTransfers.length} transfers`);
+                return { transfers: explorerTransfers, walletAddress };
             }
 
-            // ── Strategy 2: Direct RPC with small chunks ──
-            // Covers all transfers including internal contract-to-contract transfers
-            // that block explorer APIs sometimes miss
+            // ── Strategy 2: Direct RPC fallback ──
             console.log('[getTokenTransfers] Trying direct RPC approach...');
             const rpcTransfers = await fetchFromRpc(walletAddress, tokenContractAddress);
             console.log(`[getTokenTransfers] RPC returned ${rpcTransfers.length} transfers`);
@@ -66,30 +59,16 @@ exports.getTokenTransfers = functions
     });
 
 /**
- * Fetch token transfers using Routescan API (etherscan-compatible, free for Base).
+ * Fetch token transfers using Blockscout Base API.
  * Returns null if the API is unavailable, [] if no transfers found.
  */
-async function fetchFromRoutescan(walletAddress, tokenContractAddress) {
+async function fetchFromExplorer(walletAddress, tokenContractAddress) {
     try {
-        const baseUrl = 'https://api.routescan.io/v2/network/mainnet/evm/8453/etherscan/api';
-
-        const params = new URLSearchParams({
-            module: 'account',
-            action: 'tokentx',
-            contractaddress: tokenContractAddress,
-            address: walletAddress,
-            page: '1',
-            offset: '100',
-            startblock: '0',
-            endblock: '99999999',
-            sort: 'desc',
-        });
-
-        const url = `${baseUrl}?${params.toString()}`;
-        console.log(`[getTokenTransfers] Calling Routescan API...`);
+        const url = `https://base.blockscout.com/api?module=account&action=tokentx&contractaddress=${tokenContractAddress}&address=${walletAddress}&startblock=0&endblock=99999999&sort=desc`;
+        console.log(`[getTokenTransfers] Calling Base Explorer API...`);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         const response = await fetch(url, {
             signal: controller.signal,
@@ -98,26 +77,26 @@ async function fetchFromRoutescan(walletAddress, tokenContractAddress) {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-            console.warn(`[getTokenTransfers] Routescan API HTTP ${response.status}`);
+            console.warn(`[getTokenTransfers] Explorer API HTTP ${response.status}`);
             return null;
         }
 
         const json = await response.json();
-        console.log(`[getTokenTransfers] Routescan status: ${json.status}, message: ${json.message}`);
+        const rawList = Array.isArray(json.result) ? json.result : [];
 
-        if (json.status === '0' && json.message === 'No transactions found') {
-            console.log('[getTokenTransfers] Routescan: No transactions found (may be internal transfers)');
-            return []; // Valid response — no external token transfers
-        }
-
-        if (json.status !== '1' || !Array.isArray(json.result)) {
-            console.warn(`[getTokenTransfers] Routescan error: ${json.message}, result: ${JSON.stringify(json.result)}`);
+        if (rawList.length === 0) {
+            if (json.status === '0' && json.message === 'No transactions found') {
+                return [];
+            }
+            if (json.message === 'OK' || json.status === '1') {
+                return [];
+            }
             return null;
         }
 
         const { ethers } = require('ethers');
 
-        return json.result.map(tx => ({
+        return rawList.map(tx => ({
             txHash: tx.hash,
             blockNumber: parseInt(tx.blockNumber),
             timestamp: parseInt(tx.timeStamp) * 1000,
@@ -128,31 +107,26 @@ async function fetchFromRoutescan(walletAddress, tokenContractAddress) {
         }));
 
     } catch (err) {
-        console.warn(`[getTokenTransfers] Routescan exception: ${err.message}`);
+        console.warn(`[getTokenTransfers] Explorer exception: ${err.message}`);
         return null;
     }
 }
 
 /**
  * Fetch token transfers using direct RPC eth_getLogs.
- * This catches ALL Transfer events including internal contract calls
- * that block explorer APIs may miss.
- *
- * Uses 800-block chunks to stay under all known RPC provider limits.
- * Looks back ~100k blocks (~4 days on Base).
+ * Looks back to contract deployment block.
  */
 async function fetchFromRpc(walletAddress, tokenContractAddress) {
     const RPC_URLS = [
-        'https://base-mainnet.public.blastapi.io',
-        'https://1rpc.io/base',
         'https://mainnet.base.org',
+        'https://1rpc.io/base',
+        'https://base-mainnet.public.blastapi.io',
     ];
 
     const { ethers } = require('ethers');
 
     // Find a working provider
     let provider = null;
-    let providerUrl = '';
     for (const url of RPC_URLS) {
         try {
             const p = new ethers.JsonRpcProvider(url);
@@ -161,7 +135,6 @@ async function fetchFromRpc(walletAddress, tokenContractAddress) {
                 new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
             ]);
             provider = p;
-            providerUrl = url;
             console.log(`[getTokenTransfers] RPC using: ${url}`);
             break;
         } catch (e) {
@@ -178,24 +151,17 @@ async function fetchFromRpc(walletAddress, tokenContractAddress) {
     const paddedAddress = ethers.zeroPadValue(walletAddress.toLowerCase(), 32);
     const currentBlock = await provider.getBlockNumber();
 
-    // Look back 100k blocks (~4 days on Base at 2s/block)
-    // Use 800-block chunks to stay under all RPC limits (some cap at 1k)
-    const CHUNK_SIZE = 800;
-    const TOTAL_LOOKBACK = 100000;
-    const startBlock = Math.max(0, currentBlock - TOTAL_LOOKBACK);
-    const MAX_RUNTIME_MS = 100000; // 100s max
+    const DEPLOY_BLOCK = 44546025;
+    const startBlock = Math.max(DEPLOY_BLOCK, currentBlock - 2000000);
+    const CHUNK_SIZE = 5000;
+    const MAX_RUNTIME_MS = 25000;
     const startTime = Date.now();
 
-    console.log(`[getTokenTransfers] RPC scanning blocks ${startBlock} to ${currentBlock} (${Math.ceil(TOTAL_LOOKBACK / CHUNK_SIZE)} chunks)`);
-
     const allLogs = [];
-    let chunksOk = 0;
-    let chunksFail = 0;
 
     for (let from = startBlock; from <= currentBlock; from += CHUNK_SIZE) {
-        // Time guard
         if (Date.now() - startTime > MAX_RUNTIME_MS) {
-            console.log(`[getTokenTransfers] Time limit reached after ${chunksOk} chunks`);
+            console.log('[getTokenTransfers] RPC time limit reached');
             break;
         }
 
@@ -217,25 +183,10 @@ async function fetchFromRpc(walletAddress, tokenContractAddress) {
             ]);
             for (const l of inLogs) allLogs.push({ ...l, dir: 'in' });
             for (const l of outLogs) allLogs.push({ ...l, dir: 'out' });
-            chunksOk++;
-
-            // Log progress every 25 chunks
-            if (chunksOk % 25 === 0) {
-                console.log(`[getTokenTransfers] Progress: ${chunksOk} chunks done, ${allLogs.length} logs found, block ${to}`);
-            }
         } catch (err) {
-            chunksFail++;
-            // If too many consecutive failures, try switching provider
-            if (chunksFail > 5 && chunksFail % 5 === 0) {
-                console.warn(`[getTokenTransfers] ${chunksFail} chunk failures, may need different provider`);
-            }
+            console.warn(`[getTokenTransfers] RPC chunk ${from}-${to} error: ${err.message}`);
         }
-
-        // Small delay between chunks to avoid rate limiting (100ms)
-        await new Promise(r => setTimeout(r, 100));
     }
-
-    console.log(`[getTokenTransfers] RPC scan done: ${chunksOk} ok, ${chunksFail} failed, ${allLogs.length} logs found`);
 
     if (allLogs.length === 0) return [];
 
@@ -243,7 +194,6 @@ async function fetchFromRpc(walletAddress, tokenContractAddress) {
         'event Transfer(address indexed from, address indexed to, uint256 value)',
     ]);
 
-    // Batch-fetch timestamps for unique blocks (5 at a time)
     const uniqueBlocks = [...new Set(allLogs.map(l => l.blockNumber))];
     const blockTimestamps = {};
     for (let i = 0; i < uniqueBlocks.length; i += 5) {

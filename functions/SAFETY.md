@@ -51,7 +51,8 @@ three fields:
 
 Examples currently in use:
 
-- `users/<uid>.tokenWelcomeBonusPending` + `tokenWelcomeBonusError` (welcome bonus didn't land)
+- `users/<uid>.tokenWelcomeBonusPendingMilestones` (welcome bonus pending 3 onboarding milestones: location enabled, profile completed, 10 QR handshakes)
+- `users/<uid>.tokenWelcomeBonusPending` + `tokenWelcomeBonusError` (welcome bonus didn't land on-chain due to wallet/RPC error)
 - `users/<uid>.walletDeploymentPending` + `walletDeploymentError` (smart wallet didn't deploy)
 - `communities/<cid>.walletDeploymentPending` + `walletDeploymentError`
 - `tge_events/<id>.status === "tx_complete_dsp_pending"` (TGE succeeded on-chain but DSP wasn't deducted)

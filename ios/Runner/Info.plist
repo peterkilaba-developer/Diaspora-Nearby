@@ -76,6 +76,8 @@
 		</array>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>To upload photos, please allow permission to access your photo library.</string>
+		<key>GOOGLE_MAPS_API_KEY</key>
+		<string>$(GOOGLE_MAPS_API_KEY)</string>
 	</dict>
 </plist>
 

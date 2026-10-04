@@ -9,10 +9,39 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
+    function onlySelfListChange(before, after) {
+      return before is list && after is list &&
+        after.hasOnly(before.concat([request.auth.uid])) &&
+        before.hasOnly(after.concat([request.auth.uid]));
+    }
+    function validLastMessageChange(before, after) {
+      let changed = after.diff(before).affectedKeys();
+      let previousMessage = before.get('lastMessage', {});
+      let nextMessage = after.get('lastMessage', {});
+      return !changed.hasAny(['lastMessage']) ||
+        (
+          nextMessage is map && previousMessage is map &&
+          nextMessage.diff(previousMessage).affectedKeys().hasOnly(['status']) &&
+          nextMessage.get('status', '') in ['sent', 'delivered', 'read']
+        ) ||
+        (
+          nextMessage is map &&
+          nextMessage.get('senderId', '') == request.auth.uid &&
+          nextMessage.get('content', '') is string &&
+          nextMessage.get('content', '').size() <= 20000 &&
+          nextMessage.get('type', '') is string &&
+          nextMessage.get('type', '').size() <= 64
+        ) ||
+        (
+          before.size() == 0 && nextMessage is map &&
+          nextMessage.get('type', '') == 'system' &&
+          nextMessage.get('content', '') is string &&
+          nextMessage.get('content', '').size() <= 500
+        );
+    }
     // Check if the current user is a system admin
     function isAdmin() {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      return isAuthenticated() && request.auth.token.get('admin', false) == true;
     }
     // Check if user is a participant of a chat (used by message subcollection rules)
     function isChatParticipant(chatId) {
@@ -23,9 +52,22 @@ service cloud.firestore {
             get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []) is list &&
             get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []).hasAny([request.auth.uid])
           )
-          // Legacy direct chats can have a valid per-user chat index while
-          // their shared participants array is missing or incomplete.
-          || exists(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId))
+        );
+    }
+    function isDirectChat(chatId) {
+      return exists(/databases/$(database)/documents/chats/$(chatId)) &&
+        get(/databases/$(database)/documents/chats/$(chatId))
+          .data.get('type', '') == 'direct';
+    }
+    function hasDirectChatBlock(chatId) {
+      let participants = get(/databases/$(database)/documents/chats/$(chatId))
+        .data.get('participants', []);
+      return isDirectChat(chatId) && participants is list &&
+        participants.size() == 2 && (
+          exists(/databases/$(database)/documents/user_blocks/$(request.auth.uid)/blocked/$(participants[0])) ||
+          exists(/databases/$(database)/documents/user_blocks/$(request.auth.uid)/blocked/$(participants[1])) ||
+          exists(/databases/$(database)/documents/user_blocks/$(participants[0])/blocked/$(request.auth.uid)) ||
+          exists(/databases/$(database)/documents/user_blocks/$(participants[1])/blocked/$(request.auth.uid))
         );
     }
     // Check if user is an admin of the organization (requires reading the org doc)
@@ -33,6 +75,16 @@ service cloud.firestore {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/organizations/$(orgId)) &&
         get(/databases/$(database)/documents/organizations/$(orgId)).data.admins.hasAny([request.auth.uid]);
+    }
+    function isCommunityMember(communityId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/communities/$(communityId)) &&
+        (
+          get(/databases/$(database)/documents/communities/$(communityId))
+            .data.get('members', []).hasAny([request.auth.uid]) ||
+          get(/databases/$(database)/documents/communities/$(communityId))
+            .data.get('memberIds', []).hasAny([request.auth.uid])
+        );
     }
     // Is this chat doc a corridor-chamber chat?
     function isChamberChat(chatId) {
@@ -50,23 +102,72 @@ service cloud.firestore {
     // --- Users Collection ---
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && (
-        isOwner(userId) || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'trustScore', 
-          'isIdentityVerified', 
-          'blockedByCount', 
-          'vouchedByCount',
-          'communityMemberships'
-        ])
-      );
+      // Security-sensitive attributes are server-owned. In particular, a
+      // profile document must never be able to grant its owner admin rights
+      // or manufacture trust/economic milestones.
+      allow create: if isAuthenticated() && isOwner(userId) &&
+        !request.resource.data.keys().hasAny([
+          'isAdmin', 'admin', 'roles', 'customClaims',
+          'trustScore', 'trustLevel', 'isIdentityVerified',
+          'blockedByCount', 'vouchedByCount', 'communityMemberships',
+          'walletAddress', 'smartWalletAddress', 'welcomeBonusAwarded',
+          'advertReportCount', 'flaggedMessagesCount', 'isBanned',
+          'bannedAt', 'bannedReason', 'firstQrConnection',
+          'phone', 'dateOfBirth', 'geo', 'workLocation', 'pastLocations',
+          'fcmToken', 'fcmTokenUpdatedAt', 'fcmTopics',
+          'fcmTopicsUpdatedAt', 'notificationsEnabled', 'blockedUsers'
+        ]) &&
+        !request.resource.data.get('homeLocation', {}).keys().hasAny([
+          'geometry', 'place_id'
+        ]) &&
+        !request.resource.data.get('hostLocation', {}).keys().hasAny([
+          'geometry', 'place_id'
+        ]) &&
+        !request.resource.data.get('currentLocation', {}).keys().hasAny([
+          'geometry', 'place_id'
+        ]) &&
+        request.resource.data.get('cityVisibilityForfeited', false) == false &&
+        request.resource.data.get('businessProfile', {})
+          .get('isBusinessVerified', false) == false;
+      allow update: if isAuthenticated() && isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isAdmin', 'admin', 'roles', 'customClaims',
+          'trustScore', 'trustLevel', 'isIdentityVerified',
+          'blockedByCount', 'vouchedByCount', 'communityMemberships',
+          'walletAddress', 'smartWalletAddress', 'welcomeBonusAwarded',
+          'advertReportCount', 'flaggedMessagesCount', 'isBanned',
+          'bannedAt', 'bannedReason', 'firstQrConnection',
+          'phone', 'dateOfBirth', 'geo', 'workLocation', 'pastLocations',
+          'fcmToken', 'fcmTokenUpdatedAt', 'fcmTopics',
+          'fcmTopicsUpdatedAt', 'notificationsEnabled', 'blockedUsers'
+        ]) &&
+        !request.resource.data.get('homeLocation', {}).keys().hasAny([
+          'geometry', 'place_id'
+        ]) &&
+        !request.resource.data.get('hostLocation', {}).keys().hasAny([
+          'geometry', 'place_id'
+        ]) &&
+        !request.resource.data.get('currentLocation', {}).keys().hasAny([
+          'geometry', 'place_id'
+        ]) &&
+        (
+          resource.data.get('cityVisibilityForfeited', false) == false ||
+          request.resource.data.get('cityVisibilityForfeited', false) == true
+        ) &&
+        request.resource.data.get('businessProfile', {})
+          .get('isBusinessVerified', false) ==
+          resource.data.get('businessProfile', {})
+            .get('isBusinessVerified', false);
       allow delete: if isAdmin();
       
       // Relationships Subcollection
       match /relationships/{relationshipId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow write: if false;
+      }
+
+      match /relationship_slots/{slotId} {
+        allow read, write: if false;
       }
 
       // Notifications Subcollection
@@ -81,6 +182,18 @@ service cloud.firestore {
         allow write: if isAuthenticated() && isOwner(userId);
       }
     }
+
+    // Owner-only PII and precise location. Cloud Functions can read this via
+    // Admin SDK for notifications and proximity matching.
+    match /user_private/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId) &&
+        !request.resource.data.keys().hasAny(['blockedUsers']);
+      allow update: if isAuthenticated() && isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['blockedUsers']);
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
     
     // Relationship Requests Collection
     match /relationship_requests/{requestId} {
@@ -88,29 +201,36 @@ service cloud.firestore {
         resource.data.toUserId == request.auth.uid || 
         resource.data.fromUserId == request.auth.uid
       );
-      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        resource.data.toUserId == request.auth.uid ||
-        resource.data.fromUserId == request.auth.uid
-      );
-      // Sender can cancel (delete) their own pending requests
-      allow delete: if isAuthenticated() && resource.data.fromUserId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /user_blocks/{blockerId} {
+      allow read, write: if false;
+      match /blocked/{blockedId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /direct_chat_pairs/{pairId} {
+      allow read, write: if false;
     }
     
     // --- Chats Collection ---
     match /chats/{chatId} {
-      allow read: if isAuthenticated();
-      // Only participants can modify chat docs
-      allow create: if isAuthenticated();
-      // Allow existing participants/creator for any update,
-      // OR any auth user for join-related membership-count updates.
+      allow read: if isChatParticipant(chatId);
+      // Membership and reserved routing metadata are canonical server state.
+      // All chat types, including ordinary groups, are created by createChat
+      // or another purpose-specific backend transaction.
+      allow create: if false;
       allow update: if isAuthenticated() && (
-        isChatParticipant(chatId)
-        || (
-          resource.data.get('createdBy', '') == request.auth.uid
+        isAdmin() ||
+        (
+          isChatParticipant(chatId) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'lastMessage', 'updatedAt', 'lastActivityAt'
+           ]) &&
+           validLastMessageChange(resource.data, request.resource.data)
         )
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['participants', 'memberCount', 'updatedAt'])
       );
       allow delete: if isAdmin();
 
@@ -124,14 +244,30 @@ service cloud.firestore {
         //     'member' on their userChats entry). Followers are participants
         //     for read purposes but cannot post.
         allow create: if isChatParticipant(chatId) &&
+          !hasDirectChatBlock(chatId) &&
           request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.keys().hasOnly([
+            'senderId', 'senderName', 'senderImage', 'senderHostCountryCode',
+            'senderHomeCountryCode', 'content', 'text', 'type', 'timestamp',
+            'status', 'mentions', 'richContent', 'metadata', 'replyTo',
+            'adminId', 'adminImage', 'imageUrl', 'documentUrl',
+            'documentName', 'audioDuration', 'storagePath'
+          ]) &&
+          request.resource.data.get('content', '').size() <= 20000 &&
           (!isChamberChat(chatId) || isChamberMember(chatId));
-        // Sender can edit their own messages (content, etc.)
+        // Sender can edit content/status only. Identity, timestamps and chat
+        // linkage stay immutable after creation.
         // Participants can update status (read receipts) and reactions
         allow update: if isChatParticipant(chatId) && (
-          resource.data.senderId == request.auth.uid
+          (
+            resource.data.senderId == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'content', 'text', 'isEdited', 'editedAt', 'isDeleted',
+              'deletedAt', 'status'
+            ])
+          )
           || request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'reactions'])
+               .hasOnly(['status'])
         );
         // Messages should not be hard-deleted (use soft-delete flag instead)
         allow delete: if isAdmin();
@@ -139,33 +275,32 @@ service cloud.firestore {
 
       // Typing indicators subcollection
       match /typing/{typingUserId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isOwner(typingUserId);
+        allow read: if isChatParticipant(chatId);
+        allow write: if isChatParticipant(chatId) && isOwner(typingUserId);
       }
     }
 
     // --- User Chats Subcollection (under users) ---
-    // [SECURITY] Owner has full read/delete access.
-    // Any authenticated user can create or update entries — this is required
-    // because sending a message updates ALL participants' userChats entries
-    // (lastMessage, unreadCount, updatedAt). Without this, the sender can't
-    // update the recipient's chat index.
+    // Only the owner may mutate their client-side index. Cross-user fan-out is
+    // performed by Cloud Functions using the Admin SDK.
     match /users/{userId}/userChats/{chatId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      allow create, update: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) &&
+        request.resource.data.get('chatId', chatId) == chatId &&
+        !request.resource.data.keys().hasAny([
+          'accessLevel', 'lastDeliveredMessageId', 'invitationOnly'
+        ]);
+      allow update: if isAuthenticated() && isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'accessLevel', 'lastDeliveredMessageId', 'invitationOnly'
+        ]);
       allow delete: if isAuthenticated() && isOwner(userId);
     }
 
     // --- Discoverable Chats Collection ---
     match /discoverableChats/{chatId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      // Allow memberCount updates from any auth user (when joining public groups)
-      allow update: if isAuthenticated() && (
-        isAdmin()
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
-      );
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
     
     // --- Communities Collection ---
@@ -176,16 +311,18 @@ service cloud.firestore {
     }
     match /communities/{communityId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      // Allow member-count and membership array updates from any auth user (joining)
-      // Full edits restricted to admins/members
-      // NOTE: resource.data.members check is guarded with 'is list' to prevent
-      // null-reference errors when field is missing or uses 'memberIds' instead
+      allow create: if false;
       allow update: if isAuthenticated() && (
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['memberCount', 'members', 'memberIds', 'updatedAt', 'totalMembers'])
-        || (resource.data.members is list && resource.data.members.hasAny([request.auth.uid]))
-        || (resource.data.memberIds is list && resource.data.memberIds.hasAny([request.auth.uid]))
+        isAdmin() ||
+        (
+          resource.data.admins is list &&
+          resource.data.admins.hasAny([request.auth.uid]) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'name', 'description', 'profileImage', 'flag', 'images',
+              'isPrivate', 'updatedAt'
+            ])
+        )
       );
       allow delete: if isAdmin();
 
@@ -200,9 +337,7 @@ service cloud.firestore {
       // [SECURITY] Users can only add/remove themselves
       match /members/{memberId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && isOwner(memberId);
-        allow delete: if isAuthenticated() && (isOwner(memberId) || isAdmin());
-        allow update: if false;
+        allow write: if false;
       }
     }
     
@@ -210,39 +345,68 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if isAuthenticated();
       
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow create: if isAuthenticated() &&
+        request.resource.data.creatorId == request.auth.uid &&
+        request.resource.data.get('attendees', []).hasOnly([request.auth.uid]) &&
+        request.resource.data.get('attendees', []).size() <= 1 &&
+        request.resource.data.get('attendeeCount', 0) ==
+          request.resource.data.get('attendees', []).size() &&
+        request.resource.data.get('interested', []).size() == 0 &&
+        request.resource.data.get('interestedCount', 0) == 0 &&
+        request.resource.data.get('paidAttendeeIds', []).size() == 0 &&
+        request.resource.data.get('confirmedAttendees', []).size() == 0 &&
+        request.resource.data.get('invitedUserIds', []) is list &&
+        request.resource.data.get('invitedUserIds', []).size() <= 100 &&
+        request.resource.data.get('isPaid', false) == false &&
+        request.resource.data.get('maxAttendees', 5000) > 0 &&
+        request.resource.data.get('maxAttendees', 5000) <= 5000;
       
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || 
+      allow update: if isAuthenticated() &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'attendees', 'attendeeCount', 'interested', 'interestedCount',
+          'paidAttendeeIds', 'confirmedAttendees'
+        ]) && (
+        resource.data.creatorId == request.auth.uid ||
         (resource.data.organizationId != null && isOrgAdmin(resource.data.organizationId))
-      );
+      ) && request.resource.data.creatorId == resource.data.creatorId &&
+        request.resource.data.get('invitedUserIds', []) is list &&
+        request.resource.data.get('invitedUserIds', []).size() <= 100 &&
+        request.resource.data.get('isPaid', false) == false &&
+        request.resource.data.get('maxAttendees', 5000) > 0 &&
+        request.resource.data.get('maxAttendees', 5000) <= 5000;
       
       allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || isAdmin()
+        resource.data.creatorId == request.auth.uid || isAdmin()
       );
       
        // Subcollections (attendees, etc.)
        // [SECURITY] Only event creator or users adding/removing themselves
        match /attendees/{attendeeId} {
           allow read: if isAuthenticated();
-          allow create, delete: if isAuthenticated() && isOwner(attendeeId);
-          allow update: if isAuthenticated() && (
-            isOwner(attendeeId) || resource.data.createdBy == request.auth.uid
-          );
+          allow write: if false;
        }
        match /{subcollection}/{docId} {
           allow read: if isAuthenticated();
-          allow write: if isAuthenticated() && (
-            isOwner(docId)
-            || get(/databases/$(database)/documents/events/$(eventId)).data.createdBy == request.auth.uid
-          );
+          allow write: if false;
        }
     }
     
     // --- Organizations Collection ---
     match /organizations/{orgId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.superAdminId == request.auth.uid &&
+        request.resource.data.admins is list &&
+        request.resource.data.admins.hasOnly([request.auth.uid]) &&
+        request.resource.data.get('kind', '') != 'corridor_chamber' &&
+        request.resource.data.get('members', [request.auth.uid])
+          .hasOnly([request.auth.uid]) &&
+        !request.resource.data.keys().hasAny([
+          'gdpTotal', 'gdpByActivityType', 'gdpByDirection',
+          'transactionCount', 'lastTransactionAt', 'treasuryBalance',
+          'awardedBalance', 'memberPoints', 'points', 'averagePoCT',
+          'walletAddress', 'smartWalletAddress'
+        ]);
       // [SECURITY] Corridor chambers (kind == 'corridor_chamber') are
       // system-managed. Only platform admins may rewrite leadership /
       // membership fields directly; everyone else may only touch
@@ -258,14 +422,38 @@ service cloud.firestore {
           // and the bookkeeping fields are allowed.
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(
             ['members', 'followers', 'memberCount', 'updatedAt']
-          )
+          ) &&
+          onlySelfListChange(
+            resource.data.get('members', []),
+            request.resource.data.get('members', [])
+          ) &&
+          onlySelfListChange(
+            resource.data.get('followers', []),
+            request.resource.data.get('followers', [])
+          ) &&
+          request.resource.data.get('memberCount', 0) ==
+            request.resource.data.get('members', []).size()
         )
       ) || (
         // Regular orgs — original rule.
         resource.data.kind != 'corridor_chamber' && (
-          isOrgAdmin(orgId) || (
+          (
+            isOrgAdmin(orgId) &&
+            request.resource.data.get('kind', '') ==
+              resource.data.get('kind', '') &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'gdpTotal', 'gdpByActivityType', 'gdpByDirection',
+              'transactionCount', 'lastTransactionAt', 'treasuryBalance',
+              'awardedBalance', 'memberPoints', 'points', 'averagePoCT',
+              'walletAddress', 'smartWalletAddress'
+            ])
+          ) || (
             isAuthenticated() &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers'])
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers']) &&
+            onlySelfListChange(
+              resource.data.get('followers', []),
+              request.resource.data.get('followers', [])
+            )
           )
         )
       );
@@ -285,9 +473,8 @@ service cloud.firestore {
     // onChamberLeadershipRequestApproved Cloud Function to perform the
     // actual appointment server-side.
     match /leadershipRequests/{requestId} {
-      // Anyone authenticated can read (request lists are not sensitive;
-      // future UI may filter client-side to user's own + chamber admins).
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
 
       // Users submit their OWN pending request, never pre-approved.
       allow create: if isAuthenticated()
@@ -334,30 +521,23 @@ service cloud.firestore {
     // [SECURITY] Financial balance fields (totalPoints, availablePoints, lifetimeEarnings)
     // MUST only be modified via Cloud Functions admin SDK to prevent manipulation
     match /user_points/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && (
-        isOwner(userId) &&
-        // Prevent client-side modification of financial balances
-        !request.resource.data.diff(resource.data).affectedKeys()
-             .hasAny(['totalPoints', 'availablePoints', 'lifetimeEarnings'])
-      );
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create, update: if false;
       allow delete: if isAdmin();
     }
 
-    // Points Transactions — any auth user can create (penalties/rewards for other users)
-    // Ledger is immutable (no update/delete)
+    // Immutable, server-authored financial ledger.
     match /points_transactions/{transactionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if false;
       allow update, delete: if false; // Immutable ledger
     }
 
     // Referral Codes — anyone can read (to validate), owner creates
     match /referral_codes/{code} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow create, update: if false;
       allow delete: if false;
     }
 
@@ -380,43 +560,67 @@ service cloud.firestore {
 
     // --- Feedback ---
     match /feedback/{feedbackId} {
-      allow create: if isAuthenticated();
-      allow read: if false; // Only admins/system needs to read
+      allow read, write: if false;
     }
 
     // --- Bereavement Fund ---
     match /bereavement_memberships/{userId} {
-      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending_proxy' &&
+        request.resource.data.proxyStatus == 'pending';
+      allow update, delete: if false;
     }
 
     match /bereavement_claims/{claimId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'submitted';
+      allow update: if isAdmin();
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.status == 'submitted';
     }
 
     // --- Emergency Fund ---
     match /emergency_fund_memberships/{userId} {
-      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
     }
 
     match /emergency_fund_claims/{claimId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.status == 'pending';
     }
 
     // Proxy requests: sender creates, proxy reads & responds
     match /proxy_requests/{requestId} {
-      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+        request.resource.data.fromUserId == request.auth.uid &&
+        request.resource.data.toUserId != request.auth.uid;
       allow read: if isAuthenticated() && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
-      allow update: if isAuthenticated() && resource.data.toUserId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.toUserId == request.auth.uid &&
+        request.resource.data.fromUserId == resource.data.fromUserId &&
+        request.resource.data.toUserId == resource.data.toUserId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'respondedAt', 'updatedAt'
+        ]);
     }
 
     // Emergency Fund Stakers — users can read all (for count), write their own
     match /emergency_fund_stakers/{userId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
     }
 
     // Emergency Fund Ledger — public read for transparency, server-only write
@@ -432,10 +636,10 @@ service cloud.firestore {
       allow create, update, delete: if isAuthenticated() && isOwner(userId);
     }
 
-    // Trust Scores — users can read all, write their own (webhook uses admin SDK)
+    // Trust scores are derived by trusted server code only.
     match /trust_scores/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isOwner(userId);
+      allow write: if false;
     }
 
     // Stripe Customers — users can read their own, writes via Cloud Functions
@@ -447,64 +651,85 @@ service cloud.firestore {
     // --- Trust & Verification ---
     match /trust_ratings/{ratingId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+        request.resource.data.fromUserId == request.auth.uid &&
+        request.resource.data.toUserId != request.auth.uid &&
+        ratingId == request.auth.uid + '_' + request.resource.data.toUserId &&
+        exists(/databases/$(database)/documents/users/$(request.resource.data.toUserId)) &&
+        request.resource.data.keys().hasOnly([
+          'fromUserId', 'toUserId', 'score', 'isFullTrust',
+          'stakedAmount', 'remainingStake', 'timestamp', 'fromUserName'
+        ]) &&
+        request.resource.data.score is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.score <= 100 &&
+        request.resource.data.isFullTrust == (request.resource.data.score > 90) &&
+        request.resource.data.stakedAmount == 0 &&
+        request.resource.data.remainingStake == 0;
+      allow update: if isAuthenticated() &&
+        resource.data.fromUserId == request.auth.uid &&
+        request.resource.data.fromUserId == resource.data.fromUserId &&
+        request.resource.data.toUserId == resource.data.toUserId &&
+        request.resource.data.score is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.score <= 100 &&
+        request.resource.data.isFullTrust == (request.resource.data.score > 90) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'score', 'isFullTrust', 'timestamp', 'fromUserName'
+        ]);
+      allow delete: if false;
+    }
+
+    match /payment_checkout_locks/{userId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_processed_payments/{paymentId} {
+      allow read, write: if false;
     }
 
     match /field_verifications/{verificationId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+      allow read: if isAuthenticated() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.toUserId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated() &&
+        request.resource.data.fromUserId == request.auth.uid &&
+        request.resource.data.toUserId != request.auth.uid &&
+        verificationId == request.auth.uid + '_' + request.resource.data.toUserId &&
+        exists(/databases/$(database)/documents/users/$(request.resource.data.toUserId)) &&
+        request.resource.data.keys().hasOnly([
+          'fromUserId', 'toUserId', 'fields', 'timestamp'
+        ]) &&
+        request.resource.data.fields is map &&
+        request.resource.data.fields.size() > 0 &&
+        request.resource.data.fields.size() <= 20 &&
+        request.resource.data.timestamp == request.time;
+      allow update, delete: if false;
     }
 
     match /vouches/{vouchId} {
        allow read: if isAuthenticated();
-       allow write: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
+       allow create: if isAuthenticated() &&
+         request.resource.data.fromUserId == request.auth.uid &&
+         request.resource.data.toUserId != request.auth.uid &&
+         vouchId == request.auth.uid + '_' + request.resource.data.toUserId &&
+         exists(/databases/$(database)/documents/users/$(request.resource.data.toUserId)) &&
+         request.resource.data.keys().hasOnly([
+           'id', 'fromUserId', 'toUserId', 'relationship',
+           'stakeAmount', 'createdAt'
+         ]) &&
+         request.resource.data.id == vouchId &&
+         request.resource.data.relationship is string &&
+         request.resource.data.relationship.size() > 0 &&
+         request.resource.data.relationship.size() <= 100 &&
+         request.resource.data.stakeAmount == 0;
+       allow update, delete: if false;
     }
 
     match /trust_data/{userId} {
        allow read: if isAuthenticated();
-       // Owner can fully write their own trust data.
-       // Other authenticated users can only update trust-related fields
-       // (e.g., when someone vouches for/rates another user, the trust service recalculates)
-       // UPDATED: Added all serialized field names from TrustData model
-       allow write: if isAuthenticated() && (
-         isOwner(userId)
-         || request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly([
-                // Core trust fields
-                'trustScore', 'level', 'isVerified',
-                'identityScore', 'activityScore', 'vouchTrustScore', 'reputationScore',
-                // Counts & metrics
-                'vouchCount', 'vouchedByCount', 'vouchedBy',
-                'verifiedByCount', 'reviewCount', 'averageRating',
-                'reportCount', 'blockedByCount',
-                'flaggedMessagesCount', 'bannedVoucheeCount',
-                'rejectedFamilyConnectionsCount', 'fakeVerificationsCount',
-                'eventNoShowCount', 'reportedFraudCount',
-                'referralCount',
-                // Activity metrics
-                'verifiedFieldsCount', 'joinedEventsCount', 'attendedEventsCount',
-                'verifiedSolutionsCount', 'verifiedCheckInCount',
-                'identityQRExchange',
-                // Unique connection counts
-                'uniqueFamilyCount', 'uniqueFriendCount',
-                'uniqueQrCount', 'uniqueVouchCount', 'uniqueVerificationCount',
-                // HTS & PoCT
-                'poctScore', 'htsScore',
-                'isCouncilEligible',
-                'awardedQualificationMilestones',
-                'awardedHtsTracking',
-                'reliabilityScore', 'helpfulnessScore',
-                'unresponsiveLiaisonCount',
-                // Genesis milestone user IDs (serialized field names)
-                'genesisFamilyIds', 'genesisFriendIds',
-                'genesisQrIds', 'genesisTrustIds',
-                // Legacy field names (keep for backward compat)
-                'familyUserIds', 'friendUserIds', 'qrUserIds', 'trustUserIds',
-                'genesisFamily', 'genesisFriends', 'genesisQR', 'genesisTrust',
-                // Timestamp
-                'lastUpdated'
-              ])
-       );
+       allow write: if false;
     }
 
     match /interest_registrations/{registrationId} {
@@ -524,58 +749,63 @@ service cloud.firestore {
     // [SECURITY] Governance units should only be created/updated through controlled flows
     match /governance/{unitId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      // Only allow updates to voting-related fields, not structural changes
-      allow update: if isAuthenticated() &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['candidates', 'voters', 'voteCount', 'updatedAt', 'status', 'electionEndDate']);
+      allow create, update: if false;
       allow delete: if isAdmin();
     }
 
     match /governance_votes/{voteId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() &&
-         (request.resource.data.voterId == request.auth.uid || resource.data.voterId == request.auth.uid) &&
-         request.resource.data.unitId != 'global_community';
+      allow write: if false;
     }
 
     // Governance Election History
     match /governance_history/{historyId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if false;
       allow update: if false; // Immutable election records
     }
 
     // --- Trust & Verification (Additional Collections) ---
     match /qr_exchanges/{exchangeId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (
-        request.resource.data.fromUid == request.auth.uid || 
-        request.resource.data.toUid == request.auth.uid
+      allow read: if isAuthenticated() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid || isAdmin()
       );
+      allow write: if false;
+    }
+
+    match /qr_handshake_challenges/{challengeId} {
+      allow read, write: if false;
+    }
+
+    match /event_checkin_challenges/{challengeId} {
+      allow read, write: if false;
     }
 
     match /check_ins/{checkInId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if false;
+      allow update, delete: if false;
     }
 
     match /reports/{reportId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.reporterId == request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     // --- Verified Solutions ---
     match /verified_solutions/{solutionId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if false;
       allow update: if false; // Immutable verification records
     }
 
     // --- Organization Vettings ---
     match /organization_vettings/{vettingId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow create: if false;
       allow update: if false; // Immutable vetting records
     }
 
@@ -598,38 +828,46 @@ service cloud.firestore {
     // --- Marketplace ---
     match /marketplace_listings/{listingId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      // Owner can update anything; other users can only update view/saved counters
-      allow update: if isAuthenticated() && (
-        resource.data.sellerId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['viewCount', 'savedCount'])
-      );
+      allow create: if isAuthenticated() &&
+        request.resource.data.sellerId == request.auth.uid &&
+        request.resource.data.get('viewCount', 0) == 0 &&
+        request.resource.data.get('savedCount', 0) == 0;
+      allow update: if isAuthenticated() &&
+        resource.data.sellerId == request.auth.uid &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['viewCount', 'savedCount', 'reportCount', 'sellerId']);
       allow delete: if isAuthenticated() && resource.data.sellerId == request.auth.uid;
 
       // saved_by subcollection
       match /saved_by/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow write: if false;
       }
 
-      // interactions subcollection (DSP-gated contact tracking)
+      match /views/{userId} {
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow write: if false;
+      }
+
+      // Contact intent is not a verified economic transaction and must not
+      // affect GDP or rewards. Historical markers remain owner-readable only.
       match /interactions/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow write: if false;
       }
 
       // reports subcollection
       match /reports/{reporterId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && isOwner(reporterId);
+        allow read: if isAdmin() || (isAuthenticated() && isOwner(reporterId));
+        allow create, update, delete: if false;
       }
     }
 
     // --- GDP Transactions ---
     match /gdp_transactions/{transactionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() &&
+        (resource.data.actorUid == request.auth.uid || isAdmin());
+      allow create: if false;
       allow update, delete: if false; // Immutable ledger
     }
 
@@ -640,114 +878,151 @@ service cloud.firestore {
     }
 
     // --- Hosting ---
-    // [SECURITY] Only request creator or target can modify; only creator can delete
+    // Server creates requests from canonical profile/community data. Clients may
+    // only express their own interest or cancel an unmatched request.
     match /hosting_requests/{requestId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        resource.data.fromUserId == request.auth.uid ||
-        resource.data.toUserId == request.auth.uid
+      allow read: if isAuthenticated() && (
+        resource.data.travelerId == request.auth.uid ||
+        resource.data.matchedHostId == request.auth.uid ||
+        resource.data.get('interestedHostIds', []).hasAny([request.auth.uid]) ||
+        isCommunityMember(resource.data.communityId) || isAdmin()
       );
-      allow delete: if isAuthenticated() && resource.data.fromUserId == request.auth.uid;
+      allow create: if false;
+      allow update: if isAuthenticated() && (
+        (
+          resource.data.travelerId == request.auth.uid &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status == 'cancelled' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt'
+          ]) && request.resource.data.updatedAt == request.time
+        ) || (
+          resource.data.status == 'pending' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'interestedHostIds', 'updatedAt'
+          ]) &&
+          request.resource.data.get('interestedHostIds', []).size() <= 500 &&
+          onlySelfListChange(
+            resource.data.get('interestedHostIds', []),
+            request.resource.data.get('interestedHostIds', [])
+          ) && request.resource.data.updatedAt == request.time
+        )
+      );
+      allow delete: if isAuthenticated() &&
+        resource.data.travelerId == request.auth.uid &&
+        resource.data.status in ['pending', 'cancelled', 'expired'] &&
+        !exists(/databases/$(database)/documents/hosting_sessions/$(requestId));
     }
 
-    // [SECURITY] Only session participants can modify; no client-side deletes
+    // Hosting lifecycle is server-authoritative and requires mutual consent.
     match /hosting_sessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
+      allow read: if isAuthenticated() && (
         resource.data.hostId == request.auth.uid ||
-        resource.data.guestId == request.auth.uid
+        resource.data.travelerId == request.auth.uid || isAdmin()
       );
-      allow delete: if isAdmin(); // Only admin can delete sessions
+      allow create, update, delete: if false;
+    }
+
+    match /hosting_checkin_challenges/{challengeId} {
+      allow read, write: if false;
     }
 
     // --- P2P Stays & Car Rentals ---
     match /peer_listings/{listingId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.ownerId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'savedCount'])
-      );
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.get('viewCount', 0) == 0 &&
+        request.resource.data.get('savedCount', 0) == 0;
+      allow update: if isAuthenticated() &&
+        resource.data.ownerId == request.auth.uid &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['viewCount', 'savedCount', 'ownerId']);
       allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
 
       // saved_by subcollection
       match /saved_by/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow write: if false;
+      }
+
+      match /views/{userId} {
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow write: if false;
       }
     }
 
     match /peer_bookings/{bookingId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
+      allow read: if isAuthenticated() && (
         resource.data.guestId == request.auth.uid ||
-        resource.data.hostId == request.auth.uid
+        resource.data.hostId == request.auth.uid || isAdmin()
       );
+      allow create, update: if false;
+      allow delete: if false;
+    }
+
+    match /peer_booking_slots/{slotId} {
+      allow read, write: if false;
     }
 
     // --- Real Estate Listings ---
     match /real_estate_listings/{listingId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isAuthenticated() && (
-        resource.data.ownerId == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount', 'savedCount'])
-      );
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid &&
+        request.resource.data.get('viewCount', 0) == 0 &&
+        request.resource.data.get('savedCount', 0) == 0;
+      allow update: if isAuthenticated() &&
+        resource.data.ownerId == request.auth.uid &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['viewCount', 'savedCount', 'ownerId']);
       allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
 
       // View tracking subcollection
       match /views/{viewId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow read: if isAuthenticated() && (isOwner(viewId) || isAdmin());
+        allow write: if false;
       }
 
       // saved_by subcollection
       match /saved_by/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+        allow write: if false;
       }
+    }
+
+    match /event_attendance_history/{historyId} {
+      allow read, write: if false;
     }
 
     // --- Flight Bookings ---
     match /flight_bookings/{bookingId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     // --- App Testers (PWA tester signup) ---
-    match /app_testers/{email} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+    match /app_testers/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create, update: if isAuthenticated() && isOwner(userId) &&
+        request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
     }
 
     // --- Landing Page Tester Signups (unauthenticated) ---
     // [SECURITY] Create-only, no read/update/delete from client.
     // Field validation prevents abuse — only expected fields are allowed.
     match /tester_signups/{signupId} {
-      allow create: if request.resource.data.keys().hasOnly(
-        ['email', 'platform', 'source', 'signup_type', 'timestamp']
-      )
-      && request.resource.data.email is string
-      && request.resource.data.email.size() > 0
-      && request.resource.data.email.size() < 256;
-      allow read, update, delete: if false;
+      allow read, write: if false;
     }
 
     // --- Liquidity Treasury Interest Registrations (unauthenticated) ---
     // [SECURITY] Create-only, no read/update/delete from client.
     // Users on the landing page can register interest for TGE notifications.
     match /liquidity_interest/{interestId} {
-      allow create: if request.resource.data.keys().hasOnly(
-        ['email', 'interest', 'epoch', 'tge', 'type', 'createdAt', 'source']
-      )
-      && request.resource.data.email is string
-      && request.resource.data.email.size() > 0
-      && request.resource.data.email.size() < 256;
-      allow read, update, delete: if false;
+      allow read, write: if false;
     }
 
     // Default deny for all other collections

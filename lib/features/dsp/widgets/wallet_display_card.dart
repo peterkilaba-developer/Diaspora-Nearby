@@ -166,7 +166,7 @@ class WalletDisplayCard extends StatelessWidget {
                         if (trustScore != null && tgeEvent != null)
                           const TextSpan(text: ' • '),
                         if (tgeEvent != null)
-                          TextSpan(text: 'TGE $tgeEvent/10'),
+                          TextSpan(text: 'TDE $tgeEvent/10'),
                       ],
                     ),
                   ),

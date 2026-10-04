@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -38,7 +40,7 @@ final tokenBalanceProvider = FutureProvider<String>((ref) async {
 });
 
 /// Provider that fetches on-chain $DIASPORA balance for a treasury wallet address.
-/// Reads directly from the ERC-20 contract on Coinbase L2 Base Blockchain via getTokenBalance Cloud Function.
+/// Reads directly from the ERC-20 contract on Ethereum Base Blockchain via getTokenBalance Cloud Function.
 /// NOTE: For the treasury grid, use batchTokenBalancesProvider instead to avoid rate-limiting.
 final treasuryTokenBalanceProvider = FutureProvider.family<String, String>((
   ref,
@@ -75,7 +77,7 @@ class BatchTokenBalances {
   /// Map of governanceId → formatted balance string (e.g. "200")
   final Map<String, String> balances;
 
-  /// Total $DIASPORA distributed across all treasury + user wallets
+  /// Total $DIASPORA across the wallets visible in this bounded response.
   final String totalDistributed;
 
   /// The authenticated user's personal wallet balance
@@ -88,8 +90,8 @@ class BatchTokenBalances {
   });
 }
 
-/// Provider that fetches ALL treasury token balances in one Cloud Function call.
-/// This avoids Coinbase L2 Base Blockchain RPC rate-limiting that happens with 13+ individual calls.
+/// Fetches the fixed reserves and the current user's community treasury
+/// balances in one bounded Multicall request.
 final batchTokenBalancesProvider = FutureProvider<BatchTokenBalances>((
   ref,
 ) async {
@@ -143,12 +145,12 @@ final batchTokenBalancesProvider = FutureProvider<BatchTokenBalances>((
       userBalance: userFormatted,
     );
   } catch (e) {
-    debugPrint('[BatchTokenBalances] Error: $e');
+    debugPrint('[BatchTokenBalances] Treasury service unavailable: $e');
     return const BatchTokenBalances();
   }
 });
 
-/// Model for an on-chain ERC-20 token transfer event.
+/// Model for an on-chain token transfer event
 class OnChainTransfer {
   final String txHash;
   final int blockNumber;
@@ -158,7 +160,7 @@ class OnChainTransfer {
   final double amount;
   final String direction; // 'in' or 'out'
 
-  const OnChainTransfer({
+  OnChainTransfer({
     required this.txHash,
     required this.blockNumber,
     required this.timestamp,
@@ -180,13 +182,14 @@ class OnChainTransfer {
 }
 
 /// Provider that fetches real on-chain $DIASPORA token transfer events
-/// for the current user's wallet address from the Coinbase L2 Base Blockchain.
+/// for the current user's wallet address from the Ethereum Base Blockchain.
 final onChainTransfersProvider = FutureProvider<List<OnChainTransfer>>((
   ref,
 ) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return [];
 
+  // 1. Try Cloud Functions first
   try {
     final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable(
@@ -197,37 +200,107 @@ final onChainTransfersProvider = FutureProvider<List<OnChainTransfer>>((
     final data = result.data;
 
     final rawTransfers = data['transfers'];
-    if (rawTransfers == null || rawTransfers is! List) return [];
+    if (rawTransfers is List && rawTransfers.isNotEmpty) {
+      final transfers = <OnChainTransfer>[];
+      for (final raw in rawTransfers) {
+        final Map<String, dynamic> tx = raw is Map
+            ? Map<String, dynamic>.from(raw)
+            : {};
+        if (tx.isEmpty) continue;
 
-    final transfers = <OnChainTransfer>[];
-    for (final raw in rawTransfers) {
-      final Map<String, dynamic> tx = raw is Map
-          ? Map<String, dynamic>.from(raw)
-          : {};
-      if (tx.isEmpty) continue;
+        final amount = double.tryParse(tx['amount']?.toString() ?? '0') ?? 0;
+        final timestampMs =
+            tx['timestamp'] as int? ?? DateTime.now().millisecondsSinceEpoch;
 
-      final amount = double.tryParse(tx['amount']?.toString() ?? '0') ?? 0;
-      final timestampMs =
-          tx['timestamp'] as int? ?? DateTime.now().millisecondsSinceEpoch;
+        transfers.add(
+          OnChainTransfer(
+            txHash: tx['txHash']?.toString() ?? '',
+            blockNumber: tx['blockNumber'] as int? ?? 0,
+            timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
+            from: tx['from']?.toString() ?? '',
+            to: tx['to']?.toString() ?? '',
+            amount: amount,
+            direction: tx['direction']?.toString() ?? 'in',
+          ),
+        );
+      }
+      if (transfers.isNotEmpty) return transfers;
+    }
+  } catch (e) {
+    debugPrint('[OnChainTransfers] Cloud Function error/timeout: $e');
+  }
 
-      transfers.add(
-        OnChainTransfer(
-          txHash: tx['txHash']?.toString() ?? '',
-          blockNumber: tx['blockNumber'] as int? ?? 0,
-          timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
-          from: tx['from']?.toString() ?? '',
-          to: tx['to']?.toString() ?? '',
-          amount: amount,
-          direction: tx['direction']?.toString() ?? 'in',
-        ),
-      );
+  // 2. Direct Base Explorer fallback (Blockscout API)
+  try {
+    String? walletAddress = ref.read(userProfileProvider).value?.walletAddress;
+    if (walletAddress == null || walletAddress.isEmpty) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      walletAddress = doc.data()?['walletAddress'] as String?;
     }
 
-    return transfers;
+    if (walletAddress != null && walletAddress.isNotEmpty) {
+      const tokenAddress = '0x55d7e7d006938A15082752225ED44Fd130B87735';
+      final url = Uri.parse(
+        'https://base.blockscout.com/api?module=account&action=tokentx&contractaddress=$tokenAddress&address=$walletAddress&startblock=0&endblock=99999999&sort=desc',
+      );
+      final response = await http
+          .get(url, headers: {'User-Agent': 'DiasporaNearby/1.0'})
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final rawList = json['result'];
+        if (rawList is List) {
+          final transfers = <OnChainTransfer>[];
+          for (final raw in rawList) {
+            if (raw is! Map) continue;
+            final tx = Map<String, dynamic>.from(raw);
+            final rawValue = tx['value']?.toString() ?? '0';
+            final decimals =
+                int.tryParse(tx['tokenDecimal']?.toString() ?? '18') ?? 18;
+            final rawNum = BigInt.tryParse(rawValue) ?? BigInt.zero;
+            final divisor = BigInt.from(10).pow(decimals);
+            final whole = rawNum ~/ divisor;
+            final fraction = rawNum % divisor;
+            final fractionStr = fraction.toString().padLeft(decimals, '0');
+            final amount = double.tryParse('$whole.$fractionStr') ?? 0.0;
+
+            final timeStampSec =
+                int.tryParse(tx['timeStamp']?.toString() ?? '0') ?? 0;
+            final timestamp = timeStampSec > 0
+                ? DateTime.fromMillisecondsSinceEpoch(timeStampSec * 1000)
+                : DateTime.now();
+
+            final fromAddr = tx['from']?.toString() ?? '';
+            final toAddr = tx['to']?.toString() ?? '';
+            final isIncoming =
+                toAddr.toLowerCase() == walletAddress.toLowerCase();
+
+            transfers.add(
+              OnChainTransfer(
+                txHash: tx['hash']?.toString() ?? '',
+                blockNumber:
+                    int.tryParse(tx['blockNumber']?.toString() ?? '0') ?? 0,
+                timestamp: timestamp,
+                from: fromAddr,
+                to: toAddr,
+                amount: amount,
+                direction: isIncoming ? 'in' : 'out',
+              ),
+            );
+          }
+          return transfers;
+        }
+      }
+    }
   } catch (e) {
-    debugPrint('[OnChainTransfers] Error: $e');
-    return [];
+    debugPrint('[OnChainTransfers] Direct Blockscout fallback error: $e');
   }
+
+  return [];
 });
 
 /// Provider that streams the current user's smart wallet data

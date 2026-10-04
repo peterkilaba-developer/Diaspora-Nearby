@@ -123,8 +123,7 @@ class TrustVouchModal extends ConsumerWidget {
                           const SizedBox(width: 4),
                           Text(
                             trustAsync.when(
-                              data: (t) =>
-                                  '${t?.trustScore.toInt() ?? 0} PCT',
+                              data: (t) => '${t?.trustScore.toInt() ?? 0} PCT',
                               loading: () => '--',
                               error: (_, _) => '--',
                             ),

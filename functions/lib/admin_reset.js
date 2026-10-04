@@ -2,6 +2,7 @@
  * Admin Database Reset module.
  */
 const { functions, admin, db } = require("./shared");
+const { requireAdmin, requireAppCheck } = require("./security");
 
 /**
  * ==================================================================
@@ -15,45 +16,22 @@ exports.hardResetDatabase = functions
     memory: '512MB'
   })
   .https.onCall(async (data, context) => {
-
-    // 1. Verify Authentication
-    if (!context.auth) {
+    requireAppCheck(context);
+    const callerId = requireAdmin(context);
+    const projectId = process.env.GCLOUD_PROJECT || admin.app().options.projectId;
+    if (projectId === 'diaspora-nearby-a3dac') {
       throw new functions.https.HttpsError(
-        'unauthenticated',
-        'User must be authenticated to call this function.'
+        'failed-precondition',
+        'Database reset is permanently disabled in production.'
       );
     }
-
-    const callerId = context.auth.uid;
+    if (process.env.ENABLE_HARD_RESET !== 'true') {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Database reset is disabled for this environment.'
+      );
+    }
     console.log(`[Admin Reset] Request from user: ${callerId}`);
-
-    // 2. Verify Admin Status (Firestore doc + Auth custom claims fallback)
-    // Prevents chicken-and-egg: resetting DB clears isAdmin from user doc
-    const callerDoc = await db.collection('users').doc(callerId).get();
-    let isCallerAdmin = callerDoc.exists && callerDoc.data().isAdmin === true;
-
-    if (!isCallerAdmin) {
-      try {
-        const userRecord = await admin.auth().getUser(callerId);
-        isCallerAdmin = userRecord.customClaims && userRecord.customClaims.admin === true;
-        if (isCallerAdmin && callerDoc.exists) {
-          await db.collection('users').doc(callerId).update({ isAdmin: true });
-          console.log(`[Admin Reset] Self-healed isAdmin on user doc for ${callerId}`);
-        }
-      } catch (e) {
-        console.log(`[Admin Reset] Custom claims check failed: ${e.message}`);
-      }
-    }
-
-    if (!isCallerAdmin) {
-      console.log(`[Admin Reset] REJECTED: User ${callerId} is not an admin`);
-      throw new functions.https.HttpsError(
-        'permission-denied',
-        'Only administrators can reset the database.'
-      );
-    }
-
-    console.log(`[Admin Reset] AUTHORIZED: User ${callerId} is admin`);
 
     // 3. Parse Request
     const resetTargets = data.resetTargets || [];
@@ -161,6 +139,7 @@ exports.hardResetDatabase = functions
             { path: 'trust_ratings', exclude: false },
             { path: 'field_verifications', exclude: false },
             { path: 'relationship_requests', exclude: false },
+            { path: 'user_blocks', exclude: false },
             { path: 'proximity_history', exclude: false },
             { path: 'proximity-notifications', exclude: false }
           ]);
@@ -199,7 +178,8 @@ exports.hardResetDatabase = functions
           await processTarget('chats', [
             { path: 'chats', exclude: false },
             { path: 'reports', exclude: false },
-            { path: 'discoverableChats', exclude: false }
+            { path: 'discoverableChats', exclude: false },
+            { path: 'direct_chat_pairs', exclude: false }
           ]);
           // Delete userChats subcollections under each user
           try {
@@ -308,7 +288,8 @@ exports.hardResetDatabase = functions
         case 'peer_listings':
           await processTarget('peer_listings', [
             { path: 'peer_listings', exclude: false },
-            { path: 'peer_bookings', exclude: false }
+            { path: 'peer_bookings', exclude: false },
+            { path: 'peer_booking_slots', exclude: false }
           ]);
           break;
 
@@ -339,54 +320,30 @@ exports.hardResetDatabase = functions
  * ==================================================================
  * 7. SET ADMIN CLAIM
  * ==================================================================
- * Sets Firebase Auth custom claims + Firestore isAdmin flag.
- * Bootstrap: If no admin exists yet, the caller becomes the first admin.
- * After bootstrap: Only existing admins can grant admin to others.
+ * Sets Firebase Auth custom claims + a display-only Firestore mirror.
+ * The initial administrator must be provisioned out-of-band with the Admin
+ * SDK; this endpoint can never bootstrap its own authority.
  */
 exports.setAdminClaim = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated.');
-  }
-
-  const callerId = context.auth.uid;
-  const targetUid = data.targetUid || callerId; // Default: grant to self
-
-  // Check if ANY admin exists (for bootstrap)
-  const callerRecord = await admin.auth().getUser(callerId);
-  const callerIsAdmin = callerRecord.customClaims && callerRecord.customClaims.admin === true;
-
-  // Also check Firestore
-  const callerDoc = await db.collection('users').doc(callerId).get();
-  const callerIsAdminFirestore = callerDoc.exists && callerDoc.data().isAdmin === true;
-
-  if (!callerIsAdmin && !callerIsAdminFirestore) {
-    // Bootstrap mode: Check if ANY user has admin claim. If not, allow first admin.
-    const allUsers = await db.collection('users').where('isAdmin', '==', true).limit(1).get();
-    if (!allUsers.empty) {
-      throw new functions.https.HttpsError(
-        'permission-denied',
-        'Only existing admins can grant admin privileges.'
-      );
-    }
-    console.log(`[Admin] Bootstrap mode: No admins exist. Granting to ${callerId}`);
+  requireAppCheck(context);
+  const callerId = requireAdmin(context);
+  const targetUid = data && data.targetUid;
+  if (typeof targetUid !== 'string' || targetUid.length < 1 || targetUid.length > 128) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid targetUid is required.');
   }
 
   // Set custom claim on target
-  await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+  const targetRecord = await admin.auth().getUser(targetUid);
+  await admin.auth().setCustomUserClaims(targetUid, {
+    ...(targetRecord.customClaims || {}),
+    admin: true,
+  });
 
   // Set isAdmin on Firestore user doc
   const targetDoc = db.collection('users').doc(targetUid);
   const targetSnapshot = await targetDoc.get();
   if (targetSnapshot.exists) {
     await targetDoc.update({ isAdmin: true });
-  }
-
-  // If bootstrapping, also set on caller
-  if (targetUid !== callerId && !callerIsAdmin) {
-    await admin.auth().setCustomUserClaims(callerId, { admin: true });
-    if (callerDoc.exists) {
-      await db.collection('users').doc(callerId).update({ isAdmin: true });
-    }
   }
 
   console.log(`[Admin] Admin claim set for user ${targetUid} by ${callerId}`);

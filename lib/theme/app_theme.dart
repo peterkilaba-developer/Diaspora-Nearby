@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -196,7 +195,7 @@ class AppTheme {
       dividerColor: Colors.transparent,
       dividerTheme: const DividerThemeData(color: Colors.transparent, space: 0),
 
-      textTheme: GoogleFonts.interTextTheme().apply(
+      textTheme: ThemeData.light().textTheme.apply(
         bodyColor: _lightForeground,
         displayColor: _lightForeground,
         decorationColor: _lightForeground,
@@ -399,7 +398,7 @@ class AppTheme {
       dividerColor: Colors.transparent,
       dividerTheme: const DividerThemeData(color: Colors.transparent, space: 0),
 
-      textTheme: GoogleFonts.interTextTheme().apply(
+      textTheme: ThemeData.dark().textTheme.apply(
         bodyColor: _darkForeground,
         displayColor: _darkForeground,
         decorationColor: _darkForeground,

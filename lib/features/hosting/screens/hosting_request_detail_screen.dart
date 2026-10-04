@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 
@@ -84,9 +83,9 @@ class _HostingRequestDetailScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           'Hosting Request',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       body: _isLoading
@@ -106,7 +105,7 @@ class _HostingRequestDetailScreenState
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       fontSize: 15,
                       color: Theme.of(
                         context,
@@ -149,7 +148,7 @@ class _HostingRequestDetailScreenState
               const SizedBox(width: 6),
               Text(
                 _statusLabel(request.status),
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: _statusColor(request.status),
@@ -225,7 +224,7 @@ class _HostingRequestDetailScreenState
                   Expanded(
                     child: Text(
                       'Host selected: ${request.matchedHostName}',
-                      style: GoogleFonts.outfit(
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -239,12 +238,9 @@ class _HostingRequestDetailScreenState
           // ── Interested hosts section
           if (request.isOpen) ...[
             const SizedBox(height: 28),
-            Text(
+            const Text(
               'Interested Hosts',
-              style: GoogleFonts.outfit(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
 
@@ -269,7 +265,7 @@ class _HostingRequestDetailScreenState
                     const SizedBox(height: 8),
                     Text(
                       'No hosts have shown interest yet',
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(
                         fontSize: 14,
                         color: Theme.of(
                           context,
@@ -287,7 +283,7 @@ class _HostingRequestDetailScreenState
                   icon: const Icon(LucideIcons.users, size: 18),
                   label: Text(
                     'View ${request.interestedHostIds.length} Interested Host${request.interestedHostIds.length == 1 ? '' : 's'}',
-                    style: GoogleFonts.outfit(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
@@ -321,7 +317,7 @@ class _HostingRequestDetailScreenState
             children: [
               Text(
                 label,
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(
                     context,
@@ -330,7 +326,7 @@ class _HostingRequestDetailScreenState
                 ),
               ),
               const SizedBox(height: 2),
-              Text(value, style: GoogleFonts.outfit(fontSize: 14)),
+              Text(value, style: const TextStyle(fontSize: 14)),
             ],
           ),
         ),

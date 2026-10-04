@@ -60,6 +60,8 @@ import 'package:diaspora_nearby/features/governance/models/governance_unit.dart'
 import 'package:diaspora_nearby/features/more/widgets/business_registration_modal.dart'; // [NEW]
 import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/screens/ddi_loans_screen.dart'; // [NEW]
+import 'package:diaspora_nearby/features/organization/screens/organization_detail_screen.dart'; // [NEW]
+import 'package:diaspora_nearby/features/dsp/screens/gvi_corridor_list_screen.dart'; // [NEW]
 
 import 'package:diaspora_nearby/features/chat/widgets/chat_report_sheet.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_confirmation_sheet.dart';
@@ -67,7 +69,6 @@ import 'package:diaspora_nearby/features/chat/widgets/chat_date_separator.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_empty_state.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_restriction_view.dart';
 import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart'; // [NEW] Shared Providers
-import 'package:diaspora_nearby/features/shared/utils/country_utils.dart'; // [NEW]
 import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_scroll_to_bottom_fab.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_typing_indicator.dart';
@@ -1156,7 +1157,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             // [UPDATED] Split location logic
             onPickLocation: _pickLocation,
             onSendLocation: _sendLocationMessage,
-            onSendDSP: _sendDSP,
+            onSendToken: _sendToken,
+            onSendFiat: _sendFiat,
             onMediaSelected: _onMediaPicked, // [NEW] Callback for preview
             replyingTo: _replyingTo,
             onCancelReply: _clearReply,
@@ -1203,11 +1205,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed:
-                      () =>
-                          context.canPop()
-                              ? context.pop()
-                              : context.go('/chats'),
+                  onPressed: () =>
+                      context.canPop() ? context.pop() : context.go('/chats'),
                   child: const Text('Back to My Chats'),
                 ),
               ],
@@ -1827,7 +1826,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       onSendDocument: _sendDocument,
                       onPickLocation: _pickLocation,
                       onSendLocation: _sendLocationMessage,
-                      onSendDSP: _sendDSP,
+                      onSendToken: _sendToken,
+                      onSendFiat: _sendFiat,
                       onMediaSelected: _onMediaPicked,
                       onCancelReply: _clearReply,
                       replyingTo: _replyingTo,
@@ -1860,7 +1860,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   // [UPDATED] Split location logic
                   onPickLocation: _pickLocation,
                   onSendLocation: _sendLocationMessage,
-                  onSendDSP: _sendDSP,
+                  onSendToken: _sendToken,
+                  onSendFiat: _sendFiat,
                   onMediaSelected: _onMediaPicked, // [NEW] Callback for preview
                   onCancelReply: _clearReply,
                   replyingTo: _replyingTo,
@@ -2279,6 +2280,66 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           );
         },
+        onChamberOfCommerce: () async {
+          Navigator.pop(context);
+          final profile = ref.read(userProfileProvider).value;
+          final homeCode = profile?.homeCountryCode;
+          final hostCode =
+              community?.hostCountryCode ??
+              community?.homeCountryCode ??
+              chat.hostCountryCode ??
+              profile?.hostCountryCode;
+
+          if (homeCode != null &&
+              hostCode != null &&
+              homeCode.toUpperCase() != hostCode.toUpperCase()) {
+            final chamberId =
+                'chamber_${hostCode.toLowerCase()}_${homeCode.toLowerCase()}';
+            final docSnap = await FirebaseFirestore.instance
+                .collection('organizations')
+                .doc(chamberId)
+                .get();
+            final targetOrgId = docSnap.exists
+                ? chamberId
+                : 'chamber_${homeCode.toLowerCase()}_${hostCode.toLowerCase()}';
+
+            if (outerContext.mounted) {
+              Navigator.push(
+                outerContext,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      OrganizationDetailScreen(orgId: targetOrgId),
+                ),
+              );
+            }
+          } else {
+            if (outerContext.mounted) {
+              Navigator.push(
+                outerContext,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      GviCorridorListScreen(homeCountry: hostCode ?? ''),
+                ),
+              );
+            }
+          }
+        },
+        onChambersOfCommerce: () {
+          Navigator.pop(context);
+          final homeCode =
+              community?.homeCountryCode ??
+              community?.hostCountryCode ??
+              chat.homeCountryCode ??
+              ref.read(userProfileProvider).value?.homeCountryCode ??
+              '';
+          Navigator.push(
+            outerContext,
+            MaterialPageRoute(
+              builder: (context) =>
+                  GviCorridorListScreen(homeCountry: homeCode),
+            ),
+          );
+        },
         onLeaderElections: () {
           Navigator.pop(context);
           _handleLeaderElections(outerContext, chat, governanceUnit, community);
@@ -2334,15 +2395,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  // [NEW] DSP Transfer Logic
-  Future<void> _sendDSP(int amount, String assetType, String? caption) async {
+  // $DIASPORA Token Transfer Logic (Smart Wallet)
+  Future<void> _sendToken(int amount, String? caption) async {
     final chatId = await _ensureChatCreated();
     if (chatId == null) return;
-
-    // We need the recipient ID. In DM, it's the other user.
-    // In Group, we might need to ask "Who to send to?" or if 1-on-1 is assumed.
-    // The requirement implies 1-on-1 or "user from DM".
-    // Let's assume DM for now strictly or handle single recipient.
 
     final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
     if (currentUserId == null) return;
@@ -2353,7 +2409,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } else {
       final chat = await ref.read(chatRepositoryProvider).getChat(chatId);
       if (chat == null) return;
-      // Find other user: Assuming DM logic for now as per feature spec context
       if (chat.participants.length >= 2) {
         toUserId = chat.participants.firstWhere(
           (id) => id != currentUserId,
@@ -2364,12 +2419,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     if (toUserId == null) {
-      // It's a group or invalid.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'DSP transfer currently only supported in Direct Messages.',
+              r'$DIASPORA token transfer currently only supported in Direct Messages.',
             ),
           ),
         );
@@ -2388,23 +2442,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         );
       }
 
-      // Execute Transfer
+      // Execute on-chain token transfer via Smart Wallet
       await ref
           .read(pointsServiceProvider)
           .transferAsset(
             fromUserId: currentUserId,
             toUserId: toUserId,
             amount: amount,
-            assetType: assetType, // Use the selected asset type
+            assetType: 'token',
           );
 
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context); // Close loader
       }
-
-      // Send a system message or a special "transfer" message type?
-      // Requirement: "Beautiful little card in bubble"
-      // So we send a message of type 'dsp_transfer' with amount metadata.
 
       final identity = ref.read(chatIdentityProvider);
       final participants = await _getParticipants();
@@ -2413,29 +2463,127 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           .read(chatRepositoryProvider)
           .sendTextMessage(
             chatId,
-            caption?.isNotEmpty == true
-                ? caption!
-                : 'Sent $amount ${assetType == 'token' ? '\$DIASPORA' : 'DSP'}', // Use caption if available
+            caption?.isNotEmpty == true ? caption! : 'Sent $amount \$DIASPORA',
             type: 'dsp_transfer',
             senderIdOverride: identity?['id'],
             senderNameOverride: identity?['businessName'] ?? identity?['name'],
             senderImageOverride: identity?['profileImage'],
             metadata: {
               'amount': amount,
-              'currency': assetType == 'token' ? 'DIASPORA' : 'DSP',
-              'assetType': assetType,
+              'currency': 'DIASPORA',
+              'assetType': 'token',
             },
             participants: participants,
-            // We should also set push notification payload if needed here via metadata or server function?
-            // Cloud function triggers on message create usually handles push.
-            // We will ensure push_notification_service handles this type locally or via FCM.
           );
     } catch (e) {
       if (mounted && Navigator.canPop(context)) Navigator.pop(context);
-      debugPrint('DSP_TRANSFER: Error transferring $assetType: $e');
+      debugPrint('TOKEN_TRANSFER: Error transferring token: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Transfer failed: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  // Fiat Remittance Send Logic
+  Future<void> _sendFiat(
+    double amount,
+    String currency,
+    double convertedAmount,
+    String receiverCurrency,
+    double exchangeRate,
+    String? caption,
+  ) async {
+    final chatId = await _ensureChatCreated();
+    if (chatId == null) return;
+
+    final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
+    if (currentUserId == null) return;
+
+    String? toUserId;
+    if (_isPendingDM) {
+      toUserId = widget.pendingUserId;
+    } else {
+      final chat = await ref.read(chatRepositoryProvider).getChat(chatId);
+      if (chat == null) return;
+      if (chat.participants.length >= 2) {
+        toUserId = chat.participants.firstWhere(
+          (id) => id != currentUserId,
+          orElse: () => '',
+        );
+        if (toUserId.isEmpty) toUserId = null;
+      }
+    }
+
+    if (toUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Fiat remittances are currently only supported in Direct Messages.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final identity = ref.read(chatIdentityProvider);
+      final participants = await _getParticipants();
+
+      final formattedAmount = amount.toStringAsFixed(
+        amount.truncateToDouble() == amount ? 0 : 2,
+      );
+      final formattedConverted = convertedAmount.toStringAsFixed(
+        convertedAmount.truncateToDouble() == convertedAmount ? 0 : 2,
+      );
+      final defaultCaption = currency != receiverCurrency && convertedAmount > 0
+          ? 'Sent $formattedAmount $currency (≈ $formattedConverted $receiverCurrency)'
+          : 'Sent $formattedAmount $currency';
+
+      await ref
+          .read(chatRepositoryProvider)
+          .sendTextMessage(
+            chatId,
+            caption?.isNotEmpty == true ? caption! : defaultCaption,
+            type: 'money-transfer',
+            senderIdOverride: identity?['id'],
+            senderNameOverride: identity?['businessName'] ?? identity?['name'],
+            senderImageOverride: identity?['profileImage'],
+            metadata: {
+              'amount': amount,
+              'currency': currency,
+              'convertedAmount': convertedAmount,
+              'convertedCurrency': receiverCurrency,
+              'exchangeRate': exchangeRate,
+              'deliveryMethod': 'Mobile Money / Bank Settlement',
+              'fee': 0.0,
+              'status': 'Completed',
+              'assetType': 'fiat',
+              'recipientId': toUserId,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            },
+            participants: participants,
+          );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Remittance of $formattedAmount $currency sent successfully!',
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('FIAT_TRANSFER: Error sending fiat remittance: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Remittance failed: ${e.toString()}')),
         );
       }
     }
@@ -2671,6 +2819,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 .read(reportRepositoryProvider)
                 .reportMessage(
                   reporterId: currentUserId,
+                  chatId: widget.chatId ?? '',
                   messageId: message.id,
                   senderId: message.senderId,
                   reason: reason,
@@ -2853,42 +3002,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => RelationshipSelectionModal(
         otherUserId: otherUserId,
         otherUserName: displayName ?? 'User',
-        onSelected: (type) async {
-          Navigator.pop(context);
-          final repo = ref.read(relationshipRepositoryProvider);
-          final myProfile = ref.read(userProfileProvider).value;
-
-          if (myProfile == null) return;
-
-          try {
-            await repo.sendRelationshipRequest(
-              fromUserId: myProfile.uid!,
-              fromUserName: myProfile.fullName,
-              fromUserFlag: CountryUtils.getCountryFlag(
-                myProfile.homeCountryCode,
-              ),
-              fromUserPhoto: myProfile.profileImage,
-              toUserId: otherUserId,
-              toUserName: displayName ?? 'User',
-              relationshipType: type,
-            );
-
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Relationship request sent')),
-              );
-            }
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error sending request: $e')),
-              );
-            }
-          }
-        },
       ),
     );
   }

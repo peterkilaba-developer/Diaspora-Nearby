@@ -1,7 +1,8 @@
 /**
  * Amadeus Travel API Proxy module.
  */
-const { functions } = require("./shared");
+const { functions, admin, db } = require("./shared");
+const { requireAppCheck, requireAuth, consumeRateLimit } = require("./security");
 
 /**
  * ==================================================================
@@ -21,7 +22,67 @@ const { functions } = require("./shared");
 let _amadeusToken = null;
 let _amadeusTokenExpiry = null;
 
-const AMADEUS_BASE = 'https://test.api.amadeus.com';
+const AMADEUS_BASE = process.env.AMADEUS_BASE_URL || 'https://test.api.amadeus.com';
+const ALLOWED_AMADEUS_BASES = new Set([
+  'https://test.api.amadeus.com',
+  'https://api.amadeus.com',
+]);
+const ALLOW_TRAVEL_MOCKS = process.env.ALLOW_TRAVEL_MOCKS === 'true';
+const FLIGHT_BOOKING_ENABLED = process.env.ENABLE_FLIGHT_BOOKING === 'true' &&
+  AMADEUS_BASE === 'https://api.amadeus.com';
+
+function assertAmadeusConfiguration() {
+  if (!ALLOWED_AMADEUS_BASES.has(AMADEUS_BASE)) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'AMADEUS_BASE_URL must be an approved Amadeus API origin.'
+    );
+  }
+}
+
+async function persistFlightBooking(uid, responseData, orderData) {
+  const order = responseData && responseData.data ? responseData.data : responseData;
+  const orderId = order && typeof order.id === 'string' ? order.id : '';
+  if (!/^[A-Za-z0-9_-]{1,256}$/.test(orderId)) {
+    throw new functions.https.HttpsError('internal', 'Amadeus returned an invalid order ID.');
+  }
+  const offer = (order.flightOffers && order.flightOffers[0]) ||
+    (orderData.flightOffers && orderData.flightOffers[0]) || {};
+  const itineraries = Array.isArray(offer.itineraries) ? offer.itineraries : [];
+  const segments = itineraries.flatMap((itinerary) =>
+    Array.isArray(itinerary.segments) ? itinerary.segments : []);
+  const firstSegment = segments[0] || {};
+  const lastSegment = segments[segments.length - 1] || {};
+  const departure = firstSegment.departure || {};
+  const arrival = lastSegment.arrival || {};
+  const route = departure.iataCode && arrival.iataCode ?
+    `${departure.iataCode} → ${arrival.iataCode}` : '';
+  const price = offer.price || {};
+  const travelers = Array.isArray(orderData.travelers) ? orderData.travelers : [];
+  const passengerNames = travelers.map((traveler) => {
+    const name = traveler && traveler.name || {};
+    return `${String(name.firstName || '').slice(0, 100)} ${String(name.lastName || '').slice(0, 100)}`.trim();
+  }).filter(Boolean);
+  const records = Array.isArray(order.associatedRecords) ? order.associatedRecords : [];
+  const pnrReference = records[0] && records[0].reference ?
+    String(records[0].reference).slice(0, 100) : 'N/A';
+
+  await db.collection('flight_bookings').doc(orderId).create({
+    userId: uid,
+    orderId,
+    pnrReference,
+    passengerName: passengerNames.join(', ').slice(0, 500),
+    passengerNames: passengerNames.slice(0, 20),
+    route,
+    departureDate: String(departure.at || '').slice(0, 40),
+    totalPrice: Number(price.grandTotal || price.total || 0),
+    currency: String(price.currency || '').slice(0, 3),
+    status: 'confirmed',
+    bookingType: 'flight',
+    travelerCount: passengerNames.length,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
 
 async function fetchWithRetry(url, options, maxRetries = 2) {
   let lastError;
@@ -330,14 +391,20 @@ function generateMockHotelOffers(params = {}) {
 exports.amadeusProxy = functions
   .runWith({ timeoutSeconds: 60, memory: '256MB', secrets: ["AMADEUS_API_KEY", "AMADEUS_API_SECRET"] })
   .https.onCall(async (data, context) => {
-    // Require authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError('unauthenticated', 'Must be signed in.');
-    }
+    requireAppCheck(context);
+    const uid = requireAuth(context);
+    await consumeRateLimit('amadeus', uid, 120, 60 * 60 * 1000);
 
-    const { action, params } = data;
-    if (!action) {
+    const { action, params } = data || {};
+    if (!action || !params || typeof params !== 'object' || Array.isArray(params)) {
       throw new functions.https.HttpsError('invalid-argument', 'Missing action parameter.');
+    }
+    assertAmadeusConfiguration();
+    if (action === 'createFlightOrder' && !FLIGHT_BOOKING_ENABLED) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Flight booking is disabled until the live, PCI-reviewed fulfillment flow is enabled.'
+      );
     }
 
     const isSearchAction = [
@@ -442,37 +509,28 @@ exports.amadeusProxy = functions
 
       console.log(`[Amadeus] ${method} ${action} for user ${context.auth.uid}`);
 
-      const response = await fetchWithRetry(url, { method, headers, body });
+      // Never replay a booking POST automatically: an upstream timeout may
+      // occur after the provider has accepted the order.
+      const response = await fetchWithRetry(
+        url,
+        { method, headers, body },
+        action === 'createFlightOrder' ? 0 : 2
+      );
       const responseData = await response.json();
 
       if (!response.ok) {
         const errDetail = JSON.stringify(responseData).substring(0, 500);
         console.error(`[Amadeus] ${action} failed (${response.status}):`, errDetail);
 
-        if (isSearchAction) {
+        if (isSearchAction && ALLOW_TRAVEL_MOCKS) {
           console.log(`[Amadeus] Sandbox non-200 (${response.status}) for ${action}. Providing search results.`);
           if (action === 'searchFlights') return generateMockFlights(params);
           if (action === 'searchHotelsByCity' || action === 'searchHotelsByGeocode') return generateMockHotelList(params);
           if (action === 'getHotelOffers') return generateMockHotelOffers(params);
         }
 
-        if (action === 'confirmFlightPrice') {
+        if (action === 'confirmFlightPrice' && ALLOW_TRAVEL_MOCKS) {
           return { data: { type: 'flight-offers-pricing', flightOffers: [params.rawOfferJson] } };
-        }
-
-        if (action === 'createFlightOrder') {
-          return {
-            data: {
-              type: 'flight-order',
-              id: 'TEST_ORD_' + Math.floor(100000 + Math.random() * 900000),
-              associatedRecords: [
-                { reference: 'TEST' + Math.floor(1000 + Math.random() * 9000), originSystemCode: 'GDS' }
-              ],
-              flightOffers: params.orderData?.flightOffers || [],
-              travelers: params.orderData?.travelers || [],
-              creationDate: new Date().toISOString().split('T')[0]
-            }
-          };
         }
 
         let userMsg = `Amadeus ${action} failed: ${response.status}`;
@@ -484,44 +542,33 @@ exports.amadeusProxy = functions
       }
 
       // Check if Amadeus Test Sandbox returned 0 results for a non-sandbox city/route
-      if (isSearchAction && (!responseData.data || (Array.isArray(responseData.data) && responseData.data.length === 0))) {
+      if (isSearchAction && ALLOW_TRAVEL_MOCKS &&
+          (!responseData.data || (Array.isArray(responseData.data) && responseData.data.length === 0))) {
         console.log(`[Amadeus] Sandbox returned 0 results for ${action}. Providing realistic search entries for requested route/city.`);
         if (action === 'searchFlights') return generateMockFlights(params);
         if (action === 'searchHotelsByCity' || action === 'searchHotelsByGeocode') return generateMockHotelList(params);
         if (action === 'getHotelOffers') return generateMockHotelOffers(params);
       }
 
+      if (action === 'createFlightOrder') {
+        await persistFlightBooking(uid, responseData, params.orderData || {});
+      }
       return responseData;
     } catch (error) {
       console.error(`[Amadeus] Error in ${action}:`, error);
 
-      if (isSearchAction) {
+      if (error instanceof functions.https.HttpsError) throw error;
+
+      if (isSearchAction && ALLOW_TRAVEL_MOCKS) {
         console.log(`[Amadeus] Providing search results for ${action} in test mode.`);
         if (action === 'searchFlights') return generateMockFlights(params);
         if (action === 'searchHotelsByCity' || action === 'searchHotelsByGeocode') return generateMockHotelList(params);
         if (action === 'getHotelOffers') return generateMockHotelOffers(params);
       }
 
-      if (action === 'confirmFlightPrice') {
+      if (action === 'confirmFlightPrice' && ALLOW_TRAVEL_MOCKS) {
         return { data: { type: 'flight-offers-pricing', flightOffers: [params.rawOfferJson] } };
       }
-
-      if (action === 'createFlightOrder') {
-        return {
-          data: {
-            type: 'flight-order',
-            id: 'TEST_ORD_' + Math.floor(100000 + Math.random() * 900000),
-            associatedRecords: [
-              { reference: 'TEST' + Math.floor(1000 + Math.random() * 9000), originSystemCode: 'GDS' }
-            ],
-            flightOffers: params.orderData?.flightOffers || [],
-            travelers: params.orderData?.travelers || [],
-            creationDate: new Date().toISOString().split('T')[0]
-          }
-        };
-      }
-
-      if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError('internal', `Amadeus proxy error: ${error.message}`);
     }
   });

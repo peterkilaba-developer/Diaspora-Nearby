@@ -16,6 +16,8 @@
  *   7. Android collapse key + APNs thread-id so the tray groups them.
  */
 const { functions, admin, db, sendPushToUser } = require("./shared");
+const { requireAuth, requireAppCheck, consumeRateLimit } = require("./security");
+const { geohashQueryBounds } = require("geofire-common");
 
 // ─── Tunables ────────────────────────────────────────────────────────────────
 const RADIUS_MILES = 25;             // "nearby" = same metro, not same state
@@ -24,7 +26,6 @@ const COOLDOWN_MS = 5 * 60 * 1000;   // per-user, persistent
 const PAIR_REDEDUP_MS = 14 * 24 * 60 * 60 * 1000; // 14d before same pair re-alerts
 const PAIR_REDEDUP_MILES = 3;        // OR moved >3mi from lastMet location
 const TOP_N = 3;                     // max pushes fanned out per event
-const DEGREE_BOUND = 0.6;            // ~40 mi lat band for the Firestore query
 const QUIET_HOUR_START = 22;         // 10pm local
 const QUIET_HOUR_END = 8;            // 8am local
 
@@ -54,6 +55,143 @@ function isQuietHour(lng, nowMs = Date.now()) {
     const h = localHourFromLng(lng, nowMs);
     return h >= QUIET_HOUR_START || h < QUIET_HOUR_END;
 }
+
+exports.findNearbyUsers = functions.https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    const uid = requireAuth(context);
+    await consumeRateLimit("nearby-search", uid, 120, 60 * 60 * 1000);
+    const radiusKm = Math.min(Math.max(Number(data && data.radiusKm) || 50, 1), 100);
+    const limit = Math.min(Math.max(Number(data && data.limit) || 50, 1), 100);
+    const [privateSnapshot, callerProfile] = await Promise.all([
+        db.collection("user_private").doc(uid).get(),
+        db.collection("users").doc(uid).get(),
+    ]);
+    const excluded = new Set([
+        uid,
+        ...(privateSnapshot.exists ? privateSnapshot.data().blockedUsers || [] : []),
+        ...(Array.isArray(data && data.excludeUserIds) ?
+            data.excludeUserIds.slice(0, 100).filter(validUid) : []),
+    ]);
+    if (data && data.global === true) {
+        const globalSnapshot = await db.collection("users")
+            .orderBy("firstName").limit(limit * 3).get();
+        const users = globalSnapshot.docs
+            .filter((profile) => !excluded.has(profile.id))
+            .slice(0, limit)
+            .map((profile) => publicProfile(profile));
+        return { users };
+    }
+    const location = privateSnapshot.exists ? privateSnapshot.data().currentLocation : null;
+    if (!location || !location.geometry || !location.geometry.location) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Location is required for nearby discovery.",
+        );
+    }
+    const latitude = Number(location.geometry.location.lat);
+    const longitude = Number(location.geometry.location.lng);
+    const bounds = geohashQueryBounds([latitude, longitude], radiusKm * 1000);
+    const snapshots = await Promise.all(bounds.map((bound) =>
+        db.collection("user_private")
+            .orderBy("geo.geohash")
+            .startAt(bound[0])
+            .endAt(bound[1])
+            .limit(150)
+            .get()));
+    const candidateDocs = new Map();
+    for (const snapshot of snapshots) {
+        for (const document of snapshot.docs) candidateDocs.set(document.id, document);
+    }
+    const ranked = [];
+    for (const document of candidateDocs.values()) {
+        if (excluded.has(document.id)) continue;
+        const candidateLocation = document.data().currentLocation;
+        if (!candidateLocation || !candidateLocation.geometry) continue;
+        const point = candidateLocation.geometry.location;
+        const distanceMiles = calculateDistanceInMiles(
+            latitude, longitude, Number(point.lat), Number(point.lng),
+        );
+        const distanceKm = distanceMiles * 1.609344;
+        if (distanceKm <= radiusKm) ranked.push({ id: document.id, distanceKm });
+    }
+    ranked.sort((left, right) => left.distanceKm - right.distanceKm);
+    const selected = ranked.slice(0, limit);
+    if (selected.length === 0) return { users: [] };
+    const profiles = await db.getAll(...selected.map((item) =>
+        db.collection("users").doc(item.id)));
+    const distances = new Map(selected.map((item) => [item.id, item.distanceKm]));
+    const homeCountryCode = callerProfile.exists ?
+        callerProfile.data().homeCountryCode : null;
+    const users = [];
+    for (const profile of profiles) {
+        if (!profile.exists || (homeCountryCode &&
+            profile.data().homeCountryCode !== homeCountryCode)) continue;
+        const otherPrivate = candidateDocs.get(profile.id);
+        if (otherPrivate && (otherPrivate.data().blockedUsers || []).includes(uid)) continue;
+        users.push(publicProfile(profile, distances.get(profile.id)));
+    }
+    return { users: users.slice(0, limit) };
+});
+
+function validUid(value) {
+    return typeof value === "string" && value.length > 0 && value.length <= 128;
+}
+
+function publicProfile(document, distance) {
+    const data = document.data();
+    const allowed = [
+        "firstName", "lastName", "profilePhoto", "bio", "interests",
+        "occupation", "education", "languages", "socialLinks",
+        "homeLocation", "hostLocation", "homeCountry", "hostCountry",
+        "homeCountryCode", "hostCountryCode", "profession", "industry",
+        "yearsInHostCountry", "servicesOffered", "lookingFor",
+        "availability", "meetingPreferences", "showCurrentLocationName",
+        "currentCity", "currentState", "currentCountryCode",
+    ];
+    const result = {uid: document.id};
+    for (const field of allowed) {
+        if (data[field] !== undefined) result[field] = data[field];
+    }
+    if (Number.isFinite(distance)) result.distance = distance;
+    return result;
+}
+
+exports.searchUsers = functions.https.onCall(async (data, context) => {
+    requireAppCheck(context);
+    const uid = requireAuth(context);
+    await consumeRateLimit("profile-search", uid, 120, 60 * 60 * 1000);
+    const raw = String(data && data.query || "").trim();
+    if (raw.length < 2 || raw.length > 80) {
+        throw new functions.https.HttpsError("invalid-argument", "Enter at least two characters.");
+    }
+    const prefix = raw[0].toUpperCase() + raw.slice(1);
+    const [firstNames, lastNames, callerPrivate] = await Promise.all([
+        db.collection("users").where("firstName", ">=", prefix)
+            .where("firstName", "<", `${prefix}\uf8ff`).limit(25).get(),
+        db.collection("users").where("lastName", ">=", prefix)
+            .where("lastName", "<", `${prefix}\uf8ff`).limit(25).get(),
+        db.collection("user_private").doc(uid).get(),
+    ]);
+    const blocked = new Set(callerPrivate.exists ?
+        callerPrivate.data().blockedUsers || [] : []);
+    const matches = new Map();
+    for (const profile of [...firstNames.docs, ...lastNames.docs]) {
+        if (profile.id !== uid && !blocked.has(profile.id)) matches.set(profile.id, profile);
+    }
+    const privateMatches = matches.size === 0 ? [] : await db.getAll(
+        ...[...matches.keys()].map((id) => db.collection("user_private").doc(id)),
+    );
+    const blockedCaller = new Set(privateMatches
+        .filter((profile) => profile.exists &&
+            (profile.data().blockedUsers || []).includes(uid))
+        .map((profile) => profile.id));
+    return {
+        users: [...matches.values()]
+            .filter((profile) => !blockedCaller.has(profile.id))
+            .slice(0, 25)
+            .map((profile) => publicProfile(profile)),
+    };
+});
 
 function hasUsableName(data) {
     const n = (data && data.firstName) ? String(data.firstName).trim() : "";
@@ -125,7 +263,7 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
     if (!homeCountryCode) return null;
 
     _proximityCooldowns.set(userId, Date.now());
-    await db.collection("users").doc(userId).update({
+    await db.collection("user_private").doc(userId).update({
         lastProximityCheckAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(e => console.warn(`[Proximity] cooldown write failed: ${e.message}`));
 
@@ -134,45 +272,55 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
     const blockedByMover = new Set(userData.blockedUsers || []);
     const homeCountry = userData.homeCountry || homeCountryCode;
 
-    console.log(`[Proximity] ${firstName} (${userId}) ${isNewUser ? "joined" : "moved"} in ${currentCity}; scanning ≤${RADIUS_MILES}mi.`);
+    console.log(`[Proximity] Location changed for ${userId}; scanning nearby users.`);
 
-    const latMin = currentLat - DEGREE_BOUND;
-    const latMax = currentLat + DEGREE_BOUND;
-    const lngMin = currentLng - DEGREE_BOUND;
-    const lngMax = currentLng + DEGREE_BOUND;
-
-    const snapshot = await db
-        .collection("users")
-        .where("homeCountryCode", "==", homeCountryCode)
-        .where("currentLocation.geometry.location.lat", ">=", latMin)
-        .where("currentLocation.geometry.location.lat", "<=", latMax)
-        .limit(500)
-        .get();
+    const bounds = geohashQueryBounds(
+        [Number(currentLat), Number(currentLng)],
+        RADIUS_MILES * 1609.344,
+    );
+    const snapshots = await Promise.all(bounds.map((bound) =>
+        db.collection("user_private")
+            .orderBy("geo.geohash")
+            .startAt(bound[0])
+            .endAt(bound[1])
+            .limit(150)
+            .get()));
+    const privateDocuments = new Map();
+    for (const snapshot of snapshots) {
+        for (const document of snapshot.docs) {
+            privateDocuments.set(document.id, document);
+        }
+    }
 
     // Build candidate list with distance, then rank.
     const candidates = [];
-    snapshot.forEach((doc) => {
-        if (doc.id === userId) return;
-        const other = doc.data();
+    const publicSnapshots = privateDocuments.size === 0 ? [] : await db.getAll(
+        ...[...privateDocuments.keys()].map((id) => db.collection("users").doc(id)),
+    );
+    const publicById = new Map(publicSnapshots.map((doc) => [doc.id, doc]));
+    for (const doc of privateDocuments.values()) {
+        if (doc.id === userId) continue;
+        const publicProfile = publicById.get(doc.id);
+        if (!publicProfile.exists ||
+            publicProfile.data().homeCountryCode !== homeCountryCode) continue;
+        const other = {...publicProfile.data(), ...doc.data()};
 
         // Mutual block check.
-        if (blockedByMover.has(doc.id)) return;
-        if ((other.blockedUsers || []).includes(userId)) return;
+        if (blockedByMover.has(doc.id)) continue;
+        if ((other.blockedUsers || []).includes(userId)) continue;
 
         // Honor master notifications toggle + token availability.
-        if (other.notificationsEnabled === false) return;
-        if (!other.fcmToken) return;
-        if (!hasUsableName(other)) return;
-        if (other.isBanned === true) return;
+        if (other.notificationsEnabled === false) continue;
+        if (!other.fcmToken) continue;
+        if (!hasUsableName(other)) continue;
+        if (other.isBanned === true) continue;
 
         const oLoc = other.currentLocation;
-        if (!oLoc || !oLoc.geometry) return;
+        if (!oLoc || !oLoc.geometry) continue;
         const oLat = oLoc.geometry.location.lat;
         const oLng = oLoc.geometry.location.lng;
-        if (oLng < lngMin || oLng > lngMax) return;
-
         const distance = calculateDistanceInMiles(currentLat, currentLng, oLat, oLng);
-        if (distance > RADIUS_MILES) return;
+        if (distance > RADIUS_MILES) continue;
 
         candidates.push({
             id: doc.id,
@@ -182,12 +330,12 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
             lng: oLng,
             city: locationDisplayName(oLoc),
         });
-    });
+    }
 
     candidates.sort((a, b) => a.distance - b.distance);
 
     if (candidates.length === 0) {
-        console.log(`[Proximity] no matches ≤${RADIUS_MILES}mi for ${firstName} in ${currentCity}.`);
+        console.log(`[Proximity] No nearby matches for ${userId}.`);
         return null;
     }
 
@@ -209,7 +357,7 @@ async function runProximityCheck(userId, userData, oldLoc, isNewUser) {
 }
 
 exports.checkProximity = functions.firestore
-    .document("users/{userId}")
+    .document("user_private/{userId}")
     .onUpdate(async (change, context) => {
         const userId = context.params.userId;
         const before = change.before.data();
@@ -225,14 +373,24 @@ exports.checkProximity = functions.firestore
             return null;
         }
 
-        return runProximityCheck(userId, after, before.currentLocation, false);
+        const profile = await db.collection("users").doc(userId).get();
+        if (!profile.exists) return null;
+        return runProximityCheck(
+            userId,
+            {...profile.data(), ...after},
+            before.currentLocation,
+            false,
+        );
     });
 
 exports.checkProximityOnCreate = functions.firestore
-    .document("users/{userId}")
+    .document("user_private/{userId}")
     .onCreate(async (snap, context) => {
+        if (snap.data().securityMigrationVersion === 1) return null;
         const userId = context.params.userId;
-        const userData = snap.data();
+        const profile = await db.collection("users").doc(userId).get();
+        if (!profile.exists) return null;
+        const userData = {...profile.data(), ...snap.data()};
         // Onboarding-incomplete docs are gated inside runProximityCheck.
         return runProximityCheck(userId, userData, null, true);
     });

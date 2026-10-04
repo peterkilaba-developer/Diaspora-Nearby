@@ -14,13 +14,14 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 // Alias to avoid conflict with record
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
+import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart';
 import 'package:diaspora_nearby/features/chat/widgets/audio_message_player.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/features/dsp/models/points_transaction.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart'; // [New]
-import 'package:diaspora_nearby/features/dsp/models/user_points.dart'; // [New]
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -37,7 +38,16 @@ class MessageInput extends ConsumerStatefulWidget {
   onPickLocation; // [NEW] Returns location data
   final Function(MessageLocation, String? caption)?
   onSendLocation; // [UPDATED] Sends location data with optional caption
-  final Function(int, String, String?) onSendDSP;
+  final Function(int, String?) onSendToken;
+  final Function(
+    double amount,
+    String currency,
+    double convertedAmount,
+    String receiverCurrency,
+    double exchangeRate,
+    String? caption,
+  )?
+  onSendFiat;
   final Function(List<XFile>, String type, String caption)? onMediaSelected;
   final Message? replyingTo;
   final VoidCallback onCancelReply;
@@ -61,7 +71,8 @@ class MessageInput extends ConsumerStatefulWidget {
     required this.onSendDocument,
     this.onSendLocation, // Made optional
     this.onPickLocation, // [NEW]
-    required this.onSendDSP,
+    required this.onSendToken,
+    this.onSendFiat,
     this.onMediaSelected,
     this.replyingTo,
     required this.onCancelReply,
@@ -109,8 +120,12 @@ class _MessageInputState extends ConsumerState<MessageInput>
   int _pendingAudioDuration = 0;
 
   bool _isProcessingAttachment = false; // [NEW] Loading state for files
-  int? _pendingDSPAmount; // [NEW] For transfer preview using attachment logic
-  String _pendingDSPAssetType = 'points'; // [NEW] 'points' or 'token'
+  int? _pendingTokenAmount; // For token transfer preview using attachment logic
+  double? _pendingFiatAmount; // For fiat remittance preview
+  String? _pendingFiatCurrency;
+  double? _pendingFiatConvertedAmount;
+  String? _pendingFiatReceiverCurrency;
+  double? _pendingFiatExchangeRate;
   MessageLocation? _pendingLocation; // [NEW]
 
   // Playback State (Removed internal player, delegating to AudioMessagePlayer widget)
@@ -451,7 +466,12 @@ class _MessageInputState extends ConsumerState<MessageInput>
         _pendingAttachments = [];
         _pendingAttachmentType = null;
         _pendingAudioDuration = 0;
-        _pendingDSPAmount = null;
+        _pendingTokenAmount = null;
+        _pendingFiatAmount = null;
+        _pendingFiatCurrency = null;
+        _pendingFiatConvertedAmount = null;
+        _pendingFiatReceiverCurrency = null;
+        _pendingFiatExchangeRate = null;
         _pendingLocation = null;
       });
     }
@@ -533,7 +553,12 @@ class _MessageInputState extends ConsumerState<MessageInput>
       final attachments = List<XFile>.from(_pendingAttachments);
       final type = _pendingAttachmentType;
       final audioDuration = _pendingAudioDuration;
-      final dspAmount = _pendingDSPAmount;
+      final tokenAmount = _pendingTokenAmount;
+      final fiatAmount = _pendingFiatAmount;
+      final fiatCurrency = _pendingFiatCurrency;
+      final fiatConvertedAmount = _pendingFiatConvertedAmount;
+      final fiatReceiverCurrency = _pendingFiatReceiverCurrency;
+      final fiatExchangeRate = _pendingFiatExchangeRate;
       final location = _pendingLocation;
 
       // Optimistic UI Reset: Clear input immediately
@@ -557,8 +582,19 @@ class _MessageInputState extends ConsumerState<MessageInput>
           widget.onSendAudioFile(attachments.first, caption);
         } else if (type == 'document') {
           widget.onSendDocument(attachments.first, caption);
-        } else if (type == 'dsp_transfer' && dspAmount != null) {
-          widget.onSendDSP(dspAmount, _pendingDSPAssetType, caption);
+        } else if ((type == 'token_transfer' || type == 'dsp_transfer') &&
+            tokenAmount != null) {
+          widget.onSendToken(tokenAmount, caption);
+        } else if ((type == 'money-transfer' || type == 'fiat_transfer') &&
+            fiatAmount != null) {
+          widget.onSendFiat?.call(
+            fiatAmount,
+            fiatCurrency ?? 'USD',
+            fiatConvertedAmount ?? fiatAmount,
+            fiatReceiverCurrency ?? 'USD',
+            fiatExchangeRate ?? 1.0,
+            caption,
+          );
         } else if (type == 'location' && location != null) {
           if (widget.onSendLocation != null) {
             widget.onSendLocation!(location, caption);
@@ -622,6 +658,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
       isScrollControlled: true, // [Fix] Allow modal to resize with keyboard
       backgroundColor: Colors.transparent,
       builder: (context) => _AttachmentPickerModal(
+        chatId: widget.chatId,
         recipientUserId: widget.recipientUserId, // [NEW]
         onPickImage: () => _pickMedia(ImageSource.gallery, 'image'),
         onPickCamera: () {
@@ -647,18 +684,33 @@ class _MessageInputState extends ConsumerState<MessageInput>
             }
           }
         },
-        onPickDSP: (amount, assetType) {
+        onPickToken: (amount) {
           Navigator.pop(context);
           setState(() {
             _pendingAttachments = [
               XFile(''),
             ]; // Dummy file to satisfy hasAttachment logic
-            _pendingAttachmentType = 'dsp_transfer';
-            _pendingDSPAmount = amount;
-            _pendingDSPAssetType = assetType;
+            _pendingAttachmentType = 'token_transfer';
+            _pendingTokenAmount = amount;
             _isProcessingAttachment = false;
           });
         },
+        onPickFiat:
+            (amount, currency, convertedAmount, receiverCurrency, rate) {
+              Navigator.pop(context);
+              setState(() {
+                _pendingAttachments = [
+                  XFile(''),
+                ]; // Dummy file to satisfy hasAttachment logic
+                _pendingAttachmentType = 'money-transfer';
+                _pendingFiatAmount = amount;
+                _pendingFiatCurrency = currency;
+                _pendingFiatConvertedAmount = convertedAmount;
+                _pendingFiatReceiverCurrency = receiverCurrency;
+                _pendingFiatExchangeRate = rate;
+                _isProcessingAttachment = false;
+              });
+            },
       ),
     );
   }
@@ -1006,8 +1058,12 @@ class _MessageInputState extends ConsumerState<MessageInput>
             child: Builder(
               builder: (context) {
                 switch (_pendingAttachmentType) {
+                  case 'token_transfer':
                   case 'dsp_transfer':
-                    return _buildInlineDSPPreview(theme);
+                    return _buildInlineTokenPreview(theme);
+                  case 'money-transfer':
+                  case 'fiat_transfer':
+                    return _buildInlineFiatPreview(theme);
                   case 'image':
                   case 'video':
                     return _buildInlineMediaPreview(theme);
@@ -1067,48 +1123,27 @@ class _MessageInputState extends ConsumerState<MessageInput>
     );
   }
 
-  Widget _buildInlineDSPPreview(ThemeData theme) {
-    if (_pendingDSPAmount == null) return const SizedBox.shrink();
-
-    final isToken = _pendingDSPAssetType == 'token';
+  Widget _buildInlineTokenPreview(ThemeData theme) {
+    if (_pendingTokenAmount == null) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color:
-            (isToken ? AppTheme.tokenColor : theme.colorScheme.primaryContainer)
-                .withValues(alpha: 0.3),
+        color: AppTheme.tokenColor.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: (isToken ? AppTheme.tokenColor : theme.colorScheme.primary)
-              .withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: AppTheme.tokenColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          if (isToken)
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppTheme.tokenColor.withValues(alpha: 0.2),
-              child: Image.asset(
-                'assets/icons/logo-orange-transparent-24.png',
-                width: 20,
-                height: 20,
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                LucideIcons.coins,
-                color: Colors.white,
-                size: 16,
-              ),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: AppTheme.tokenColor.withValues(alpha: 0.2),
+            child: Image.asset(
+              'assets/icons/logo-orange-transparent-24.png',
+              width: 20,
+              height: 20,
             ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1117,29 +1152,95 @@ class _MessageInputState extends ConsumerState<MessageInput>
                 Row(
                   children: [
                     Text(
-                      'Sending $_pendingDSPAmount ',
+                      'Sending $_pendingTokenAmount ',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: isToken
-                            ? AppTheme.tokenColor
-                            : AppTheme.dspColor,
+                        color: AppTheme.tokenColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      isToken ? r'$DIASPORA' : 'DSP',
+                      r'$DIASPORA',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: isToken
-                            ? AppTheme.tokenColor
-                            : AppTheme.dspColor,
+                        color: AppTheme.tokenColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
                 Text(
-                  'Transfer ready',
+                  'Smart Wallet transfer ready',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineFiatPreview(ThemeData theme) {
+    if (_pendingFiatAmount == null) return const SizedBox.shrink();
+
+    final formattedAmount = _pendingFiatAmount!.toStringAsFixed(
+      _pendingFiatAmount!.truncateToDouble() == _pendingFiatAmount ? 0 : 2,
+    );
+    final currency = _pendingFiatCurrency ?? 'USD';
+    final hasConversion =
+        _pendingFiatConvertedAmount != null &&
+        _pendingFiatConvertedAmount! > 0 &&
+        _pendingFiatCurrency != _pendingFiatReceiverCurrency;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.fiatColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.fiatColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: AppTheme.fiatColor.withValues(alpha: 0.2),
+            child: const Icon(
+              LucideIcons.banknote,
+              color: AppTheme.fiatColor,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Sending $formattedAmount $currency',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: AppTheme.fiatColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (hasConversion) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '(≈ ${_pendingFiatConvertedAmount!.toStringAsFixed(_pendingFiatConvertedAmount!.truncateToDouble() == _pendingFiatConvertedAmount ? 0 : 2)} ${_pendingFiatReceiverCurrency!})',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                Text(
+                  'Zero-Fee Remittance ready',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.green.shade700,
                   ),
                 ),
               ],
@@ -1436,8 +1537,15 @@ class _AttachmentPickerModal extends ConsumerStatefulWidget {
   final VoidCallback onPickDocument;
   final VoidCallback onPickAudio;
   final VoidCallback onPickLocation;
-  final Function(int, String)
-  onPickDSP; // Renamed to ensure clarity it's just picking
+  final Function(int) onPickToken;
+  final Function(
+    double amount,
+    String currency,
+    double convertedAmount,
+    String receiverCurrency,
+    double rate,
+  )
+  onPickFiat;
 
   const _AttachmentPickerModal({
     required this.onPickImage,
@@ -1446,10 +1554,13 @@ class _AttachmentPickerModal extends ConsumerStatefulWidget {
     required this.onPickDocument,
     required this.onPickAudio,
     required this.onPickLocation,
-    required this.onPickDSP,
+    required this.onPickToken,
+    required this.onPickFiat,
+    this.chatId,
     this.recipientUserId, // [NEW]
   });
 
+  final String? chatId;
   final String? recipientUserId; // [NEW]
 
   @override
@@ -1463,7 +1574,7 @@ class _AttachmentPickerModalState
   final TextEditingController _fiatAmountController = TextEditingController();
 
   // null = no asset selected (show media grid), non-null = show transaction UI
-  String? _selectedAssetType; // 'points', 'token', or 'fiat'
+  String? _selectedAssetType; // 'token' or 'fiat'
   int _inputAmount = 0;
   double _fiatInputAmount = 0;
   bool _fiatRemittanceExpanded = true;
@@ -1488,14 +1599,31 @@ class _AttachmentPickerModalState
     super.dispose();
   }
 
-  void _handlePickDSP(int currentBalance) {
+  void _handlePickToken(int currentBalance) {
     if (_inputAmount <= 0) return;
 
     if (_inputAmount > currentBalance) {
       return;
     }
 
-    widget.onPickDSP(_inputAmount, _selectedAssetType ?? 'points');
+    widget.onPickToken(_inputAmount);
+  }
+
+  void _handlePickFiat(
+    double convertedAmount,
+    String currencyCode,
+    String receiverCurrencyCode,
+    double exchangeRate,
+  ) {
+    if (_fiatInputAmount <= 0) return;
+
+    widget.onPickFiat(
+      _fiatInputAmount,
+      currencyCode,
+      convertedAmount,
+      receiverCurrencyCode,
+      exchangeRate,
+    );
   }
 
   void _selectAsset(String type) {
@@ -1514,50 +1642,49 @@ class _AttachmentPickerModalState
     final theme = Theme.of(context);
     final isFiat = _selectedAssetType == 'fiat';
     final isToken = _selectedAssetType == 'token';
-    final isPoints = _selectedAssetType == 'points';
     final hasSelection = _selectedAssetType != null;
 
-    final activeColor = isFiat
-        ? AppTheme.fiatColor
-        : isToken
-        ? AppTheme.tokenColor
-        : AppTheme.dspColor;
+    final activeColor = isFiat ? AppTheme.fiatColor : AppTheme.tokenColor;
 
-    // Reactive Balance Fetching
     final authState = ref.watch(authStateProvider);
     final authUser = authState.asData?.value;
-
-    final pointsAsync = authUser != null
-        ? ref.watch(userPointsProvider(authUser.uid))
-        : const AsyncValue<UserPoints?>.loading();
-
-    final pointsBalance = pointsAsync.asData?.value?.availablePoints ?? 0;
 
     // Fetch real on-chain $DIASPORA balance
     final tokenBalanceAsync = ref.watch(tokenBalanceProvider);
     final tokenBalance =
-        (double.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0.0).toInt();
+        (double.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0.0)
+            .toInt();
 
-    final currentBalance = isPoints ? pointsBalance : tokenBalance;
-    final isLoadingBalance = isPoints
-        ? pointsAsync.isLoading
-        : tokenBalanceAsync.isLoading;
+    final currentBalance = tokenBalance;
+    final isLoadingBalance = tokenBalanceAsync.isLoading;
 
     final remaining = currentBalance - _inputAmount;
     final isError = _inputAmount > currentBalance;
     final isZero = _inputAmount <= 0;
 
-    // Host country currency (what the user sends in)
+    // Host country currency (what the sender sends in)
     final profileAsync = ref.watch(userProfileProvider);
     final profile = profileAsync.asData?.value;
     final hostCountryCode = profile?.hostCountryCode;
     final currencyCode = CurrencyHelper.currencyCode(hostCountryCode);
     final currencySymbol = CurrencyHelper.currencySymbol(hostCountryCode);
 
-    // Home country currency (settlement default)
-    final homeCountryCode = profile?.homeCountryCode;
-    final homeCurrencyCode = CurrencyHelper.currencyCode(homeCountryCode);
-    final homeCurrencySymbol = CurrencyHelper.currencySymbol(homeCountryCode);
+    // Receiver's current location currency for settlement ($DIASPORA / Receiver Local Fiat)
+    final recipientProfileAsync = widget.recipientUserId != null
+        ? ref.watch(userProfileByIdProvider(widget.recipientUserId!))
+        : null;
+    final recipientProfile = recipientProfileAsync?.asData?.value;
+    final receiverCurrentCountryCode =
+        recipientProfile?.currentLocation?.countryCode ??
+        recipientProfile?.hostCountryCode ??
+        recipientProfile?.homeCountryCode ??
+        hostCountryCode;
+    final receiverCurrencyCode = CurrencyHelper.currencyCode(
+      receiverCurrentCountryCode,
+    );
+    final receiverCurrencySymbol = CurrencyHelper.currencySymbol(
+      receiverCurrentCountryCode,
+    );
 
     // Handle keyboard
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -1636,36 +1763,44 @@ class _AttachmentPickerModalState
                   ),
                 if (hasSelection && !isFiat) const SizedBox(height: 12),
 
-                // ─── THREE-WAY TOGGLE ───
+                // ─── TWO-WAY TOGGLE ($DIASPORA and Fiat) ───
                 Container(
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.5,
+                      alpha: 0.35,
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(5),
                   child: Row(
                     children: [
                       _buildToggleTab(
                         theme,
-                        label: 'DSP',
-                        isSelected: isPoints,
-                        selectedColor: theme.colorScheme.primary,
-                        onTap: () => _selectAsset('points'),
-                      ),
-                      _buildToggleTab(
-                        theme,
-                        label: r'$DIASPORA',
+                        label: r'Send $DIASPORA',
+                        icon: Image.asset(
+                          'assets/icons/logo-orange-transparent-24.png',
+                          width: 17,
+                          height: 17,
+                        ),
                         isSelected: isToken,
-                        selectedColor: AppTheme.tokenColor,
+                        hasAnySelection: hasSelection,
+                        brandColor: AppTheme.tokenColor,
                         onTap: () => _selectAsset('token'),
                       ),
+                      const SizedBox(width: 6),
                       _buildToggleTab(
                         theme,
-                        label: currencyCode,
+                        label: 'Send $currencyCode',
+                        icon: Icon(
+                          LucideIcons.banknote,
+                          size: 17,
+                          color: (isFiat || !hasSelection)
+                              ? AppTheme.fiatColor
+                              : AppTheme.fiatColor.withValues(alpha: 0.6),
+                        ),
                         isSelected: isFiat,
-                        selectedColor: AppTheme.fiatColor,
+                        hasAnySelection: hasSelection,
+                        brandColor: AppTheme.fiatColor,
                         onTap: () => _selectAsset('fiat'),
                       ),
                     ],
@@ -1684,11 +1819,11 @@ class _AttachmentPickerModalState
                   if (widget.recipientUserId != null && isFiat)
                     _buildFiatRecipientRow(theme, currencyCode),
 
-                  if (isPoints || isToken) ...[
+                  if (isToken) ...[
                     const SizedBox(height: 12),
-                    // DSP / Token input container
+                    // Token input container
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.surfaceContainerHighest
                             .withValues(alpha: 0.3),
@@ -1707,7 +1842,7 @@ class _AttachmentPickerModalState
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        'Balance',
+                                        'Available',
                                         style: theme.textTheme.labelSmall
                                             ?.copyWith(
                                               color: theme
@@ -1730,7 +1865,7 @@ class _AttachmentPickerModalState
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        isPoints ? 'DSP' : r'$DIASPORA',
+                                        r'$DIASPORA',
                                         style: theme.textTheme.labelSmall
                                             ?.copyWith(
                                               fontSize: 8,
@@ -1784,7 +1919,9 @@ class _AttachmentPickerModalState
                                   child: Center(
                                     child: Material(
                                       color:
-                                          (isZero || isError || isLoadingBalance)
+                                          (isZero ||
+                                              isError ||
+                                              isLoadingBalance)
                                           ? theme.disabledColor
                                           : activeColor,
                                       shape: const CircleBorder(),
@@ -1794,8 +1931,9 @@ class _AttachmentPickerModalState
                                                 isError ||
                                                 isLoadingBalance)
                                             ? null
-                                            : () =>
-                                                  _handlePickDSP(currentBalance),
+                                            : () => _handlePickToken(
+                                                currentBalance,
+                                              ),
                                         customBorder: const CircleBorder(),
                                         child: Container(
                                           width: 48,
@@ -1814,13 +1952,76 @@ class _AttachmentPickerModalState
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Text(
-                            'Enter Amount of ${isPoints ? 'DSP' : r'$DIASPORA'} to Send',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontSize: 10,
-                              color: activeColor,
+                          // Quick Amount Chips for Token
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (final chip in [100, 500, 1000, 5000])
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ActionChip(
+                                      label: Text('+$chip'),
+                                      labelStyle: TextStyle(
+                                        fontSize: 11,
+                                        color: activeColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      backgroundColor: activeColor.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      side: BorderSide(
+                                        color: activeColor.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                      ),
+                                      onPressed: () {
+                                        _amountController.text = chip
+                                            .toString();
+                                      },
+                                    ),
+                                  ),
+                                if (currentBalance > 0)
+                                  ActionChip(
+                                    label: const Text('Max'),
+                                    labelStyle: TextStyle(
+                                      fontSize: 11,
+                                      color: activeColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    backgroundColor: activeColor.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    side: BorderSide(
+                                      color: activeColor.withValues(alpha: 0.3),
+                                    ),
+                                    onPressed: () {
+                                      _amountController.text = currentBalance
+                                          .toString();
+                                    },
+                                  ),
+                              ],
                             ),
-                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                LucideIcons.shieldCheck,
+                                size: 12,
+                                color: activeColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Base Smart Wallet • Gasless Zero-Fee Transfer',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 10,
+                                  color: activeColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1835,8 +2036,8 @@ class _AttachmentPickerModalState
                       theme,
                       currencyCode,
                       currencySymbol,
-                      homeCurrencyCode,
-                      homeCurrencySymbol,
+                      receiverCurrencyCode,
+                      receiverCurrencySymbol,
                     ),
                     const SizedBox(height: 12),
                     // Transaction history (or card input placeholder)
@@ -1851,6 +2052,10 @@ class _AttachmentPickerModalState
                       theme,
                       currencyCode,
                       currencySymbol,
+                      receiverCurrencyCode,
+                      receiverCurrencySymbol,
+                      hostCountryCode,
+                      receiverCurrentCountryCode,
                       activeColor,
                     ),
                   ],
@@ -1867,35 +2072,90 @@ class _AttachmentPickerModalState
   Widget _buildToggleTab(
     ThemeData theme, {
     required String label,
+    Widget? icon,
     required bool isSelected,
-    required Color selectedColor,
+    required bool hasAnySelection,
+    required Color brandColor,
     required VoidCallback onTap,
   }) {
+    final Color bgColor;
+    final Border? border;
+    final List<BoxShadow>? shadow;
+    final Color textColor;
+    final FontWeight fontWeight;
+
+    if (isSelected) {
+      // 1. Actively selected tab
+      bgColor = theme.colorScheme.surface;
+      border = Border.all(color: brandColor, width: 1.5);
+      shadow = [
+        BoxShadow(
+          color: brandColor.withValues(alpha: 0.25),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ];
+      textColor = brandColor;
+      fontWeight = FontWeight.bold;
+    } else if (!hasAnySelection) {
+      // 2. Initial state when clicking plus icon (clickable brand-colored pill buttons)
+      bgColor = brandColor.withValues(alpha: 0.1);
+      border = Border.all(
+        color: brandColor.withValues(alpha: 0.45),
+        width: 1.2,
+      );
+      shadow = [
+        BoxShadow(
+          color: brandColor.withValues(alpha: 0.08),
+          blurRadius: 4,
+          offset: const Offset(0, 1),
+        ),
+      ];
+      textColor = brandColor;
+      fontWeight = FontWeight.bold;
+    } else {
+      // 3. Inactive tab when the other tab is selected
+      bgColor = Colors.transparent;
+      border = Border.all(color: brandColor.withValues(alpha: 0.2), width: 1);
+      shadow = null;
+      textColor = brandColor.withValues(alpha: 0.65);
+      fontWeight = FontWeight.w600;
+    }
+
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+              border: border,
+              boxShadow: shadow,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[icon, const SizedBox(width: 6)],
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: fontWeight,
+                      fontSize: 12.5,
+                      color: textColor,
                     ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected
-                  ? selectedColor
-                  : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -2036,12 +2296,29 @@ class _AttachmentPickerModalState
     ThemeData theme,
     String currencyCode,
     String currencySymbol,
+    String receiverCurrencyCode,
+    String receiverCurrencySymbol,
+    String? hostCountryCode,
+    String? receiverCountryCode,
     Color activeColor,
   ) {
     final isFiatZero = _fiatInputAmount <= 0;
 
+    final senderCountry = hostCountryCode ?? 'US';
+    final receiverCountry = receiverCountryCode ?? 'TZ';
+    final convertedAmount = CurrencyHelper.convertCurrency(
+      _fiatInputAmount,
+      senderCountry,
+      receiverCountry,
+    );
+    final exchangeRate = CurrencyHelper.convertCurrency(
+      1.0,
+      senderCountry,
+      receiverCountry,
+    );
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(16),
@@ -2120,7 +2397,7 @@ class _AttachmentPickerModalState
                   ),
                 ),
                 const SizedBox(width: 8),
-                // RIGHT: Send button (disabled — UI placeholder)
+                // RIGHT: Send button (Actionable)
                 Expanded(
                   flex: 2,
                   child: Center(
@@ -2130,17 +2407,12 @@ class _AttachmentPickerModalState
                       child: InkWell(
                         onTap: isFiatZero
                             ? null
-                            : () {
-                                // TODO: Wire up fiat payment rail
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Fiat sending coming soon! $currencySymbol${_fiatInputAmount.toStringAsFixed(2)} $currencyCode',
-                                    ),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
+                            : () => _handlePickFiat(
+                                convertedAmount,
+                                currencyCode,
+                                receiverCurrencyCode,
+                                exchangeRate,
+                              ),
                         customBorder: const CircleBorder(),
                         child: Container(
                           width: 48,
@@ -2159,6 +2431,102 @@ class _AttachmentPickerModalState
             ),
           ),
           const SizedBox(height: 12),
+          // Quick Amount Chips for Fiat
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final chip in [25, 50, 100, 250, 500])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ActionChip(
+                      label: Text('+$chip'),
+                      labelStyle: TextStyle(
+                        fontSize: 11,
+                        color: activeColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      backgroundColor: activeColor.withValues(alpha: 0.1),
+                      side: BorderSide(
+                        color: activeColor.withValues(alpha: 0.2),
+                      ),
+                      onPressed: () {
+                        _fiatAmountController.text = chip.toString();
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Live Real-Time Conversion Card
+          if (_fiatInputAmount > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: activeColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: activeColor.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            LucideIcons.repeat,
+                            size: 13,
+                            color: activeColor,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Recipient gets: ≈ $receiverCurrencySymbol${convertedAmount.toStringAsFixed(convertedAmount.truncateToDouble() == convertedAmount ? 0 : 2)} $receiverCurrencyCode',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: activeColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '0% Fee',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: activeColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Exchange Rate: 1 $currencyCode = ${exchangeRate.toStringAsFixed(2)} $receiverCurrencyCode',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        'Instant Settlement',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
           Text(
             'Enter Amount in $currencyCode to Send',
             style: theme.textTheme.labelSmall?.copyWith(
@@ -2175,10 +2543,10 @@ class _AttachmentPickerModalState
   // ─── Expandable fiat remittance details ───
   Widget _buildFiatRemittanceDetails(
     ThemeData theme,
-    String currencyCode,
-    String currencySymbol,
-    String homeCurrencyCode,
-    String homeCurrencySymbol,
+    String sendingCurrencyCode,
+    String sendingCurrencySymbol,
+    String receiverCurrencyCode,
+    String receiverCurrencySymbol,
   ) {
     return Container(
       decoration: BoxDecoration(
@@ -2253,13 +2621,13 @@ class _AttachmentPickerModalState
                   _buildRemittanceInfoRow(
                     theme,
                     'Settlement',
-                    '$homeCurrencyCode ($homeCurrencySymbol) + \$DIASPORA',
+                    '\$DIASPORA / $receiverCurrencyCode ($receiverCurrencySymbol)',
                     LucideIcons.shield,
                   ),
                   _buildRemittanceInfoRow(
                     theme,
                     'Currency',
-                    '$currencyCode ($currencySymbol)',
+                    '$sendingCurrencyCode ($sendingCurrencySymbol)',
                     LucideIcons.banknote,
                   ),
                 ],
@@ -2319,9 +2687,69 @@ class _AttachmentPickerModalState
     }
 
     final recipientId = widget.recipientUserId!;
-    final transactionsAsync = ref.watch(
-      userTransactionsProvider(currentUserId),
+
+    // 1. Authoritative Firestore P2P transactions stream
+    final p2pTxAsync = ref.watch(
+      p2pUserTransactionsProvider((
+        userId: currentUserId,
+        recipientId: recipientId,
+      )),
     );
+
+    // 2. Chat messages in current direct chat (instant fallback / realtime sync)
+    final chatMessages = (widget.chatId != null && widget.chatId!.isNotEmpty)
+        ? ref.watch(messagesStreamProvider(widget.chatId!)).value ??
+              const <Message>[]
+        : const <Message>[];
+
+    final firestoreList = p2pTxAsync.value ?? const <PointsTransaction>[];
+
+    // Combine & filter for fiat remittance transfers
+    final Map<
+      String,
+      ({String display, String amountText, bool isSent, DateTime timestamp})
+    >
+    mergedList = {};
+
+    for (final tx in firestoreList) {
+      final action = tx.action.toLowerCase();
+      if (!action.contains('fiat')) continue;
+      final isSent = tx.points < 0;
+      final key =
+          'tx_${tx.id}_${tx.timestamp.millisecondsSinceEpoch ~/ 120000}';
+      mergedList[key] = (
+        display: tx.displayAction,
+        amountText: '${isSent ? '-' : '+'}${tx.points.abs()}',
+        isSent: isSent,
+        timestamp: tx.timestamp,
+      );
+    }
+
+    for (final msg in chatMessages) {
+      if (msg.type != 'money-transfer') continue;
+      final meta = msg.metadata ?? {};
+      final amount = (meta['amount'] as num?)?.toDouble() ?? 0.0;
+      final currency = meta['currency'] as String? ?? 'USD';
+      if (amount <= 0) continue;
+
+      final isSent = msg.senderId == currentUserId;
+      final ts = msg.timestamp > 0
+          ? DateTime.fromMillisecondsSinceEpoch(msg.timestamp)
+          : DateTime.now();
+
+      final key = 'msg_${msg.id}_${ts.millisecondsSinceEpoch ~/ 120000}';
+      if (!mergedList.containsKey(key)) {
+        mergedList[key] = (
+          display: isSent ? 'Sent Remittance' : 'Received Remittance',
+          amountText: '${isSent ? '-' : '+'}$amount $currency',
+          isSent: isSent,
+          timestamp: ts,
+        );
+      }
+    }
+
+    final sortedItems = mergedList.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     return Container(
       width: double.infinity,
@@ -2339,7 +2767,7 @@ class _AttachmentPickerModalState
               Icon(LucideIcons.history, size: 14, color: activeColor),
               const SizedBox(width: 6),
               Text(
-                'Transaction History',
+                'Remittance History',
                 style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: activeColor,
@@ -2350,28 +2778,21 @@ class _AttachmentPickerModalState
           ),
           const SizedBox(height: 8),
           Flexible(
-            child: transactionsAsync.when(
-              data: (transactions) {
-                // Filter fiat transactions between these two users
-                final filtered = transactions.where((tx) {
-                  final action = tx.action.toLowerCase();
-                  final meta = tx.metadata ?? {};
-                  final toUser = meta['toUserId'] as String?;
-                  final fromUser = meta['fromUserId'] as String?;
-                  final involvesRecipient =
-                      toUser == recipientId || fromUser == recipientId;
-                  if (!involvesRecipient) return false;
-                  return action.contains('fiat');
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  // ─── EMPTY STATE: Credit/Debit card illustration ───
-                  return Column(
+            child: (sortedItems.isEmpty && p2pTxAsync.isLoading)
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : sortedItems.isEmpty
+                ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
@@ -2385,9 +2806,9 @@ class _AttachmentPickerModalState
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.green.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+                              color: Colors.green.withValues(alpha: 0.25),
+                              blurRadius: 6,
+                              offset: const Offset(0, 3),
                             ),
                           ],
                         ),
@@ -2400,30 +2821,30 @@ class _AttachmentPickerModalState
                                 const Icon(
                                   LucideIcons.creditCard,
                                   color: Colors.white,
-                                  size: 24,
+                                  size: 20,
                                 ),
                                 Icon(
-                                  LucideIcons.wifi,
-                                  color: Colors.white.withValues(alpha: 0.7),
+                                  LucideIcons.shieldCheck,
+                                  color: Colors.white.withValues(alpha: 0.8),
                                   size: 16,
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 10),
                             Text(
                               '•••• •••• •••• ••••',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.8),
-                                fontSize: 16,
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 14,
                                 letterSpacing: 2,
                                 fontFamily: 'monospace',
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Add Sending Source',
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Diaspora Zero-Fee Remittance Rail',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
+                                color: Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -2431,7 +2852,7 @@ class _AttachmentPickerModalState
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
                         'No fiat transfers with this user yet',
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -2442,75 +2863,56 @@ class _AttachmentPickerModalState
                         ),
                       ),
                     ],
-                  );
-                }
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: sortedItems.length > 5 ? 5 : sortedItems.length,
+                    itemBuilder: (context, index) {
+                      final item = sortedItems[index];
+                      final isSent = item.isSent;
+                      final color = isSent
+                          ? activeColor.withValues(alpha: 0.7)
+                          : activeColor;
+                      final icon = isSent
+                          ? LucideIcons.arrowUpRight
+                          : LucideIcons.arrowDownLeft;
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: filtered.length > 5 ? 5 : filtered.length,
-                  itemBuilder: (context, index) {
-                    final tx = filtered[index];
-                    final isSent = tx.points < 0;
-                    final color = isSent
-                        ? activeColor.withValues(alpha: 0.7)
-                        : activeColor;
-                    final sign = isSent ? '' : '+';
-                    final icon = isSent
-                        ? LucideIcons.arrowUpRight
-                        : LucideIcons.arrowDownLeft;
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.1),
-                              shape: BoxShape.circle,
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(icon, size: 12, color: color),
                             ),
-                            child: Icon(icon, size: 12, color: color),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              tx.displayAction,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w500,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item.display,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 11,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              item.amountText,
+                              style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.bold,
                                 fontSize: 11,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Text(
-                            '$sign${tx.points}',
-                            style: TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-              error: (_, _) => Text(
-                'Could not load transactions',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                  fontSize: 11,
-                ),
-              ),
-            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -2527,11 +2929,90 @@ class _AttachmentPickerModalState
       return const SizedBox.shrink();
     }
 
-    final isPoints = _selectedAssetType == 'points';
     final recipientId = widget.recipientUserId!;
-    final transactionsAsync = ref.watch(
-      userTransactionsProvider(currentUserId),
+
+    // 1. Authoritative Firestore P2P transactions stream
+    final p2pTxAsync = ref.watch(
+      p2pUserTransactionsProvider((
+        userId: currentUserId,
+        recipientId: recipientId,
+      )),
     );
+
+    // 2. Chat messages in current direct chat (instant fallback / realtime sync)
+    final chatMessages = (widget.chatId != null && widget.chatId!.isNotEmpty)
+        ? ref.watch(messagesStreamProvider(widget.chatId!)).value ??
+              const <Message>[]
+        : const <Message>[];
+
+    final firestoreList = p2pTxAsync.value ?? const <PointsTransaction>[];
+
+    // Combine & filter for token transfers
+    final Map<String, PointsTransaction> mergedMap = {};
+
+    // First add Firestore ledger transactions
+    for (final tx in firestoreList) {
+      final action = tx.action.toLowerCase();
+      final isTokenTx =
+          action.startsWith('token_transfer') ||
+          tx.metadata?['assetType'] == 'token' ||
+          tx.metadata?['currency'] == 'DIASPORA';
+      if (!isTokenTx) continue;
+
+      final txHash = tx.metadata?['txHash'] as String?;
+      final key = (txHash != null && txHash.isNotEmpty)
+          ? 'hash_$txHash'
+          : 'tx_${tx.points}_${tx.timestamp.millisecondsSinceEpoch ~/ 120000}';
+      mergedMap[key] = tx;
+    }
+
+    // Next add chat transfer messages
+    for (final msg in chatMessages) {
+      if (msg.type != 'dsp_transfer' && msg.type != 'token_transfer') continue;
+      final meta = msg.metadata ?? {};
+      final assetType =
+          meta['assetType'] as String? ??
+          (meta['currency'] == 'DIASPORA' ? 'token' : null);
+      if (assetType != 'token' && meta['currency'] != 'DIASPORA') continue;
+
+      final rawAmount =
+          (meta['amount'] as num?)?.toInt() ??
+          (int.tryParse(msg.content.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0);
+      final amount = rawAmount > 0 ? rawAmount : 0;
+      if (amount <= 0) continue;
+
+      final isSent = msg.senderId == currentUserId;
+      final txHash = meta['txHash'] as String?;
+      final ts = msg.timestamp > 0
+          ? DateTime.fromMillisecondsSinceEpoch(msg.timestamp)
+          : DateTime.now();
+
+      final key = (txHash != null && txHash.isNotEmpty)
+          ? 'hash_$txHash'
+          : 'tx_${isSent ? -amount : amount}_${ts.millisecondsSinceEpoch ~/ 120000}';
+
+      if (!mergedMap.containsKey(key)) {
+        mergedMap[key] = PointsTransaction(
+          id: msg.id,
+          userId: currentUserId,
+          type: 'transfer',
+          action: isSent ? 'token_transfer_sent' : 'token_transfer_received',
+          points: isSent ? -amount : amount,
+          timestamp: ts,
+          metadata: {
+            'toUserId': isSent ? recipientId : currentUserId,
+            'fromUserId': isSent ? currentUserId : recipientId,
+            ...?txHash != null ? {'txHash': txHash} : null,
+            'description': isSent
+                ? 'Sent $amount \$DIASPORA'
+                : 'Received $amount \$DIASPORA',
+          },
+        );
+      }
+    }
+
+    final filtered = mergedMap.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     return Container(
       width: double.infinity,
@@ -2560,31 +3041,16 @@ class _AttachmentPickerModalState
           ),
           const SizedBox(height: 8),
           Flexible(
-            child: transactionsAsync.when(
-              data: (transactions) {
-                // Filter transactions between these two users — STRICT decoupling
-                final filtered = transactions.where((tx) {
-                  final action = tx.action.toLowerCase();
-                  final meta = tx.metadata ?? {};
-                  final toUser = meta['toUserId'] as String?;
-                  final fromUser = meta['fromUserId'] as String?;
-
-                  // Check if this transaction involves the recipient
-                  final involvesRecipient =
-                      toUser == recipientId || fromUser == recipientId;
-                  if (!involvesRecipient) return false;
-
-                  if (isPoints) {
-                    // DSP transfers ONLY — must NOT match token_transfer
-                    return action.startsWith('dsp_transfer');
-                  } else {
-                    // Token transfers ONLY
-                    return action.startsWith('token_transfer');
-                  }
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return Column(
+            child: (filtered.isEmpty && p2pTxAsync.isLoading)
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : filtered.isEmpty
+                ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
@@ -2596,7 +3062,7 @@ class _AttachmentPickerModalState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'No ${isPoints ? 'DSP' : r'$DIASPORA'} transfers with this user yet',
+                        'No \$DIASPORA transfers with this user yet',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant.withValues(
                             alpha: 0.5,
@@ -2605,91 +3071,73 @@ class _AttachmentPickerModalState
                         ),
                       ),
                     ],
-                  );
-                }
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filtered.length > 5 ? 5 : filtered.length,
+                    itemBuilder: (context, index) {
+                      final tx = filtered[index];
+                      final isSent = tx.points < 0;
+                      final color = isSent
+                          ? activeColor.withValues(alpha: 0.7)
+                          : activeColor;
+                      final icon = isSent
+                          ? LucideIcons.arrowUpRight
+                          : LucideIcons.arrowDownLeft;
+                      final txHash = tx.metadata?['txHash'] as String?;
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: filtered.length > 5 ? 5 : filtered.length,
-                  itemBuilder: (context, index) {
-                    final tx = filtered[index];
-                    final isSent = tx.points < 0;
-                    final color = isSent
-                        ? activeColor.withValues(alpha: 0.7)
-                        : activeColor;
-                    final icon = isSent
-                        ? LucideIcons.arrowUpRight
-                        : LucideIcons.arrowDownLeft;
-                    final txHash = tx.metadata?['txHash'] as String?;
-
-                    return GestureDetector(
-                      onTap: txHash != null
-                          ? () => launchUrl(
-                              Uri.parse('https://basescan.org/tx/$txHash'),
-                              mode: LaunchMode.externalApplication,
-                            )
-                          : null,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
+                      return GestureDetector(
+                        onTap: txHash != null
+                            ? () => launchUrl(
+                                Uri.parse('https://basescan.org/tx/$txHash'),
+                                mode: LaunchMode.externalApplication,
+                              )
+                            : null,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(icon, size: 12, color: color),
                               ),
-                              child: Icon(icon, size: 12, color: color),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                tx.displayAction,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w500,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  tx.displayAction,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 11,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                '${isSent ? 'Sent' : 'Received'} ${tx.points.abs()} \$DIASPORA',
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
                                   fontSize: 11,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            Text(
-                              '${isSent ? 'Sent' : 'Received'} ${tx.points.abs()} ${isPoints ? 'DSP' : r'$DIASPORA'}',
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            ),
-                            if (txHash != null) ...[
-                              const SizedBox(width: 4),
-                              Icon(
-                                LucideIcons.externalLink,
-                                size: 10,
-                                color: activeColor.withValues(alpha: 0.5),
-                              ),
+                              if (txHash != null) ...[
+                                const SizedBox(width: 4),
+                                Icon(
+                                  LucideIcons.externalLink,
+                                  size: 10,
+                                  color: activeColor.withValues(alpha: 0.5),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-              error: (_, _) => Text(
-                'Could not load transactions',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
-                  fontSize: 11,
-                ),
-              ),
-            ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

@@ -11,7 +11,6 @@ import 'package:diaspora_nearby/features/marketplace/screens/marketplace_screen.
     show categoryIcon;
 import 'package:diaspora_nearby/features/shared/widgets/currency_price_display.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
@@ -1482,52 +1481,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   Future<void> _contactSeller(MarketplaceListing listing) async {
     final user = ref.read(authRepositoryProvider).currentUser;
     if (user == null) return;
-
-    final marketRepo = ref.read(marketplaceRepositoryProvider);
-
-    // Check if this is the first interaction with this listing
-    final alreadyInteracted = await marketRepo.hasInteractedWithListing(
-      listing.id,
-      user.uid,
-    );
-
-    if (!mounted) return;
-
-    if (!alreadyInteracted) {
-      if (!mounted) return;
-
-      // Record the interaction so we don't count GDP again
-      try {
-        await marketRepo.recordListingInteraction(
-          listing.id,
-          user.uid,
-          interactionType: _getListingType(listing.category),
-        );
-      } catch (e) {
-        debugPrint('⚠️ [Marketplace] Record interaction error: $e');
-      }
-
-      // Record listing's fiat value as GDP output
-      if (listing.priceAmount > 0) {
-        try {
-          await ref
-              .read(pointsServiceProvider)
-              .recordFiatGdp(
-                amount: listing.priceAmount,
-                countryCode: listing.sellerCountryCode,
-                activityType: 'marketplace_engagement',
-                metadata: {
-                  'listingId': listing.id,
-                  'category': listing.category,
-                  'buyerId': user.uid,
-                  'sellerId': listing.sellerId,
-                },
-              );
-        } catch (e) {
-          debugPrint('⚠️ [GDP] Record marketplace GDP error: $e');
-        }
-      }
-    }
 
     if (!mounted) return;
 

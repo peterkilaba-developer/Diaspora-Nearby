@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -72,7 +71,7 @@ class DSPTransferMessageContent extends StatelessWidget {
                 isOwn
                     ? (isToken ? r'Sent $DIASPORA' : 'Sent Points')
                     : (isToken ? r'Received $DIASPORA' : 'Received Points'),
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: isOwn
@@ -91,7 +90,7 @@ class DSPTransferMessageContent extends StatelessWidget {
             children: [
               Text(
                 '$amount',
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: accentColor,
@@ -100,7 +99,7 @@ class DSPTransferMessageContent extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 isToken ? r'$DIASPORA' : 'DSP',
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: accentColor.withValues(alpha: 0.8),
@@ -132,7 +131,7 @@ class DSPTransferMessageContent extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 'Transfer Confirmed',
-                style: GoogleFonts.outfit(
+                style: TextStyle(
                   fontSize: 12,
                   color: isOwn
                       ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
@@ -151,7 +150,7 @@ class DSPTransferMessageContent extends StatelessWidget {
                     children: [
                       Text(
                         'Verify',
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 10,
                           color: accentColor,
                           fontWeight: FontWeight.w600,

@@ -232,17 +232,11 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.2),
-              ),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
-                const Icon(
-                  LucideIcons.info,
-                  size: 14,
-                  color: AppTheme.accent,
-                ),
+                const Icon(LucideIcons.info, size: 14, color: AppTheme.accent),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

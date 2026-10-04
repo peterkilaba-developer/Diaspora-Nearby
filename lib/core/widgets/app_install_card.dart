@@ -103,7 +103,7 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
 
       await FirebaseFirestore.instance
           .collection('app_testers')
-          .doc(email)
+          .doc(userId)
           .set({
             'email': email,
             'platform': _detectedPlatform,

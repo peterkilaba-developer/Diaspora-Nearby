@@ -141,7 +141,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     ref: ref,
                     icon: LucideIcons.shieldAlert,
                     iconColor: Colors.red.shade400,
-                    title: 'Community Emergency Fund',
+                    title: 'Ubuntu Emergency Fund',
                     subtitle: 'Medical, Legal, Bereavement & Repatriation',
                     explorationAction: ExplorationAction.economyEmergencyFund,
                     onTap: () => context.push('/dsp/emergency-fund'),
@@ -152,82 +152,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             const SizedBox(height: 16),
 
             // ============================================
-            // SECTION 2: MY WALLET
-            // ============================================
-            _buildSectionHeader(context, 'MY WALLET', LucideIcons.wallet),
-            _buildSectionContainer(
-              context,
-              child: Column(
-                children: [
-                  _buildRow(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.coins,
-                    iconColor: AppTheme.accent,
-                    title: 'Diaspora Social Points (DSP)',
-                    subtitle: 'Earn & convert to tokens',
-                    explorationAction: ExplorationAction.walletView,
-                    onTap: () => context.push('/dsp/points'),
-                  ),
-                  _buildRow(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.coins,
-                    iconColor: Colors.orange,
-                    title: r'$DIASPORA Token',
-                    subtitle: 'Hold, Invest, Spend, Swap or Trade',
-                    explorationAction: ExplorationAction.economyCrypto,
-                    onTap: () => context.push('/dsp/crypto'),
-                    useLogoImage: true,
-                  ),
-                  // Remittances (Admin only)
-                  if (isAdmin)
-                    _buildRow(
-                      context,
-                      ref: ref,
-                      icon: LucideIcons.send,
-                      iconColor: AppTheme.accent,
-                      title: 'International Remittances',
-                      subtitle: 'Send money to ${homeCountry ?? 'home'}',
-                      explorationAction: ExplorationAction.economyRemittances,
-                      onTap: () => context.push('/dsp/remittances'),
-                      isComingSoon: true,
-                    ),
-                  // DDI — Host Community Loans (Admin only)
-                  if (isAdmin)
-                    _buildRow(
-                      context,
-                      ref: ref,
-                      icon: LucideIcons.landmark,
-                      iconColor: AppTheme.accent,
-                      title: 'DDI Loans',
-                      subtitle:
-                          'Host community business loans — funded by host treasury',
-                      explorationAction: ExplorationAction.economyDfdi,
-                      onTap: () => context.push('/dsp/dfdi'),
-                      isComingSoon: true,
-                    ),
-                  // DFDI — Home Country Large Projects (Admin only)
-                  if (isAdmin)
-                    _buildRow(
-                      context,
-                      ref: ref,
-                      icon: LucideIcons.trendingUp,
-                      iconColor: AppTheme.accent,
-                      title: 'DFDI Projects',
-                      subtitle:
-                          'Home country direct investments — \$1M+ from home treasury',
-                      explorationAction: ExplorationAction.economyDfdi,
-                      onTap: () => context.push('/dsp/dfdi'),
-                      isComingSoon: true,
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ============================================
-            // SECTION 3: MARKETPLACE
+            // SECTION 2: MARKETPLACE
             // ============================================
             _buildSectionHeader(
               context,
@@ -264,6 +189,55 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     title: 'Jobs',
                     subtitle: 'Find opportunities',
                     onTap: () => context.push('/marketplace?type=job'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ============================================
+            // SECTION 3: TRAVEL
+            // ============================================
+            _buildSectionHeader(context, 'TRAVEL', LucideIcons.plane),
+            _buildSectionContainer(
+              context,
+              child: Column(
+                children: [
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.plane,
+                    iconColor: Colors.blue,
+                    title: 'Flights',
+                    subtitle: 'Book flights',
+                    onTap: () => context.push('/dsp/travel/flights'),
+                  ),
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.hotel,
+                    iconColor: Colors.deepPurple,
+                    title: 'Hotels',
+                    subtitle: 'Find hotels',
+                    onTap: () => context.push('/dsp/travel/hotels'),
+                  ),
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.home,
+                    iconColor: Colors.teal,
+                    title: 'Stays',
+                    subtitle: 'Short-term stays',
+                    onTap: () => context.push('/dsp/travel/stays'),
+                  ),
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.car,
+                    iconColor: Colors.orange,
+                    title: 'Car Rental',
+                    subtitle: 'Rent a car',
+                    onTap: () => context.push('/dsp/travel/car-rental'),
                   ),
                 ],
               ),
@@ -311,9 +285,9 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             const SizedBox(height: 16),
 
             // ============================================
-            // SECTION 5: TRAVEL
+            // SECTION 5: MY WALLET
             // ============================================
-            _buildSectionHeader(context, 'TRAVEL', LucideIcons.plane),
+            _buildSectionHeader(context, 'MY WALLET', LucideIcons.wallet),
             _buildSectionContainer(
               context,
               child: Column(
@@ -321,39 +295,65 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                   _buildRow(
                     context,
                     ref: ref,
-                    icon: LucideIcons.plane,
-                    iconColor: Colors.blue,
-                    title: 'Flights',
-                    subtitle: 'Book flights',
-                    onTap: () => context.push('/dsp/travel/flights'),
+                    icon: LucideIcons.coins,
+                    iconColor: AppTheme.accent,
+                    title: 'Diaspora Social Points (DSP)',
+                    subtitle: 'Earn & convert to tokens',
+                    explorationAction: ExplorationAction.walletView,
+                    onTap: () => context.push('/dsp/points'),
                   ),
                   _buildRow(
                     context,
                     ref: ref,
-                    icon: LucideIcons.hotel,
-                    iconColor: Colors.deepPurple,
-                    title: 'Hotels',
-                    subtitle: 'Find hotels',
-                    onTap: () => context.push('/dsp/travel/hotels'),
-                  ),
-                  _buildRow(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.home,
-                    iconColor: Colors.teal,
-                    title: 'Stays',
-                    subtitle: 'Short-term stays',
-                    onTap: () => context.push('/dsp/travel/stays'),
-                  ),
-                  _buildRow(
-                    context,
-                    ref: ref,
-                    icon: LucideIcons.car,
+                    icon: LucideIcons.coins,
                     iconColor: Colors.orange,
-                    title: 'Car Rental',
-                    subtitle: 'Rent a car',
-                    onTap: () => context.push('/dsp/travel/car-rental'),
+                    title: r'$DIASPORA Token',
+                    subtitle: 'Hold, Invest, Spend, Swap or Trade',
+                    explorationAction: ExplorationAction.economyCrypto,
+                    onTap: () => context.push('/dsp/crypto'),
+                    useLogoImage: true,
                   ),
+                  // Remittances (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.send,
+                      iconColor: AppTheme.accent,
+                      title: 'International Remittances',
+                      subtitle: 'Send money to ${homeCountry ?? 'home'}',
+                      explorationAction: ExplorationAction.economyRemittances,
+                      onTap: () => context.push('/dsp/remittances'),
+                      isComingSoon: true,
+                    ),
+                  // DDI — Town Community Business Loans (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.landmark,
+                      iconColor: AppTheme.accent,
+                      title: 'Town DDI Loans',
+                      subtitle:
+                          'Local community business loans (up to \$1M) — funded by town treasury',
+                      explorationAction: ExplorationAction.economyDfdi,
+                      onTap: () => context.push('/dsp/dfdi'),
+                      isComingSoon: true,
+                    ),
+                  // DDI — Country Sovereign Large Projects (Admin only)
+                  if (isAdmin)
+                    _buildRow(
+                      context,
+                      ref: ref,
+                      icon: LucideIcons.trendingUp,
+                      iconColor: AppTheme.accent,
+                      title: 'Country DDI Projects',
+                      subtitle:
+                          'Large-scale sovereign investments (\$1M+) — funded by country treasury',
+                      explorationAction: ExplorationAction.economyDfdi,
+                      onTap: () => context.push('/dsp/dfdi'),
+                      isComingSoon: true,
+                    ),
                 ],
               ),
             ),

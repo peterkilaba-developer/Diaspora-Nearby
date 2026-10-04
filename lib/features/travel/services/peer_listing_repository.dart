@@ -1,15 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 
 final peerListingRepositoryProvider = Provider<PeerListingRepository>((ref) {
-  return PeerListingRepository(FirebaseFirestore.instance);
+  return PeerListingRepository(
+    FirebaseFirestore.instance,
+    FirebaseFunctions.instance,
+  );
 });
 
 class PeerListingRepository {
   final FirebaseFirestore _firestore;
-  PeerListingRepository(this._firestore);
+  final FirebaseFunctions _functions;
+  PeerListingRepository(this._firestore, this._functions);
 
   CollectionReference get _listings => _firestore.collection('peer_listings');
   CollectionReference get _bookings => _firestore.collection('peer_bookings');
@@ -223,16 +228,23 @@ class PeerListingRepository {
 
   /// Create a booking request
   Future<String> createBooking(PeerBooking booking) async {
-    final doc = _bookings.doc();
-    await doc.set(booking.toJson());
-    return doc.id;
+    final result = await _functions
+        .httpsCallable('createPeerBooking')
+        .call<Map<String, dynamic>>({
+          'listingId': booking.listingId,
+          'startDate': booking.startDate.toUtc().toIso8601String(),
+          'endDate': booking.endDate.toUtc().toIso8601String(),
+          'guests': booking.guests,
+          'notes': booking.notes,
+        });
+    return result.data['bookingId'] as String;
   }
 
   /// Update booking status
   Future<void> updateBookingStatus(String id, String status) async {
-    await _bookings.doc(id).update({
+    await _functions.httpsCallable('updatePeerBookingStatus').call<void>({
+      'bookingId': id,
       'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -303,31 +315,28 @@ class PeerListingRepository {
 
   /// Increment view count
   Future<void> incrementViewCount(String listingId) async {
-    await _listings.doc(listingId).update({
-      'viewCount': FieldValue.increment(1),
+    await _functions.httpsCallable('recordListingView').call({
+      'listingType': 'peer',
+      'listingId': listingId,
     });
   }
 
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
-    final batch = _firestore.batch();
-    batch.set(_listings.doc(listingId).collection('saved_by').doc(userId), {
-      'savedAt': FieldValue.serverTimestamp(),
+    await _functions.httpsCallable('setListingSaved').call({
+      'listingType': 'peer',
+      'listingId': listingId,
+      'saved': true,
     });
-    batch.update(_listings.doc(listingId), {
-      'savedCount': FieldValue.increment(1),
-    });
-    await batch.commit();
   }
 
   /// Unsave (remove bookmark) a listing
   Future<void> unsaveListing(String listingId, String userId) async {
-    final batch = _firestore.batch();
-    batch.delete(_listings.doc(listingId).collection('saved_by').doc(userId));
-    batch.update(_listings.doc(listingId), {
-      'savedCount': FieldValue.increment(-1),
+    await _functions.httpsCallable('setListingSaved').call({
+      'listingType': 'peer',
+      'listingId': listingId,
+      'saved': false,
     });
-    await batch.commit();
   }
 
   /// Check if a listing is saved by the user

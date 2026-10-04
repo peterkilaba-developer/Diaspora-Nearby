@@ -6,8 +6,8 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/shared/utils/country_utils.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_confirmation_sheet.dart';
 
 class RelationshipSelectionModal extends ConsumerStatefulWidget {
@@ -207,31 +207,10 @@ class _RelationshipSelectionModalState
             size: 20,
             color: theme.colorScheme.primary,
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'Earn 1,000 DSP',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                LucideIcons.chevronRight,
-                size: 16,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
+          trailing: Icon(
+            LucideIcons.chevronRight,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -252,7 +231,7 @@ class _RelationshipSelectionModalState
                   message:
                       'Send a request to ${widget.otherUserName} to add them as your $rel?',
                   actionTitle: 'Confirm Relationship',
-                  subtitle: 'Both users will earn 1,000 DSP upon acceptance',
+                  subtitle: 'The other person must confirm the relationship.',
                   icon: LucideIcons.heartHandshake,
                   isDestructive: false,
                   onAction: () {
@@ -269,16 +248,17 @@ class _RelationshipSelectionModalState
   }
 
   Future<void> _saveRelationship(String type) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
       if (currentUserId == null) return;
 
       if (mounted) {
         Navigator.pop(context); // Close sheet
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sending relationship request...')),
-        );
       }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Sending relationship request...')),
+      );
 
       final currentUserProfile = await ref
           .read(profileRepositoryProvider)
@@ -310,18 +290,16 @@ class _RelationshipSelectionModalState
             theyVerifiedMe ||
             hasVouchedThem ||
             theyVouchedMe) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Cannot add as family — a verification or vouch already '
-                  'exists between you (Conflict of Interest).',
-                ),
-                backgroundColor: Colors.red,
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Cannot add as family — a verification or vouch already '
+                'exists between you (Conflict of Interest).',
               ),
-            );
-          }
+              backgroundColor: Colors.red,
+            ),
+          );
           return;
         }
       }
@@ -335,15 +313,13 @@ class _RelationshipSelectionModalState
           (r) => r.type == type && r.status == 'active',
         );
         if (hasParent) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('You can only have one active $type.'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('You can only have one active $type.'),
+              backgroundColor: Colors.red,
+            ),
+          );
           return;
         }
       }
@@ -352,16 +328,19 @@ class _RelationshipSelectionModalState
         currentUserProfile?.homeCountryCode,
       );
 
+      final fullName = currentUserProfile?.fullName.trim();
+      final composedName =
+          '${currentUserProfile?.firstName ?? ''} ${currentUserProfile?.lastName ?? ''}'
+              .trim();
+      final senderName = composedName.isNotEmpty
+          ? composedName
+          : (fullName != null && fullName.isNotEmpty ? fullName : 'User');
+
       await ref
           .read(relationshipRepositoryProvider)
           .sendRelationshipRequest(
             fromUserId: currentUserId,
-            fromUserName:
-                '${currentUserProfile?.firstName ?? ''} ${currentUserProfile?.lastName ?? ''}'
-                    .trim()
-                    .isNotEmpty
-                ? '${currentUserProfile?.firstName} ${currentUserProfile?.lastName}'
-                : 'User',
+            fromUserName: senderName,
             fromUserFlag: flag,
             fromUserPhoto: currentUserProfile?.profileImage,
             toUserId: widget.otherUserId,
@@ -370,21 +349,21 @@ class _RelationshipSelectionModalState
             relationshipType: type,
           );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        showExplorationRewardToast(
-          context,
-          message: 'Relationship request sent',
-          points: 50, // Small bonus for social connection
-        );
-      }
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Relationship request sent')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to send request: $e')));
+      String msg = e.toString();
+      if (e is FirebaseFunctionsException &&
+          e.message != null &&
+          e.message!.isNotEmpty) {
+        msg = e.message!;
+      } else if (msg.startsWith('Exception: ')) {
+        msg = msg.substring('Exception: '.length);
       }
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 }

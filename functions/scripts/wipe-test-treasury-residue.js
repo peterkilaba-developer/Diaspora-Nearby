@@ -29,42 +29,11 @@
  *   APPLY=1 node functions/scripts/wipe-test-treasury-residue.js
  */
 const https = require("https");
-const os = require("os");
-const path = require("path");
-const fs = require("fs");
+const {getAccessToken} = require("./lib/access-token");
 
 const PROJECT_ID = "diaspora-nearby-a3dac";
 const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
 const APPLY = process.env.APPLY === "1";
-
-const configCandidates = [
-  path.join(os.homedir(), ".config", "configstore", "firebase-tools.json"),
-  path.join(process.env.APPDATA || "", "configstore", "firebase-tools.json"),
-];
-const configPath = configCandidates.find((p) => fs.existsSync(p));
-
-async function getAccessToken() {
-  if (!configPath) throw new Error("Firebase CLI config not found — run `firebase login` first");
-  const configData = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  const refreshToken = configData?.tokens?.refresh_token;
-  if (!refreshToken) throw new Error("No refresh token found");
-  const body = new URLSearchParams({
-    client_id: "563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com",
-    client_secret: "j9iVZfS8kkCEFUPaAeJV0sAi",
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  }).toString();
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: "oauth2.googleapis.com", path: "/token", method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "Content-Length": Buffer.byteLength(body) },
-    }, (res) => {
-      let data = ""; res.on("data", (d) => (data += d));
-      res.on("end", () => { const p = JSON.parse(data); p.access_token ? resolve(p.access_token) : reject(new Error(data)); });
-    });
-    req.on("error", reject); req.write(body); req.end();
-  });
-}
 
 function firestoreReq(method, pathSuffix, token, body) {
   return new Promise((resolve, reject) => {

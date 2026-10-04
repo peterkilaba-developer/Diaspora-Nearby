@@ -573,7 +573,7 @@ class SettingsScreen extends ConsumerWidget {
                         try {
                           await FirebaseFirestore.instance
                               .collection('app_testers')
-                              .doc(email)
+                              .doc(currentUserId)
                               .set({
                                 'email': email,
                                 'platform': selectedPlatform,

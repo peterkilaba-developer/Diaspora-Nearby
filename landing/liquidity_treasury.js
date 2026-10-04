@@ -1,24 +1,26 @@
 // ═══ LIQUIDITY TREASURY DATA MODEL ═══
 const BASE_PRICE_USD = 0.001;
-const CONVERSION_RATES = [100,90,80,70,60,50,40,30,20,10];
+const CONVERSION_RATES = [100,100,100,100,100,100,100,100,100,100];
 const EPOCH_MILESTONES = [
-  { epoch:1, users:100 },
-  { epoch:2, users:1000 },
-  { epoch:3, users:10000 },
-  { epoch:4, users:100000 },
-  { epoch:5, users:1e6 },
-  { epoch:6, users:1e7 },
-  { epoch:7, users:1e8 },
-  { epoch:8, users:1e9 },
-  { epoch:9, users:1e10 },
-  { epoch:10, users:1e11 }
+  { epoch:1, users:10 },
+  { epoch:2, users:100 },
+  { epoch:3, users:1000 },
+  { epoch:4, users:10000 },
+  { epoch:5, users:100000 },
+  { epoch:6, users:1e6 },
+  { epoch:7, users:1e7 },
+  { epoch:8, users:1e8 },
+  { epoch:9, users:1e9 },
+  { epoch:10, users:1e10 }
 ];
 
 // Each epoch's total supply = 10^(epoch+5) so Epoch 1 = 1M, Epoch 2 = 10M, etc.
-// Liquidity Treasury allocation = 5% of total supply → per epoch = 10^(epoch+4)
-// Per TGE = per epoch / 10 = 10^(epoch+3)
-function treasuryPerTge(epoch){ return Math.pow(10, epoch+3); }
-function treasuryPerEpoch(epoch){ return treasuryPerTge(epoch)*10; }
+// Liquidity Treasury allocation = 5% of total supply:
+// Epoch 1 = 5% of 1M = 50K DSP, Epoch 2 = 500K DSP, etc.
+// Formula: 0.05 * 10^(epoch+5) = 5 * 10^(epoch+3)
+// Per TDE = per epoch / 10 = 5 * 10^(epoch+2) (5K DSP in Epoch 1)
+function treasuryPerEpoch(epoch){ return 5 * Math.pow(10, epoch+3); }
+function treasuryPerTge(epoch){ return 5 * Math.pow(10, epoch+2); }
 
 // ═══ VALUATION ENGINE (mirrors Dart ValuationService exactly) ═══
 function calculateImpliedValue({totalUsers=0, totalMinted=0, totalBurned=0, currentEpoch=1, fiatGdpUsd=0, circulatingSupply=0}={}){
@@ -105,8 +107,6 @@ function computeTrajectory(){
   if(liveValuation.impliedValue > 0){
     trajectoryPoints[0].impliedValue = liveValuation.impliedValue;
     trajectoryPoints[0].isLive = true;
-    
-    // For the projected floor, we just want to show the pure math, so we don't override with live price
   }
 }
 
@@ -136,20 +136,19 @@ function updateDynamicPricing(){
     setTextById(`ep${e}-total-dsp`, fmtDsp(perEpoch)+' DSP');
     setTextById(`ep${e}-total-cost`, fmtUsd(epochCost)+' total');
 
-    const avgConv = 55;
-    const effectiveDspEpoch = Math.round(perEpoch * (avgConv/100));
-    setTextById(`ep${e}-full-conv`, `All 10 TDEs • Avg ${avgConv}% conversion • ${fmtDsp(effectiveDspEpoch)} effective DSP`);
+    const effectiveDspEpoch = perEpoch;
+    setTextById(`ep${e}-full-conv`, `All 10 TDEs • 100% conversion • ${fmtDsp(effectiveDspEpoch)} effective DSP`);
     setTextById(`ep${e}-full-price`, fmtUsd(epochCost));
 
     for(let t=1; t<=10; t++){
-      const conv = CONVERSION_RATES[t-1];
-      const effectiveDsp = Math.round(perTge * (conv/100));
+      const conv = CONVERSION_RATES[t-1] || 100;
+      const effectiveDsp = perTge;
       setTextById(`ep${e}-tge${t}-alloc`, fmtDsp(perTge));
       setTextById(`ep${e}-tge${t}-eff`, fmtDsp(effectiveDsp));
       setTextById(`ep${e}-tge${t}-price`, fmtUsd(tgeCost));
     }
   }
-  drawChart('trajectory-canvas', trajectoryPoints, 'Implied DSP Value (log scale)');
+  drawChart('trajectory-canvas', trajectoryPoints, 'Initial $DIASPORA Token Price (log scale)');
   drawChart('projected-trajectory-canvas', projectedTrajectoryPoints, '$DIASPORA Price Floor (log scale)');
   buildPriceFloorTable();
 }
@@ -183,7 +182,7 @@ function buildEpochTables(){
     section.id=`epoch-${e}`;
     section.className='epoch-block'+(isFirst?' open':'');
 
-    const statusHtml=e<=5?'<span class="badge live"><span class="dot"></span> Open</span>':'<span class="badge upcoming">Upcoming</span>';
+    const statusHtml = '<span class="badge live"><span class="dot"></span> Open</span>';
 
     const hdr=document.createElement('div');
     hdr.className='epoch-header';
@@ -214,7 +213,7 @@ function buildEpochTables(){
 
     let tgeRows='';
     for(let t=1;t<=10;t++){
-      const conv=CONVERSION_RATES[t-1];
+      const conv=CONVERSION_RATES[t-1] || 100;
       const convClass=`c${conv}`;
       tgeRows+=`<tr>
         <td><strong>TDE ${t}</strong></td>
@@ -435,27 +434,27 @@ function openNotifyModal(epoch,tge,type){
   if(type==='epoch'){
     const cost = treasuryPerEpoch(epoch) * epVal;
     title.textContent=`Get Notified: Epoch ${epoch}`;
-    subtitle.textContent=`All 10 TDEs — ${fmtDsp(treasuryPerEpoch(epoch))} DSP total pool`;
+    subtitle.textContent=`All 10 TDEs — ${fmtDsp(treasuryPerEpoch(epoch))} DSP total pool (100% conversion)`;
     preview.innerHTML=`
       <div class="contract-line"><span>Pool Type</span><strong>Full Epoch ${epoch} — All 10 TDEs</strong></div>
       <div class="contract-line"><span>Total Pool Size</span><strong>${fmtDsp(treasuryPerEpoch(epoch))} DSP</strong></div>
-      <div class="contract-line"><span>Avg Conversion</span><strong>55% (decile: 100%→10%)</strong></div>
+      <div class="contract-line"><span>Conversion Rate</span><strong>100% (equal deciles)</strong></div>
       <div class="contract-line"><span>Initial Pool Value</span><strong>${fmtUsd(cost)}</strong></div>
       <div class="contract-line"><span>Initial DEX Token Price</span><strong>${fmtPrice(epVal)}</strong></div>
       <div class="contract-line"><span>Trading Pairs</span><strong>$DIASPORA/USDC • $DIASPORA/ETH</strong></div>
       <div class="contract-line"><span>DEX</span><strong>Aerodrome DEX on Base</strong></div>
       <div class="contract-line"><span>Lot Size</span><strong>Any amount — no minimum</strong></div>`;
   } else {
-    const conv=CONVERSION_RATES[tge-1];
+    const conv=CONVERSION_RATES[tge-1] || 100;
     const perTge = treasuryPerTge(epoch);
-    const eff=Math.round(perTge*(conv/100));
+    const eff=perTge;
     const cost = perTge * epVal;
     title.textContent=`Get Notified: Epoch ${epoch}, TDE ${tge}`;
-    subtitle.textContent=`${conv}% conversion — ${fmtDsp(eff)} effective DSP in the pool`;
+    subtitle.textContent=`100% conversion — ${fmtDsp(eff)} effective DSP in the pool`;
     preview.innerHTML=`
       <div class="contract-line"><span>TDE Drop</span><strong>Epoch ${epoch}, TDE ${tge}</strong></div>
       <div class="contract-line"><span>Pool Size</span><strong>${fmtDsp(perTge)} DSP</strong></div>
-      <div class="contract-line"><span>Conversion Rate</span><strong>${conv}%</strong></div>
+      <div class="contract-line"><span>Conversion Rate</span><strong>100%</strong></div>
       <div class="contract-line"><span>Effective DSP</span><strong>${fmtDsp(eff)} DSP</strong></div>
       <div class="contract-line"><span>Initial Pool Value</span><strong>${fmtUsd(cost)}</strong></div>
       <div class="contract-line"><span>Initial DEX Token Price</span><strong>${fmtPrice(epVal)}</strong></div>
@@ -487,7 +486,7 @@ function validateNotifyForm(){
   if(btn) btn.disabled = !valid;
 }
 
-function submitNotification(){
+async function submitNotification(){
   const btn = document.getElementById('notify-btn');
   const email = document.getElementById('notify-email')?.value?.trim();
   if(!email) return;
@@ -496,25 +495,23 @@ function submitNotification(){
   btn.disabled = true;
   lucide.createIcons();
 
-  // Write to Firestore
   const sel = currentSelection;
-  const interestType = sel.type === 'epoch' ? `Epoch ${sel.epoch} (Full)` : `Epoch ${sel.epoch}, TDE ${sel.tge}`;
-
-  if(typeof window._firestoreDb !== 'undefined' && window._firestoreDb){
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(({collection, addDoc, serverTimestamp})=>{
-      addDoc(collection(window._firestoreDb, 'liquidity_interest'), {
-        email: email,
-        interest: interestType,
-        epoch: sel.epoch,
-        tge: sel.tge || 0,
-        type: sel.type,
-        createdAt: serverTimestamp(),
-        source: 'landing_page'
-      }).then(()=>showSuccess(email)).catch(()=>showSuccess(email));
-    }).catch(()=>showSuccess(email));
-  } else {
-    // Fallback — just show success (Firebase not initialized yet)
-    setTimeout(()=>showSuccess(email), 800);
+  try {
+    if(typeof window._submitLiquidityInterest !== 'function'){
+      throw new Error('Secure notification service is unavailable');
+    }
+    await window._submitLiquidityInterest({
+      email,
+      epoch: sel.epoch,
+      tge: sel.tge || 0,
+      type: sel.type
+    });
+    showSuccess(email);
+  } catch(error) {
+    console.error('Liquidity notification signup failed:', error);
+    btn.innerHTML='<i data-lucide="bell" style="width:16px;height:16px"></i> Try Again';
+    btn.disabled = false;
+    lucide.createIcons();
   }
 }
 
@@ -545,4 +542,3 @@ if(typeof ResizeObserver !== 'undefined'){
 } else {
   window.addEventListener('resize', () => drawCharts());
 }
-

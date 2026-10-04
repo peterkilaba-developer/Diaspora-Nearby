@@ -3,14 +3,13 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:diaspora_nearby/features/hosting/services/hosting_service.dart';
 import 'package:diaspora_nearby/features/hosting/models/hosting_session.dart';
-import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
+import 'package:diaspora_nearby/features/hosting/repository/hosting_repository.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
 import 'package:diaspora_nearby/features/notifications/repository/notifications_repository.dart';
@@ -42,6 +41,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
   String? _scanSuccess;
   bool _isProcessing = false;
   StreamSubscription<DocumentSnapshot>? _sessionListener;
+  Timer? _challengeRefreshTimer;
 
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
@@ -54,7 +54,13 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
     super.initState();
     // Host shows QR by default, traveler scans by default
     _isScanning = kIsWeb ? false : !widget.isHost;
-    _generateQR();
+    if (widget.isHost) {
+      _generateQR();
+      _challengeRefreshTimer = Timer.periodic(
+        const Duration(minutes: 4),
+        (_) => _generateQR(),
+      );
+    }
 
     // If host is showing QR, listen for session status changes
     // so we can detect when the traveler scans and checks in
@@ -94,17 +100,27 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
         });
   }
 
-  void _generateQR() {
-    // Encode session data into the QR code
-    final qrPayload = jsonEncode({
-      'type': 'hosting_checkin',
-      'sessionId': widget.session.id,
-      'hostId': widget.session.hostId,
-      'travelerId': widget.session.travelerId,
-    });
-    setState(() {
-      _qrData = qrPayload;
-    });
+  Future<void> _generateQR() async {
+    try {
+      final token = await ref
+          .read(hostingRepositoryProvider)
+          .createCheckInChallenge(widget.session.id);
+      if (!mounted) return;
+      setState(() {
+        _qrData = jsonEncode({
+          'type': 'hosting_checkin',
+          'sessionId': widget.session.id,
+          'token': token,
+        });
+        _scanError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _qrData = null;
+        _scanError = 'Could not create a secure check-in code. Please retry.';
+      });
+    }
   }
 
   Future<void> _handleScan(BarcodeCapture capture) async {
@@ -141,22 +157,22 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
 
           // Validate session ID matches
           final scannedSessionId = payload['sessionId'] as String?;
+          final token = payload['token'] as String?;
           if (scannedSessionId == null ||
-              scannedSessionId != widget.session.id) {
+              scannedSessionId != widget.session.id ||
+              token == null ||
+              token.isEmpty) {
             _showError('This QR code is for a different hosting session.');
             return;
           }
 
           // Perform the check-in
           final hostingService = ref.read(hostingServiceProvider);
-          final success = await hostingService.checkIn(scannedSessionId);
+          final success = await hostingService.checkIn(scannedSessionId, token);
 
           if (!mounted) return;
 
           if (success) {
-            // Send a system message to the DM
-            await _sendCheckInMessage();
-
             // Mark hosting-selected notification as completed
             await _markNotificationsCompleted();
 
@@ -177,25 +193,6 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
         }
         break; // Only process first barcode
       }
-    }
-  }
-
-  /// Sends a system message to the DM indicating check-in.
-  Future<void> _sendCheckInMessage() async {
-    final chatId = widget.session.chatId;
-    if (chatId == null || chatId.isEmpty) return;
-
-    try {
-      final messagingService = ref.read(chatMessagingServiceProvider);
-      await messagingService.sendTextMessage(
-        chatId,
-        'Check-in confirmed! The hosting session is now active. Enjoy your stay!',
-        type: 'system',
-        senderIdOverride: 'system',
-        senderNameOverride: 'Hosting',
-      );
-    } catch (e) {
-      debugPrint('[Hosting] Failed to send check-in message: $e');
     }
   }
 
@@ -253,6 +250,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
 
   @override
   void dispose() {
+    _challengeRefreshTimer?.cancel();
     _sessionListener?.cancel();
     _controller.dispose();
     super.dispose();
@@ -268,7 +266,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
       appBar: AppBar(
         title: Text(
           widget.isHost ? 'Host Check-in Code' : 'Scan to Check In',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -320,7 +318,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                         Expanded(
                           child: Text(
                             _scanError!,
-                            style: GoogleFonts.outfit(color: AppTheme.error),
+                            style: const TextStyle(color: AppTheme.error),
                           ),
                         ),
                       ],
@@ -349,7 +347,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                           children: [
                             Text(
                               widget.session.communityName,
-                              style: GoogleFonts.outfit(
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -358,7 +356,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                               widget.isHost
                                   ? 'Guest: ${widget.session.travelerName}'
                                   : 'Host: ${widget.session.hostName}',
-                              style: GoogleFonts.outfit(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: onSurface.withValues(alpha: 0.5),
                               ),
@@ -395,7 +393,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                         ? 'Show this code to your guest when they arrive.'
                         : 'Ask your host to show their QR code, then scan it.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       color: onSurface.withValues(alpha: 0.5),
                       fontSize: 13,
                     ),
@@ -474,7 +472,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                       Text(
                         _scanSuccess!,
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: onSurface,
@@ -483,7 +481,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                       const SizedBox(height: 8),
                       Text(
                         'Your hosting session is now active',
-                        style: GoogleFonts.outfit(
+                        style: TextStyle(
                           fontSize: 14,
                           color: onSurface.withValues(alpha: 0.5),
                         ),
@@ -494,19 +492,16 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
               ]
               // QR code display
               else if (_qrData != null) ...[
-                Text(
+                const Text(
                   'Hosting Check-in',
-                  style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   widget.isHost
                       ? 'Let your guest scan this code'
                       : 'Show this to verify your identity',
-                  style: GoogleFonts.outfit(
+                  style: TextStyle(
                     fontSize: 13,
                     color: onSurface.withValues(alpha: 0.5),
                   ),
@@ -541,18 +536,18 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
+                const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       LucideIcons.shieldCheck,
                       size: 16,
                       color: AppTheme.accent,
                     ),
-                    const SizedBox(width: 6),
+                    SizedBox(width: 6),
                     Text(
                       'Verified Hosting Code',
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(
                         color: AppTheme.accent,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -584,7 +579,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                         const SizedBox(width: 10),
                         Text(
                           'Waiting for guest to scan...',
-                          style: GoogleFonts.outfit(
+                          style: TextStyle(
                             fontSize: 12,
                             color: onSurface.withValues(alpha: 0.5),
                           ),

@@ -72,6 +72,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
+                  .limit(200)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {

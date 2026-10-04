@@ -444,7 +444,7 @@ img {
   margin: 0;
 }
 
-/* ── TGE EFFICIENCY GATES CARD ── */
+/* ── TDE EFFICIENCY GATES CARD ── */
 .tge-gates-card {
   margin-top: 32px;
   background: var(--surface);
@@ -699,6 +699,18 @@ img {
   margin-bottom: 12px;
 }
 
+/* Center all section and sub-section titles throughout the landing page */
+.section h2,
+.section h3,
+.section > .container h3,
+.section > .container .fade-in > h3,
+.section-header h2,
+.economy-highlight h3,
+.highlight-box h3,
+.tge-gates-header h3 {
+  text-align: center;
+}
+
 .section-header p {
   color: var(--fg-muted);
   max-width: 580px;
@@ -713,14 +725,6 @@ img {
 .economy-highlight p,
 .tge-gates-card p,
 .tge-gates-desc {
-  text-align: center;
-}
-
-/* Center all standalone h3 sub-section titles throughout the page */
-.section > .container > h3,
-.section > .container > .fade-in > h3,
-.section > .container > div:not(.card-grid):not(.card):not(.utility-card):not(.trust-step):not(.decouple-card):not(.rewards-grid):not(.dist-bar-wrap):not(.epoch-grid):not(.tge-gates-card):not(.contract-box) > h3,
-.section > .container > .economy-highlight > h3 {
   text-align: center;
 }
 
@@ -740,11 +744,27 @@ img {
   gap: 16px;
 }
 
+.card-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .card-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
 .card {
   background: var(--surface);
   border: none;
   border-radius: var(--radius-lg);
   padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
   transition: transform 0.2s;
 }
 
@@ -1344,6 +1364,10 @@ img {
   border-radius: var(--radius-lg);
   padding: 28px 16px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
   transition: transform 0.2s;
 }
 

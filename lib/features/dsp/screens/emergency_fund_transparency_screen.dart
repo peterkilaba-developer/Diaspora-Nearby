@@ -10,7 +10,7 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
-/// Public transparency dashboard for the Community Emergency Fund.
+/// Public transparency dashboard for the Ubuntu Emergency Fund.
 /// Shows: treasury $DIASPORA balance, total direct contributions, member
 /// & interest counts, and the full on-chain ledger of every contribution
 /// and disbursement with recipient info + tx hash.

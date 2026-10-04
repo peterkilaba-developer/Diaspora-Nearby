@@ -143,8 +143,51 @@ class _RelationshipResponseModalState
                   title: Text(_selectedReciprocalType ?? possibleTypes.first),
                   subtitle: const Text('Logical reciprocal relationship'),
                 ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.amber.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.shield_outlined,
+                          size: 18,
+                          color: Colors.amber,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Circle of Trust Commitment',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Accepting this relationship directly binds your trust score and economic standing together. If either member incurs DSP or PCT slashing penalties for fraud or misconduct, the identical penalty is deducted from your account. Circle of Trust members are also excluded from Trust Slider staking.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.85,
+                        ),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               if (_isLoading)
                 const Center(child: CircularProgressIndicator())
               else

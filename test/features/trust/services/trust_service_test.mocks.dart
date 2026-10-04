@@ -716,29 +716,6 @@ class MockRelationshipRepository extends _i1.Mock
           as _i3.Future<List<_i11.Relationship>>);
 
   @override
-  _i3.Future<void> addRelationship({
-    required String? userId,
-    required String? relatedUserId,
-    required String? type,
-    required String? name,
-    String? status = 'active',
-    String? flag,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#addRelationship, [], {
-              #userId: userId,
-              #relatedUserId: relatedUserId,
-              #type: type,
-              #name: name,
-              #status: status,
-              #flag: flag,
-            }),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
-
-  @override
   _i3.Future<void> sendRelationshipRequest({
     required String? fromUserId,
     required String? fromUserName,
@@ -827,12 +804,6 @@ class MockRelationshipRepository extends _i1.Mock
                 _i3.Future<_i12.RelationshipRequest?>.value(),
           )
           as _i3.Future<_i12.RelationshipRequest?>);
-
-  @override
-  void syncAcceptedSentRequests(String? userId) => super.noSuchMethod(
-    Invocation.method(#syncAcceptedSentRequests, [userId]),
-    returnValueForMissingStub: null,
-  );
 
   @override
   _i3.Future<void> acceptRequest(
@@ -1097,10 +1068,15 @@ class MockPointsRepository extends _i1.Mock implements _i13.PointsRepository {
 
   @override
   _i3.Stream<List<_i16.PointsTransaction>> streamUserTransactions(
-    String? userId,
-  ) =>
+    String? userId, {
+    int? limit = 100,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#streamUserTransactions, [userId]),
+            Invocation.method(
+              #streamUserTransactions,
+              [userId],
+              {#limit: limit},
+            ),
             returnValue: _i3.Stream<List<_i16.PointsTransaction>>.empty(),
             returnValueForMissingStub:
                 _i3.Stream<List<_i16.PointsTransaction>>.empty(),
@@ -1124,6 +1100,19 @@ class MockPointsRepository extends _i1.Mock implements _i13.PointsRepository {
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
           as _i3.Future<void>);
+
+  @override
+  _i3.Future<Map<String, dynamic>> evaluateWelcomeBonus() =>
+      (super.noSuchMethod(
+            Invocation.method(#evaluateWelcomeBonus, []),
+            returnValue: _i3.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+            returnValueForMissingStub: _i3.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i3.Future<Map<String, dynamic>>);
 
   @override
   _i3.Future<void> addPoints(
@@ -1547,6 +1536,38 @@ class MockPointsRepository extends _i1.Mock implements _i13.PointsRepository {
             returnValueForMissingStub: _i3.Future<bool>.value(false),
           )
           as _i3.Future<bool>);
+
+  @override
+  _i3.Future<DateTime?> getLastPeerVisitTime({
+    required String? hostUserId,
+    required String? visitorUserId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getLastPeerVisitTime, [], {
+              #hostUserId: hostUserId,
+              #visitorUserId: visitorUserId,
+            }),
+            returnValue: _i3.Future<DateTime?>.value(),
+            returnValueForMissingStub: _i3.Future<DateTime?>.value(),
+          )
+          as _i3.Future<DateTime?>);
+
+  @override
+  _i3.Future<void> recordPeerVisit({
+    required String? hostUserId,
+    required String? visitorUserId,
+    String? locationAddress,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#recordPeerVisit, [], {
+              #hostUserId: hostUserId,
+              #visitorUserId: visitorUserId,
+              #locationAddress: locationAddress,
+            }),
+            returnValue: _i3.Future<void>.value(),
+            returnValueForMissingStub: _i3.Future<void>.value(),
+          )
+          as _i3.Future<void>);
 }
 
 /// A class which mocks [ReportRepository].
@@ -1556,6 +1577,7 @@ class MockReportRepository extends _i1.Mock implements _i17.ReportRepository {
   @override
   _i3.Future<_i17.ReportResult> reportMessage({
     required String? reporterId,
+    required String? chatId,
     required String? messageId,
     required String? senderId,
     required String? reason,
@@ -1563,6 +1585,7 @@ class MockReportRepository extends _i1.Mock implements _i17.ReportRepository {
       (super.noSuchMethod(
             Invocation.method(#reportMessage, [], {
               #reporterId: reporterId,
+              #chatId: chatId,
               #messageId: messageId,
               #senderId: senderId,
               #reason: reason,

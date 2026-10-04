@@ -123,6 +123,13 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
       return state;
     }
 
+    if (countryCode != null && countryCode.isNotEmpty) {
+      final country = country_data.getCountryByCode(countryCode);
+      if (country != null && country.name.isNotEmpty) {
+        return country.name;
+      }
+    }
+
     return '';
   }
 
@@ -137,47 +144,93 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
     double? lat;
     double? lng;
 
-    if (widget.profile!.currentLocation != null) {
+    if (widget.profile!.currentLocation?.geometry.location != null) {
       lat = widget.profile!.currentLocation!.geometry.location.lat;
       lng = widget.profile!.currentLocation!.geometry.location.lng;
-    } else {
-      lat = widget.profile!.hostLocation.geometry?.location.lat;
-      lng = widget.profile!.hostLocation.geometry?.location.lng;
+    } else if (widget.profile!.hostLocation.geometry?.location != null) {
+      lat = widget.profile!.hostLocation.geometry!.location.lat;
+      lng = widget.profile!.hostLocation.geometry!.location.lng;
+    } else if (widget.profile!.homeLocation.geometry?.location != null) {
+      lat = widget.profile!.homeLocation.geometry!.location.lat;
+      lng = widget.profile!.homeLocation.geometry!.location.lng;
     }
 
-    if (lat == null || lng == null) return;
+    if (lat == null || lng == null) {
+      return;
+    }
 
-    try {
-      final timestamp = (DateTime.now().millisecondsSinceEpoch / 1000).round();
-      const apiKey = Env.googleMapsApiKey;
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/timezone/json?location=$lat,$lng&timestamp=$timestamp&key=$apiKey',
-      );
+    // 1. Set immediate baseline offset using longitude (~15 deg per hour)
+    final approxOffsetSeconds = (lng / 15.0).round() * 3600;
+    if (mounted) {
+      setState(() {
+        _rawOffset = approxOffsetSeconds;
+        _dstOffset = 0;
+      });
+      _updateTime();
+    }
 
-      final response = await http.get(url);
+    // 2. Try Google Maps Timezone API if key is configured
+    const apiKey = Env.googleMapsApiKey;
+    if (apiKey.isNotEmpty) {
+      try {
+        final timestamp = (DateTime.now().millisecondsSinceEpoch / 1000)
+            .round();
+        final url = Uri.parse(
+          'https://maps.googleapis.com/maps/api/timezone/json?location=$lat,$lng&timestamp=$timestamp&key=$apiKey',
+        );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'OK') {
-          if (mounted) {
-            setState(() {
-              _rawOffset = (data['rawOffset'] as num?)?.toInt();
-              _dstOffset = (data['dstOffset'] as num?)?.toInt();
-            });
-            _updateTime();
+        final response = await http
+            .get(url)
+            .timeout(const Duration(seconds: 4));
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['status'] == 'OK') {
+            if (mounted) {
+              setState(() {
+                _rawOffset = (data['rawOffset'] as num?)?.toInt();
+                _dstOffset = (data['dstOffset'] as num?)?.toInt();
+              });
+              _updateTime();
+              return;
+            }
           }
         }
+      } catch (_) {
+        // Fall through to free open endpoint fallback
       }
-    } catch (e) {
-      // Silently fail
+    }
+
+    // 3. Fallback to Open-Meteo free API (no API key required) for exact UTC offset
+    try {
+      final omUrl = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=temperature_2m&timezone=auto',
+      );
+      final omResponse = await http
+          .get(omUrl)
+          .timeout(const Duration(seconds: 4));
+
+      if (omResponse.statusCode == 200) {
+        final omData = json.decode(omResponse.body);
+        final utcOffset = (omData['utc_offset_seconds'] as num?)?.toInt();
+        if (utcOffset != null && mounted) {
+          setState(() {
+            _rawOffset = utcOffset;
+            _dstOffset = 0;
+          });
+          _updateTime();
+        }
+      }
+    } catch (_) {
+      // Baseline offset from longitude remains active
     }
   }
 
   void _updateTime() {
-    if (_rawOffset == null || _dstOffset == null) return;
+    if (_rawOffset == null) return;
 
     final nowUtc = DateTime.now().toUtc();
-    final totalOffsetSeconds = _rawOffset! + _dstOffset!;
+    final totalOffsetSeconds = _rawOffset! + (_dstOffset ?? 0);
     final userTime = nowUtc.add(Duration(seconds: totalOffsetSeconds));
     final timeFormatter = DateFormat('h:mm a');
     final formattedTime = timeFormatter.format(userTime).toLowerCase();

@@ -5,14 +5,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 import 'package:diaspora_nearby/features/sharing/services/share_receiver_service.dart';
 import 'package:diaspora_nearby/core/initialization/app_bootstrap.dart'; // [NEW] Bootstrap import
-import 'package:google_fonts/google_fonts.dart'; // [PERF] For disabling runtime fetching
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:diaspora_nearby/firebase_options.dart';
 import 'package:diaspora_nearby/config/app_environment.dart';
+import 'package:diaspora_nearby/config/environment_firebase_options.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -30,7 +29,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
+        options: EnvironmentFirebaseOptions.currentPlatform,
       );
     }
   } catch (e) {
@@ -136,82 +135,163 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 void main() async {
-  await runDiasporaApp();
+  // Keep a plain `flutter run` on the production Firebase/app environment.
+  // Explicit dev and staging runs still use main_dev.dart/main_staging.dart.
+  await runDiasporaApp(environment: AppEnvironment.production);
 }
 
 Future<void> runDiasporaApp({AppEnvironment? environment}) async {
   if (environment != null) {
     AppEnvironmentConfig.configure(environment);
   }
+  WidgetsFlutterBinding.ensureInitialized();
 
   return runZonedGuarded<Future<void>>(
     () async {
-      // [NEW] Centralized Initialization
       AppEnvironmentConfig.logStartup();
-      await AppBootstrap.init();
-
-      // Fonts are not currently bundled as app assets, so runtime fetching must
-      // remain enabled on every platform to avoid repeated GoogleFonts errors.
-      try {
-        // ignore: deprecated_member_use
-        GoogleFonts.config.allowRuntimeFetching = true;
-      } catch (_) {
-        // GoogleFonts config may not be available on all platforms
-      }
-
-      // Initialize Stripe (non-blocking — not supported on web)
-      // Key is injected at build time: --dart-define=STRIPE_PUBLISHABLE_KEY=pk_live_...
-      try {
-        const stripeKey = String.fromEnvironment(
-          'STRIPE_PUBLISHABLE_KEY',
-          defaultValue:
-              'pk_test_51SCn3gI1F9UMWfaWdPiGbCBhcv2jpHOC06TrLhU2iHS5GxslRN4ltU4Chqc0rhTo7aW01BzxOjoXEPcCN7bafrlJ00jxw3bQsJ',
-        );
-        Stripe.publishableKey = stripeKey;
-        await Stripe.instance.applySettings();
-        debugPrint(
-          '▶ Stripe initialized ✓ (live=${stripeKey.startsWith("pk_live")})',
-        );
-      } catch (e) {
-        debugPrint('▶ Stripe init skipped: $e');
-      }
-
-      // Initialize Providers requiring SharedPreferences
-      final sharedPreferences = await SharedPreferences.getInstance();
-
-      final container = ProviderContainer(
-        overrides: [
-          sharedPreferencesProvider.overrideWithValue(sharedPreferences),
-        ],
-      );
-
-      // Initialize Push Notifications (Provider-dependent)
-      try {
-        container.read(pushNotificationServiceProvider).initialize().catchError(
-          (e) {
-            debugPrint('Push Notification Init Failed: $e');
-          },
-        );
-        FirebaseMessaging.onBackgroundMessage(
-          _firebaseMessagingBackgroundHandler,
-        );
-      } catch (e) {
-        debugPrint('Push Notification Setup Error: $e');
-      }
-
-      runApp(
-        UncontrolledProviderScope(container: container, child: const MyApp()),
-      );
+      // Paint a native Flutter shell immediately. Firebase, preferences, and
+      // provider wiring finish inside the bootstrap host instead of extending
+      // the platform launch screen with a blank frame.
+      runApp(const _BootstrapHost());
     },
     (error, stack) {
-      if (!kIsWeb) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      if (!kIsWeb && Firebase.apps.isNotEmpty) {
+        unawaited(
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true),
+        );
       } else {
         debugPrint('Web Error: $error');
         debugPrint('Stack Trace: $stack');
       }
     },
   );
+}
+
+class _BootstrapHost extends StatefulWidget {
+  const _BootstrapHost();
+
+  @override
+  State<_BootstrapHost> createState() => _BootstrapHostState();
+}
+
+class _BootstrapHostState extends State<_BootstrapHost> {
+  late Future<ProviderContainer> _initialization;
+  ProviderContainer? _container;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialization = _initialize();
+  }
+
+  Future<ProviderContainer> _initialize() async {
+    await AppBootstrap.init();
+
+    // Stripe settings do not hold the application route.
+    try {
+      const stripeKey = String.fromEnvironment(
+        'STRIPE_PUBLISHABLE_KEY',
+        defaultValue: '',
+      );
+      if (stripeKey.isNotEmpty) {
+        Stripe.publishableKey = stripeKey;
+        unawaited(Stripe.instance.applySettings());
+      } else if (AppEnvironmentConfig.isProduction) {
+        debugPrint('▶ Stripe disabled: publishable key was not injected');
+      }
+    } catch (error) {
+      debugPrint('▶ Stripe init skipped: $error');
+    }
+
+    final preferences = await SharedPreferences.getInstance();
+    final container = ProviderContainer(
+      overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+    );
+    _container = container;
+
+    try {
+      unawaited(
+        container
+            .read(pushNotificationServiceProvider)
+            .initialize()
+            .catchError(
+              (Object error) =>
+                  debugPrint('Push Notification Init Failed: $error'),
+            ),
+      );
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+    } catch (error) {
+      debugPrint('Push Notification Setup Error: $error');
+    }
+    return container;
+  }
+
+  @override
+  void dispose() {
+    _container?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ProviderContainer>(
+      future: _initialization,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return UncontrolledProviderScope(
+            container: snapshot.requireData,
+            child: const MyApp(),
+          );
+        }
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Center(
+              child: snapshot.hasError
+                  ? ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.cloud_off_outlined, size: 48),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Diaspora Nearby could not start securely.',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton(
+                              onPressed: () {
+                                _container?.dispose();
+                                _container = null;
+                                setState(() => _initialization = _initialize());
+                              },
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Loading Diaspora Nearby…'),
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class MyApp extends ConsumerStatefulWidget {

@@ -83,7 +83,7 @@ void main() {
       '[EPOCH ${epochDef.epochNumber}: Epoch ${epochDef.epochNumber}] START',
     );
     print(
-      '  Gate: ${epochDef.minDspRequired} DSP  |  Efficiency: Exact P.o.C.T Percent',
+      '  Model: Positive DSP  |  Efficiency: Exact PCT (Proof of Community Trust) Percent',
     );
     print('-----------------------------------------------------------');
 

@@ -2,9 +2,12 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
+    - "*.dart"
     - pub_cache/**
     - temp_cache/**
     - packages/flutter_background_service_android/**
+    - "**/node_modules/**"
+    - build/**
     - test/**/*.mocks.dart
     - test/simulation/**
   # errors:

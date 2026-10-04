@@ -267,7 +267,12 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     }
 
     final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
-    if (!isGlobalUnlocked) {
+    // Product rollout: Nearby and Communities stay local-only until the
+    // global network launch. Do not let seeded or legacy country data expose
+    // these toggles prematurely.
+    final isLocalOnlyHub =
+        currentScreen == 'nearby' || currentScreen == 'communities';
+    if (isLocalOnlyHub || !isGlobalUnlocked) {
       onToggleView = null;
       isGlobalView = false;
     }

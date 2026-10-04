@@ -97,8 +97,8 @@ class GlobalUserSearchService {
     }
 
     try {
-      // Get all users from Firestore
-      final snapshot = await _firestore.collection('users').get();
+      // Fetch recent candidate users from Firestore (capped at 100 for speed)
+      final snapshot = await _firestore.collection('users').limit(100).get();
       final allUsers = snapshot.docs;
 
       final results = <UserSearchResult>[];

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -190,7 +189,7 @@ class _HostingRequestMessageContentState
                 Expanded(
                   child: Text(
                     'Hosting Request',
-                    style: GoogleFonts.outfit(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: Theme.of(context).textTheme.bodyLarge?.color,
@@ -217,7 +216,7 @@ class _HostingRequestMessageContentState
                       const SizedBox(width: 4),
                       Text(
                         '${_stayDuration}d',
-                        style: GoogleFonts.outfit(
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
@@ -276,7 +275,7 @@ class _HostingRequestMessageContentState
                                 _travelerName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.outfit(
+                                style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: Theme.of(
@@ -290,7 +289,7 @@ class _HostingRequestMessageContentState
                         const SizedBox(height: 2),
                         Text(
                           'Tap to view profile',
-                          style: GoogleFonts.outfit(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.accent.withValues(alpha: 0.7),
                             fontWeight: FontWeight.w500,
@@ -379,7 +378,7 @@ class _HostingRequestMessageContentState
                     const SizedBox(width: 6),
                     Text(
                       '$interestedCount host${interestedCount == 1 ? '' : 's'} interested',
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Theme.of(context).textTheme.bodyMedium?.color,
@@ -419,7 +418,7 @@ class _HostingRequestMessageContentState
                         ),
                   label: Text(
                     alreadyInterested ? 'Interest Shown' : 'Show Interest',
-                    style: GoogleFonts.outfit(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -467,7 +466,7 @@ class _HostingRequestMessageContentState
                     const SizedBox(width: 6),
                     Text(
                       'Host Selected ✓',
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Colors.green.shade700,
@@ -503,7 +502,7 @@ class _HostingRequestMessageContentState
                   icon: const Icon(LucideIcons.users, size: 16),
                   label: Text(
                     'View Interested Hosts ($interestedCount)',
-                    style: GoogleFonts.outfit(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -535,18 +534,14 @@ class _HostingRequestMessageContentState
                     color: AppTheme.accent.withValues(alpha: 0.2),
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      LucideIcons.clock,
-                      size: 14,
-                      color: AppTheme.accent,
-                    ),
-                    const SizedBox(width: 6),
+                    Icon(LucideIcons.clock, size: 14, color: AppTheme.accent),
+                    SizedBox(width: 6),
                     Text(
                       'Waiting for hosts...',
-                      style: GoogleFonts.outfit(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.accent,
@@ -574,7 +569,7 @@ class _HostingRequestMessageContentState
         const SizedBox(width: 6),
         Text(
           '$label: ',
-          style: GoogleFonts.outfit(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: Theme.of(context).textTheme.bodySmall?.color,
@@ -583,7 +578,7 @@ class _HostingRequestMessageContentState
         Expanded(
           child: Text(
             value,
-            style: GoogleFonts.outfit(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: valueColor ?? Theme.of(context).textTheme.bodyLarge?.color,

@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:universal_io/io.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
@@ -55,6 +57,117 @@ class ProfileRepository {
   // in chat lists with many DM conversations
   static final Map<String, _CachedProfile> _profileCache = {};
   static const _cacheTtl = Duration(minutes: 5);
+  static const _privateFields = <String>{
+    'phone',
+    'dateOfBirth',
+    'currentLocation',
+    'geo',
+    'workLocation',
+    'pastLocations',
+    'fcmToken',
+    'fcmTokenUpdatedAt',
+    'fcmTopics',
+    'fcmTopicsUpdatedAt',
+    'notificationsEnabled',
+  };
+  static const _serverFields = <String>{
+    'isAdmin',
+    'admin',
+    'roles',
+    'customClaims',
+    'trustScore',
+    'trustLevel',
+    'isIdentityVerified',
+    'blockedByCount',
+    'vouchedByCount',
+    'communityMemberships',
+    'walletAddress',
+    'smartWalletAddress',
+    'welcomeBonusAwarded',
+    'advertReportCount',
+    'flaggedMessagesCount',
+    'isBanned',
+    'bannedAt',
+    'bannedReason',
+    'firstQrConnection',
+    'blockedUsers',
+  };
+
+  cf.DocumentReference<Map<String, dynamic>> _privateRef(String uid) =>
+      _firestore.collection('user_private').doc(uid);
+
+  Map<String, dynamic>? _publicLocation(dynamic value) {
+    if (value is! Map) return null;
+    final map = Map<String, dynamic>.from(value);
+    final city = map['city'] as String?;
+    final state = map['state'] as String?;
+    final country = map['country'] as String?;
+    final summary = [
+      city,
+      state,
+      country,
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
+    return {
+      'formatted_address': summary,
+      'place_id': '',
+      'city': city,
+      'state': state,
+      'country': country,
+      'country_code': map['country_code'] ?? map['countryCode'],
+    };
+  }
+
+  ({Map<String, dynamic> publicData, Map<String, dynamic> privateData})
+  _splitSensitiveData(Map<String, dynamic> source) {
+    final publicData = Map<String, dynamic>.from(source);
+    final privateData = <String, dynamic>{};
+    for (final key in _privateFields) {
+      if (publicData.containsKey(key)) {
+        privateData[key] = publicData.remove(key);
+      }
+    }
+    for (final key in _serverFields) {
+      publicData.remove(key);
+    }
+    for (final key in const ['homeLocation', 'hostLocation']) {
+      if (publicData.containsKey(key)) {
+        privateData[key] = publicData[key];
+        publicData[key] = _publicLocation(publicData[key]);
+      }
+    }
+    final business = publicData['businessProfile'];
+    if (business is Map && business.containsKey('taxId')) {
+      privateData['businessProfile'] = Map<String, dynamic>.from(business);
+      publicData['businessProfile'] = Map<String, dynamic>.from(business)
+        ..remove('taxId');
+    }
+    final currentSummary = _publicLocation(privateData['currentLocation']);
+    if (currentSummary != null &&
+        publicData['showCurrentLocationName'] == true) {
+      publicData['currentCity'] = currentSummary['city'];
+      publicData['currentState'] = currentSummary['state'];
+      publicData['currentCountryCode'] = currentSummary['country_code'];
+    } else if (publicData['showCurrentLocationName'] == false) {
+      publicData['currentCity'] = cf.FieldValue.delete();
+      publicData['currentState'] = cf.FieldValue.delete();
+      publicData['currentCountryCode'] = cf.FieldValue.delete();
+    }
+    return (publicData: publicData, privateData: privateData);
+  }
+
+  Future<Map<String, dynamic>> _mergeOwnPrivateData(
+    String uid,
+    Map<String, dynamic> publicData,
+  ) async {
+    if (FirebaseAuth.instance.currentUser?.uid != uid) return publicData;
+    try {
+      final privateDoc = await _privateRef(uid).get();
+      if (privateDoc.exists) return {...publicData, ...?privateDoc.data()};
+    } catch (_) {
+      // A cached public profile remains useful while private data reconnects.
+    }
+    return publicData;
+  }
 
   /// Clear cache for a specific user (call after profile update)
   void invalidateProfileCache(String uid) => _profileCache.remove(uid);
@@ -114,7 +227,7 @@ class ProfileRepository {
       );
       if (doc.exists && doc.data() != null) {
         try {
-          final data = doc.data()!;
+          final data = await _mergeOwnPrivateData(uid, doc.data()!);
           debugPrint(
             '📋 [getUserProfile] FIRESTORE DATA for $uid → '
             'firstName="${data['firstName']}", lastName="${data['lastName']}", '
@@ -175,9 +288,11 @@ class ProfileRepository {
   }
 
   Stream<ProfileData?> watchProfile(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
+    return _firestore.collection('users').doc(uid).snapshots().asyncMap((
+      doc,
+    ) async {
       if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
+        final data = await _mergeOwnPrivateData(uid, doc.data()!);
         data['uid'] = uid;
         return ProfileData.fromJson(data);
       }
@@ -263,25 +378,41 @@ class ProfileRepository {
 
   Future<void> updateProfileData(String uid, Map<String, dynamic> data) async {
     data['updatedAt'] = cf.FieldValue.serverTimestamp();
-    await _firestore.collection('users').doc(uid).update(data);
+    final split = _splitSensitiveData(data);
+    final batch = _firestore.batch();
+    if (split.publicData.isNotEmpty) {
+      batch.update(_firestore.collection('users').doc(uid), split.publicData);
+    }
+    if (split.privateData.isNotEmpty) {
+      batch.set(
+        _privateRef(uid),
+        split.privateData,
+        cf.SetOptions(merge: true),
+      );
+    }
+    await batch.commit();
   }
 
   Future<void> saveUserProfile(String uid, ProfileData profile) async {
     final data = profile.toJson();
     data['updatedAt'] = cf.FieldValue.serverTimestamp();
+    final split = _splitSensitiveData(data);
 
     // [FIX] Check for 'createdAt' field, not just doc existence.
     // The doc might already exist from FCM token save (merge:true), but
     // createdAt should only be set on first real profile write.
     final docSnapshot = await _firestore.collection('users').doc(uid).get();
     if (!docSnapshot.exists || docSnapshot.data()?['createdAt'] == null) {
-      data['createdAt'] = cf.FieldValue.serverTimestamp();
+      split.publicData['createdAt'] = cf.FieldValue.serverTimestamp();
     }
-
-    await _firestore
-        .collection('users')
-        .doc(uid)
-        .set(data, cf.SetOptions(merge: true));
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore.collection('users').doc(uid),
+      split.publicData,
+      cf.SetOptions(merge: true),
+    );
+    batch.set(_privateRef(uid), split.privateData, cf.SetOptions(merge: true));
+    await batch.commit();
     // [FIX] Invalidate in-memory cache so next getUserProfile reads fresh data
     invalidateProfileCache(uid);
     // Cache UID locally for quick existence checks
@@ -354,48 +485,6 @@ class ProfileRepository {
     // 1. Create the Organization Document in Firestore
     final orgRef = _firestore.collection('organizations').doc();
     final orgId = orgRef.id;
-    final chatId = 'org_$orgId';
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // 2. Initialize Chat in Firestore
-    try {
-      await _firestore.collection('chats').doc(chatId).set({
-        'id': chatId,
-        'type': 'organization',
-        'name': businessName,
-        'photoUrl': logoUrl,
-        'participants': [uid],
-        'admins': [uid],
-        'createdAt': now,
-        'updatedAt': now,
-        'createdBy': uid,
-        'lastMessage': {
-          'content': 'Organization created',
-          'timestamp': now,
-          'type': 'system',
-          'senderId': 'system',
-          'senderName': 'System',
-        },
-      });
-
-      await _firestore
-          .collection('users')
-          .doc(uid)
-          .collection('userChats')
-          .doc(chatId)
-          .set({
-            'chatId': chatId,
-            'updatedAt': now,
-            'lastMessage': {
-              'content': 'Organization created',
-              'timestamp': now,
-              'type': 'system',
-            },
-          });
-    } catch (e) {
-      debugPrint('Error initializing Firestore chat: $e');
-    }
-
     final orgData = {
       'id': orgId,
       'name':
@@ -409,7 +498,6 @@ class ProfileRepository {
       'superAdminId': uid,
       'admins': [uid],
       'pendingAdmins': <String>[],
-      'chatId': chatId,
       'createdAt': cf.FieldValue.serverTimestamp(),
       'status': 'active',
       // Location data
@@ -429,6 +517,12 @@ class ProfileRepository {
     };
 
     await orgRef.set(orgData);
+    await FirebaseFunctions.instance
+        .httpsCallable('createChat')
+        .call<Map<String, dynamic>>({
+          'mode': 'organization',
+          'organizationId': orgId,
+        });
 
     // 2. Cache org locally for immediate access (Deprecated: now handled by OrganizationRepository subscription)
     // await LocalCacheService.cacheOrganization(orgId, orgData);

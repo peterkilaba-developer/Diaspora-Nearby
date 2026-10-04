@@ -205,16 +205,22 @@ class AuthController extends Notifier<bool> {
     }
   }
 
-  void verifyWhatsAppOTP(BuildContext context, String phoneNumber, String otp) async {
+  void verifyWhatsAppOTP(
+    BuildContext context,
+    String phoneNumber,
+    String otp,
+  ) async {
     debugPrint('AuthCtrl: verifyWhatsAppOTP called');
     state = true;
     final repository = ref.read(authRepositoryProvider);
     try {
       debugPrint('AuthCtrl: calling repository.verifyWhatsAppOtp...');
       final customToken = await repository.verifyWhatsAppOtp(phoneNumber, otp);
-      
+
       debugPrint('AuthCtrl: calling signInWithCustomToken...');
-      final userCredential = await repository.signInWithCustomToken(customToken);
+      final userCredential = await repository.signInWithCustomToken(
+        customToken,
+      );
 
       if (userCredential.user != null) {
         if (context.mounted) {
@@ -226,9 +232,9 @@ class AuthController extends Notifier<bool> {
       debugPrint('AuthCtrl: verifyWhatsAppOTP ERROR: $e');
       state = false;
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('WhatsApp verification failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('WhatsApp verification failed: $e')),
+        );
       }
     }
   }

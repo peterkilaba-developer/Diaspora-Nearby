@@ -58,4 +58,3 @@ final radioViewModeProvider = NotifierProvider<ViewModeNotifier, ViewMode>(() {
 final chatsViewModeProvider = NotifierProvider<ViewModeNotifier, ViewMode>(() {
   return ViewModeNotifier();
 });
-

@@ -2,6 +2,9 @@
  * Platform-managed bilateral Chamber of Commerce group operations.
  */
 const {functions, admin, db} = require("./shared");
+const {requireAdmin, requireAppCheck, consumeRateLimit} = require("./security");
+
+const MAX_CHAMBER_PARTICIPANTS = 500;
 
 const CHAMBER_CATEGORY = "Business & Entrepreneurship";
 const CHAMBER_METADATA = {
@@ -82,11 +85,14 @@ async function ensureMembership({
       .collection("userChats")
       .doc(details.chatId);
   const communityRef = db.collection("communities").doc(details.communityId);
+  const organizationRef = db.collection("organizations").doc(details.chatId);
+  const userRef = db.collection("users").doc(userId);
   const now = Date.now();
 
   return db.runTransaction(async (transaction) => {
     const chatSnap = await transaction.get(chatRef);
     const userChatSnap = await transaction.get(userChatRef);
+    const organizationSnap = await transaction.get(organizationRef);
     if (requireCommunity) {
       const communitySnap = await transaction.get(communityRef);
       if (!communitySnap.exists) {
@@ -122,6 +128,12 @@ async function ensureMembership({
       participants.push(userId);
       enrolled = true;
     }
+    if (participants.length > MAX_CHAMBER_PARTICIPANTS) {
+      throw new functions.https.HttpsError(
+          "resource-exhausted",
+          "This chamber has reached its current membership limit.",
+      );
+    }
 
     const fields = officialFields(details, homeCountryCode, hostCountryCode);
     transaction.set(chatRef, {
@@ -147,20 +159,62 @@ async function ensureMembership({
     if (!userChatSnap.exists) {
       transaction.set(userChatRef, {
         chatId: details.chatId,
+        accessLevel: "member",
         updatedAt: now,
         addedAt: now,
         lastRead: now,
         pinned: false,
         isDeleted: false,
       }, {merge: true});
+    } else {
+      transaction.set(userChatRef, {
+        accessLevel: "member",
+        updatedAt: now,
+        isDeleted: false,
+      }, {merge: true});
     }
+
+    const existingOrganization = organizationSnap.exists ? organizationSnap.data() : {};
+    const followers = Array.isArray(existingOrganization.followers) ?
+      [...new Set(existingOrganization.followers)] : [];
+    if (!followers.includes(userId)) followers.push(userId);
+    transaction.set(organizationRef, {
+      id: details.chatId,
+      kind: "corridor_chamber",
+      name: details.name,
+      businessName: details.name,
+      description,
+      type: "Chamber of Commerce",
+      chatId: details.chatId,
+      homeCountryCode,
+      hostCountryCode,
+      communityId: details.communityId,
+      isPublic: true,
+      status: "active",
+      members: participants,
+      followers,
+      memberCount: participants.length,
+      admins: Array.isArray(existingOrganization.admins) ?
+        existingOrganization.admins : [],
+      pendingAdmins: Array.isArray(existingOrganization.pendingAdmins) ?
+        existingOrganization.pendingAdmins : [],
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(!organizationSnap.exists && {
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }),
+    }, {merge: true});
+    transaction.set(userRef, {
+      organizationMemberships: admin.firestore.FieldValue.arrayUnion(details.chatId),
+    }, {merge: true});
 
     return {chatId: details.chatId, created, enrolled};
   });
 }
 
 exports.ensureSignupChamber = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const userId = requireAuth(context);
+  await consumeRateLimit("chamber-ensure", userId, 20, 24 * 60 * 60 * 1000);
   const userSnap = await db.collection("users").doc(userId).get();
   if (!userSnap.exists) {
     throw new functions.https.HttpsError(
@@ -191,7 +245,9 @@ exports.ensureSignupChamber = functions.https.onCall(async (data, context) => {
 });
 
 exports.joinChamber = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const userId = requireAuth(context);
+  await consumeRateLimit("chamber-join", userId, 30, 24 * 60 * 60 * 1000);
   const chatId = typeof data.chatId === "string" ? data.chatId : "";
   if (!chatId.startsWith("chamber_")) {
     throw new functions.https.HttpsError(
@@ -231,15 +287,141 @@ exports.joinChamber = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.manageChamber = functions.https.onCall(async (data, context) => {
-  const adminId = requireAuth(context);
-  const adminSnap = await db.collection("users").doc(adminId).get();
-  if (!adminSnap.exists || adminSnap.data().isAdmin !== true) {
-    throw new functions.https.HttpsError(
-        "permission-denied",
-        "Platform administrator access is required.",
-    );
+exports.setChamberFollow = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  const userId = requireAuth(context);
+  await consumeRateLimit("chamber-follow", userId, 60, 24 * 60 * 60 * 1000);
+  const chatId = typeof data.chatId === "string" ? data.chatId : "";
+  const following = data.following;
+  if (!chatId.startsWith("chamber_") || typeof following !== "boolean") {
+    throw new functions.https.HttpsError("invalid-argument", "Invalid chamber follow request.");
   }
+
+  const chatRef = db.collection("chats").doc(chatId);
+  const organizationRef = db.collection("organizations").doc(chatId);
+  const userChatRef = db.collection("users").doc(userId)
+      .collection("userChats").doc(chatId);
+  await db.runTransaction(async (transaction) => {
+    const chatSnapshot = await transaction.get(chatRef);
+    const organizationSnapshot = await transaction.get(organizationRef);
+    if (!chatSnapshot.exists || chatSnapshot.data().metadata?.isChamber !== true) {
+      throw new functions.https.HttpsError("not-found", "Chamber not found.");
+    }
+    const organization = organizationSnapshot.exists ? organizationSnapshot.data() : {};
+    const members = Array.isArray(organization.members) ? organization.members : [];
+    if (!following && members.includes(userId)) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Leave chamber membership before unfollowing.",
+      );
+    }
+    const followers = Array.isArray(organization.followers) ?
+      [...new Set(organization.followers)] : [];
+    const followerIndex = followers.indexOf(userId);
+    if (following && followerIndex < 0) followers.push(userId);
+    if (!following && followerIndex >= 0) followers.splice(followerIndex, 1);
+
+    const participants = Array.isArray(chatSnapshot.data().participants) ?
+      [...new Set(chatSnapshot.data().participants)] : [];
+    const participantIndex = participants.indexOf(userId);
+    if (following && participantIndex < 0) participants.push(userId);
+    if (!following && participantIndex >= 0) participants.splice(participantIndex, 1);
+    if (participants.length > MAX_CHAMBER_PARTICIPANTS) {
+      throw new functions.https.HttpsError("resource-exhausted", "This chamber is full.");
+    }
+
+    transaction.set(organizationRef, {
+      id: chatId,
+      kind: "corridor_chamber",
+      chatId,
+      followers,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.update(chatRef, {
+      participants,
+      memberCount: participants.length,
+      updatedAt: Date.now(),
+    });
+    if (following) {
+      transaction.set(userChatRef, {
+        chatId,
+        accessLevel: "follower",
+        isDeleted: false,
+        updatedAt: Date.now(),
+        lastRead: Date.now(),
+      }, {merge: true});
+    } else {
+      transaction.delete(userChatRef);
+    }
+  });
+  return {chatId, following};
+});
+
+exports.leaveChamber = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  const userId = requireAuth(context);
+  await consumeRateLimit("chamber-leave", userId, 30, 24 * 60 * 60 * 1000);
+  const rawId = typeof data.chatId === "string" ? data.chatId.trim() : "";
+  if (!rawId.startsWith("chamber_") && !rawId.startsWith("org_chamber_")) {
+    throw new functions.https.HttpsError("invalid-argument", "A chamber chat ID is required.");
+  }
+  const chamberOrgId = rawId.startsWith("org_") ? rawId.substring(4) : rawId;
+  const chamberChatId = rawId.startsWith("org_") ? rawId : `org_${rawId}`;
+
+  const chatRef = db.collection("chats").doc(chamberChatId);
+  const altChatRef = db.collection("chats").doc(chamberOrgId);
+  const organizationRef = db.collection("organizations").doc(chamberOrgId);
+  const altOrgRef = db.collection("organizations").doc(chamberChatId);
+  const userChatRef = db.collection("users").doc(userId)
+      .collection("userChats").doc(chamberChatId);
+  const altUserChatRef = db.collection("users").doc(userId)
+      .collection("userChats").doc(chamberOrgId);
+  const userRef = db.collection("users").doc(userId);
+
+  await db.runTransaction(async (transaction) => {
+    let chat = await transaction.get(chatRef);
+    if (!chat.exists) chat = await transaction.get(altChatRef);
+
+    let organization = await transaction.get(organizationRef);
+    let targetOrgRef = organizationRef;
+    if (!organization.exists) {
+      organization = await transaction.get(altOrgRef);
+      targetOrgRef = altOrgRef;
+    }
+
+    if (!organization.exists) {
+      throw new functions.https.HttpsError("not-found", "Chamber not found.");
+    }
+    const orgData = organization.data() || {};
+    const members = Array.isArray(orgData.members) ?
+      [...new Set(orgData.members)] : [];
+    const index = members.indexOf(userId);
+    if (index >= 0) members.splice(index, 1);
+
+    transaction.update(targetOrgRef, {
+      members,
+      memberCount: members.length,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(userChatRef, {
+      accessLevel: "follower",
+      updatedAt: Date.now(),
+    }, {merge: true});
+    transaction.set(altUserChatRef, {
+      accessLevel: "follower",
+      updatedAt: Date.now(),
+    }, {merge: true});
+    transaction.set(userRef, {
+      organizationMemberships: admin.firestore.FieldValue.arrayRemove(chamberOrgId, chamberChatId),
+    }, {merge: true});
+  });
+  return {chatId: rawId, member: false};
+});
+
+exports.manageChamber = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  const adminId = requireAdmin(context);
+  await consumeRateLimit("chamber-manage", adminId, 60, 60 * 60 * 1000);
 
   const chatId = typeof data.chatId === "string" ? data.chatId : "";
   if (!chatId.startsWith("chamber_")) {
@@ -258,17 +440,21 @@ exports.manageChamber = functions.https.onCall(async (data, context) => {
     );
   }
   const addMemberIds = Array.isArray(data.addMemberIds) ?
-    data.addMemberIds.filter((id) => typeof id === "string" && id.length > 0) :
+    [...new Set(data.addMemberIds.filter((id) =>
+      typeof id === "string" && id.length > 0 && id.length <= 128))].slice(0, 100) :
     [];
   const removeMemberIds = Array.isArray(data.removeMemberIds) ?
-    data.removeMemberIds.filter((id) => typeof id === "string" && id.length > 0) :
+    [...new Set(data.removeMemberIds.filter((id) =>
+      typeof id === "string" && id.length > 0 && id.length <= 128))].slice(0, 100) :
     [];
   const now = Date.now();
   const chatRef = db.collection("chats").doc(chatId);
   const discoverableRef = db.collection("discoverableChats").doc(chatId);
+  const organizationRef = db.collection("organizations").doc(chatId);
 
   await db.runTransaction(async (transaction) => {
     const chatSnap = await transaction.get(chatRef);
+    await transaction.get(organizationRef);
     const chat = chatSnap.exists ? chatSnap.data() : null;
     if (!chat || chat.metadata?.isChamber !== true) {
       throw new functions.https.HttpsError("not-found", "Chamber not found.");
@@ -280,6 +466,9 @@ exports.manageChamber = functions.https.onCall(async (data, context) => {
     addMemberIds.forEach((id) => members.add(id));
     removeMemberIds.forEach((id) => members.delete(id));
     const participants = [...members];
+    if (participants.length > MAX_CHAMBER_PARTICIPANTS) {
+      throw new functions.https.HttpsError("resource-exhausted", "This chamber is full.");
+    }
     const updates = {
       participants,
       memberCount: participants.length,
@@ -291,12 +480,19 @@ exports.manageChamber = functions.https.onCall(async (data, context) => {
       memberCount: participants.length,
       ...(description != null ? {description} : {}),
     }, {merge: true});
+    transaction.set(organizationRef, {
+      members: participants,
+      memberCount: participants.length,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(description != null ? {description} : {}),
+    }, {merge: true});
 
     addMemberIds.forEach((memberId) => {
       transaction.set(
           db.collection("users").doc(memberId).collection("userChats").doc(chatId),
           {
             chatId,
+            accessLevel: "member",
             updatedAt: now,
             addedAt: now,
             lastRead: now,
@@ -305,11 +501,17 @@ exports.manageChamber = functions.https.onCall(async (data, context) => {
           },
           {merge: true},
       );
+      transaction.set(db.collection("users").doc(memberId), {
+        organizationMemberships: admin.firestore.FieldValue.arrayUnion(chatId),
+      }, {merge: true});
     });
     removeMemberIds.forEach((memberId) => {
       transaction.delete(
           db.collection("users").doc(memberId).collection("userChats").doc(chatId),
       );
+      transaction.set(db.collection("users").doc(memberId), {
+        organizationMemberships: admin.firestore.FieldValue.arrayRemove(chatId),
+      }, {merge: true});
     });
   });
 

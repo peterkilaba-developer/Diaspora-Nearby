@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -12,7 +13,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:diaspora_nearby/core/services/database_service.dart';
 import 'package:diaspora_nearby/features/chat/services/mention_monitor_service.dart';
 import 'package:diaspora_nearby/features/marketplace/utils/exchange_rate_service.dart';
-import 'package:diaspora_nearby/firebase_options.dart';
+import 'package:diaspora_nearby/config/environment_firebase_options.dart';
 
 /// Centralizes all application initialization logic.
 /// Enforces strict ordering to prevent race conditions.
@@ -27,18 +28,23 @@ class AppBootstrap {
     await _initFirebase();
     debugPrint('▶ AppBootstrap: [2/4] Firebase initialized ✓');
 
-    // 3. [PERF] Audio & Storage are independent — run in parallel
-    debugPrint(
-      '▶ AppBootstrap: [3/4] Initializing Audio + Storage in parallel...',
-    );
-    await Future.wait([_initAudio(), _initStorage()]);
-    debugPrint('▶ AppBootstrap: [3/4] Audio + Storage initialized ✓');
+    // Optional subsystems must not delay first paint. They initialize in
+    // dependency order in the background and retain their existing fallbacks.
+    unawaited(_initDeferred());
+    debugPrint('▶ AppBootstrap: ✅ CRITICAL INIT COMPLETE');
+  }
 
-    // 4. Feature Services (may depend on storage)
-    debugPrint('▶ AppBootstrap: [4/4] Initializing Services...');
-    await _initServices();
-    debugPrint('▶ AppBootstrap: [4/4] Services initialized ✓');
-    debugPrint('▶ AppBootstrap: ✅ ALL INIT COMPLETE');
+  static Future<void> _initDeferred() async {
+    try {
+      await Future.wait([_initAudio(), _initStorage(), _warmCredentials()]);
+      await _initServices();
+      debugPrint('▶ AppBootstrap: Deferred services ready');
+    } catch (error, stack) {
+      debugPrint('AppBootstrap: Deferred initialization failed: $error');
+      if (!kIsWeb) {
+        await FirebaseCrashlytics.instance.recordError(error, stack);
+      }
+    }
   }
 
   static Future<void> _initFirebase() async {
@@ -46,7 +52,7 @@ class AppBootstrap {
       if (Firebase.apps.isEmpty) {
         debugPrint('  → Firebase.initializeApp starting...');
         await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
+          options: EnvironmentFirebaseOptions.currentPlatform,
         );
         debugPrint('  → Firebase.initializeApp done');
       }
@@ -54,16 +60,6 @@ class AppBootstrap {
       // [PERF] Firestore persistence on ALL platforms. On web this is
       // opt-in (IndexedDB) — without it every browser refresh re-fetches
       // all data from the network, which made reloads painfully slow.
-      try {
-        FirebaseFirestore.instance.settings = const Settings(
-          persistenceEnabled: true,
-          cacheSizeBytes: 100000000, // 100MB
-        );
-        debugPrint('AppBootstrap: Firestore Persistence Configured');
-      } catch (e) {
-        debugPrint('AppBootstrap: Persistence Init Warning: $e');
-      }
-
       if (!kIsWeb) {
         // Crashlytics for non-web
         FlutterError.onError =
@@ -100,9 +96,39 @@ class AppBootstrap {
       } catch (e) {
         debugPrint('AppBootstrap: App Check Init Error: $e');
       }
+
+      // Access Firestore only after App Check activation/token warm-up.
+      try {
+        FirebaseFirestore.instance.settings = const Settings(
+          persistenceEnabled: true,
+          cacheSizeBytes: 100000000, // 100MB
+        );
+        debugPrint('AppBootstrap: Firestore Persistence Configured');
+      } catch (e) {
+        debugPrint('AppBootstrap: Persistence Init Warning: $e');
+      }
     } catch (e) {
       debugPrint('AppBootstrap: Firebase Fatal Error: $e');
       rethrow; // Fatal
+    }
+  }
+
+  static Future<void> _warmCredentials() async {
+    if (kIsWeb) return;
+    try {
+      await FirebaseAppCheck.instance
+          .getToken(false)
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('AppBootstrap: App Check token warm-up failed: $e');
+    }
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.getIdToken(false).timeout(const Duration(seconds: 15));
+      }
+    } catch (e) {
+      debugPrint('AppBootstrap: Auth token warm-up failed: $e');
     }
   }
 

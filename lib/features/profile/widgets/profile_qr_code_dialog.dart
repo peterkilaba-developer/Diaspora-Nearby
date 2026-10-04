@@ -8,6 +8,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -46,6 +47,8 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
   List<String> _missingFields = [];
   late ProfileData _currentProfile;
   ProfileData? _knownConnectionProfile;
+  String? _handshakeToken;
+  String? _handshakeError;
 
   @override
   void initState() {
@@ -57,6 +60,25 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     _preCacheLocation();
     _fetchKnownProfile();
     _trackExploration();
+    _refreshHandshake();
+  }
+
+  Future<void> _refreshHandshake() async {
+    try {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('createQrHandshake')
+          .call();
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (!mounted) return;
+      setState(() {
+        _handshakeToken = data['token'] as String?;
+        _handshakeError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _handshakeError = 'Unable to create a secure QR code.');
+      debugPrint('QR challenge creation failed: $error');
+    }
   }
 
   Future<void> _trackExploration() async {
@@ -133,32 +155,82 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
     return city;
   }
 
-  Future<void> _preCacheLocation() async {
+  String? _fallbackHostLocation() {
+    final host = widget.profile.hostLocation;
+    final city = host.city?.trim();
+    final country = host.country?.trim();
+    final state = host.state?.trim();
+
+    if (city != null && city.isNotEmpty) {
+      if (state != null && state.isNotEmpty) {
+        return '$city, $state${country != null && country.isNotEmpty ? ', $country' : ''}';
+      }
+      if (country != null && country.isNotEmpty) {
+        return '$city, $country';
+      }
+      return city;
+    }
+    if (country != null && country.isNotEmpty) {
+      return country;
+    }
+    return null;
+  }
+
+  Future<String?> _resolveLocationAddress() async {
+    if (_cachedAddress != null && _cachedAddress!.isNotEmpty) {
+      return _cachedAddress;
+    }
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
+      if (!serviceEnabled) {
+        return _fallbackHostLocation();
       }
 
-      final position = await Geolocator.getCurrentPosition(
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return _fallbackHostLocation();
+      }
+
+      // 1. Try instant last known position first (0ms)
+      Position? position = await Geolocator.getLastKnownPosition();
+
+      // 2. If no cached position, query current position with a realistic timeout
+      position ??= await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 5),
+          timeLimit: Duration(seconds: 6),
         ),
       );
+
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
+
       if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        // Format as "City, State" or "City, Country" matching user card format
-        _cachedAddress = _formatPlacemarkLocation(p);
-        if (_cachedAddress?.isEmpty == true) _cachedAddress = null;
+        final formatted = _formatPlacemarkLocation(placemarks.first);
+        if (formatted != null && formatted.isNotEmpty) {
+          _cachedAddress = formatted;
+          return formatted;
+        }
+      }
+    } catch (e) {
+      debugPrint('QR: Location resolution error: $e');
+    }
+
+    return _fallbackHostLocation();
+  }
+
+  Future<void> _preCacheLocation() async {
+    try {
+      final address = await _resolveLocationAddress();
+      if (address != null && address.isNotEmpty) {
+        _cachedAddress = address;
         debugPrint('📍 QR: Location precached: $_cachedAddress');
       }
     } catch (e) {
@@ -195,27 +267,6 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             _lastConnectionUid = fromUid;
 
             try {
-              // Fetch the other user's name for the profile update
-              final fromProfile = await ref
-                  .read(profileRepositoryProvider)
-                  .getUserProfile(fromUid);
-              if (!mounted || fromProfile == null) return;
-
-              // [HANDSHAKE] Now update OUR OWN profile on OUR device
-              await ref.read(profileRepositoryProvider).updateProfileData(uid, {
-                'firstQrConnection': QRConnectionInfo(
-                  otherUid: fromUid,
-                  otherName: fromProfile.fullName,
-                  locationAddress:
-                      data['locationAddress'] ?? 'Location Unavailable',
-                  timestamp: DateTime.now().toIso8601String(),
-                ).toJson(),
-              });
-
-              debugPrint(
-                "ProfileQRCodeDialog: Handshake complete. Navigating...",
-              );
-
               if (mounted) {
                 context.push('/profile/$fromUid?src=qr');
                 Navigator.pop(context);
@@ -228,7 +279,12 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
   }
 
   String _generateQRData() {
-    return 'https://diasporanearby.com/profile/${widget.profile.uid}?src=qr';
+    final token = _handshakeToken;
+    if (token == null) return '';
+    return Uri.https('diasporanearby.com', '/profile/${widget.profile.uid}', {
+      'src': 'qr',
+      'qrToken': token,
+    }).toString();
   }
 
   Future<void> _handleScan(BarcodeCapture capture) async {
@@ -252,7 +308,13 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             if (uri.pathSegments.length < 2) continue;
 
             final targetUid = uri.pathSegments[1];
+            final handshakeToken = uri.queryParameters['qrToken'];
             if (targetUid.isEmpty) continue;
+            if (handshakeToken == null || handshakeToken.isEmpty) {
+              throw const FormatException(
+                'This QR code is missing its secure challenge.',
+              );
+            }
 
             final currentUid = widget.profile.uid;
 
@@ -274,49 +336,19 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
             _scannerController.stop();
             if (mounted) setState(() => _isScanning = false);
 
-            // Use cached address if available, otherwise try one quick fetch
-            String? finalAddress = _cachedAddress;
-            if (finalAddress == null) {
-              try {
-                // Quick check for service and permission
-                bool serviceEnabled =
-                    await Geolocator.isLocationServiceEnabled();
-                LocationPermission permission =
-                    await Geolocator.checkPermission();
-
-                if (serviceEnabled &&
-                    (permission == LocationPermission.whileInUse ||
-                        permission == LocationPermission.always)) {
-                  final position = await Geolocator.getCurrentPosition(
-                    locationSettings: const LocationSettings(
-                      accuracy: LocationAccuracy.medium,
-                      timeLimit: Duration(seconds: 2),
-                    ),
-                  );
-                  final placemarks = await placemarkFromCoordinates(
-                    position.latitude,
-                    position.longitude,
-                  );
-                  if (placemarks.isNotEmpty) {
-                    final p = placemarks.first;
-                    // Format as "City, State" or "City, Country" matching user card format
-                    finalAddress = _formatPlacemarkLocation(p);
-                  }
-                } else {
-                  debugPrint(
-                    'QR Scan: Location unavailable (Service: $serviceEnabled, Permission: $permission)',
-                  );
-                }
-              } catch (e) {
-                debugPrint('QR Scan: Location capture failed: $e');
-              }
-            }
+            // Resolve location address (instant last known / GPS / profile fallback)
+            final finalAddress = await _resolveLocationAddress();
 
             // Perform Exchange
             debugPrint(
               'QR: Starting exchange from $currentUid to $targetUid with address: $finalAddress',
             );
-            await _performExchange(currentUid!, targetUid, finalAddress);
+            await _performExchange(
+              currentUid!,
+              targetUid,
+              handshakeToken,
+              finalAddress,
+            );
           }
         } catch (e) {
           debugPrint('Error parsing QR data: $e');
@@ -329,6 +361,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
   Future<void> _performExchange(
     String fromUid,
     String toUid,
+    String handshakeToken,
     String? address,
   ) async {
     try {
@@ -337,6 +370,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
           .performQRExchange(
             fromUid: fromUid,
             toUid: toUid,
+            handshakeToken: handshakeToken,
             locationAddress: address,
           );
 
@@ -470,7 +504,7 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
         final success = await _showCompleteProfileModal(e.missingFields);
         if (success == true) {
           // Re-trigger exchange now that profile is updated
-          await _performExchange(fromUid, toUid, address);
+          await _performExchange(fromUid, toUid, handshakeToken, address);
         } else {
           // User cancelled or failed - restart scanner
           setState(() => _isScanning = true);
@@ -617,19 +651,32 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                       ),
                     ],
                   ),
-                  child: QrImageView(
-                    data: _generateQRData(),
-                    version: QrVersions.auto,
-                    size: 200.0,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: AppTheme.accent,
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: AppTheme.accent,
-                    ),
-                  ),
+                  child: _handshakeToken != null
+                      ? QrImageView(
+                          data: _generateQRData(),
+                          version: QrVersions.auto,
+                          size: 200.0,
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.square,
+                            color: AppTheme.accent,
+                          ),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.square,
+                            color: AppTheme.accent,
+                          ),
+                        )
+                      : SizedBox(
+                          width: 200,
+                          height: 200,
+                          child: Center(
+                            child: _handshakeError == null
+                                ? const CircularProgressIndicator()
+                                : TextButton(
+                                    onPressed: _refreshHandshake,
+                                    child: Text(_handshakeError!),
+                                  ),
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -639,7 +686,23 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 8),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(LucideIcons.qrCode, size: 14, color: AppTheme.accent),
+                    SizedBox(width: 6),
+                    Text(
+                      'In-person handshake • Counts toward 10 QR milestone',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -732,9 +795,16 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
 
                 // Display location if available in their record
                 if (_knownConnectionProfile!
-                        .firstQrConnection
-                        ?.locationAddress !=
-                    null) ...[
+                            .firstQrConnection
+                            ?.locationAddress !=
+                        null &&
+                    _knownConnectionProfile!.firstQrConnection!.locationAddress!
+                        .trim()
+                        .isNotEmpty &&
+                    _knownConnectionProfile!.firstQrConnection!.locationAddress!
+                            .trim()
+                            .toLowerCase() !=
+                        'location unavailable') ...[
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

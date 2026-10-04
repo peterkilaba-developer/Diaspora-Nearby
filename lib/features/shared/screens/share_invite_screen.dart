@@ -653,10 +653,10 @@ class _ShareInviteBodyState extends ConsumerState<ShareInviteBody> {
         const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.qrCode, size: 14, color: AppTheme.accent),
+            Icon(LucideIcons.share2, size: 14, color: AppTheme.accent),
             SizedBox(width: 6),
             Text(
-              'Counts toward your 10 QR milestone',
+              'Shareable app invite code',
               style: TextStyle(
                 fontSize: 12,
                 color: AppTheme.accent,

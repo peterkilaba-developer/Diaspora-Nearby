@@ -196,6 +196,11 @@ describe("DiasporaSmartWallet & WalletFactory", function () {
 
     describe("Backend Signer Rotation", function () {
         it("should update backend signer", async function () {
+            const oldHash = phoneHash("+447700900123");
+            await factory.connect(backendSigner).createWallet(oldHash);
+            const oldWalletAddress = await factory.getWallet(oldHash);
+            const oldWallet = await ethers.getContractAt("DiasporaSmartWallet", oldWalletAddress);
+
             await factory.connect(admin).updateBackendSigner(user1.address);
             expect(await factory.backendSigner()).to.equal(user1.address);
 
@@ -203,6 +208,24 @@ describe("DiasporaSmartWallet & WalletFactory", function () {
             const hash = phoneHash("+14155551234");
             await factory.connect(user1).createWallet(hash);
             expect(await factory.walletExists(hash)).to.equal(true);
+
+            // Existing wallets are rotated explicitly in bounded batches.
+            expect(await oldWallet.owner()).to.equal(backendSigner.address);
+            await factory.connect(admin).rotateWalletOwner(oldWalletAddress, user1.address);
+            expect(await oldWallet.owner()).to.equal(user1.address);
+            await expect(
+                oldWallet.connect(backendSigner).transferToken(
+                    ethers.ZeroAddress,
+                    admin.address,
+                    1,
+                )
+            ).to.be.revertedWith("DSW: unauthorized");
+        });
+
+        it("rejects rotation of an unknown wallet", async function () {
+            await expect(
+                factory.connect(admin).rotateWalletOwner(user2.address, user1.address)
+            ).to.be.revertedWith("DWF: unknown wallet");
         });
     });
 });

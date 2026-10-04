@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 
@@ -113,18 +114,14 @@ class PointsService {
   // [DEPRECATED v8] Block penalty → -10 PCT / 10 blocks (in TrustService)
   Future<void> trackBlockPenalty(String userId, int newBlocksCount) async {
     // DSP penalty removed — PCT milestone handled in TrustService
-    debugPrint(
-      'DSP: Block penalty deprecated — PCT handled in TrustService',
-    );
+    debugPrint('DSP: Block penalty deprecated — PCT handled in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
 
   // [DEPRECATED v8] Flag penalty → -10 PCT / 10 flags (in TrustService)
   Future<void> trackFlagPenalty(String userId, int newFlagCount) async {
     // DSP penalty removed — PCT milestone handled in TrustService
-    debugPrint(
-      'DSP: Flag penalty deprecated — PCT handled in TrustService',
-    );
+    debugPrint('DSP: Flag penalty deprecated — PCT handled in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
 
@@ -143,6 +140,11 @@ class PointsService {
   // Initialize points for new user
   Future<void> initializeUserPoints(String userId) async {
     await _repository.initializeUserPoints(userId);
+  }
+
+  // Evaluates 7 Proof of Humanity milestones & auto-credits 7,000 $DIASPORA distribution
+  Future<Map<String, dynamic>> evaluateWelcomeBonus() async {
+    return await _repository.evaluateWelcomeBonus();
   }
 
   // [RESTORED] Daily Share awards 100 DSP
@@ -185,7 +187,10 @@ class PointsService {
   }
 
   // [UPDATED v9] Verifier Reward: 1,000 DSP (10x scale)
-  Future<void> trackVerifierReward(String userId, {String? verifiedUserId}) async {
+  Future<void> trackVerifierReward(
+    String userId, {
+    String? verifiedUserId,
+  }) async {
     // 1. Award per-action reward — 1,000 DSP per verification
     await _addPoints(userId, 1000, 'verifier_reward');
     if (verifiedUserId != null) {
@@ -220,31 +225,20 @@ class PointsService {
 
   // [RESTORED] External shares award 100 DSP.
   Future<bool> trackExternalShare(String userId, String contentType) async {
-    await _addPoints(
-      userId,
-      100,
-      'external_share',
-      metadata: {'contentType': contentType},
-    );
-    return true;
+    // External share-sheet completion is not proof that content was actually
+    // delivered. Keep the action non-economic until a verifiable attribution
+    // event exists.
+    return false;
   }
 
   // [RESTORED] Incoming shares award 10 DSP.
-  Future<void> trackIncomingShare(String userId, String contentType, {String? sharerId}) async {
-    await _addPoints(
-      userId,
-      10,
-      'incoming_share',
-      metadata: {'contentType': contentType},
-    );
-    if (sharerId != null) {
-      await _addPoints(
-        sharerId,
-        10,
-        'share_received',
-        metadata: {'contentType': contentType},
-      );
-    }
+  Future<void> trackIncomingShare(
+    String userId,
+    String contentType, {
+    String? sharerId,
+  }) async {
+    // The platform import sheet does not yet create a server-verifiable share.
+    // Do not manufacture balances from a client assertion.
   }
 
   // Process referral: Returns referrerId for relationship connection (No immediate reward)
@@ -255,89 +249,12 @@ class PointsService {
     );
 
     try {
-      final referrerId = await _repository.validateReferralCode(normalizedCode);
-      if (referrerId == null) {
-        debugPrint('DSP: Invalid referral code: $normalizedCode');
-        return null;
-      }
-
-      if (referrerId == newUserId) {
-        debugPrint('DSP: User $newUserId tried to use their own referral code');
-        return null;
-      }
-
-      debugPrint('DSP: Referral code valid. Referrer: $referrerId');
-
-      // Immediate 1,000 DSP Reward for Referrer & Referee
-      const int referralBonus = 1000;
-
-      // 1. Award Referrer — Cloud Function handles treasury distribution
-      //    server-side via Admin SDK (no client permission needed).
-      //    [FIX] skipTreasury: true is REQUIRED because the calling user (referee)
-      //    does NOT have Firestore write permission on the referrer's user_points doc.
-      //    Without this, _checkAndResetDaily would try to resetDailyCounters on
-      //    the referrer's document and get PERMISSION_DENIED, silently killing
-      //    the entire referrer reward.
-      try {
-        debugPrint(
-          'DSP: Step 1 - Awarding $referralBonus DSP to referrer $referrerId...',
-        );
-        await _addPoints(
-          referrerId,
-          referralBonus,
-          'referral_reward_referrer',
-          metadata: {'referredUserId': newUserId, 'code': normalizedCode},
-          skipTreasury: true,
-        );
-        debugPrint(
-          'DSP: Step 1 SUCCESS - Referrer $referrerId awarded $referralBonus DSP',
-        );
-      } catch (e, stack) {
-        debugPrint('DSP: Step 1 FAILED - Error awarding referrer: $e');
-        debugPrint('DSP: Stack trace: $stack');
-        // Continue to award referee even if referrer fails
-      }
-
-      // 2. Award Referee (New User — self)
-      //    [FIX] skipTreasury: true avoids redundant initializeUserPoints call
-      //    and daily counter reset. Cloud Function handles treasury server-side.
-      try {
-        debugPrint(
-          'DSP: Step 2 - Awarding $referralBonus DSP to referee $newUserId...',
-        );
-        await _addPoints(
-          newUserId,
-          referralBonus,
-          'referral_reward_referee',
-          metadata: {'referrerId': referrerId, 'code': normalizedCode},
-          skipTreasury: true,
-        );
-        debugPrint(
-          'DSP: Step 2 SUCCESS - Referee $newUserId awarded $referralBonus DSP',
-        );
-      } catch (e, stack) {
-        debugPrint('DSP: Step 2 FAILED - Error awarding referee: $e');
-        debugPrint('DSP: Stack trace: $stack');
-      }
-
-      try {
-        await _repository.incrementReferralCount(normalizedCode);
-        debugPrint('DSP: Step 3 SUCCESS - Referral count incremented');
-      } catch (e) {
-        debugPrint('DSP: Step 3 FAILED - incrementReferralCount: $e');
-      }
-
-      // [NEW] Record HTS Referral Activity for the Referrer
-      try {
-        await _trustService.recordActivity(
-          referrerId,
-          HTSActivityType.referral,
-        );
-        debugPrint('DSP: Step 4 SUCCESS - HTS referral activity recorded');
-      } catch (e) {
-        debugPrint('DSP: Step 4 FAILED - recordActivity: $e');
-      }
-
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('redeemReferralCode')
+          .call<Map<String, dynamic>>({'code': normalizedCode});
+      final referrerId = response.data['referrerId'] as String?;
+      if (referrerId == null || referrerId.isEmpty) return null;
+      debugPrint('DSP: Referral redeemed securely. Referrer: $referrerId');
       return referrerId;
     } catch (e) {
       debugPrint('DSP: Error processing referral: $e');
@@ -426,8 +343,6 @@ class PointsService {
     await _trustService.updateTrustForUser(senderId);
   }
 
-
-
   // [DEPRECATED v8] Fraud penalty removed (no way to verify)
   Future<void> recordFraudPenalty(String userId) async {
     debugPrint('DSP: Fraud penalty removed (v8)');
@@ -479,15 +394,15 @@ class PointsService {
     if (pointsData == null) {
       await initializeUserPoints(userId);
     }
-    // Record check in the repository and conditionally award points if it's the first time today.
-    final bool isFirstCheckIn = await _repository.recordDailyCheckIn(userId);
-    if (isFirstCheckIn) {
-      await _addPoints(userId, 10, 'daily_check_in');
-    }
+    await FirebaseFunctions.instance.httpsCallable('recordDailyCheckIn').call();
   }
 
   // [NEW] Track Content Reaction
-  Future<void> trackContentReaction(String userId, String targetId, {String? receiverId}) async {
+  Future<void> trackContentReaction(
+    String userId,
+    String targetId, {
+    String? receiverId,
+  }) async {
     await _addPoints(
       userId,
       10,
@@ -521,9 +436,7 @@ class PointsService {
 
   // [DEPRECATED v8] Chat ad DSP penalty removed → PCT milestone in TrustService
   Future<void> trackChatAdPenalty(String userId) async {
-    debugPrint(
-      'DSP: Chat ad penalty deprecated — PCT handled in TrustService',
-    );
+    debugPrint('DSP: Chat ad penalty deprecated — PCT handled in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
 
@@ -539,7 +452,11 @@ class PointsService {
 
   // [UPDATED] Host a Traveler: 1000 DSP + 100 DSP per night to both host and traveler.
   // Both parties earn for creating real-world economic/social value.
-  Future<void> trackHostATraveler(String userId, String guestUserId, {int nights = 1}) async {
+  Future<void> trackHostATraveler(
+    String userId,
+    String guestUserId, {
+    int nights = 1,
+  }) async {
     try {
       final totalDsp = 1000 + (100 * nights);
 
@@ -640,9 +557,7 @@ class PointsService {
 
   // [DEPRECATED v8] Event No-Show → -10 PCT / 10 no-shows (in TrustService)
   Future<void> recordEventNoShowPenalty(String userId) async {
-    debugPrint(
-      'DSP: Event no-show penalty deprecated — PCT in TrustService',
-    );
+    debugPrint('DSP: Event no-show penalty deprecated — PCT in TrustService');
     await _trustService.updateTrustForUser(userId);
   }
 
@@ -671,14 +586,19 @@ class PointsService {
   Future<String?> getReferralCode(String userId) =>
       _repository.getReferralCode(userId);
 
-  // [SIMPLIFIED] Transfer asset with 1% DSP transfer fee applied to sender.
+  /// Transfers liquid on-chain assets ($DIASPORA tokens) between users via Smart Wallets.
+  /// Note: Off-chain DSP points are strictly non-transferable to preserve PCT conversion integrity.
   Future<void> transferAsset({
     required String fromUserId,
     required String toUserId,
     required int amount,
     required String assetType,
   }) async {
-    // No transfer fee — execute the transfer directly
+    if (assetType == 'points') {
+      throw ArgumentError(
+        'DSP points cannot be transferred between users to preserve Proof of Community Trust (PCT) integrity.',
+      );
+    }
     await _repository.transferAsset(
       fromUserId: fromUserId,
       toUserId: toUserId,
@@ -838,7 +758,9 @@ class PointsService {
       );
 
       if (lastVisitTime != null) {
-        final daysSinceLastVisit = DateTime.now().difference(lastVisitTime).inDays;
+        final daysSinceLastVisit = DateTime.now()
+            .difference(lastVisitTime)
+            .inDays;
         if (daysSinceLastVisit < 7) {
           debugPrint(
             '⚠️ [PEER VISIT] Rate limit active: Pair ($hostUserId, $visitorUserId) rewarded $daysSinceLastVisit days ago.',

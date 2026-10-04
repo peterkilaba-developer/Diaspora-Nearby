@@ -93,7 +93,41 @@ class _OrganizationDetailScreenState
 
     try {
       final repo = ref.read(organizationRepositoryProvider);
-      final data = await repo.getOrganization(widget.orgId);
+      var data = await repo.getOrganization(widget.orgId);
+      if (data == null && widget.orgId.startsWith('chamber_')) {
+        final parts = widget.orgId.replaceFirst('chamber_', '').split('_');
+        if (parts.length >= 2) {
+          final host = parts[0].toUpperCase();
+          final home = parts[1].toUpperCase();
+          final hostCountry = country_data.getCountryByCode(host);
+          final homeCountry = country_data.getCountryByCode(home);
+          final hostName = hostCountry?.name ?? host;
+          final homeName = homeCountry?.name ?? home;
+          final chamberName = '$host ⇄ $home Chamber of Commerce';
+          data = {
+            'id': widget.orgId,
+            'kind': 'corridor_chamber',
+            'name': chamberName,
+            'businessName': chamberName,
+            'description':
+                'Official public corridor chamber — $hostName (host) ↔ $homeName (home) diaspora.',
+            'type': 'Chamber of Commerce',
+            'homeCountryCode': home,
+            'hostCountryCode': host,
+            'chatId': 'org_${widget.orgId}',
+            'isPublic': true,
+            'status': 'active',
+            'members': <String>[],
+            'followers': <String>[],
+            'memberCount': 0,
+            'admins': <String>[],
+            'pendingAdmins': <String>[],
+            'adminTitles': <String, dynamic>{},
+            'gdpTotal': 0,
+            'transactionCount': 0,
+          };
+        }
+      }
       if (mounted) {
         setState(() {
           _orgData = data;
@@ -1255,8 +1289,8 @@ class _OrganizationDetailScreenState
         const SizedBox(height: 4),
         Text(
           councilRoles.isEmpty
-              ? 'System-managed — no leaders appointed yet.'
-              : '${councilRoles.length} of ${ChamberRoles.all.length} seats filled',
+              ? 'Managed by Home & Host Community Councils — 2 Appointed Trade Reps'
+              : '${councilRoles.length} of ${ChamberRoles.all.length} trade seats filled',
           style: TextStyle(
             fontSize: 13,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.6),

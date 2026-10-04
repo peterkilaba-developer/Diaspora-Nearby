@@ -74,7 +74,7 @@ class _EmergencyFundScreenState extends ConsumerState<EmergencyFundScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            title: const Text('Community Emergency Fund'),
+            title: const Text('Ubuntu Emergency Fund'),
             centerTitle: true,
             pinned: true,
             floating: true,
@@ -148,7 +148,7 @@ class _OverviewTab extends StatelessWidget {
 
         // How it works — condensed to 3 short steps
         Text(
-          'How It Works',
+          'How It Works & Governance',
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -162,12 +162,12 @@ class _OverviewTab extends StatelessWidget {
         _buildStepRow(
           context,
           '2',
-          'Provide documentation to your Community Secretary',
+          'Managed by Community Secretaries (Home/Host Town & Country)',
         ),
         _buildStepRow(
           context,
           '3',
-          'Leadership reviews — once approved, \$DIASPORA is auto-disbursed on-chain to the recipient',
+          'Standard (≤ \$1,000) & Fast-Track (up to \$50,000 in 24h by Secretaries) · Over \$50,000 by 10 full trust score members (51% approval in 48h local community vote)',
         ),
 
         const SizedBox(height: 24),
@@ -268,7 +268,7 @@ class _OverviewTab extends StatelessWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  'Community\nEmergency Fund',
+                  'Ubuntu\nEmergency Fund',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -472,7 +472,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Community Emergency Fund',
+                'Ubuntu Emergency Fund',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -496,58 +496,56 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
 
         const SizedBox(height: 16),
 
-        // --- ELIGIBILITY REQUIREMENTS ---
-        FutureBuilder<EligibilityResult>(
-          future: widget.eligibilityFuture,
-          builder: (context, snap) {
-            final result = snap.data;
-            final isLoading = !snap.hasData;
-
-            return Container(
-              padding: const EdgeInsets.all(16),
-              decoration: AppTheme.cardDecoration(context),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        // --- MEMBERSHIP & CLAIM GUIDELINES ---
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: AppTheme.cardDecoration(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        LucideIcons.clipboardCheck,
-                        size: 18,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Eligibility Requirements',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    LucideIcons.shieldCheck,
+                    size: 18,
+                    color: theme.colorScheme.primary,
                   ),
-                  const SizedBox(height: 14),
-                  _buildEligibilityRow(
-                    theme,
-                    icon: LucideIcons.userCheck,
-                    title: 'Complete Profile',
-                    subtitle: 'All profile fields must be filled',
-                    met: isLoading ? null : result!.isProfileComplete,
-                  ),
-                  const SizedBox(height: 10),
-                  _buildEligibilityRow(
-                    theme,
-                    icon: LucideIcons.qrCode,
-                    title: '10 In-Person QR Verifications',
-                    subtitle: isLoading
-                        ? 'Checking PCT scans...'
-                        : '${result!.qrScanCount}/${EligibilityResult.requiredQrScans} unique in-person scans',
-                    met: isLoading ? null : result!.hasEnoughQrScans,
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Ubuntu Fund Guidelines',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                 ],
               ),
-            );
-          },
+              const SizedBox(height: 14),
+              _buildEligibilityRow(
+                theme,
+                icon: LucideIcons.checkCircle,
+                title: 'Open Membership Contribution',
+                subtitle:
+                    'Contribute \$100 in \$DIASPORA directly to the fund treasury',
+                met: true,
+              ),
+              const SizedBox(height: 10),
+              _buildEligibilityRow(
+                theme,
+                icon: LucideIcons.clock,
+                title: '100-Day Active Membership for Claims',
+                subtitle:
+                    'Must be an active member for at least 100 days to submit support claims',
+                met: true,
+              ),
+              const SizedBox(height: 10),
+              _buildEligibilityRow(
+                theme,
+                icon: LucideIcons.layers,
+                title: 'Three-Tier Emergency Protection',
+                subtitle:
+                    'Standard (≤ \$1,000) · Fast-Track (up to \$50,000 in 24h) · Catastrophic (over \$50,000 by 10 full trust score members, 51% approval in 48h local community vote)',
+                met: true,
+              ),
+            ],
+          ),
         ),
 
         const SizedBox(height: 16),
@@ -705,7 +703,7 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
 
               // Title
               Text(
-                'Community Emergency Fund',
+                'Ubuntu Emergency Fund',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -3155,6 +3153,23 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
             ),
           const SizedBox(height: 16),
           _buildPayCta(theme),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(
+              Uri.parse(
+                'https://aerodrome.finance/swap?from=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&to=0x55d7e7d006938A15082752225ED44Fd130B87735',
+              ),
+              mode: LaunchMode.externalApplication,
+            ),
+            icon: const Icon(LucideIcons.externalLink, size: 14),
+            label: const Text('Buy \$DIASPORA on Aerodrome DEX'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(42),
+              side: BorderSide(
+                color: theme.colorScheme.primary.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -3162,7 +3177,7 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
               Icon(LucideIcons.shieldCheck, size: 12, color: theme.hintColor),
               const SizedBox(width: 4),
               Text(
-                'On-chain transfer · Base L2',
+                'On-chain transfer · Base blockchain',
                 style: TextStyle(fontSize: 11, color: theme.hintColor),
               ),
             ],

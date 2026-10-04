@@ -22,7 +22,6 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW] Share reward toast
-import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
@@ -597,29 +596,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
         // Process referral if code was provided
         final referralCode = _referralCodeController.text.trim();
-        String? referrerId;
-
         if (referralCode.isNotEmpty) {
           try {
-            // [UPDATED] Capture referrerId for immediate relationship connection
-            referrerId = await pointsService.processReferral(
-              referralCode,
-              user.uid,
-            );
-            debugPrint('Referral processed. Referrer ID: $referrerId');
+            await pointsService.processReferral(referralCode, user.uid);
+            debugPrint('Referral processed.');
           } catch (e) {
             debugPrint('Error processing referral: $e');
-          }
-
-          // Log a QR exchange record so the referrer's 10-QR milestone advances
-          if (referrerId != null) {
-            try {
-              await ref
-                  .read(trustRepositoryProvider)
-                  .saveQRExchangeRecord(referrerId, user.uid);
-            } catch (e) {
-              debugPrint('Error saving QR exchange record: $e');
-            }
           }
         }
 

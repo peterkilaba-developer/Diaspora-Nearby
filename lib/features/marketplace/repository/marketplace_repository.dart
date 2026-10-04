@@ -1,14 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.dart';
 
 final marketplaceRepositoryProvider = Provider<MarketplaceRepository>((ref) {
-  return MarketplaceRepository();
+  return MarketplaceRepository(
+    FirebaseFirestore.instance,
+    FirebaseFunctions.instance,
+  );
 });
 
 class MarketplaceRepository {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
+
+  MarketplaceRepository(this._firestore, this._functions);
 
   CollectionReference get _listingsRef =>
       _firestore.collection('marketplace_listings');
@@ -252,33 +259,28 @@ class MarketplaceRepository {
 
   /// Increment view count
   Future<void> incrementViewCount(String listingId) async {
-    await _listingsRef.doc(listingId).update({
-      'viewCount': FieldValue.increment(1),
+    await _functions.httpsCallable('recordListingView').call({
+      'listingType': 'marketplace',
+      'listingId': listingId,
     });
   }
 
   /// Save (bookmark) a listing
   Future<void> saveListing(String listingId, String userId) async {
-    final batch = _firestore.batch();
-    batch.set(_listingsRef.doc(listingId).collection('saved_by').doc(userId), {
-      'savedAt': FieldValue.serverTimestamp(),
+    await _functions.httpsCallable('setListingSaved').call({
+      'listingType': 'marketplace',
+      'listingId': listingId,
+      'saved': true,
     });
-    batch.update(_listingsRef.doc(listingId), {
-      'savedCount': FieldValue.increment(1),
-    });
-    await batch.commit();
   }
 
   /// Unsave a listing
   Future<void> unsaveListing(String listingId, String userId) async {
-    final batch = _firestore.batch();
-    batch.delete(
-      _listingsRef.doc(listingId).collection('saved_by').doc(userId),
-    );
-    batch.update(_listingsRef.doc(listingId), {
-      'savedCount': FieldValue.increment(-1),
+    await _functions.httpsCallable('setListingSaved').call({
+      'listingType': 'marketplace',
+      'listingId': listingId,
+      'saved': false,
     });
-    await batch.commit();
   }
 
   /// Check if a listing is saved by the user
@@ -398,14 +400,18 @@ class MarketplaceRepository {
     String reporterId,
     String reason,
   ) async {
-    final batch = _firestore.batch();
-    batch.set(
-      _listingsRef.doc(listingId).collection('reports').doc(reporterId),
-      {'reason': reason, 'reportedAt': FieldValue.serverTimestamp()},
-    );
-    batch.update(_listingsRef.doc(listingId), {
-      'reportCount': FieldValue.increment(1),
+    final listing = await _listingsRef.doc(listingId).get();
+    final data = listing.data() as Map<String, dynamic>?;
+    final sellerId = data?['sellerId'] as String?;
+    if (sellerId == null || sellerId.isEmpty) {
+      throw StateError('The listing owner could not be verified.');
+    }
+    await _functions.httpsCallable('submitReport').call<void>({
+      'type': 'marketplace_listing',
+      'listingId': listingId,
+      'reportedUserId': sellerId,
+      'reporterId': reporterId,
+      'reason': reason,
     });
-    await batch.commit();
   }
 }

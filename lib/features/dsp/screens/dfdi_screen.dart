@@ -98,7 +98,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
     final country = profile?.homeCountry ?? 'Your Country';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Diaspora Foreign Direct Investments')),
+      appBar: AppBar(title: const Text('Diaspora Direct Investments (DDI)')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(
@@ -116,13 +116,13 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 32),
               const Text(
-                'Diaspora Foreign Direct Investments',
+                'Diaspora Direct Investments (DDI)',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               const Text(
-                'Coming Soon',
+                'Country & Sovereign Projects (\$1M+)',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -131,7 +131,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Invest in your home country using Diaspora (\$DIASPORA) across 7 key sectors: Food, Healthcare, Education, Real Estate, Water, Energy, and Public-Private Partnerships.',
+                'Invest in large-scale sovereign projects using \$DIASPORA across 7 key sectors: Food, Healthcare, Education, Real Estate, Water, Energy, and Public-Private Partnerships. Governed by a 67% supermajority community vote.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),

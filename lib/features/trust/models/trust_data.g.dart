@@ -15,7 +15,7 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
   isVerified: json['isVerified'] as bool? ?? false,
   identityScore: (json['identityScore'] as num?)?.toDouble() ?? 0.0,
   activityScore: (json['activityScore'] as num?)?.toDouble() ?? 0.0,
-  vouchTrustScore: ((json['vouchTrustScore'] ?? json['reputationScore']) as num?)?.toDouble() ?? 0.0,
+  vouchTrustScore: (json['vouchTrustScore'] as num?)?.toDouble() ?? 0.0,
   vouchCount: (json['vouchCount'] as num?)?.toInt() ?? 0,
   reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
   averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
@@ -34,6 +34,9 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
   verifiedByCount: (json['verifiedByCount'] as num?)?.toInt() ?? 0,
   vouchedByCount: (json['vouchedByCount'] as num?)?.toInt() ?? 0,
   isCouncilEligible: json['isCouncilEligible'] as bool? ?? false,
+  isDdiEligible: json['isDdiEligible'] as bool? ?? false,
+  hasReceivedPohTokenDistribution:
+      json['hasReceivedPohTokenDistribution'] as bool? ?? false,
   awardedQualificationMilestones:
       (json['awardedQualificationMilestones'] as List<dynamic>?)
           ?.map((e) => e as String)
@@ -47,7 +50,8 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
   blockedByCount: (json['blockedByCount'] as num?)?.toInt() ?? 0,
   flaggedMessagesCount: (json['flaggedMessagesCount'] as num?)?.toInt() ?? 0,
   bannedVoucheeCount: (json['bannedVoucheeCount'] as num?)?.toInt() ?? 0,
-  fakeVerificationsCount: (json['fakeVerificationsCount'] as num?)?.toInt() ?? 0,
+  fakeVerificationsCount:
+      (json['fakeVerificationsCount'] as num?)?.toInt() ?? 0,
   rejectedFamilyConnectionsCount:
       (json['rejectedFamilyConnectionsCount'] as num?)?.toInt() ?? 0,
   eventNoShowCount: (json['eventNoShowCount'] as num?)?.toInt() ?? 0,
@@ -132,6 +136,8 @@ Map<String, dynamic> _$TrustDataToJson(TrustData instance) => <String, dynamic>{
   'verifiedByCount': instance.verifiedByCount,
   'vouchedByCount': instance.vouchedByCount,
   'isCouncilEligible': instance.isCouncilEligible,
+  'isDdiEligible': instance.isDdiEligible,
+  'hasReceivedPohTokenDistribution': instance.hasReceivedPohTokenDistribution,
   'awardedQualificationMilestones': instance.awardedQualificationMilestones,
   'verifiedCheckInCount': instance.verifiedCheckInCount,
   'unresponsiveLiaisonCount': instance.unresponsiveLiaisonCount,

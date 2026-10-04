@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:diaspora_nearby/theme/app_theme.dart';import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
+import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 
 /// Detail screen for a treasury card — shows Diaspora Direct Investments
 /// loan information for community treasuries, or system reserve information
@@ -13,6 +14,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
   final String? walletAddress;
   final String balance;
   final bool isSystemReserve;
+  final String? unitId;
 
   const DdiTreasuryDetailScreen({
     super.key,
@@ -21,6 +23,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
     this.walletAddress,
     required this.balance,
     this.isSystemReserve = false,
+    this.unitId,
   });
 
   @override
@@ -276,7 +279,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Diaspora Direct Investments',
+                      'Diaspora Direct Investments (DDI)',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -284,7 +287,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Community Investment Loans',
+                      'Community Lending & Sovereign Projects',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
@@ -294,15 +297,54 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Diaspora Direct Investments enable community members to access '
-            'investment loans directly '
-            'from their community treasury. Funds are used to support local '
-            'businesses, projects, and initiatives that strengthen the diaspora '
-            'economy.',
+            'Diaspora Direct Investments (DDI) empower community members to access '
+            'investment loans and fund sovereign projects directly from community treasuries, '
+            'funded through the 1:1 Ubuntu community match.',
             style: TextStyle(
               fontSize: 13,
               color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
               height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      LucideIcons.arrowUpRight,
+                      size: 14,
+                      color: AppTheme.accent,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Upward Cascading Liquidity Protocol',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'If the local Town DDI Treasury does not have enough funds to cover an approved loan, the protocol automatically cascades upward to draw the shortfall from the State Reserve Treasury, Country DDI Treasury, and Continent Reserve Treasury.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -312,6 +354,49 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
 
   // ── System Reserve Info ─────────────────────────────────────────────────
   Widget _buildSystemReserveInfo(BuildContext context, bool isDark) {
+    final String cardTitle;
+    final String cardSubtitle;
+    final IconData iconData;
+    final String boxTitle;
+    final String boxText;
+
+    if (unitId == 'founders') {
+      cardTitle = 'Founders & Core Team';
+      cardSubtitle = 'Core Maintenance Allocation (10%)';
+      iconData = LucideIcons.users;
+      boxTitle = 'Core Allocation & Vesting';
+      boxText =
+          'This treasury holds the 10% \$DIASPORA allocation dedicated to founders, core developers, and ongoing protocol maintenance. Funds are subject to vesting schedules to ensure long-term alignment with the community.';
+    } else if (unitId == 'liquidity') {
+      cardTitle = 'Liquidity Treasury';
+      cardSubtitle = 'DEX Liquidity & Market Access';
+      iconData = LucideIcons.droplets;
+      boxTitle = 'Market Liquidity Provision';
+      boxText =
+          'This treasury provides initial and ongoing liquidity for decentralized exchanges (DEXs), enabling seamless trading, token swaps, and price stability across the ecosystem.';
+    } else if (unitId == 'burn') {
+      cardTitle = 'Natural Burn Pool';
+      cardSubtitle = 'Protocol Deflationary Sink';
+      iconData = LucideIcons.flame;
+      boxTitle = 'Automated Deflationary Mechanism';
+      boxText =
+          'This wallet serves as an un-spendable deflationary sink (0x...dEaD). Tokens sent here or generated via protocol burn mechanisms are permanently removed from circulating supply to support token scarcity.';
+    } else if (unitId == 'global_community') {
+      cardTitle = 'Global Reserve';
+      cardSubtitle = 'Zero-Fee Remittances & Protocol Operations';
+      iconData = LucideIcons.globe;
+      boxTitle = 'Global Reserve Operations';
+      boxText =
+          'The Global Reserve funds zero-fee token transfers and fiat remittance subsidies, chamber leadership operations, global charitable contributions, and overall protocol upkeep through the 10% Ubuntu community match.';
+    } else {
+      cardTitle = 'Reserve Treasury';
+      cardSubtitle = 'Liquidity & Upward Loan Cascading Backstop';
+      iconData = LucideIcons.shield;
+      boxTitle = 'Liquidity Backstop Function';
+      boxText =
+          'This reserve acts as a dynamic liquidity backstop for local community treasuries. Whenever local treasuries do not have enough funds to cover approved community loans, the requests cascade upward to this reserve to ensure community initiatives remain fully funded.';
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -335,28 +420,24 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                   color: Colors.blueGrey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  LucideIcons.lock,
-                  size: 20,
-                  color: Colors.blueGrey,
-                ),
+                child: Icon(iconData, size: 20, color: Colors.blueGrey),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'System Reserve',
-                      style: TextStyle(
+                      cardTitle,
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Protocol-managed treasury',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      cardSubtitle,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -372,14 +453,45 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'This treasury is managed by the protocol and operates under '
-            'automated rules. Funds are allocated according to the tokenomics framework.',
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              height: 1.4,
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.blueGrey.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      LucideIcons.layers,
+                      size: 14,
+                      color: Colors.blueGrey,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      boxTitle,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  boxText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -429,7 +541,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'COINBASE L2 BASE',
+                  'ETHEREUM BASE',
                   style: TextStyle(
                     fontSize: 8,
                     fontWeight: FontWeight.bold,
@@ -466,7 +578,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 4),
                   Text(
                     'All $balance \$DIASPORA token transfers for this treasury\n'
-                    'are recorded on the Coinbase L2 Base Blockchain and can be verified below.',
+                    'are recorded on the Ethereum Base Blockchain and can be verified below.',
                     style: TextStyle(
                       fontSize: 11,
                       color: isDark

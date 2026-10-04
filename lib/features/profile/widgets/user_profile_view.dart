@@ -105,19 +105,34 @@ class UserProfileView extends ConsumerWidget {
               icon: const Icon(LucideIcons.edit, size: 16),
               label: const Text('Edit'),
             ),
-          if (isSelf)
-            IconButton(
-              onPressed: () {
-                // Always open QR dialog directly — it has its own
-                // built-in profile completion flow if fields are missing.
+          IconButton(
+            onPressed: () async {
+              if (isSelf) {
                 showDialog(
                   context: context,
                   builder: (context) => ProfileQRCodeDialog(profile: profile),
                 );
-              },
-              icon: const Icon(LucideIcons.qrCode, size: 20),
-              tooltip: 'Identity QR',
-            ),
+              } else {
+                final currentUser = ref
+                    .read(authRepositoryProvider)
+                    .currentUser;
+                if (currentUser == null) return;
+                var myProfile = ref.read(userProfileProvider).value;
+                myProfile ??= await ref
+                    .read(profileRepositoryProvider)
+                    .getUserProfile(currentUser.uid);
+                if (myProfile != null && context.mounted) {
+                  showDialog(
+                    context: context,
+                    builder: (context) =>
+                        ProfileQRCodeDialog(profile: myProfile!),
+                  );
+                }
+              }
+            },
+            icon: const Icon(LucideIcons.qrCode, size: 20),
+            tooltip: 'Identity QR',
+          ),
         ],
         leading: () {
           if (isEnforced) return const SizedBox();
@@ -1944,6 +1959,10 @@ class UserProfileView extends ConsumerWidget {
         'wife',
         'brother',
         'sister',
+        'grandfather',
+        'grandmother',
+        'grandson',
+        'granddaughter',
       ].contains(type)) {
         grouped['Immediate Family']!.add(rel);
       } else if ([
@@ -1952,10 +1971,6 @@ class UserProfileView extends ConsumerWidget {
         'nephew',
         'niece',
         'cousin',
-        'grandfather',
-        'grandmother',
-        'grandson',
-        'granddaughter',
         'relative',
       ].contains(type)) {
         grouped['Extended Family']!.add(rel);
@@ -2189,19 +2204,56 @@ class UserProfileView extends ConsumerWidget {
               builder: (context, setState) {
                 return AlertDialog(
                   title: const Text('Accept as...'),
-                  content: RadioGroup<String>(
-                    groupValue: tempSelected,
-                    onChanged: (val) => setState(() => tempSelected = val),
+                  content: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: possibleTypes
-                          .map(
-                            (type) => RadioListTile<String>(
-                              title: Text(type),
-                              value: type,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        RadioGroup<String>(
+                          groupValue: tempSelected,
+                          onChanged: (val) =>
+                              setState(() => tempSelected = val),
+                          child: Column(
+                            children: possibleTypes
+                                .map(
+                                  (type) => RadioListTile<String>(
+                                    title: Text(type),
+                                    value: type,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.amber.withValues(alpha: 0.4),
                             ),
-                          )
-                          .toList(),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 18,
+                                color: Colors.amber,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Binding Commitment: Accepting directly ties your trust and economic fortune together. If either member is penalized for misconduct or fraud, identical DSP & PCT penalties will be deducted from your account.',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontSize: 11, height: 1.3),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   actions: [

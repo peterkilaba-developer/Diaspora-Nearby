@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/message.dart';
 
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
@@ -18,6 +19,9 @@ class ChatMessagingService {
   final FirebaseStorage _storage;
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  // Kept in the constructor for API compatibility while legacy client-side
+  // economic rewards remain disabled.
+  // ignore: unused_field
   final PointsService _pointsService;
 
   // [FIX] Cache sender profile to avoid fetching on every message
@@ -208,22 +212,15 @@ class ChatMessagingService {
         allTargets.add(currentUserId!);
       }
 
-      for (final userId in allTargets) {
-        String userSpecificContent = content;
-
-        if (type == 'dsp_transfer') {
-          final isSender = userId == (senderIdOverride ?? currentUserId);
-          final amount = metadata?['amount'] ?? 0;
-          userSpecificContent = isSender
-              ? 'You sent $amount DSP'
-              : 'You received $amount DSP from $senderName';
-        }
-
+      // The client may update only its own inbox index. A Firestore trigger
+      // fans the canonical message out to every other participant and makes
+      // unread increments idempotent.
+      if (currentUserId != null) {
         final userChatUpdates = <String, dynamic>{
           'chatId': chatId,
           'lastMessage': {
             'id': newMsgRef.id,
-            'content': userSpecificContent,
+            'content': content,
             'timestamp': now,
             'senderId': senderIdOverride ?? currentUserId,
             'senderName': senderName,
@@ -235,13 +232,8 @@ class ChatMessagingService {
           'updatedAt': now,
           'isDeleted': false,
         };
-
-        if (userId != currentUserId) {
-          userChatUpdates['unreadCount'] = FieldValue.increment(1);
-        }
-
         batch.set(
-          _userChatsCol(userId).doc(chatId),
+          _userChatsCol(currentUserId!).doc(chatId),
           userChatUpdates,
           SetOptions(merge: true),
         );
@@ -251,14 +243,7 @@ class ChatMessagingService {
       await batch.commit();
 
       debugPrint(
-        '✅ Message sent via batch commit (${allTargets.length} targets)',
-      );
-
-      // Track Engagement Rewards (fire-and-forget)
-      _triggerPointRewards(
-        chatId: chatId,
-        senderIdOverride: senderIdOverride,
-        participants: allTargets,
+        '✅ Message committed; server fan-out queued for ${allTargets.length} targets',
       );
 
       return Message.fromFirestoreData(newMsgRef.id, chatId, messageData);
@@ -276,35 +261,11 @@ class ChatMessagingService {
   ) async {
     if (currentUserId == null) return;
 
-    final userData = await _getSenderData();
-    final senderName =
-        '${userData?['firstName'] ?? ''} ${userData?['lastName'] ?? ''}'.trim();
-    // Req: "[sender full] invites you to join group: [group name]"
-    final content = '$senderName invites you to join group: $groupName';
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-
     for (final userId in invitedUserIds) {
       try {
-        await _userChatsCol(userId).doc(groupId).set({
-          'chatId': groupId,
-          'lastMessage': {
-            'content': content,
-            'timestamp': now,
-            'senderId': currentUserId,
-            'senderName': senderName.isNotEmpty ? senderName : 'Someone',
-            'type': 'group_invitation',
-            'status': 'sent',
-            'metadata': {
-              'inviterId': currentUserId,
-              'inviterName': senderName,
-              'groupName': groupName,
-            },
-          },
-          'updatedAt': now,
-          'unreadCount': FieldValue.increment(1),
-          'isDeleted': false,
-        }, SetOptions(merge: true));
+        await FirebaseFunctions.instance
+            .httpsCallable('manageChatMembers')
+            .call({'chatId': groupId, 'inviteUserId': userId});
       } catch (e) {
         debugPrint('Error sending invitation to $userId: $e');
       }
@@ -927,6 +888,7 @@ class ChatMessagingService {
       final storageMetadata = SettableMetadata(
         contentType: mimeType,
         cacheControl: 'public, max-age=31536000',
+        customMetadata: {'ownerUid': ?currentUserId, 'chatId': chatId},
       );
 
       UploadTask uploadTask;
@@ -976,6 +938,7 @@ class ChatMessagingService {
         'type': type,
         'timestamp': now,
         'metadata': metadata, // [NEW]
+        'storagePath': storageRef.fullPath,
         'status': 'sent',
       };
 
@@ -1047,82 +1010,6 @@ class ChatMessagingService {
           .doc(chatId)
           .set(chatDocMediaUpdate, SetOptions(merge: true));
 
-      var targetParticipants = participants;
-      debugPrint(
-        '📤 _uploadMediaAsync: Initial participants: $targetParticipants',
-      );
-
-      if (targetParticipants == null || targetParticipants.isEmpty) {
-        try {
-          debugPrint(
-            '⚠️ Media participants missing. Fetching from Firestore...',
-          );
-          final chatDoc = await _chatsCol.doc(chatId).get();
-          if (chatDoc.exists) {
-            targetParticipants = List<String>.from(
-              chatDoc.data()?['participants'] ?? [],
-            );
-            debugPrint('✅ Fetched participants: $targetParticipants');
-          }
-        } catch (e) {
-          debugPrint('❌ Error fetching participants fallback: $e');
-        }
-      }
-
-      final userIdsToUpdate = Set<String>.from(targetParticipants ?? []);
-      if (replyToSenderId != null) userIdsToUpdate.add(replyToSenderId);
-
-      if (senderIdOverride != null) {
-        userIdsToUpdate.add(senderIdOverride);
-      } else if (currentUserId != null) {
-        userIdsToUpdate.add(currentUserId!);
-      }
-
-      debugPrint('🎯 Updating userChats (media) for targets: $userIdsToUpdate');
-
-      for (final userId in userIdsToUpdate) {
-        try {
-          final contentPreview = caption?.isNotEmpty == true ? caption : icon;
-          debugPrint(
-            '   -> Updating userChats for $userId with content: "$contentPreview"',
-          );
-
-          final userChatMediaData = <String, dynamic>{
-            'lastMessage': <String, dynamic>{
-              'id': newMsgRef.id,
-              'content': contentPreview,
-              'timestamp': now,
-              'senderId': senderIdOverride ?? currentUserId,
-              'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
-              'type': type,
-              'status': 'sent',
-              'metadata': ?metadata,
-              if (type == 'image') 'imageUrl': derivedUrl,
-              if (type == 'video') 'documentUrl': derivedUrl,
-            },
-            'updatedAt': now,
-            'isDeleted': false,
-          };
-
-          if (userId != currentUserId) {
-            userChatMediaData['unreadCount'] = FieldValue.increment(1);
-          }
-
-          await _userChatsCol(
-            userId,
-          ).doc(chatId).set(userChatMediaData, SetOptions(merge: true));
-        } catch (e) {
-          debugPrint('Error updating userChat for $userId: $e');
-        }
-      }
-
-      // Track Engagement Rewards (Media)
-      _triggerPointRewards(
-        chatId: chatId,
-        senderIdOverride: senderIdOverride,
-        participants: userIdsToUpdate,
-      );
-
       if (onConfirmed != null) {
         onConfirmed(
           Message.fromFirestoreData(newMsgRef.id, chatId, messageData),
@@ -1149,122 +1036,10 @@ class ChatMessagingService {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return;
 
-    // 1. Read current reactions, update, and write back
-    final msgDoc = await _messagesCol(chatId).doc(messageId).get();
-    final msgData = msgDoc.data() ?? {};
-
-    // Parse existing reactions (stored as list of {emoji, userIds} maps)
-    List<Map<String, dynamic>> reactionsList = [];
-    if (msgData['reactions'] is List) {
-      reactionsList = (msgData['reactions'] as List)
-          .map((r) => Map<String, dynamic>.from(r as Map))
-          .toList();
-    }
-
-    // Remove user from any existing reaction
-    for (final r in reactionsList) {
-      final userIds = List<String>.from(r['userIds'] ?? []);
-      userIds.remove(currentUserId);
-      r['userIds'] = userIds;
-    }
-    reactionsList.removeWhere((r) => (r['userIds'] as List).isEmpty);
-
-    // Add user to the target emoji reaction
-    final existingReaction = reactionsList
-        .where((r) => r['emoji'] == emoji)
-        .firstOrNull;
-    if (existingReaction != null) {
-      (existingReaction['userIds'] as List).add(currentUserId);
-    } else {
-      reactionsList.add({
-        'emoji': emoji,
-        'userIds': [currentUserId],
-      });
-    }
-
-    await _messagesCol(
-      chatId,
-    ).doc(messageId).set({'reactions': reactionsList}, SetOptions(merge: true));
-
-    // 2. Notify the message sender (if not self)
-    if (messageSenderId != currentUserId) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .get();
-      final userData = userDoc.data();
-      final senderName = userData?['firstName'] as String? ?? 'Someone';
-
-      debugPrint(
-        '🔔 Triggering reaction notification for user: $messageSenderId',
-      );
-
-      // Update userChats for the message OWNER to trigger push notification
-      final reactionUpdate = <String, dynamic>{
-        'lastMessage': {
-          'content': 'Reacted $emoji to your message',
-          'timestamp': now,
-          'senderId': currentUserId,
-          'senderName': senderName,
-          'type': 'reaction',
-          'status': 'sent',
-        },
-        'updatedAt': now,
-        'unreadCount': FieldValue.increment(1),
-      };
-
-      await _userChatsCol(
-        messageSenderId,
-      ).doc(chatId).set(reactionUpdate, SetOptions(merge: true));
-    }
-  }
-
-  // ============================================
-  // REWARDS HELPER
-  // ============================================
-
-  void _triggerPointRewards({
-    required String chatId,
-    required String? senderIdOverride,
-    required Iterable<String>? participants,
-  }) {
-    if (senderIdOverride != null || currentUserId == null) return;
-
-    // 1. Regular message reward (100 DSP, daily limit 100 handled in repo)
-    // (Moved inside the logic below to handle bi-directional rewards for DMs)
-
-    // 2. Specialized rewards (1,000 DSP)
-    // Community IDs usually start with 'home_', 'host_', 'past_', 'chat_', or is 'global_community'
-    final isCommunity =
-        chatId.startsWith('chat_') ||
-        chatId.startsWith('home_') ||
-        chatId.startsWith('host_') ||
-        chatId.startsWith('past_') ||
-        chatId == 'global_community';
-
-    if (isCommunity) {
-      _pointsService.trackMessageSent(currentUserId!);
-      _pointsService.trackCommunityMessage(currentUserId!, chatId);
-    } else if (chatId.startsWith('direct_')) {
-      // DM reward (Unique per user pair)
-      if (participants != null) {
-        final targetUserId = participants.firstWhere(
-          (uid) => uid != currentUserId,
-          orElse: () => '',
-        );
-        if (targetUserId.isNotEmpty) {
-          _pointsService.trackMessageSent(currentUserId!, receiverId: targetUserId);
-          _pointsService.trackNewDM(currentUserId!, targetUserId);
-        } else {
-          _pointsService.trackMessageSent(currentUserId!);
-        }
-      } else {
-        _pointsService.trackMessageSent(currentUserId!);
-      }
-    } else {
-      _pointsService.trackMessageSent(currentUserId!);
-    }
+    await FirebaseFunctions.instance.httpsCallable('reactToMessage').call({
+      'chatId': chatId,
+      'messageId': messageId,
+      'emoji': emoji,
+    });
   }
 }

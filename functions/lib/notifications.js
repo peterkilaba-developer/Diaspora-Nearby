@@ -80,7 +80,7 @@ exports.onPointsTransactionCreated = functions.firestore
  */
 
 exports.manageUserFCMTopics = functions.firestore
-  .document('users/{userId}')
+  .document('user_private/{userId}')
   .onWrite(async (change, context) => {
     // If deleted, do nothing (tokens expire)
     if (!change.after.exists) return null;
@@ -93,8 +93,9 @@ exports.manageUserFCMTopics = functions.firestore
     const newToken = afterData.fcmToken;
 
     // Country check
-    const oldCountry = beforeData ? beforeData.homeCountryCode : null;
-    const newCountry = afterData.homeCountryCode;
+    const profile = await db.collection('users').doc(context.params.userId).get();
+    const oldCountry = null;
+    const newCountry = profile.exists ? profile.data().homeCountryCode : null;
 
     if (!newToken) return null;
 

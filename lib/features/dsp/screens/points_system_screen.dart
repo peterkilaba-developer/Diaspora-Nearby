@@ -380,6 +380,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     UserPoints userPoints,
     Map<String, int> lifetimeEarnings,
   ) {
+    final userProfileAsync = ref.watch(
+      userProfileStreamProvider(userPoints.userId),
+    );
+    final trustDataAsync = ref.watch(userTrustProvider(userPoints.userId));
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
         horizontal: AppTheme.pageHorizontalPadding,
@@ -408,11 +413,18 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildSubHeader('Getting Started'),
             const SizedBox(height: 8),
 
+            _buildTokenWelcomeBonusCard(
+              context,
+              userProfile: userProfileAsync.value,
+              displayPoints: userPoints,
+              trustData: trustDataAsync.value,
+            ),
+
             _buildActivityCard(
               context,
-              title: 'Welcome Bonus',
-              subtitle: 'Awarded automatically when you sign up',
-              amount: '1,000 DSP',
+              title: 'Welcome Bonus (DSP Points)',
+              subtitle: '10,000 DSP points awarded upon joining',
+              amount: '10,000 DSP',
               earned: lifetimeEarnings['welcome_bonus'] ?? 0,
             ),
             _buildActivityCard(
@@ -433,8 +445,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildActivityCard(
               context,
               title: 'Invite Family & Friends',
-              subtitle: 'Someone signs up using your referral code',
-              amount: '1,000 DSP each',
+              subtitle:
+                  'Someone signs up using your referral code (10,000 DSP for both)',
+              amount: '10,000 DSP each',
               earned:
                   (lifetimeEarnings['referral_reward_referrer'] ?? 0) +
                   (lifetimeEarnings['referral_reward_referee'] ?? 0),
@@ -674,7 +687,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
             const SizedBox(height: 16),
             Text(
-              'DSP is earned instantly for all activities (except Profile Completion, which requires 10 fields for a 10,000 DSP payout). PCT is earned instantly for general activities. For the four core connection milestones (Family, Friend, QR Connect, and Vouched/Verified), you earn 1,000 DSP instantly per connection, but the 10 PCT is awarded only at 10× intervals (10, 100, 1K...).',
+              'DSP is earned instantly for all activities (with 10,000 DSP welcome and profile completion payouts). PCT is earned through verifiable interactions. For core connection milestones (Family, Friend, QR Connect, and Verified/Vouched), reaching 10 connections awards 10,000 DSP + 10 PCT, with progressive tiers at 100, 1K, etc.',
               style: TextStyle(
                 color: Theme.of(context).hintColor,
                 fontSize: 12,
@@ -694,6 +707,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
             ),
 
+            // --- Dual Geographic Locations ---
+            _buildTrustCard(
+              context,
+              title: 'Dual Geographic Locations',
+              subtitle:
+                  'Your activity automatically directs 70% community matching supply into your saved Home & Host geographic community tiers and the Global Community.',
+              amount: '70% Dual Community Allocation',
+              standing: 'Dual Identity Active',
+            ),
+
             // --- Verification ---
             _buildSubHeader('Verification'),
             const SizedBox(height: 8),
@@ -701,7 +724,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Verified by Peer',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique verifications.',
+                  '1,000 DSP earned per connection. +10 PCT awarded at 10, 100, 1K... unique verifications.',
               amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueVerificationCount ?? 0} Received',
             ),
@@ -723,7 +746,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Vouched by Peer',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique vouches.',
+                  '1,000 DSP earned per connection. +10 PCT awarded at 10, 100, 1K... unique vouches.',
               amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueVouchCount ?? 0} Received',
             ),
@@ -741,7 +764,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Family Connection',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique connections.',
+                  '1,000 DSP earned per connection. +10 PCT & 10,000 DSP milestone at 10 unique family connections.',
               amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueFamilyCount ?? 0} Connected',
             ),
@@ -749,7 +772,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Friend Connection',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique connections.',
+                  '1,000 DSP earned per connection. +10 PCT & 10,000 DSP milestone at 10 unique friend connections.',
               amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueFriendCount ?? 0} Connected',
             ),
@@ -757,17 +780,18 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'QR Connect',
               subtitle:
-                  '1,000 DSP earned instantly per connection. +10 PCT awarded at 10, 100, 1K... unique connections.',
+                  '1,000 DSP earned per connection. +10 PCT & 10,000 DSP milestone at 10 unique in-person QR scans.',
               amount: '+10 PCT per 10× milestone',
               standing: '${trustData?.uniqueQrCount ?? 0} Scanned',
             ),
 
-            // --- Seniority ---
+            // --- Seniority & Ubuntu Fund ---
             _buildTrustCard(
               context,
-              title: 'Account Age',
-              subtitle: 'Time on the platform builds trust.',
-              amount: '+1 PCT every 100 days',
+              title: 'Account Age & Fund Access',
+              subtitle:
+                  'Seniority builds trust. 100 days of active membership unlocks full claim rights in the Ubuntu Emergency Fund.',
+              amount: '+1 PCT every 100 days (100d Fund Gate)',
               standing: '$daysActive Days',
             ),
 
@@ -1932,11 +1956,14 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                       efficiency = (trust / 10).ceil() / 10.0;
                                       if (efficiency > 1.0) efficiency = 1.0;
                                     }
-                                    final double payout = currentBalance * efficiency;
-                                    final valuation =
-                                        ref.watch(dspValuationProvider);
-                                    final usdEst =
-                                        valuation.formatBalance(payout.round());
+                                    final double payout =
+                                        currentBalance * efficiency;
+                                    final valuation = ref.watch(
+                                      dspValuationProvider,
+                                    );
+                                    final usdEst = valuation.formatBalance(
+                                      payout.round(),
+                                    );
                                     return Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
@@ -1963,8 +1990,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                                       '${NumberFormat('#,###').format(payout.round())} \$DIASPORA ',
                                                   style: const TextStyle(
                                                     fontSize: 10,
-                                                    fontWeight:
-                                                        FontWeight.bold,
+                                                    fontWeight: FontWeight.bold,
                                                     color: AppTheme.warning,
                                                   ),
                                                 ),
@@ -1972,8 +1998,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                                   text: '($usdEst)',
                                                   style: const TextStyle(
                                                     fontSize: 10,
-                                                    fontWeight:
-                                                        FontWeight.w600,
+                                                    fontWeight: FontWeight.w600,
                                                     color: Color(0xFF38BDF8),
                                                   ),
                                                 ),
@@ -2625,7 +2650,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           ),
           const SizedBox(height: 12),
 
-          // 1.1 Global Reserve (10% Tribute)
+          // 1.1 Global Reserve (10% Ubuntu Community Match)
           _buildWalletDisplayCard(
             title: 'Global Reserve',
             icon: LucideIcons.globe,
@@ -2638,7 +2663,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             trustScore: (globalCommunity?.averagePoCT ?? 0).toDouble(),
             tgeEvent: globalTgeEvent,
             epochLabel:
-                'Zero fee value transfer subsidies, salaries and benefits for community leaders and chambers of commerce staff, global charitable contributions, and all other costs associated with running the platform',
+                'Zero fee value transfer and remittances subsidies, salaries and benefits for community leaders and chambers of commerce staff, global charitable contributions, and platform upkeep',
             avatarWidget: CommunityChatUtils.getCommunityAvatar(
               context: context,
               type: globalCommunity?.type ?? 'global',
@@ -2659,11 +2684,23 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 8),
             ...homePool.map((community) {
               const percentage = "10%";
+              final isReserve =
+                  community.type == 'state' ||
+                  community.type == 'province' ||
+                  community.type == 'continent';
+              final rawName = CommunityChatUtils.generateCommunityNameFromParts(
+                name: community.name,
+                locationType: community.locationType ?? 'home',
+                id: community.id,
+              );
+              final cardTitle = isReserve
+                  ? '$rawName Reserve Treasury'
+                  : '$rawName DDI Treasury';
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _buildWalletDisplayCard(
-                  title:
-                      '${CommunityChatUtils.generateCommunityNameFromParts(name: community.name, locationType: community.locationType ?? 'home', id: community.id)} Treasury',
+                  title: cardTitle,
                   icon: LucideIcons.home,
                   color: AppTheme.accent,
                   percentage: percentage,
@@ -2697,11 +2734,23 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 8),
             ...hostPool.map((community) {
               const percentage = "10%";
+              final isReserve =
+                  community.type == 'state' ||
+                  community.type == 'province' ||
+                  community.type == 'continent';
+              final rawName = CommunityChatUtils.generateCommunityNameFromParts(
+                name: community.name,
+                locationType: community.locationType ?? 'host',
+                id: community.id,
+              );
+              final cardTitle = isReserve
+                  ? '$rawName Reserve Treasury'
+                  : '$rawName DDI Treasury';
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _buildWalletDisplayCard(
-                  title:
-                      '${CommunityChatUtils.generateCommunityNameFromParts(name: community.name, locationType: community.locationType ?? 'host', id: community.id)} Treasury',
+                  title: cardTitle,
                   icon: LucideIcons.mapPin,
                   color: Colors.orange,
                   percentage: percentage,
@@ -3125,6 +3174,267 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTokenWelcomeBonusCard(
+    BuildContext context, {
+    required ProfileData? userProfile,
+    required UserPoints displayPoints,
+    required TrustData? trustData,
+  }) {
+    final hasLocation =
+        (displayPoints.homeCountryCode != null &&
+            displayPoints.homeCountryCode!.isNotEmpty) ||
+        (userProfile?.homeLocation.city != null &&
+            userProfile!.homeLocation.city!.isNotEmpty) ||
+        (userProfile?.hostLocation.city != null &&
+            userProfile!.hostLocation.city!.isNotEmpty) ||
+        (userProfile?.homeCountryCode != null &&
+            userProfile!.homeCountryCode!.isNotEmpty);
+
+    final isProfileComplete =
+        userProfile?.isComplete == true ||
+        (userProfile?.completedMilestoneFieldCount ?? 0) >= 10;
+
+    final qrCount = trustData?.uniqueQrCount ?? displayPoints.qrConnectionCount;
+    final hasTenQr = qrCount >= 10;
+
+    final familyCount = trustData?.uniqueFamilyCount ?? 0;
+    final hasTenFamily = familyCount >= 10;
+
+    final friendCount = trustData?.uniqueFriendCount ?? 0;
+    final hasTenFriends = friendCount >= 10;
+
+    final verificationCount = trustData?.uniqueVerificationCount ?? 0;
+    final hasTenVerifications = verificationCount >= 10;
+
+    final hasEmergencyFund =
+        (trustData?.awardedQualificationMilestones.contains('EmergencyFund') ??
+            false) ||
+        (trustData?.awardedQualificationMilestones.contains(
+              'UbuntuEmergencyFund',
+            ) ??
+            false);
+
+    int completedCount = 0;
+    if (hasLocation) completedCount++;
+    if (isProfileComplete) completedCount++;
+    if (hasTenQr) completedCount++;
+    if (hasTenFamily) completedCount++;
+    if (hasTenFriends) completedCount++;
+    if (hasTenVerifications) completedCount++;
+    if (hasEmergencyFund) completedCount++;
+
+    final bool isAllComplete = completedCount == 7;
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: isAllComplete
+                ? [const Color(0xFF1B4D3E), const Color(0xFF2D5A47)]
+                : [Theme.of(context).cardColor, Theme.of(context).cardColor],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.stars_rounded,
+                  color: isAllComplete ? Colors.amber : const Color(0xFF2D5A47),
+                  size: 28,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '7,000 \$DIASPORA Proof of Humanity Distribution',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isAllComplete ? Colors.white : null,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Auto-credited to smart wallet upon completing all 7 PoH milestones (70 PCT Base)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isAllComplete
+                              ? Colors.white70
+                              : Theme.of(context).hintColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            _buildMilestoneCheckRow(
+              context,
+              title: 'Location Transparency (10 PCT)',
+              isComplete: hasLocation,
+              subtitle: hasLocation
+                  ? 'Location enabled'
+                  : 'Enable location or set current city',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 8),
+            _buildMilestoneCheckRow(
+              context,
+              title: 'Complete Profile (10 PCT)',
+              isComplete: isProfileComplete,
+              subtitle: isProfileComplete
+                  ? 'Profile fields completed'
+                  : 'Fill all profile fields',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 8),
+            _buildMilestoneCheckRow(
+              context,
+              title: '10 QR Identity Exchanges (10 PCT)',
+              isComplete: hasTenQr,
+              subtitle: '$qrCount / 10 physical in-person QR exchanges',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 8),
+            _buildMilestoneCheckRow(
+              context,
+              title: 'Family Circle (10 PCT)',
+              isComplete: hasTenFamily,
+              subtitle: '$familyCount / 10 verified family connections',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 8),
+            _buildMilestoneCheckRow(
+              context,
+              title: 'Friend Circle (10 PCT)',
+              isComplete: hasTenFriends,
+              subtitle: '$friendCount / 10 verified friend connections',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 8),
+            _buildMilestoneCheckRow(
+              context,
+              title: 'Peer Profile Verifications (10 PCT)',
+              isComplete: hasTenVerifications,
+              subtitle: '$verificationCount / 10 peer profile claims verified',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 8),
+            _buildMilestoneCheckRow(
+              context,
+              title: 'Ubuntu Emergency Fund (10 PCT)',
+              isComplete: hasEmergencyFund,
+              subtitle: hasEmergencyFund
+                  ? 'Emergency fund active'
+                  : 'Contribute to catastrophe protection pool',
+              textColor: isAllComplete ? Colors.white : null,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isAllComplete
+                    ? Colors.amber.withValues(alpha: 0.2)
+                    : const Color(0xFF2D5A47).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isAllComplete ? Colors.amber : const Color(0xFF2D5A47),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isAllComplete
+                        ? Icons.check_circle_rounded
+                        : Icons.hourglass_top_rounded,
+                    color: isAllComplete
+                        ? Colors.amber
+                        : const Color(0xFF2D5A47),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isAllComplete
+                          ? '✅ All 7 Milestones Met — 7,000 \$DIASPORA Auto-Credited on Base blockchain!'
+                          : 'Status: Pending Milestones ($completedCount/7 Complete)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isAllComplete
+                            ? Colors.white
+                            : const Color(0xFF2D5A47),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMilestoneCheckRow(
+    BuildContext context, {
+    required String title,
+    required bool isComplete,
+    required String subtitle,
+    Color? textColor,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          isComplete
+              ? Icons.check_circle_rounded
+              : Icons.radio_button_unchecked_rounded,
+          color: isComplete
+              ? Colors.green
+              : Theme.of(context).hintColor.withValues(alpha: 0.5),
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: textColor,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: textColor != null
+                      ? textColor.withValues(alpha: 0.7)
+                      : Theme.of(context).hintColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

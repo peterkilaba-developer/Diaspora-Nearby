@@ -8,7 +8,7 @@ This document provides the definitive technical specification for the **$DIASPOR
 | **Token Name** | Diaspora |
 | **Ticker** | $DIASPORA |
 | **Decimals** | 18 |
-| **Blockchain** | Base (Coinbase Layer 2, ERC-20 Standard) |
+| **Blockchain** | Ethereum Base Blockchain by Coinbase (ERC-20 Standard) |
 | **Smart Contract** | UUPS Upgradeable Proxy |
 | **Hard Cap** | 1 Quadrillion (1,000,000,000,000,000 $DIASPORA) |
 | **Max Supply** | Dynamic (gated by 10 Epochs, each 10x the previous) |
@@ -30,34 +30,33 @@ The smart contract pre-mints epoch supply at TGE and distributes it through TDE 
 - **Epoch 1 Supply Target**: **1,000,000 $DIASPORA** (One Million).
 - **Each Epoch**: 10x the previous Epoch's supply target, up to 1 Quadrillion at Epoch 10.
 - **TDE Releases Per Epoch**: 10 Token Distribution Events, each triggered at a 10% distributed-DSP milestone inside the epoch and distributing that decile of the epoch supply target.
-- **Distribution Mechanism**: Batch distribution to wallet addresses based on the final Firebase snapshot.
-- **Burn Mechanism**: Any tokens from the epoch premint that are **unclaimed** (e.g., users below the 10,000 $DIASPORA gate or communities below the 1,000,000 $DIASPORA floor) MUST BE **BURNED** by the contract.
+- **Burn Mechanism**: Inefficiency resulting from PCT scores below 91% is automatically burned to the burn address by the smart contract.
 
 ## 4. TGE "Great Reset" Prerequisites
 Before executing a TGE, the following system-wide actions occur:
 1. **DSP Supply Trigger**: The TGE happens once per epoch. TDEs then distribute supply as cumulative distributed DSP crosses each 10% decile milestone. For a 1,000,000 DSP epoch, TDEs occur at 100,000, 200,000, and every additional 100,000 DSP through 1,000,000. Population targets are informational and do not gate execution.
 2. **Snapshot Generation**: A final immutable snapshot of Firebase is captured, providing a list of:
-   - **Eligible Users**: Users with **>= 10,000 $DIASPORA** balance.
-   - **Communities**: Community treasury balances (**>= 1,000,000 $DIASPORA** gate).
-   - **System Wallets**: Founders/Team, Investors/Partners, and Burn addresses.
-3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA at a **1:1 ratio**, adjusted by the user's PCT efficiency. Scores 1-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%.
-4. **Cleanup**: All off-chain $DIASPORA balances in the application are reset to **0**.
+   - **Eligible Users**: Users who have completed the 7 Proof of Humanity milestones with positive DSP balance.
+   - **Communities**: Community treasury balances.
+   - **System Wallets**: Founders & Core Team, Liquidity Treasury, and Burn addresses.
+3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA adjusted by the user's PCT efficiency: scores 0-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%.
+4. **Cleanup**: All snapshotted off-chain DSP balances are reset to **0** for the next cycle.
 
 ## 5. Economic Governance: 10-Epoch Scaling
 The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in the distributed-DSP supply target. Population targets are retained as informational network-growth benchmarks.
 
 | Epoch | Informational Population Benchmark | Distributed DSP Trigger |
 | :--- | :--- | :--- |
-| **1** | 100 | 1,000,000 |
-| **2** | 1,000 | 10,000,000 |
-| **3** | 10,000 | 100,000,000 |
-| **4** | 100,000 | 1,000,000,000 |
-| **5** | 1,000,000 | 10,000,000,000 |
-| **6** | 10,000,000 | 100,000,000,000 |
-| **7** | 100,000,000 | 1,000,000,000,000 |
-| **8** | 1,000,000,000 | 10,000,000,000,000 |
-| **9** | 10,000,000,000 | 100,000,000,000,000 |
-| **10** | 100,000,000,000 | 1,000,000,000,000,000 |
+| **1** | 10 | 1,000,000 |
+| **2** | 100 | 10,000,000 |
+| **3** | 1,000 | 100,000,000 |
+| **4** | 10,000 | 1,000,000,000 |
+| **5** | 100,000 | 10,000,000,000 |
+| **6** | 1,000,000 | 100,000,000,000 |
+| **7** | 10,000,000 | 1,000,000,000,000 |
+| **8** | 100,000,000 | 10,000,000,000,000 |
+| **9** | 1,000,000,000 | 100,000,000,000,000 |
+| **10** | 10,000,000,000 (10 Billion) | 1,000,000,000,000,000 |
 
 ## 6. Token Utility Sinks
 - **Community Penalties**: Spam, fraud, no-shows, and other bad behaviors result in DSP deductions.

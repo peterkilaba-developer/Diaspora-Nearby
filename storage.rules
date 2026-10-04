@@ -9,6 +9,25 @@ service firebase.storage {
     function isSmallEnough() {
        return request.resource.size < 5 * 1024 * 1024; // 5MB
     }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() &&
+        'admin' in request.auth.token && request.auth.token.admin == true;
+    }
+    function isChatParticipant(chatId) {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/chats/$(chatId)) &&
+        firestore.get(/databases/(default)/documents/chats/$(chatId))
+          .data.participants.hasAny([request.auth.uid]);
+    }
+    function isEventOwner(eventId) {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/events/$(eventId)) &&
+        firestore.get(/databases/(default)/documents/events/$(eventId))
+          .data.creatorId == request.auth.uid;
+    }
 
     // --- Profile Photos & Business Logos ---
     // Path: profile_photos/{userId}/...
@@ -22,43 +41,57 @@ service firebase.storage {
     // --- Event Images ---
     // Path: event_images/{eventId} (or similar)
     // Authenticated users can upload event images or delete them.
-    match /event_images/{allPaths=**} {
+    match /event_images/{eventId} {
       allow read: if true;
-      allow write: if request.auth != null
+      allow write: if (isEventOwner(eventId) || isAdmin())
                    && (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     // --- Chat/Group Media ---
     // Path: groups/{chatId}/... or chat_media/...
     match /groups/{chatId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 10 * 1024 * 1024; // Allow slightly larger for shared media
+      allow read: if isChatParticipant(chatId);
+      allow write: if isChatParticipant(chatId) &&
+        (request.resource == null || (isImage() && isSmallEnough()));
     }
     
     match /chat_media/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 20 * 1024 * 1024; 
+      allow read, write: if false;
     }
 
     // [NEW] Explicit rules for folders used by ChatMessagingService
     match /chat_images/{chatId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isImage() && isSmallEnough();
+      allow read: if isChatParticipant(chatId);
+      allow write: if isChatParticipant(chatId) &&
+        (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     match /chat_videos/{chatId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 50 * 1024 * 1024; // 50MB for videos
+      allow read: if isChatParticipant(chatId);
+      allow write: if isChatParticipant(chatId) &&
+        (request.resource == null || (
+          request.resource.contentType.matches('video/.*') &&
+          request.resource.size < 50 * 1024 * 1024
+        ));
     }
 
     match /chat_voices/{chatId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 10 * 1024 * 1024; // 10MB audio
+      allow read: if isChatParticipant(chatId);
+      allow write: if isChatParticipant(chatId) &&
+        (request.resource == null || (
+          request.resource.contentType.matches('audio/.*') &&
+          request.resource.size < 10 * 1024 * 1024
+        ));
     }
 
     match /chat_documents/{chatId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.resource.size < 20 * 1024 * 1024; // 20MB docs
+      allow read: if isChatParticipant(chatId);
+      allow write: if isChatParticipant(chatId) &&
+        (request.resource == null || (
+          !request.resource.contentType.matches('text/html') &&
+          !request.resource.contentType.matches('image/svg\\+xml') &&
+          request.resource.size < 20 * 1024 * 1024
+        ));
     }
 
 

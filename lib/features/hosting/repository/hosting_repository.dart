@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,6 +41,7 @@ final activeHostingSessionProvider =
 
 class HostingRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   CollectionReference get _requestsCol =>
       _firestore.collection('hosting_requests');
@@ -53,10 +55,23 @@ class HostingRepository {
 
   /// Create a new hosting request from a traveler.
   Future<HostingRequest> createRequest(HostingRequest request) async {
-    final docRef = _requestsCol.doc(request.id);
-    await docRef.set(request.toMap());
+    await _functions.httpsCallable('createHostingRequest').call<void>({
+      'requestId': request.id,
+      'communityId': request.communityId,
+      'arrivalMillis': request.arrivalDate.millisecondsSinceEpoch,
+      'departureMillis': request.departureDate.millisecondsSinceEpoch,
+      'purpose': request.purpose,
+      'notes': request.notes,
+      'guestCount': request.guestCount ?? 1,
+      'preferredArea': request.preferredArea,
+      'languages': request.languages ?? const <String>[],
+    });
+    final created = await getRequest(request.id);
+    if (created == null) {
+      throw StateError('The hosting request could not be loaded.');
+    }
     debugPrint('✅ [Hosting] Request created: ${request.id}');
-    return request;
+    return created;
   }
 
   /// Get a single hosting request by ID.
@@ -80,6 +95,7 @@ class HostingRepository {
         .where('communityId', isEqualTo: communityId)
         .where('status', whereIn: ['pending', 'matched'])
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -98,6 +114,7 @@ class HostingRepository {
     return _requestsCol
         .where('travelerId', isEqualTo: travelerId)
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -141,30 +158,6 @@ class HostingRepository {
     debugPrint('[Hosting] Host $hostId withdrew interest from $requestId');
   }
 
-  /// Traveler selects a host — updates request to 'matched' status.
-  Future<void> selectHost({
-    required String requestId,
-    required String hostId,
-    required String hostName,
-  }) async {
-    final doc = await _requestsCol.doc(requestId).get();
-    if (!doc.exists) {
-      debugPrint('[Hosting] Request $requestId not found — may have expired.');
-      throw Exception(
-        'This hosting request no longer exists. It may have expired.',
-      );
-    }
-    await _requestsCol.doc(requestId).update({
-      'matchedHostId': hostId,
-      'matchedHostName': hostName,
-      'status': HostingRequestStatus.matched.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    debugPrint(
-      '[Hosting] Traveler selected host $hostName for request $requestId',
-    );
-  }
-
   /// Cancel a hosting request (traveler only, before check-in).
   Future<void> cancelRequest(String requestId) async {
     await _requestsCol.doc(requestId).update({
@@ -179,25 +172,25 @@ class HostingRepository {
   // =========================================================================
 
   /// Create a hosting session after both parties agree.
-  Future<HostingSession> createSession(HostingSession session) async {
-    debugPrint(
-      '📝 [createSession] Writing session ${session.id} to Firestore...',
-    );
-    final docRef = _sessionsCol.doc(session.id);
-    await docRef.set(session.toMap());
-    debugPrint('📝 [createSession] ✅ Session document written');
-
-    // Also update the request to 'active' status
-    debugPrint(
-      '📝 [createSession] Updating request ${session.requestId} to active...',
-    );
-    await _requestsCol.doc(session.requestId).update({
-      'status': HostingRequestStatus.active.name,
-      'updatedAt': FieldValue.serverTimestamp(),
+  Future<HostingSession> createSession({
+    required String requestId,
+    required String hostId,
+    String? chatId,
+  }) async {
+    final callable = _functions.httpsCallable('createHostingSession');
+    final result = await callable.call<Map<String, dynamic>>({
+      'requestId': requestId,
+      'hostId': hostId,
+      if (chatId != null && chatId.isNotEmpty) 'chatId': chatId,
     });
-    debugPrint('📝 [createSession] ✅ Request updated to active');
-
-    debugPrint('✅ [Hosting] Session created: ${session.id}');
+    final sessionId = result.data['sessionId'] as String?;
+    if (sessionId == null || sessionId.isEmpty) {
+      throw StateError('The server did not return a hosting session.');
+    }
+    final session = await getSession(sessionId);
+    if (session == null) {
+      throw StateError('The hosting session could not be loaded.');
+    }
     return session;
   }
 
@@ -281,6 +274,7 @@ class HostingRepository {
     return _sessionsCol
         .where('travelerId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
@@ -295,94 +289,46 @@ class HostingRepository {
   }
 
   /// QR Check-in — activates the session.
-  Future<void> checkIn(String sessionId) async {
-    await _sessionsCol.doc(sessionId).update({
-      'checkInTime': FieldValue.serverTimestamp(),
-      'status': HostingSessionStatus.active.name,
-      'updatedAt': FieldValue.serverTimestamp(),
+  Future<String> createCheckInChallenge(String sessionId) async {
+    final callable = _functions.httpsCallable('createHostingCheckInChallenge');
+    final result = await callable.call<Map<String, dynamic>>({
+      'sessionId': sessionId,
     });
-    debugPrint('✅ [Hosting] Session $sessionId checked in');
+    final token = result.data['token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw StateError('The server did not return a check-in challenge.');
+    }
+    return token;
+  }
+
+  /// QR Check-in — consumes a one-time host-issued challenge.
+  Future<void> checkIn(String sessionId, String token) async {
+    await _functions.httpsCallable('completeHostingCheckIn').call<void>({
+      'sessionId': sessionId,
+      'token': token,
+    });
+  }
+
+  Future<void> _updateSessionState(String sessionId, String operation) async {
+    await _functions.httpsCallable('updateHostingSessionState').call<void>({
+      'sessionId': sessionId,
+      'operation': operation,
+    });
   }
 
   /// One party requests to end the session.
-  Future<void> requestEnd({
-    required String sessionId,
-    required String requestedByUserId,
-  }) async {
-    await _sessionsCol.doc(sessionId).update({
-      'endRequestedBy': requestedByUserId,
-      'endRequestedAt': FieldValue.serverTimestamp(),
-      'status': HostingSessionStatus.endRequested.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    debugPrint(
-      '✅ [Hosting] End requested for session $sessionId by $requestedByUserId',
-    );
+  Future<void> requestEnd(String sessionId) async {
+    await _updateSessionState(sessionId, 'request_end');
   }
 
-  /// Both parties confirmed end — calculates final duration and marks as ended.
+  /// The other party confirms the end and the server settles the stay.
   Future<void> confirmEnd(String sessionId) async {
-    final session = await getSession(sessionId);
-    if (session == null) return;
-
-    final checkIn = session.checkInTime ?? session.createdAt;
-    final checkOut = DateTime.now();
-    final days = checkOut.difference(checkIn).inDays;
-    final actualDays = days < 1 ? 1 : days;
-
-    await _sessionsCol.doc(sessionId).update({
-      'checkOutTime': Timestamp.fromDate(checkOut),
-      'actualDays': actualDays,
-      'status': HostingSessionStatus.ended.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    debugPrint('✅ [Hosting] Session $sessionId ended: $actualDays days');
+    await _updateSessionState(sessionId, 'confirm_end');
   }
 
-  /// Mark session as settled (both parties confirmed completion).
-  Future<void> markSettled(String sessionId) async {
-    await _sessionsCol.doc(sessionId).update({
-      'travelerSettled': true,
-      'hostSettled': true,
-      'status': HostingSessionStatus.settled.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    // Also mark the original request as completed
-    final session = await getSession(sessionId);
-    if (session != null) {
-      await _requestsCol.doc(session.requestId).update({
-        'status': HostingRequestStatus.completed.name,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    debugPrint('✅ [Hosting] Session $sessionId settled');
-  }
-
-  /// Cancel a session (before check-in only).
+  /// Cancel a session before check-in only.
   Future<void> cancelSession(String sessionId) async {
-    final session = await getSession(sessionId);
-    if (session == null) return;
-
-    // Only allow cancellation if not yet active
-    if (session.status == HostingSessionStatus.confirmed) {
-      await _sessionsCol.doc(sessionId).update({
-        'status': HostingSessionStatus.cancelled.name,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Revert request to pending so traveler can find another host
-      await _requestsCol.doc(session.requestId).update({
-        'matchedHostId': null,
-        'matchedHostName': null,
-        'status': HostingRequestStatus.pending.name,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      debugPrint('✅ [Hosting] Session $sessionId cancelled');
-    }
+    await _updateSessionState(sessionId, 'cancel');
   }
 
   // =========================================================================

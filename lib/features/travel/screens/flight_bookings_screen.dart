@@ -39,6 +39,7 @@ class _FlightBookingsScreenState extends State<FlightBookingsScreen>
     return FirebaseFirestore.instance
         .collection('flight_bookings')
         .where('userId', isEqualTo: uid)
+        .limit(100)
         .snapshots();
   }
 

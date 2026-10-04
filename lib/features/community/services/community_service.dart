@@ -10,7 +10,6 @@ import 'package:diaspora_nearby/core/utils/location_utils.dart'
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
-import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 
 final communityServiceProvider = Provider<CommunityService>((ref) {
   return CommunityService(ref);
@@ -32,6 +31,7 @@ class CommunityService {
             'location.country',
             isEqualTo: query,
           ) // More precise than name if possible
+          .limit(50)
           .get();
 
       // Fallback to name search if country search yields nothing?
@@ -47,6 +47,7 @@ class CommunityService {
           .collection('communities')
           .where('name', isGreaterThanOrEqualTo: query)
           .where('name', isLessThan: '${query}z')
+          .limit(50)
           .get();
 
       return nameSnapshot.docs
@@ -153,16 +154,12 @@ class CommunityService {
     // corridor — modelled as an Organization, not a community. Idempotent.
     if (_ref != null && hostCountryCode != 'XX') {
       try {
-        final chamberId = await _ref
-            .read(organizationRepositoryProvider)
-            .ensureCorridorChamber(
-              userId: userId,
-              homeCountryCode: homeCountryCode,
-              hostCountryCode: hostCountryCode,
-              userName: userName,
-            );
-        if (chamberId != null) {
-          chatIds.add('org_$chamberId');
+        final result = await FirebaseFunctions.instanceFor(
+          region: 'us-central1',
+        ).httpsCallable('ensureSignupChamber').call<Map<String, dynamic>>();
+        final chamberChatId = result.data['chatId'] as String?;
+        if (chamberChatId != null) {
+          chatIds.add(chamberChatId);
         }
       } catch (e) {
         debugPrint('⚠️ ensureCorridorChamber failed: $e');
@@ -173,9 +170,6 @@ class CommunityService {
     // 4. BATCH UPDATE userChats INDEX + PROFILE
     // ========================================
     await _batchUpdateUserChatsIndex(userId, chatIds);
-    await _firestore.collection('users').doc(userId).update({
-      'communityMemberships': cf.FieldValue.arrayUnion(communityIds),
-    });
 
     return communityIds;
   }
@@ -272,20 +266,6 @@ class CommunityService {
       ids.add(cityId);
     }
 
-    // 5. Sync to Profile if requested (Robustness)
-    if (syncToUserProfile && ids.isNotEmpty) {
-      try {
-        await _firestore.collection('users').doc(userId).update({
-          'communityMemberships': cf.FieldValue.arrayUnion(ids),
-        });
-      } catch (e) {
-        // Log but don't fail the whole flow if sync fails, though it's critical
-        debugPrint(
-          'CommunityService: Error syncing memberships to profile: $e',
-        );
-      }
-    }
-
     return ids;
   }
 
@@ -301,313 +281,17 @@ class CommunityService {
     Function(String)? onFirstMember,
     String? userName, // [NEW] For notification
   }) async {
-    String? existingCommunityId;
-    String? existingCommunityName;
-
-    // 1. [NEW] Check if community exists by Google Place ID (Priority)
-    // This allows multiple names for the same physical place to resolve to one community.
-    if (location.placeId != null && location.placeId!.isNotEmpty) {
-      try {
-        final query = await _firestore
-            .collection('communities')
-            .where('location.placeId', isEqualTo: location.placeId)
-            .where('type', isEqualTo: type)
-            .where('locationType', isEqualTo: locationType)
-            // Ensure we only match for this specific Diaspora (Home Country)
-            // [FIX] Always use the actual homeCountryCode for PlaceID dedup.
-            // Previously, home communities passed `null` which never matched
-            // stored docs (they always have the real country code), breaking
-            // PlaceID-based deduplication for home communities.
-            .where('homeCountryCode', isEqualTo: homeCountryCode)
-            .limit(1)
-            .get();
-
-        if (query.docs.isNotEmpty) {
-          final doc = query.docs.first;
-          existingCommunityId = doc.id;
-          existingCommunityName = doc.data()['name'] as String?;
-          debugPrint(
-            'CommunityService: Found existing community by PlaceID: $existingCommunityId',
-          );
-        }
-      } catch (e) {
-        debugPrint(
-          'CommunityService: Check by PlaceID failed, falling back to ID Gen: $e',
-        );
-      }
-    }
-
-    // 2. Determine Community ID and Name
-    final communityId =
-        existingCommunityId ??
-        location_utils.generateCommunityId(
-          locationType: locationType,
-          type: type,
-          location: location,
-          continent: continent,
-          homeCountryCode: (locationType == 'host' || locationType == 'past')
-              ? homeCountryCode
-              : null,
-        );
-
-    final communityName =
-        existingCommunityName ??
-        location_utils.generateCommunityName(
-          type: type,
-          location: location,
-          continent: continent,
-          locationType: locationType,
-        );
-
-    final docRef = _firestore.collection('communities').doc(communityId);
-    final docSnapshot = await docRef.get();
-
-    if (!docSnapshot.exists) {
-      // Create new community in Firestore
-      await docRef.set({
-        'id': communityId,
-        'name': communityName,
-        'description': '', // Initialize with empty string
-        'type': type,
-        'locationType': locationType,
-        'location': {
-          'city': location.city,
-          'state': location.state,
-          'country': location.country,
-          'countryCode': location.countryCode,
-          'placeId': location.placeId, // [NEW] Save canonical Place ID
-        },
-        'homeCountryCode': homeCountryCode,
-        'hostCountryCode': hostCountryCode,
-        'continent': continent,
-        'members': [userId],
-        'admins': [userId], // Initialize with creator
-        'memberCount': 1,
-        'totalMembers': 1,
-        'isPrivate': false,
-        'chatId': 'chat_$communityId',
-        'walletAddress': null, // [UPDATED] Removed mock wallet generation
-        'profileImage': '',
-        'flag': '',
-        'images': [],
-        'createdAt': cf.Timestamp.now(),
-        'updatedAt': cf.Timestamp.now(),
-      });
-
-      // Create chat in RTDB
-      await _createChat(
-        communityId: communityId,
-        communityName: communityName,
-        communityType: type,
-        locationType: locationType,
-        homeCountryCode: homeCountryCode,
-        hostCountryCode: hostCountryCode,
-        initialParticipants: [userId],
-        continent: continent,
-      );
-
-      // Notify caller if this is the first member
-      if (onFirstMember != null) {
-        onFirstMember(communityName);
-      }
-
-      // Add chat to userChats index for the creator/joiner
-      final chatId = 'chat_$communityId';
-      final chatNow = DateTime.now().millisecondsSinceEpoch;
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('userChats')
-          .doc(chatId)
-          .set({
-            'chatId': chatId,
-            'lastRead': chatNow,
-            'addedAt': chatNow,
-          }, cf.SetOptions(merge: true));
-    } else {
-      // Add member to existing community
-      final existingData = docSnapshot.data() as Map<String, dynamic>;
-      final existingMemberIds = List<String>.from(
-        existingData['members'] ?? existingData['memberIds'] ?? [],
-      );
-
-      if (!existingMemberIds.contains(userId)) {
-        await docRef.update({
-          'members': cf.FieldValue.arrayUnion([userId]),
-          'memberCount': cf.FieldValue.increment(1),
-          'updatedAt': cf.Timestamp.now(),
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('ensureCommunity')
+        .call<Map<String, dynamic>>({
+          'type': type,
+          'locationType': locationType,
         });
-      }
-
-      // Get the chatId from the community
-      final chatId = existingData['chatId'] as String? ?? 'chat_$communityId';
-      final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-
-      if (chatDoc.exists) {
-        // Chat exists, add user to participants if not already there
-        final chatData = chatDoc.data() ?? {};
-        final participants = List<String>.from(chatData['participants'] ?? []);
-
-        if (!participants.contains(userId)) {
-          // Use Firestore arrayUnion for atomic participant addition
-          await _firestore.collection('chats').doc(chatId).update({
-            'participants': cf.FieldValue.arrayUnion([userId]),
-            'memberCount': cf.FieldValue.increment(1),
-            'updatedAt': DateTime.now().millisecondsSinceEpoch,
-          });
-
-          // Announce to Community (triggers Notification)
-          if (userName != null && userName.isNotEmpty) {
-            try {
-              final now = DateTime.now().millisecondsSinceEpoch;
-              final messageRef = _firestore
-                  .collection('chats')
-                  .doc(chatId)
-                  .collection('messages')
-                  .doc();
-
-              final systemMessage = {
-                'id': messageRef.id,
-                'chatId': chatId,
-                'senderId': userId,
-                'senderName': userName,
-                'content': 'joined the community',
-                'type': 'system',
-                'timestamp': now,
-                'status': 'sent',
-              };
-
-              await messageRef.set(systemMessage);
-
-              // Update Last Message on Chat
-              final lastMsg = {
-                'content': '$userName joined the community',
-                'timestamp': now,
-                'senderId': userId,
-                'senderName': userName,
-                'type': 'system',
-                'status': 'sent',
-              };
-              await _firestore.collection('chats').doc(chatId).update({
-                'lastMessage': lastMsg,
-                'updatedAt': now,
-              });
-
-              // Fan-out to ALL participants' userChats
-              final allTargetIds = List<String>.from(participants);
-              allTargetIds.add(userId);
-
-              final batch = _firestore.batch();
-              for (final pid in allTargetIds) {
-                final userChatRef = _firestore
-                    .collection('users')
-                    .doc(pid)
-                    .collection('userChats')
-                    .doc(chatId);
-                batch.set(userChatRef, {
-                  'lastMessage': lastMsg,
-                  'updatedAt': now,
-                }, cf.SetOptions(merge: true));
-              }
-              await batch.commit();
-
-              debugPrint('Announced new member $userName to $chatId');
-            } catch (e) {
-              debugPrint('Error announcing new member: $e');
-            }
-          }
-        }
-
-        // Add chat to user's userChats index
-        final nowTs = DateTime.now().millisecondsSinceEpoch;
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('userChats')
-            .doc(chatId)
-            .set({
-              'chatId': chatId,
-              'lastRead': nowTs,
-              'addedAt': nowTs,
-            }, cf.SetOptions(merge: true));
-      } else {
-        // Chat doesn't exist - create it now
-        await _createChat(
-          communityId: communityId,
-          communityName: communityName,
-          communityType: type,
-          locationType: locationType,
-          homeCountryCode: homeCountryCode,
-          hostCountryCode: hostCountryCode,
-          initialParticipants: [userId, ...existingMemberIds],
-          continent: continent,
-        );
-
-        // Add chat to userChats index for ALL members
-        final allMemberIds = [userId, ...existingMemberIds];
-        final batchWrite = _firestore.batch();
-        final batchNow = DateTime.now().millisecondsSinceEpoch;
-        for (final memberId in allMemberIds) {
-          final userChatRef = _firestore
-              .collection('users')
-              .doc(memberId)
-              .collection('userChats')
-              .doc(chatId);
-          batchWrite.set(userChatRef, {
-            'chatId': chatId,
-            'lastRead': batchNow,
-            'addedAt': batchNow,
-          }, cf.SetOptions(merge: true));
-        }
-        await batchWrite.commit();
-      }
+    final communityId = result.data['communityId'] as String;
+    if (result.data['created'] == true && onFirstMember != null) {
+      onFirstMember(result.data['name'] as String? ?? communityId);
     }
-
     return communityId;
-  }
-
-  /// Creates a chat in Firestore for a community.
-  Future<void> _createChat({
-    required String communityId,
-    required String communityName,
-    required String communityType,
-    required String locationType,
-    required String homeCountryCode,
-    String? hostCountryCode,
-    required List<String> initialParticipants,
-    String? continent,
-  }) async {
-    final chatId = 'chat_$communityId';
-    final chatRef = _firestore.collection('chats').doc(chatId);
-
-    final snapshot = await chatRef.get();
-    if (snapshot.exists) {
-      return; // Chat already exists
-    }
-
-    // Chat name is the same as community name
-    final String chatName = communityName;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    await chatRef.set({
-      'id': chatId,
-      'communityId': communityId,
-      'type': 'community', // CRITICAL: must be 'community' not communityType
-      'name': chatName,
-      'locationType':
-          locationType, // CRITICAL: Determines avatar color (home vs host)
-      'homeCountryCode': homeCountryCode,
-      'hostCountryCode': hostCountryCode,
-      'participants': initialParticipants,
-      'memberCount': initialParticipants.length,
-      'admins': [],
-      'createdBy': initialParticipants.isNotEmpty
-          ? initialParticipants.first
-          : 'system',
-      'lastMessage': null,
-      'createdAt': now,
-      'updatedAt': now,
-    });
   }
 
   /// internal cleanup: Removes communities with 0 members.
@@ -616,7 +300,10 @@ class CommunityService {
     // 1. Query for communities with 0 members
     // Note: This relies on memberCount being accurately 0 for empty ones.
     // We also check memberIds to be safe.
-    final snapshot = await _firestore.collection('communities').get();
+    final snapshot = await _firestore
+        .collection('communities')
+        .limit(500)
+        .get();
 
     for (final doc in snapshot.docs) {
       final data = doc.data();

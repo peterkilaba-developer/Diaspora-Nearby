@@ -17,7 +17,7 @@ const db = admin.firestore();
  * Helper to send FCM Push notification to a user.
  */
 async function sendPushToUser(userId, payload) {
-    const userDoc = await db.collection("users").doc(userId).get();
+    const userDoc = await db.collection("user_private").doc(userId).get();
     if (!userDoc.exists) return;
 
     const fcmToken = userDoc.data().fcmToken;

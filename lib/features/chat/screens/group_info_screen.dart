@@ -11,7 +11,6 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
@@ -49,6 +48,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   String? _inviterId; // [NEW]
   bool _isMuted = false; // [NEW] Mute State
   bool _isFamilyGroup = false; // [NEW] Family Group Detection
+  bool _isImmediateFamilyGroup = false; // [NEW] Immediate vs Extended
 
   // For Batch Editing
   final Set<String> _membersToRemove = {};
@@ -148,7 +148,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
             _descriptionController.text = chat.description ?? '';
             _adminIds = chat.admins ?? [];
             _inviterId = foundInviterId; // [NEW]
-            _isFamilyGroup = chat.metadata?['isFamilyGroup'] == true;
+            _isFamilyGroup =
+                chat.metadata?['isFamilyGroupImmediate'] == true ||
+                chat.metadata?['isFamilyGroupExtended'] == true;
+            _isImmediateFamilyGroup =
+                chat.metadata?['isFamilyGroupImmediate'] == true;
 
             _isAdmin =
                 (chat.admins?.contains(widget.currentUserId) ?? false) ||
@@ -175,23 +179,8 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _acceptInvitation() async {
     setState(() => _isLoading = true);
-    final pointsService = ref.read(pointsServiceProvider);
     final repo = ref.read(chatRepositoryProvider);
     final profileRepo = ref.read(profileRepositoryProvider);
-
-    // Add +100 DSP to user and inviter
-    if (_inviterId != null) {
-      await pointsService.awardPoints(
-        userId: _inviterId!,
-        amount: 100,
-        reason: 'Group Invite Accepted',
-      );
-    }
-    await pointsService.awardPoints(
-      userId: widget.currentUserId,
-      amount: 100,
-      reason: 'Joined Group',
-    );
 
     await repo.addGroupMember(widget.chatId, widget.currentUserId);
 
@@ -262,22 +251,6 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _rejectInvitation() async {
     setState(() => _isLoading = true);
-    final pointsService = ref.read(pointsServiceProvider);
-
-    // +100 DSP to user, -100 DSP to inviter
-    await pointsService.awardPoints(
-      userId: widget.currentUserId,
-      amount: 100,
-      reason: 'Rejected Group Invite',
-    );
-    if (_inviterId != null) {
-      await pointsService.deductPoints(
-        userId: _inviterId!,
-        amount: 100,
-        reason: 'Group Invite Rejected',
-      );
-    }
-
     // Remove from userChats (hide invitation)
     final repo = ref.read(chatRepositoryProvider);
     await repo.deleteChat(widget.chatId);
@@ -574,8 +547,12 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                     ? Center(
                                         child: _isFamilyGroup
                                             ? Icon(
-                                                LucideIcons.heartHandshake,
-                                                color: Colors.blue.shade600,
+                                                _isImmediateFamilyGroup
+                                                    ? LucideIcons.heartHandshake
+                                                    : LucideIcons.trees,
+                                                color: _isImmediateFamilyGroup
+                                                    ? Colors.blue.shade600
+                                                    : Colors.teal.shade600,
                                                 size: 42,
                                               )
                                             : Text(

@@ -26,7 +26,7 @@ class AppEnvironmentConfig {
 
   static const String _envName = String.fromEnvironment(
     'APP_ENV',
-    defaultValue: 'dev',
+    defaultValue: 'production',
   );
 
   static AppEnvironment _current = AppEnvironment.fromName(_envName);

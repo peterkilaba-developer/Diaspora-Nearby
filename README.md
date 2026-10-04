@@ -1,16 +1,17 @@
 # Diaspora Nearby
 
-Diaspora Nearby is a Flutter and Firebase app for helping diaspora communities connect with nearby compatriots, local communities, events, organizations, and trust-based services.
+Diaspora Nearby is a Flutter and Firebase application built for anyone positioned between their home country and a host country—whether temporarily (corporate expats, international diplomats, business professionals, international travelers, exchange students, temporary workers) or permanently (naturalized citizens, permanent residents, settled diaspora). It empowers anyone with a temporary or permanent dual geographic identity to connect with nearby compatriots, local communities, events, organizations, and trust-based services.
 
 ## Core Features
 
-- Nearby Connect: discover and message compatriots near your current location.
-- Community Hubs: participate in city, state, country, and continent communities.
-- Events and Organizations: discover diaspora-led events and organizations.
-- Background Notifications: receive nearby-community notifications.
-- Global Search: search communities and users across supported regions.
-- DSP Economy: earn Diaspora Social Points through Proof of Activity (P.O.A) and Proof of Community Trust (PCT) trust signals.
-- National Pride: contribute to country-level leaderboards and treasury mechanics.
+- **Target User Positioning**: Designed for individuals with dual geographic identity (living between Home Country and Host Country either temporarily or permanently).
+- **Nearby Connect**: Discover and message compatriots near your current location.
+- **Nested Hierarchical Community Hubs**: Navigate and participate in nested geographic communities (Global → Continent → Country → State/Province → City/Town).
+- **Events and Organizations**: Discover diaspora-led events and organizations.
+- **Background Notifications**: Receive nearby-community notifications.
+- **Global Search**: Search communities and users across supported regions.
+- **DSP Economy**: Earn Diaspora Social Points through Proof of Activity (P.O.A) and Proof of Community Trust (PCT) trust signals.
+- **National Pride**: Contribute to country-level leaderboards and treasury mechanics.
 
 ## Technical Stack
 

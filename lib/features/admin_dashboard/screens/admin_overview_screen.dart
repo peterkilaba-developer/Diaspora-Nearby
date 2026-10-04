@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:diaspora_nearby/features/admin_dashboard/repository/admin_repository.dart';
+
+final _adminStatsProvider = FutureProvider.autoDispose(
+  (ref) => ref.read(adminRepositoryProvider).getDashboardStats(),
+);
 
 class AdminOverviewScreen extends ConsumerWidget {
   const AdminOverviewScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(_adminStatsProvider);
     return Scaffold(
       backgroundColor: AppTheme.elevationColor(context, 0), // Level 0 page bg
       body: SingleChildScrollView(
@@ -23,52 +28,39 @@ class AdminOverviewScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // Stats Row
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .snapshots(),
-              builder: (context, userSnapshot) {
-                return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('communities')
-                      .snapshots(),
-                  builder: (context, commSnapshot) {
-                    final userCount = userSnapshot.data?.size ?? 0;
-                    final commCount = commSnapshot.data?.size ?? 0;
-
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            title: 'Total Users',
-                            value: userCount.toString(),
-                            icon: LucideIcons.users,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: _StatCard(
-                            title: 'Communities',
-                            value: commCount.toString(),
-                            icon: LucideIcons.home,
-                            color: Colors.green,
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-                        const Expanded(
-                          child: _StatCard(
-                            title: 'Active Chats',
-                            value: '...', // Placeholder until RTDB integration
-                            icon: LucideIcons.messageSquare,
-                            color: Colors.orange,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
+            stats.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, _) => const Text('Dashboard statistics unavailable.'),
+              data: (values) => Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      title: 'Total Users',
+                      value: '${values['users'] ?? 0}',
+                      icon: LucideIcons.users,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: _StatCard(
+                      title: 'Communities',
+                      value: '${values['communities'] ?? 0}',
+                      icon: LucideIcons.home,
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: _StatCard(
+                      title: 'Open Reports',
+                      value: '${values['reports'] ?? 0}',
+                      icon: LucideIcons.flag,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 32),

@@ -75,9 +75,10 @@ node scripts/check-repo-hygiene.js
 Area-specific checks:
 
 ```bash
-cd functions && npm run lint && npm audit --omit=dev --audit-level=high
-cd firestore-rules-test && npm test
-cd blockchain && npm run compile && npm test && npm audit --omit=dev --audit-level=high
+cd functions && npm run lint && npm audit --audit-level=high
+cd firestore-rules-test && npm test && npm audit --audit-level=high
+cd blockchain && npm run compile && npm test && npm audit --audit-level=high
+cd tools/admin-scripts && npm audit --audit-level=high
 ```
 
 ## Release Promotions

@@ -214,12 +214,14 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
         final baseChats = isGlobalUnlocked
             ? chats
             : chats
-                .where(
-                  (chat) =>
-                      chat.id != 'global_community' &&
-                      chat.locationType != 'global',
-                )
-                .toList();
+                  .where(
+                    (chat) =>
+                        chat.id != 'global_community' &&
+                        chat.locationType != 'global' &&
+                        chat.type != 'global' &&
+                        !chat.name.toLowerCase().contains('global community'),
+                  )
+                  .toList();
 
         final filteredChats = searchQuery.isEmpty
             ? baseChats

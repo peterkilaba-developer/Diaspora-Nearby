@@ -3,6 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:uuid/uuid.dart';
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
@@ -11,14 +14,26 @@ import 'package:diaspora_nearby/core/utils/location_utils.dart';
 /// Firebase Cloud Functions base URL for CORS proxy
 /// On web, we route Google Places API calls through this proxy
 /// because the Places REST API does not support CORS.
-const String _placesProxyBaseUrl =
-    'https://us-central1-diaspora-nearby-a3dac.cloudfunctions.net/placesProxy';
+String get _placesProxyBaseUrl {
+  final projectId = Firebase.app().options.projectId;
+  return 'https://us-central1-$projectId.cloudfunctions.net/placesProxy';
+}
 
 class GooglePlacesService {
   String? _sessionToken;
   final Uuid _uuid = const Uuid();
 
   GooglePlacesService(String apiKey);
+
+  Future<Map<String, String>> _proxyHeaders() async {
+    if (!kIsWeb) return const {};
+    final appCheckToken = await FirebaseAppCheck.instance.getToken();
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final headers = <String, String>{};
+    if (appCheckToken != null) headers['X-Firebase-AppCheck'] = appCheckToken;
+    if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
+    return headers;
+  }
 
   /// Generates a new session token if one doesn't exist
   void _ensureSessionToken() {
@@ -67,26 +82,33 @@ class GooglePlacesService {
 
       // On web, use the Cloud Functions proxy to avoid CORS issues
       // On mobile, call the Google Places API directly
-      String urlString;
+      final Uri url;
       if (kIsWeb) {
-        urlString =
-            '$_placesProxyBaseUrl?type=autocomplete&input=${Uri.encodeComponent(input)}&key=$apiKey&sessiontoken=$_sessionToken';
-        if (requestTypes != null) {
-          urlString += '&types=${Uri.encodeComponent(requestTypes)}';
-        }
+        url = Uri.parse(_placesProxyBaseUrl).replace(
+          queryParameters: {
+            'type': 'autocomplete',
+            'input': input,
+            'sessiontoken': _sessionToken!,
+            'types': ?requestTypes,
+          },
+        );
       } else {
-        urlString =
-            'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$input&key=$apiKey&sessiontoken=$_sessionToken';
-        if (requestTypes != null) {
-          urlString += '&types=$requestTypes';
-        }
+        url = Uri.https(
+          'maps.googleapis.com',
+          '/maps/api/place/autocomplete/json',
+          {
+            'input': input,
+            'key': apiKey,
+            'sessiontoken': _sessionToken!,
+            'types': ?requestTypes,
+          },
+        );
       }
 
       debugPrint(
         '[Places] Autocomplete request (web=$kIsWeb): ${kIsWeb ? 'via proxy' : 'direct'}',
       );
-      final url = Uri.parse(urlString);
-      final response = await http.get(url);
+      final response = await http.get(url, headers: await _proxyHeaders());
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -153,10 +175,6 @@ class GooglePlacesService {
     try {
       final apiKey = Env.googleMapsApiKey;
       // Pass the session token to link this selection to the search
-      final sessionTokenParam = _sessionToken != null
-          ? '&sessiontoken=$_sessionToken'
-          : '';
-
       // Request critical fields and rich data
       final fields =
           'formatted_address,geometry,name,place_id,types,address_components,website,international_phone_number,url,rating,user_ratings_total,opening_hours,photos,price_level,editorial_summary';
@@ -164,19 +182,27 @@ class GooglePlacesService {
       // On web, use the Cloud Functions proxy to avoid CORS issues
       final Uri url;
       if (kIsWeb) {
-        url = Uri.parse(
-          '$_placesProxyBaseUrl?type=details&place_id=$placeId&fields=${Uri.encodeComponent(fields)}&key=$apiKey${sessionTokenParam.isNotEmpty ? sessionTokenParam : ''}',
+        url = Uri.parse(_placesProxyBaseUrl).replace(
+          queryParameters: {
+            'type': 'details',
+            'place_id': placeId,
+            'fields': fields,
+            'sessiontoken': ?_sessionToken,
+          },
         );
       } else {
-        url = Uri.parse(
-          'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=$fields&key=$apiKey$sessionTokenParam',
-        );
+        url = Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
+          'place_id': placeId,
+          'fields': fields,
+          'key': apiKey,
+          'sessiontoken': ?_sessionToken,
+        });
       }
       debugPrint(
         '[Places] Details request (web=$kIsWeb): ${kIsWeb ? 'via proxy' : 'direct'}',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(url, headers: await _proxyHeaders());
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

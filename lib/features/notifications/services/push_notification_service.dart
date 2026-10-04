@@ -61,7 +61,9 @@ class PushNotificationService {
   StreamSubscription<QuerySnapshot>?
   _hostingSelectionSubscription; // Listener for host selection
   StreamSubscription<QuerySnapshot>?
-  _sessionStatusSubscription; // Listener for session status changes
+  _travelerSessionStatusSubscription; // Traveler-side session listener
+  StreamSubscription<QuerySnapshot>?
+  _hostSessionStatusSubscription; // Host-side session listener
 
   // ── New feature listeners ──────────────────────────────────────────
   StreamSubscription<QuerySnapshot>?
@@ -304,7 +306,8 @@ class PushNotificationService {
       _proxyRequestSubscription?.cancel();
       _hostingInterestSubscription?.cancel();
       _hostingSelectionSubscription?.cancel();
-      _sessionStatusSubscription?.cancel();
+      _travelerSessionStatusSubscription?.cancel();
+      _hostSessionStatusSubscription?.cancel();
       _bookingRequestSubscription?.cancel();
       _bookingStatusSubscription?.cancel();
       _eventSubscription?.cancel();
@@ -315,11 +318,11 @@ class PushNotificationService {
       _trustVouchSubscription?.cancel();
       _fullTrustSubscription?.cancel();
 
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('user_private').doc(userId).set({
         'fcmToken': null,
         'notificationsEnabled': false,
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     } catch (e) {
       // Error disabling notifications
     }
@@ -495,7 +498,7 @@ class PushNotificationService {
 
   /// Save token to Firestore
   Future<void> _saveTokenToFirestore(String userId, String token) async {
-    await _firestore.collection('users').doc(userId).set({
+    await _firestore.collection('user_private').doc(userId).set({
       'fcmToken': token,
       'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
       'notificationsEnabled': true,
@@ -528,10 +531,10 @@ class PushNotificationService {
       }
 
       // Save topics to Firestore
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('user_private').doc(userId).set({
         'fcmTopics': topics,
         'fcmTopicsUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
 
       // Also subscribe via FCM SDK for client-side messaging optimization
       for (final topic in topics) {
@@ -718,6 +721,7 @@ class PushNotificationService {
         .collection('relationship_requests')
         .where('toUserId', isEqualTo: userId)
         .where('status', isEqualTo: 'pending')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -832,6 +836,7 @@ class PushNotificationService {
         .collection('relationship_requests')
         .where('fromUserId', isEqualTo: userId)
         .where('status', isEqualTo: 'accepted')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -943,6 +948,7 @@ class PushNotificationService {
         .collection('proxy_requests')
         .where('toUserId', isEqualTo: userId)
         .where('status', isEqualTo: 'pending')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1000,6 +1006,7 @@ class PushNotificationService {
         .collection('hosting_requests')
         .where('travelerId', isEqualTo: userId)
         .where('status', isEqualTo: 'pending')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1281,6 +1288,7 @@ class PushNotificationService {
     _hostingSelectionSubscription = _firestore
         .collection('hosting_sessions')
         .where('hostId', isEqualTo: userId)
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1362,134 +1370,128 @@ class PushNotificationService {
     debugPrint(
       '🔔 [PushNotificationService] Starting session status listener for user: $userId',
     );
-    _sessionStatusSubscription?.cancel();
+    _travelerSessionStatusSubscription?.cancel();
+    _hostSessionStatusSubscription?.cancel();
 
     // Track known statuses to detect changes
     final Map<String, String> knownStatuses = {};
-    bool isFirstLoad = true;
 
-    // We need two queries: one for traveler, one for host
-    // Using a combined approach with both subscriptions
-    _sessionStatusSubscription = _firestore
-        .collection('hosting_sessions')
-        .where(
-          'status',
-          whereIn: ['confirmed', 'active', 'end_requested', 'ended'],
-        )
-        .snapshots()
-        .listen(
-          (snapshot) {
-            for (final change in snapshot.docChanges) {
-              final data = change.doc.data();
-              if (data == null) continue;
+    void handleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+      for (final change in snapshot.docChanges) {
+        final data = change.doc.data();
+        if (data == null) continue;
 
-              final travelerId = data['travelerId'] as String?;
-              final hostId = data['hostId'] as String?;
+        final travelerId = data['travelerId'] as String?;
+        final hostId = data['hostId'] as String?;
 
-              // Only process sessions where the current user is a participant
-              if (travelerId != userId && hostId != userId) continue;
+        // Only process sessions where the current user is a participant
+        if (travelerId != userId && hostId != userId) continue;
 
-              final currentStatus = data['status'] as String? ?? 'unknown';
-              final previousStatus = knownStatuses[change.doc.id];
+        final currentStatus = data['status'] as String? ?? 'unknown';
+        final previousStatus = knownStatuses[change.doc.id];
 
-              if (isFirstLoad || change.type == DocumentChangeType.added) {
-                knownStatuses[change.doc.id] = currentStatus;
-                continue;
-              }
+        if (change.type == DocumentChangeType.added) {
+          knownStatuses[change.doc.id] = currentStatus;
+          continue;
+        }
 
-              // Only notify on actual status changes
-              if (previousStatus == currentStatus) continue;
-              knownStatuses[change.doc.id] = currentStatus;
+        // Only notify on actual status changes
+        if (previousStatus == currentStatus) continue;
+        knownStatuses[change.doc.id] = currentStatus;
 
-              final travelerName =
-                  data['travelerName'] as String? ?? 'Traveler';
-              final hostName = data['hostName'] as String? ?? 'Host';
-              final communityName =
-                  data['communityName'] as String? ?? 'the community';
-              final endRequestedBy = data['endRequestedBy'] as String?;
-              final chatId = data['chatId'] as String?;
-              final isHost = userId == hostId;
-              final otherPartyName = isHost ? travelerName : hostName;
+        final travelerName = data['travelerName'] as String? ?? 'Traveler';
+        final hostName = data['hostName'] as String? ?? 'Host';
+        final communityName =
+            data['communityName'] as String? ?? 'the community';
+        final endRequestedBy = data['endRequestedBy'] as String?;
+        final chatId = data['chatId'] as String?;
+        final isHost = userId == hostId;
+        final otherPartyName = isHost ? travelerName : hostName;
 
-              String? title;
-              String? body;
+        String? title;
+        String? body;
 
-              switch (currentStatus) {
-                case 'active':
-                  // Check-in happened
-                  if (previousStatus == 'confirmed') {
-                    title = 'Check-in Confirmed!';
-                    body =
-                        'Hosting session with $otherPartyName in $communityName is now active.';
-                  }
-                  break;
-
-                case 'end_requested':
-                  // One party requested to end
-                  if (endRequestedBy != null && endRequestedBy != userId) {
-                    title = 'End Stay Requested';
-                    body =
-                        '$otherPartyName has requested to end the hosting session in $communityName. '
-                        'Please confirm to complete the session.';
-                  }
-                  break;
-
-                case 'ended':
-                  title = 'Stay Ended';
-                  body =
-                      'Your hosting session with $otherPartyName in $communityName has ended.';
-                  break;
-
-                case 'settled':
-                  title = 'Session Complete';
-                  body = isHost
-                      ? 'Your hosting of $travelerName in $communityName is complete!'
-                      : 'Your stay with $hostName in $communityName is complete!';
-                  break;
-              }
-
-              if (title != null && body != null) {
-                debugPrint(
-                  '🔔 [PushNotificationService] Session status change: ${change.doc.id} -> $currentStatus',
-                );
-
-                _showRichNotification(
-                  id: 'session_${change.doc.id}_$currentStatus'.hashCode,
-                  title: title,
-                  body: body,
-                  payload: jsonEncode({
-                    'type': chatId != null
-                        ? 'hosting_session_chat'
-                        : 'hosting_session',
-                    'chatId': chatId,
-                    'sessionId': change.doc.id,
-                  }),
-                );
-
-                // Persist to Notifications hub
-                _persistNotification(
-                  type: NotificationType.hostingSessionEvent,
-                  title: title,
-                  body: body,
-                  payload: {
-                    'chatId': chatId,
-                    'sessionId': change.doc.id,
-                    'status': currentStatus,
-                  },
-                  actionRequired: currentStatus == 'end_requested',
-                  dedupKey: 'session_${change.doc.id}_$currentStatus',
-                );
-              }
+        switch (currentStatus) {
+          case 'active':
+            // Check-in happened
+            if (previousStatus == 'confirmed') {
+              title = 'Check-in Confirmed!';
+              body =
+                  'Hosting session with $otherPartyName in $communityName is now active.';
             }
+            break;
 
-            if (isFirstLoad) isFirstLoad = false;
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in session status listener: $e',
-            );
-          },
-        );
+          case 'endRequested':
+            // One party requested to end
+            if (endRequestedBy != null && endRequestedBy != userId) {
+              title = 'End Stay Requested';
+              body =
+                  '$otherPartyName has requested to end the hosting session in $communityName. '
+                  'Please confirm to complete the session.';
+            }
+            break;
+
+          case 'settled':
+            title = 'Session Complete';
+            body = isHost
+                ? 'Your hosting of $travelerName in $communityName is complete!'
+                : 'Your stay with $hostName in $communityName is complete!';
+            break;
+        }
+
+        if (title != null && body != null) {
+          debugPrint(
+            '🔔 [PushNotificationService] Session status change: ${change.doc.id} -> $currentStatus',
+          );
+
+          _showRichNotification(
+            id: 'session_${change.doc.id}_$currentStatus'.hashCode,
+            title: title,
+            body: body,
+            payload: jsonEncode({
+              'type': chatId != null
+                  ? 'hosting_session_chat'
+                  : 'hosting_session',
+              'chatId': chatId,
+              'sessionId': change.doc.id,
+            }),
+          );
+
+          // Persist to Notifications hub
+          _persistNotification(
+            type: NotificationType.hostingSessionEvent,
+            title: title,
+            body: body,
+            payload: {
+              'chatId': chatId,
+              'sessionId': change.doc.id,
+              'status': currentStatus,
+            },
+            actionRequired: currentStatus == 'endRequested',
+            dedupKey: 'session_${change.doc.id}_$currentStatus',
+          );
+        }
+      }
+    }
+
+    const activeStatuses = ['confirmed', 'active', 'endRequested', 'settled'];
+    void onError(Object error) => debugPrint(
+      '❌ [PushNotificationService] Error in session status listener: $error',
+    );
+    _travelerSessionStatusSubscription = _firestore
+        .collection('hosting_sessions')
+        .where('travelerId', isEqualTo: userId)
+        .where('status', whereIn: activeStatuses)
+        .limit(100)
+        .snapshots()
+        .listen(handleSnapshot, onError: onError);
+    _hostSessionStatusSubscription = _firestore
+        .collection('hosting_sessions')
+        .where('hostId', isEqualTo: userId)
+        .where('status', whereIn: activeStatuses)
+        .limit(100)
+        .snapshots()
+        .listen(handleSnapshot, onError: onError);
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1510,6 +1512,7 @@ class PushNotificationService {
         .collection('peer_bookings')
         .where('hostId', isEqualTo: userId)
         .where('status', isEqualTo: 'pending')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1583,6 +1586,7 @@ class PushNotificationService {
     _bookingStatusSubscription = _firestore
         .collection('peer_bookings')
         .where('guestId', isEqualTo: userId)
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1683,6 +1687,7 @@ class PushNotificationService {
     _eventSubscription = _firestore
         .collection('events')
         .where('participants', arrayContains: userId)
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1790,6 +1795,7 @@ class PushNotificationService {
     _electionSubscription = _firestore
         .collection('governance')
         .where('status', isEqualTo: 'active')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1870,6 +1876,7 @@ class PushNotificationService {
         .collection('chats')
         .where('metadata.listingSellerId', isEqualTo: userId)
         .where('type', isEqualTo: 'marketplace')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1945,6 +1952,7 @@ class PushNotificationService {
         .collection('chats')
         .where('metadata.propertySellerId', isEqualTo: userId)
         .where('type', isEqualTo: 'real_estate')
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -2017,6 +2025,7 @@ class PushNotificationService {
     _trustVerificationSubscription = _firestore
         .collection('field_verifications')
         .where('verifiedUserId', isEqualTo: userId)
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -2084,6 +2093,7 @@ class PushNotificationService {
     _trustVouchSubscription = _firestore
         .collection('vouches')
         .where('vouchedUserId', isEqualTo: userId)
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {
@@ -2151,6 +2161,7 @@ class PushNotificationService {
         .collection('trust_ratings')
         .where('toUserId', isEqualTo: userId)
         .where('isFullTrust', isEqualTo: true)
+        .limit(100)
         .snapshots()
         .listen(
           (snapshot) {

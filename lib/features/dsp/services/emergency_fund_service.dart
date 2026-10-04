@@ -158,6 +158,7 @@ class EmergencyFundService {
     return _firestore
         .collection('emergency_fund_interest')
         .orderBy('createdAt', descending: true)
+        .limit(500)
         .snapshots()
         .map((s) => s.docs.map((d) => d.id).toList());
   }
@@ -167,6 +168,7 @@ class EmergencyFundService {
     return _firestore
         .collection('emergency_fund_memberships')
         .where('status', isEqualTo: 'active')
+        .limit(500)
         .snapshots()
         .map((s) => s.docs.map((d) => d.id).toList());
   }
@@ -348,6 +350,7 @@ class EmergencyFundService {
         .collection('proxy_requests')
         .where('toUserId', isEqualTo: proxyUserId)
         .where('status', isEqualTo: 'pending')
+        .limit(100)
         .snapshots();
   }
 
@@ -358,6 +361,7 @@ class EmergencyFundService {
         .collection('emergency_fund_claims')
         .where('userId', isEqualTo: userId)
         .orderBy('submittedDate', descending: true)
+        .limit(100)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs
@@ -404,12 +408,9 @@ class EmergencyFundService {
   /// When the fund opens, all docs in this collection represent users
   /// who already staked and can proceed directly to payment.
   Future<void> stakePromissory(String userId) async {
-    await _firestore.collection('emergency_fund_stakers').doc(userId).set({
-      'userId': userId,
-      'stakedAt': FieldValue.serverTimestamp(),
-      'amountDSP': 1000,
-      'status': 'staked', // staked → contributed → refunded
-    });
+    await FirebaseFunctions.instance
+        .httpsCallable('stakeEmergencyFundPromissory')
+        .call();
     debugPrint('✅ [EmergencyFund] User $userId staked 1,000 DSP promissory');
 
     // Fire notification
@@ -421,7 +422,7 @@ class EmergencyFundService {
           type: NotificationType.emergencyFundStaked,
           title: 'DSP Staked Successfully',
           body:
-              'You staked 1,000 DSP promissory for the Community Emergency Fund. Complete your annual contribution to activate membership.',
+              'You staked 1,000 DSP promissory for the Ubuntu Emergency Fund. Complete your annual contribution to activate membership.',
           createdAt: DateTime.now(),
         ),
       );

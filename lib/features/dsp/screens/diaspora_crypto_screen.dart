@@ -581,7 +581,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
           const SizedBox(height: 16),
           const Text(
-            '\$DIASPORA Token Ecosystem',
+            '\$DIASPORA',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 28,
@@ -602,7 +602,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
           const SizedBox(height: 6),
           const Text(
-            'Reputation-to-Asset Engine',
+            'Trust-to-Asset Engine',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
@@ -758,8 +758,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        GviCorridorListScreen(homeCountry: country),
+                    builder: (context) => GviCorridorListScreen(
+                      homeCountry: countryCode.isNotEmpty
+                          ? countryCode
+                          : country,
+                    ),
                   ),
                 );
               },
@@ -835,7 +838,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Upon reaching 1 Million DSP + 100 Members, Epoch 1 (The Great Reset) completes. Complete 10 unique in-person Identity QR exchanges to qualify for your first TGE — every TGE after that is automatic.',
+                    'Upon reaching 1 Million DSP + 10 Members, Epoch 1 (The Great Reset) completes. Complete 10 unique in-person Identity QR exchanges to qualify for your first TDE — every TDE after that is automatic.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -924,7 +927,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
       children: [
         _buildSectionHeader('COMMUNITY BASED TREASURIES', 'Sovereign Reserves'),
         const Text(
-          'Community based wallets are multi-sig accounts overseen by elected Leaders and funded by the decentralized sovereign split (10% Matching).',
+          'Community treasuries are transparent multi-sig reserves managed by elected community leaders and funded through the 1:1 Ubuntu community match.',
           style: TextStyle(
             fontSize: 14,
             color: Colors.blueGrey,
@@ -993,7 +996,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                                 fit: BoxFit.contain,
                               ),
                               const SizedBox(width: 6),
-                              // Use actual on-chain totalDistributed from batch provider
+                              // Sum the on-chain wallets visible to this user.
                               (() {
                                 final batchAsync = ref.watch(
                                   batchTokenBalancesProvider,
@@ -1030,7 +1033,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     Text(
-                      'Aggregated Distributed Wealth',
+                      'Visible On-chain Wealth',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -1050,7 +1053,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             communityId: 'global_community',
             defaultTitle: 'Global Reserve',
             subtitle:
-                'Global Reserve — 10% Tribute · Funds chambers operations, charitable donations, and protocol upkeep',
+                'Zero-fee transfers & remittances, chamber leadership, charities & protocol upkeep · 10% Ubuntu community match',
             icon: LucideIcons.globe,
             governanceType: 'Global Reserve',
           ),
@@ -1073,18 +1076,30 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ? community.id.substring(community.id.indexOf('_') + 1)
                 : community.id;
 
-            // Determine allocation % based on hierarchy depth
-            final bool hasHomeState = homePool.any((c) => c.type == 'state');
+            String defaultTitle;
             String tributeLabel;
-            if (community.type == 'country' && hasHomeState) {
+
+            if (community.type == 'city' || community.type == 'town') {
+              defaultTitle = '${community.name} DDI Treasury';
               tributeLabel =
-                  'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
-            } else if (community.type == 'state') {
+                  'Local community business loans (up to \$1M) · 10% Ubuntu community match';
+            } else if (community.type == 'state' ||
+                community.type == 'province') {
+              defaultTitle = '${community.name} Reserve Treasury';
               tributeLabel =
-                  'Foreign Diaspora Direct Investments — 5% Tribute (Split)';
+                  'State liquidity reserve & loan backstop · 10% Ubuntu community match';
+            } else if (community.type == 'country') {
+              defaultTitle = '${community.name} DDI Treasury';
+              tributeLabel =
+                  'Large-scale sovereign investments (\$1M+) · 10% Ubuntu community match';
+            } else if (community.type == 'continent') {
+              defaultTitle = '${community.name} Reserve Treasury';
+              tributeLabel =
+                  'Regional liquidity reserve & loan backstop · 10% Ubuntu community match';
             } else {
+              defaultTitle = '${community.name} Treasury';
               tributeLabel =
-                  'Foreign Diaspora Direct Investments — 10% Tribute';
+                  'Diaspora Direct Investments & community wealth · 10% Ubuntu community match';
             }
 
             return Padding(
@@ -1092,7 +1107,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               child: _GovernanceUnitCard(
                 unitId: unitId,
                 communityId: community.id,
-                defaultTitle: '${community.name} Treasury',
+                defaultTitle: defaultTitle,
                 subtitle: tributeLabel,
                 icon: community.type == 'continent'
                     ? LucideIcons.map
@@ -1125,17 +1140,30 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ? community.id.substring(community.id.indexOf('_') + 1)
                 : community.id;
 
-            // Determine allocation % based on hierarchy depth
-            final bool hasHostState = hostPool.any((c) => c.type == 'state');
+            String defaultTitle;
             String tributeLabel;
-            if (community.type == 'country' && hasHostState) {
+
+            if (community.type == 'city' || community.type == 'town') {
+              defaultTitle = '${community.name} DDI Treasury';
               tributeLabel =
-                  'Diaspora Direct Investments Loans — 5% Tribute (Split)';
-            } else if (community.type == 'state') {
+                  'Local community business loans (up to \$1M) · 10% Ubuntu community match';
+            } else if (community.type == 'state' ||
+                community.type == 'province') {
+              defaultTitle = '${community.name} Reserve Treasury';
               tributeLabel =
-                  'Diaspora Direct Investments Loans — 5% Tribute (Split)';
+                  'State liquidity reserve & loan backstop · 10% Ubuntu community match';
+            } else if (community.type == 'country') {
+              defaultTitle = '${community.name} DDI Treasury';
+              tributeLabel =
+                  'Large-scale sovereign investments (\$1M+) · 10% Ubuntu community match';
+            } else if (community.type == 'continent') {
+              defaultTitle = '${community.name} Reserve Treasury';
+              tributeLabel =
+                  'Regional liquidity reserve & loan backstop · 10% Ubuntu community match';
             } else {
-              tributeLabel = 'Diaspora Direct Investments Loans — 10% Tribute';
+              defaultTitle = '${community.name} Treasury';
+              tributeLabel =
+                  'Diaspora Direct Investments & community wealth · 10% Ubuntu community match';
             }
 
             return Padding(
@@ -1143,7 +1171,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               child: _GovernanceUnitCard(
                 unitId: unitId,
                 communityId: community.id,
-                defaultTitle: '${community.name} Treasury',
+                defaultTitle: defaultTitle,
                 subtitle: tributeLabel,
                 icon: community.type == 'city'
                     ? LucideIcons.mapPin
@@ -1325,16 +1353,6 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // ── Description ──
-          const Center(
-            child: Text(
-              'Auto-created from your phone number. No keys to manage, no gas fees.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.white70),
-            ),
-          ),
           const SizedBox(height: 16),
 
           // ── Key Features ──
@@ -1344,7 +1362,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               const SizedBox(width: 8),
               _buildWalletFeature(LucideIcons.zap, 'Zero Gas Fees'),
               const SizedBox(width: 8),
-              _buildWalletFeature(LucideIcons.lock, 'Non-Custodial'),
+              _buildWalletFeature(LucideIcons.lock, 'Self-Custodial'),
             ],
           ),
           const SizedBox(height: 16),
@@ -1411,86 +1429,91 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     color: Colors.white.withValues(alpha: 0.1),
                   ),
                   const SizedBox(height: 10),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final balanceAsync = ref.watch(tokenBalanceProvider);
-                      final valuation = ref.watch(dspValuationProvider);
-                      return balanceAsync.when(
-                        data: (balance) {
-                          final parsedInt =
-                              (double.tryParse(balance) ?? 0).toInt();
-                          final usdEst = valuation.formatBalance(parsedInt);
-                          return Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 6,
-                            runSpacing: 4,
+                  Center(
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final balanceAsync = ref.watch(tokenBalanceProvider);
+                        final valuation = ref.watch(dspValuationProvider);
+                        return balanceAsync.when(
+                          data: (balance) {
+                            final parsedInt = (double.tryParse(balance) ?? 0)
+                                .toInt();
+                            final usdEst = valuation.formatBalance(parsedInt);
+                            return Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                Image.asset(
+                                  'assets/icons/logo-orange-transparent-32.png',
+                                  width: 24,
+                                  height: 24,
+                                ),
+                                Text(
+                                  '$balance \$DIASPORA',
+                                  style: const TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  '($usdEst)',
+                                  style: const TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                          loading: () => Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Image.asset(
-                                'assets/icons/logo-orange-transparent-32.png',
-                                width: 24,
-                                height: 24,
-                              ),
                               Text(
-                                '$balance \$DIASPORA',
-                                style: const TextStyle(
-                                  color: Colors.orange,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
+                                'Balance: ',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              Text(
-                                '($usdEst)',
-                                style: const TextStyle(
-                                  color: Color(0xFF38BDF8),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.orange,
                                 ),
                               ),
                             ],
-                          );
-                        },
-                        loading: () => Row(
-                          children: [
-                            Text(
-                              'Balance: ',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.6),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                          ),
+                          error: (_, _) => Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Balance: ',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.orange,
+                              const Text(
+                                '—',
+                                style: TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        error: (_, _) => Row(
-                          children: [
-                            Text(
-                              'Balance: ',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.6),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const Text(
-                              '—',
-                              style: TextStyle(
-                                color: Colors.orange,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -1629,7 +1652,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           data: (onChainTransfers) {
             final List<_BlockchainEvent> activities = [];
 
-            // 1. Add real on-chain ERC-20 transfer events from Coinbase L2 Base Blockchain
+            // 1. Add real on-chain ERC-20 transfer events from Ethereum Base Blockchain
             for (final tx in onChainTransfers) {
               final title = tx.isIncoming
                   ? 'Received from ${tx.shortFrom}'
@@ -2144,15 +2167,33 @@ class _GovernanceUnitCard extends ConsumerWidget {
         final cleanName = community?.name
             .replaceAll('Community', '')
             .replaceAll('Treasury', '')
+            .replaceAll('DDI', '')
+            .replaceAll('Reserve', '')
             .trim();
-        // Global Reserve is not a community treasury — always use the
-        // defaultTitle ("Global Reserve") instead of appending "Community
-        // Treasury" to whatever the underlying community doc is named.
-        final title = unitId == 'global_community'
-            ? defaultTitle
-            : (cleanName != null && cleanName.isNotEmpty
-                  ? '$cleanName Community Treasury'
-                  : defaultTitle);
+        final bool isCommunityReserve =
+            community?.type == 'state' ||
+            community?.type == 'province' ||
+            community?.type == 'continent';
+        final String title;
+
+        if (unitId == 'global_community') {
+          title = defaultTitle;
+        } else if (cleanName != null && cleanName.isNotEmpty) {
+          if (community?.type == 'city' || community?.type == 'town') {
+            title = '$cleanName DDI Treasury';
+          } else if (community?.type == 'state' ||
+              community?.type == 'province') {
+            title = '$cleanName Reserve Treasury';
+          } else if (community?.type == 'country') {
+            title = '$cleanName DDI Treasury';
+          } else if (community?.type == 'continent') {
+            title = '$cleanName Reserve Treasury';
+          } else {
+            title = defaultTitle;
+          }
+        } else {
+          title = defaultTitle;
+        }
 
         return GestureDetector(
           onTap: () => Navigator.push(
@@ -2163,7 +2204,8 @@ class _GovernanceUnitCard extends ConsumerWidget {
                 subtitle: subtitle,
                 walletAddress: walletAddr,
                 balance: balance,
-                isSystemReserve: isSystemReserve,
+                isSystemReserve: isSystemReserve || isCommunityReserve,
+                unitId: unitId,
               ),
             ),
           ),
@@ -2225,12 +2267,14 @@ class _GovernanceUnitCard extends ConsumerWidget {
                               const SizedBox(width: 6),
                               Builder(
                                 builder: (context) {
-                                  final valuation =
-                                      ref.watch(dspValuationProvider);
+                                  final valuation = ref.watch(
+                                    dspValuationProvider,
+                                  );
                                   final parsedVal =
                                       (double.tryParse(balance) ?? 0).toInt();
-                                  final usdEst =
-                                      valuation.formatBalance(parsedVal);
+                                  final usdEst = valuation.formatBalance(
+                                    parsedVal,
+                                  );
                                   return Text.rich(
                                     TextSpan(
                                       children: [

@@ -139,14 +139,25 @@ class LocationUpdateService {
       // First-ever location fetch + user hasn't forfeited → grant visibility,
       // which immediately triggers the +10 City Visibility PCT.
       if (!forfeited && !hasExplicitChoice) {
-        updates['showCurrentLocationName'] = true;
+        await _firestore.collection('users').doc(userId).update({
+          'showCurrentLocationName': true,
+          'currentCity': city,
+          'currentState': state,
+          'currentCountryCode': countryCode,
+        });
       }
 
-      // Update Firestore
-      await _firestore.collection('users').doc(userId).update(updates);
+      await _firestore
+          .collection('user_private')
+          .doc(userId)
+          .set(updates, SetOptions(merge: true));
 
       // Check for automatic RSVP'd event attendance within 100 meters
-      await _checkGeofencedEventAttendance(userId, position.latitude, position.longitude);
+      await _checkGeofencedEventAttendance(
+        userId,
+        position.latitude,
+        position.longitude,
+      );
     } catch (e) {
       // Failed to update location
     }
@@ -167,6 +178,7 @@ class LocationUpdateService {
           .collection('events')
           .where('attendees', arrayContains: userId)
           .where('status', isEqualTo: 'published')
+          .limit(100)
           .get();
 
       for (var doc in snapshot.docs) {
@@ -182,7 +194,9 @@ class LocationUpdateService {
         double? venueLng = (data['longitude'] as num?)?.toDouble();
 
         final plusCode = data['plusCode'] as String?;
-        if ((venueLat == null || venueLng == null) && plusCode != null && plusCode.isNotEmpty) {
+        if ((venueLat == null || venueLng == null) &&
+            plusCode != null &&
+            plusCode.isNotEmpty) {
           final decoded = PlusCodeService.decode(plusCode);
           if (decoded != null) {
             venueLat = decoded['latitude'];
@@ -214,13 +228,17 @@ class LocationUpdateService {
           try {
             start = DateTime.parse('$startDateStr $startTimeStr');
           } catch (_) {
-            try { start = DateTime.parse(startDateStr); } catch (_) {}
+            try {
+              start = DateTime.parse(startDateStr);
+            } catch (_) {}
           }
 
           try {
             end = DateTime.parse('$endDateStr $endTimeStr');
           } catch (_) {
-            try { end = DateTime.parse(endDateStr); } catch (_) {}
+            try {
+              end = DateTime.parse(endDateStr);
+            } catch (_) {}
           }
 
           start ??= now;
@@ -280,7 +298,10 @@ class LocationUpdateService {
         updates['geo'] = geoFirePoint.data;
       }
 
-      await _firestore.collection('users').doc(userId).update(updates);
+      await _firestore
+          .collection('user_private')
+          .doc(userId)
+          .set(updates, SetOptions(merge: true));
     } catch (e) {
       debugPrint(
         'LocationUpdateService: Failed to fallback to host location: $e',

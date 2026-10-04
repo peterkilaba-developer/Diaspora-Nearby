@@ -201,7 +201,9 @@ class _PeerListingDetailScreenState
       if (widget.listing.isPeerHosting) {
         final trustData = ref.read(userTrustProvider(user.uid)).value;
         if (trustData == null || trustData.trustScore < 91) {
-          throw Exception('You need a Trust Score of 91+ to book a free Peer Hosting stay.');
+          throw Exception(
+            'You need a Trust Score of 91+ to book a free Peer Hosting stay.',
+          );
         }
       }
 
@@ -458,7 +460,9 @@ class _PeerListingDetailScreenState
                                       : _isHotel
                                       ? 'Community Hotel'
                                       : _isStay
-                                      ? (listing.isPeerHosting ? 'Peer Hosting' : (listing.propertyType ?? 'Stay'))
+                                      ? (listing.isPeerHosting
+                                            ? 'Peer Hosting'
+                                            : (listing.propertyType ?? 'Stay'))
                                       : 'Car Rental',
                                   style: const TextStyle(
                                     fontSize: 12,

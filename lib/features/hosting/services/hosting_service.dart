@@ -8,7 +8,6 @@ import 'package:diaspora_nearby/features/hosting/models/hosting_request.dart';
 import 'package:diaspora_nearby/features/hosting/models/hosting_session.dart';
 import 'package:diaspora_nearby/features/hosting/repository/hosting_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -89,15 +88,15 @@ class HostingService {
       );
 
       // Save to Firestore
-      await _hostingRepo.createRequest(request);
+      final createdRequest = await _hostingRepo.createRequest(request);
 
       // Broadcast to community chat (if chat exists)
       if (communityChatId != null && communityChatId.isNotEmpty) {
-        await _broadcastToCommunityChatMessage(request, communityChatId);
+        await _broadcastToCommunityChatMessage(createdRequest, communityChatId);
       }
 
       debugPrint('✅ [Hosting] Request created and broadcast: $requestId');
-      return request;
+      return createdRequest;
     } catch (e) {
       debugPrint('❌ [Hosting] Error creating request: $e');
       return null;
@@ -124,9 +123,6 @@ class HostingService {
       await _chatRepo.sendTextMessage(
         chatId,
         content,
-        type: 'system',
-        senderIdOverride: 'system',
-        senderNameOverride: 'Hosting Request',
         metadata: {
           'systemType': 'hosting_request',
           'hostingRequestId': request.id,
@@ -186,45 +182,12 @@ class HostingService {
         '🏠 [confirmArrangement] Host: $hostName ($hostId), chatId: $chatId',
       );
 
-      // 1. Update request to 'matched'
-      debugPrint('🏠 [confirmArrangement] Step 1: selectHost...');
-      await _hostingRepo.selectHost(
+      final session = await _hostingRepo.createSession(
         requestId: request.id,
         hostId: hostId,
-        hostName: hostName,
-      );
-      debugPrint('🏠 [confirmArrangement] Step 1 ✅ selectHost done');
-
-      // 2. Create a hosting session
-      debugPrint('🏠 [confirmArrangement] Step 2: Creating session object...');
-      final sessionId = _hostingRepo.generateId();
-      debugPrint('🏠 [confirmArrangement] Generated session ID: $sessionId');
-
-      final session = HostingSession(
-        id: sessionId,
-        requestId: request.id,
-        travelerId: request.travelerId,
-        travelerName: request.travelerName,
-        travelerPhoto: request.travelerPhoto,
-        hostId: hostId,
-        hostName: hostName,
-        hostPhoto: hostPhoto,
-        communityId: request.communityId,
-        communityName: request.communityName,
-        plannedArrival: request.arrivalDate,
-        plannedDeparture: request.departureDate,
-        createdAt: DateTime.now(),
         chatId: chatId,
       );
-      debugPrint('🏠 [confirmArrangement] Session object created');
-
-      debugPrint(
-        '🏠 [confirmArrangement] Step 3: Saving session to Firestore...',
-      );
-      await _hostingRepo.createSession(session);
-      debugPrint('🏠 [confirmArrangement] Step 3 ✅ Session saved');
-
-      debugPrint('✅ [Hosting] Arrangement confirmed, session: $sessionId');
+      debugPrint('✅ [Hosting] Arrangement confirmed, session: ${session.id}');
       return session;
     } catch (e, stackTrace) {
       debugPrint('❌ [Hosting] Error confirming arrangement: $e');
@@ -238,9 +201,9 @@ class HostingService {
   // =========================================================================
 
   /// QR Check-in: Activates the hosting session.
-  Future<bool> checkIn(String sessionId) async {
+  Future<bool> checkIn(String sessionId, String token) async {
     try {
-      await _hostingRepo.checkIn(sessionId);
+      await _hostingRepo.checkIn(sessionId, token);
       return true;
     } catch (e) {
       debugPrint('❌ [Hosting] Check-in error: $e');
@@ -251,13 +214,7 @@ class HostingService {
   /// One party requests to end the stay.
   Future<bool> requestEndStay(String sessionId) async {
     try {
-      final user = _ref.read(authRepositoryProvider).currentUser;
-      if (user == null) return false;
-
-      await _hostingRepo.requestEnd(
-        sessionId: sessionId,
-        requestedByUserId: user.uid,
-      );
+      await _hostingRepo.requestEnd(sessionId);
       return true;
     } catch (e) {
       debugPrint('❌ [Hosting] End request error: $e');
@@ -268,24 +225,7 @@ class HostingService {
   /// Both parties confirmed end — settle the session.
   Future<bool> settleSession(String sessionId) async {
     try {
-      // 1. Calculate final days and mark as ended
       await _hostingRepo.confirmEnd(sessionId);
-
-      // 2. Mark as settled (no DSP fee — hosting is free)
-      await _hostingRepo.markSettled(sessionId);
-
-      // 3. Award DSP for Peer Hosting (1000 flat + 100 per night)
-      final session = await _hostingRepo.getSession(sessionId);
-      if (session != null) {
-        final nights = session.plannedDeparture.difference(session.plannedArrival).inDays;
-        final actualNights = nights > 0 ? nights : 1;
-        await _ref.read(pointsServiceProvider).trackHostATraveler(
-          session.hostId,
-          session.travelerId,
-          nights: actualNights,
-        );
-      }
-
       debugPrint('✅ [Hosting] Session $sessionId settled');
       return true;
     } catch (e) {

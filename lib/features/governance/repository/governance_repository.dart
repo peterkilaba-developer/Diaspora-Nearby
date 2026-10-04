@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rxdart/rxdart.dart';
 import '../models/governance_unit.dart';
@@ -87,6 +88,7 @@ class GovernanceRepository {
     final snapshot = await _firestore
         .collection('governance_votes')
         .where('unitId', isEqualTo: unitId)
+        .limit(500)
         .get();
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
@@ -95,6 +97,7 @@ class GovernanceRepository {
     return _firestore
         .collection('governance_votes')
         .where('unitId', isEqualTo: unitId)
+        .limit(500)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
@@ -159,6 +162,7 @@ class GovernanceRepository {
         .collection('governance_history')
         .where('unitId', isEqualTo: unitId)
         .orderBy('timestamp', descending: true)
+        .limit(100)
         .get();
     return snapshot.docs
         .map((doc) => ElectionResult.fromJson(doc.data()))
@@ -169,6 +173,7 @@ class GovernanceRepository {
     return _firestore
         .collection('governance')
         .where('isActiveElection', isEqualTo: true)
+        .limit(100)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs.map((doc) {
@@ -183,6 +188,7 @@ class GovernanceRepository {
     final snapshot = await _firestore
         .collection('governance')
         .where('councilMembers', arrayContains: userId)
+        .limit(100)
         .get();
 
     return snapshot.docs.map((doc) {
@@ -203,19 +209,12 @@ class GovernanceRepository {
     required String role,
     required String verdict,
   }) async {
-    final data = {
+    await FirebaseFunctions.instance.httpsCallable('castGovernanceVote').call({
       'unitId': unitId,
-      'voterId': voterId,
       'candidateId': candidateId,
       'role': role,
       'verdict': verdict,
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    await _firestore
-        .collection('governance_votes')
-        .doc('${unitId}_${role}_${candidateId}_$voterId')
-        .set(data);
+    });
   }
 
   /// Get all votes for a specific candidate in a specific role.
@@ -229,6 +228,7 @@ class GovernanceRepository {
         .where('unitId', isEqualTo: unitId)
         .where('candidateId', isEqualTo: candidateId)
         .where('role', isEqualTo: role)
+        .limit(500)
         .get();
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
@@ -242,6 +242,7 @@ class GovernanceRepository {
         .collection('governance_votes')
         .where('unitId', isEqualTo: unitId)
         .where('role', isEqualTo: role)
+        .limit(500)
         .snapshots()
         .map((s) => s.docs.map((d) => d.data()).toList());
   }
@@ -340,6 +341,7 @@ class GovernanceRepository {
         .collection('communities')
         .doc(communityId)
         .collection('members')
+        .limit(500)
         .get();
     return membersSnapshot.docs.map((d) => d.id).toList();
   }
@@ -351,10 +353,14 @@ class GovernanceRepository {
     String candidateId,
     String role,
   ) async {
-    final doc = await _firestore
+    final snapshot = await _firestore
         .collection('governance_votes')
-        .doc('${unitId}_${role}_${candidateId}_$voterId')
+        .where('unitId', isEqualTo: unitId)
+        .where('role', isEqualTo: role)
+        .where('candidateId', isEqualTo: candidateId)
+        .where('voterId', isEqualTo: voterId)
+        .limit(1)
         .get();
-    return doc.exists;
+    return snapshot.docs.isNotEmpty;
   }
 }

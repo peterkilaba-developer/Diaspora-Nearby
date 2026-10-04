@@ -64,7 +64,8 @@ class TrustData {
   final int flaggedMessagesCount; // [NEW] -10 PCT for every 10 unique flags
   final int
   bannedVoucheeCount; // [NEW] -10 PCT if someone you vouched for is banned
-  final int fakeVerificationsCount; // [NEW] -10 PCT for every 10 fake verifications
+  final int
+  fakeVerificationsCount; // [NEW] -10 PCT for every 10 fake verifications
 
   // [NEW] Reliability & Helpfulness metrics
   final int attendedEventsCount;
@@ -81,7 +82,8 @@ class TrustData {
   final int verifiedByCount; // How many peers verified this user
   final int vouchedByCount; // How many peers vouched for this user
   final bool isCouncilEligible;
-  final bool isDdiEligible; // [NEW] 7 Genesis Milestones + 100+ days active + PCT 91+
+  final bool
+  isDdiEligible; // [NEW] 7 Genesis Milestones + 100+ days active + PCT 91+
   final List<String> awardedQualificationMilestones; // [NEW] Track awards
   final int verifiedCheckInCount;
   final int unresponsiveLiaisonCount;
@@ -90,6 +92,8 @@ class TrustData {
   final int eventNoShowCount; // [NEW] -10 PCT
   final int reportedFraudCount; // [NEW] -10 PCT
   final int referralCount; // [NEW] +1 PCT per 10 referrals (linear)
+  final bool
+  hasReceivedPohTokenDistribution; // 7,000 DSP Genesis conversion to on-chain $DIASPORA
 
   // [NEW] Ledger for already awarded/penalized HTS units (sets of 10)
   final Map<String, int> awardedHtsTracking;
@@ -140,6 +144,7 @@ class TrustData {
     this.vouchedByCount = 0,
     this.isCouncilEligible = false,
     this.isDdiEligible = false,
+    this.hasReceivedPohTokenDistribution = false,
     this.awardedQualificationMilestones = const [],
     this.verifiedCheckInCount = 0,
     this.unresponsiveLiaisonCount = 0,
@@ -202,6 +207,8 @@ class TrustData {
     int? verifiedByCount,
     int? vouchedByCount,
     bool? isCouncilEligible,
+    bool? isDdiEligible,
+    bool? hasReceivedPohTokenDistribution,
     List<String>? awardedQualificationMilestones,
     int? verifiedCheckInCount,
     int? unresponsiveLiaisonCount,
@@ -254,6 +261,10 @@ class TrustData {
       verifiedByCount: verifiedByCount ?? this.verifiedByCount,
       vouchedByCount: vouchedByCount ?? this.vouchedByCount,
       isCouncilEligible: isCouncilEligible ?? this.isCouncilEligible,
+      isDdiEligible: isDdiEligible ?? this.isDdiEligible,
+      hasReceivedPohTokenDistribution:
+          hasReceivedPohTokenDistribution ??
+          this.hasReceivedPohTokenDistribution,
       awardedQualificationMilestones:
           awardedQualificationMilestones ?? this.awardedQualificationMilestones,
       verifiedCheckInCount: verifiedCheckInCount ?? this.verifiedCheckInCount,

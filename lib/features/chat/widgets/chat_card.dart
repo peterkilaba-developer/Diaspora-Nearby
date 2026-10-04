@@ -83,7 +83,11 @@ class ChatCard extends ConsumerWidget {
   });
 
   /// Whether this chat is an auto-created Family Group Chat
-  bool get _isFamilyGroup => chat.metadata?['isFamilyGroup'] == true;
+  bool get _isFamilyGroup =>
+      chat.metadata?['isFamilyGroupImmediate'] == true ||
+      chat.metadata?['isFamilyGroupExtended'] == true;
+  bool get _isImmediateFamilyGroup =>
+      chat.metadata?['isFamilyGroupImmediate'] == true;
 
   String _getCountryFlag(String? countryCode) {
     if (countryCode == null || countryCode.isEmpty) return '';
@@ -276,9 +280,32 @@ class ChatCard extends ConsumerWidget {
             ],
           );
         case 'money-transfer':
-          icon = LucideIcons.banknote;
-          text = 'Money transfer';
-          break;
+          final meta = lastMessage.metadata ?? {};
+          final amount = meta['amount'] != null ? '${meta['amount']}' : '';
+          final currency = meta['currency'] as String? ?? 'USD';
+          final currentUserId = ref.watch(authStateProvider).value?.uid;
+          final isSent = lastMessage.senderId == currentUserId;
+          final direction = isSent ? 'sent' : 'received';
+          final fiatColor = AppTheme.fiatColor;
+
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.banknote, size: 18, color: fiatColor),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Remittance $currency $amount $direction',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: fiatColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          );
         default:
           isMedia = false;
           text = lastMessage.content;
@@ -492,13 +519,19 @@ class ChatCard extends ConsumerWidget {
         width: 56,
         height: 56,
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: _isImmediateFamilyGroup
+              ? Colors.blue.shade50
+              : Colors.teal.shade50,
           shape: BoxShape.circle,
         ),
         child: Center(
           child: Icon(
-            LucideIcons.heartHandshake,
-            color: Colors.blue.shade600,
+            _isImmediateFamilyGroup
+                ? LucideIcons.heartHandshake
+                : LucideIcons.trees,
+            color: _isImmediateFamilyGroup
+                ? Colors.blue.shade600
+                : Colors.teal.shade600,
             size: 26,
           ),
         ),
@@ -818,11 +851,15 @@ class ChatCard extends ConsumerWidget {
                                     padding: const EdgeInsets.only(right: 6.0),
                                     child: Icon(
                                       _isFamilyGroup
-                                          ? LucideIcons.heartHandshake
+                                          ? (_isImmediateFamilyGroup
+                                                ? LucideIcons.heartHandshake
+                                                : LucideIcons.trees)
                                           : LucideIcons.users,
                                       size: 16,
                                       color: _isFamilyGroup
-                                          ? Colors.blue.shade600
+                                          ? (_isImmediateFamilyGroup
+                                                ? Colors.blue.shade600
+                                                : Colors.teal.shade600)
                                           : Colors.green,
                                     ),
                                   ),
