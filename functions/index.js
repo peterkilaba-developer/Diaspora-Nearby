@@ -112,6 +112,7 @@ exports.setUserBlocked = relationships.setUserBlocked;
 exports.removeRelationship = relationships.removeRelationship;
 exports.markRelationshipDeceased = relationships.markRelationshipDeceased;
 exports.ensureCommunity = communities.ensureCommunity;
+exports.provisionSignupCommunities = communities.provisionSignupCommunities;
 exports.createPeerBooking = bookings.createPeerBooking;
 exports.updatePeerBookingStatus = bookings.updatePeerBookingStatus;
 

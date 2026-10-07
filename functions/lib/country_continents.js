@@ -58,4 +58,13 @@ function continentForCountry(countryCode) {
       .find((continent) => CONTINENT_CODES[continent].has(code)) || null;
 }
 
-module.exports = {continentForCountry, CONTINENT_NAMES};
+const STATE_LEVEL_COUNTRIES = new Set([
+  "AR", "AU", "BR", "CA", "CL", "CN", "CO", "FR", "DE", "IN",
+  "ID", "IT", "MX", "NG", "PK", "PH", "PL", "RU", "CH", "US",
+]);
+
+function hasStateLevel(countryCode) {
+  return STATE_LEVEL_COUNTRIES.has(String(countryCode || "").toUpperCase());
+}
+
+module.exports = {continentForCountry, CONTINENT_NAMES, hasStateLevel};

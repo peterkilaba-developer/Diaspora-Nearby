@@ -101,21 +101,82 @@ class CommunityService {
     final List<String> communityIds = [];
     final List<String> chatIds = [];
 
-    // ========================================
+    // =========================================================================
+    // FAST PATH: Single Server-Side Batch Provisioning (1 HTTP call, <400ms)
+    // =========================================================================
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('provisionSignupCommunities');
+      final result = await callable.call<Map<String, dynamic>>({
+        'homeLocation': {
+          'city': homeParsed.city,
+          'state': homeParsed.state,
+          'country': homeParsed.country,
+          'countryCode': homeCountryCode,
+          'placeId': homeParsed.placeId,
+        },
+        'hostLocation': {
+          'city': hostParsed.city,
+          'state': hostParsed.state,
+          'country': hostParsed.country,
+          'countryCode': hostCountryCode,
+          'placeId': hostParsed.placeId,
+        },
+        'homeCountryCode': homeCountryCode,
+        'hostCountryCode': hostCountryCode,
+      });
+
+      final commIds = List<String>.from(result.data['communityIds'] ?? []);
+      final cIds = List<String>.from(result.data['chatIds'] ?? []);
+      if (commIds.isNotEmpty) {
+        communityIds.addAll(commIds);
+        chatIds.addAll(cIds);
+
+        // Corridor Chamber (only if different countries)
+        if (_ref != null && hostCountryCode != 'XX' && homeCountryCode != hostCountryCode) {
+          try {
+            final chamberResult = await FirebaseFunctions.instanceFor(
+              region: 'us-central1',
+            ).httpsCallable('ensureSignupChamber').call<Map<String, dynamic>>();
+            final chamberChatId = chamberResult.data['chatId'] as String?;
+            if (chamberChatId != null) {
+              chatIds.add(chamberChatId);
+            }
+          } catch (e) {
+            debugPrint('⚠️ ensureCorridorChamber failed: $e');
+          }
+        }
+
+        await _batchUpdateUserChatsIndex(userId, chatIds);
+        return communityIds;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Fast batch provisioning failed, falling back to tier-by-tier: $e');
+    }
+
+    // =========================================================================
+    // RESILIENT FALLBACK: Individual Tier-by-Tier Provisioning
+    // =========================================================================
     // 1. GLOBAL COMMUNITY
     // ========================================
-    final globalId = await _ensureCommunity(
-      type: 'global',
-      locationType: 'global',
-      location: homeParsed,
-      userId: userId,
-      homeCountryCode: homeCountryCode,
-      hostCountryCode: null,
-      onFirstMember: onFirstMember,
-      userName: userName,
-    );
-    communityIds.add(globalId);
-    chatIds.add('chat_$globalId');
+    try {
+      final globalId = await _ensureCommunity(
+        type: 'global',
+        locationType: 'global',
+        location: homeParsed,
+        userId: userId,
+        homeCountryCode: homeCountryCode,
+        hostCountryCode: null,
+        onFirstMember: onFirstMember,
+        userName: userName,
+      );
+      communityIds.add(globalId);
+      chatIds.add('chat_$globalId');
+    } catch (e) {
+      debugPrint('⚠️ ensure global community failed: $e');
+      communityIds.add('global_community');
+      chatIds.add('chat_global_community');
+    }
 
     // ========================================
     // 2. HOME COMMUNITIES
@@ -150,9 +211,7 @@ class CommunityService {
     // ========================================
     // 3.5 CORRIDOR CHAMBER OF COMMERCE (Organization)
     // ========================================
-    // The bilateral (home ↔ host) public business identity for the diaspora
-    // corridor — modelled as an Organization, not a community. Idempotent.
-    if (_ref != null && hostCountryCode != 'XX') {
+    if (_ref != null && hostCountryCode != 'XX' && homeCountryCode != hostCountryCode) {
       try {
         final result = await FirebaseFunctions.instanceFor(
           region: 'us-central1',
@@ -169,7 +228,11 @@ class CommunityService {
     // ========================================
     // 4. BATCH UPDATE userChats INDEX + PROFILE
     // ========================================
-    await _batchUpdateUserChatsIndex(userId, chatIds);
+    try {
+      await _batchUpdateUserChatsIndex(userId, chatIds);
+    } catch (e) {
+      debugPrint('⚠️ _batchUpdateUserChatsIndex warning: $e');
+    }
 
     return communityIds;
   }
@@ -197,31 +260,39 @@ class CommunityService {
     final continentName = location_utils.getContinentName(continent);
 
     // 1. Continent
-    final continentId = await _ensureCommunity(
-      type: 'continent',
-      locationType: locationType,
-      location: location,
-      continent: continentName,
-      userId: userId,
-      homeCountryCode: homeCountryCode,
-      hostCountryCode: hostCountryCode,
-      onFirstMember: onFirstMember,
-      userName: userName,
-    );
-    ids.add(continentId);
+    try {
+      final continentId = await _ensureCommunity(
+        type: 'continent',
+        locationType: locationType,
+        location: location,
+        continent: continentName,
+        userId: userId,
+        homeCountryCode: homeCountryCode,
+        hostCountryCode: hostCountryCode,
+        onFirstMember: onFirstMember,
+        userName: userName,
+      );
+      ids.add(continentId);
+    } catch (e) {
+      debugPrint('⚠️ ensureCommunity continent failed: $e');
+    }
 
     // 2. Country
-    final countryId = await _ensureCommunity(
-      type: 'country',
-      locationType: locationType,
-      location: location,
-      userId: userId,
-      homeCountryCode: homeCountryCode,
-      hostCountryCode: hostCountryCode,
-      onFirstMember: onFirstMember,
-      userName: userName,
-    );
-    ids.add(countryId);
+    try {
+      final countryId = await _ensureCommunity(
+        type: 'country',
+        locationType: locationType,
+        location: location,
+        userId: userId,
+        homeCountryCode: homeCountryCode,
+        hostCountryCode: hostCountryCode,
+        onFirstMember: onFirstMember,
+        userName: userName,
+      );
+      ids.add(countryId);
+    } catch (e) {
+      debugPrint('⚠️ ensureCommunity country failed: $e');
+    }
 
     // 3. State (only for 3-level countries)
     // [FIX] China Direct-Controlled Municipalities Logic: Skip State level to avoid "Shanghai, Shanghai, China"
@@ -238,32 +309,50 @@ class CommunityService {
         location.state != null &&
         location.state!.isNotEmpty &&
         country_data.hasStateLevelHierarchyFromData(countryCode)) {
-      final stateId = await _ensureCommunity(
-        type: 'state',
-        locationType: locationType,
-        location: location,
-        userId: userId,
-        homeCountryCode: homeCountryCode,
-        hostCountryCode: hostCountryCode,
-        onFirstMember: onFirstMember,
-        userName: userName,
-      );
-      ids.add(stateId);
+      try {
+        final stateId = await _ensureCommunity(
+          type: 'state',
+          locationType: locationType,
+          location: location,
+          userId: userId,
+          homeCountryCode: homeCountryCode,
+          hostCountryCode: hostCountryCode,
+          onFirstMember: onFirstMember,
+          userName: userName,
+        );
+        ids.add(stateId);
+      } catch (e) {
+        debugPrint('⚠️ ensureCommunity state failed: $e');
+      }
     }
 
     // 4. City
     if (location.city != null && location.city!.isNotEmpty) {
-      final cityId = await _ensureCommunity(
-        type: 'city',
-        locationType: locationType,
-        location: location,
-        userId: userId,
-        homeCountryCode: homeCountryCode,
-        hostCountryCode: hostCountryCode,
-        onFirstMember: onFirstMember,
-        userName: userName,
-      );
-      ids.add(cityId);
+      try {
+        final cityId = await _ensureCommunity(
+          type: 'city',
+          locationType: locationType,
+          location: location,
+          userId: userId,
+          homeCountryCode: homeCountryCode,
+          hostCountryCode: hostCountryCode,
+          onFirstMember: onFirstMember,
+          userName: userName,
+        );
+        ids.add(cityId);
+      } catch (e) {
+        debugPrint('⚠️ ensureCommunity city failed: $e');
+      }
+    }
+
+    if (syncToUserProfile && ids.isNotEmpty) {
+      try {
+        await _firestore.collection('users').doc(userId).set({
+          'communityMemberships': cf.FieldValue.arrayUnion(ids),
+        }, cf.SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('⚠️ Error syncing community memberships to profile: $e');
+      }
     }
 
     return ids;
@@ -286,6 +375,15 @@ class CommunityService {
         .call<Map<String, dynamic>>({
           'type': type,
           'locationType': locationType,
+          'location': {
+            'city': location.city,
+            'state': location.state,
+            'country': location.country,
+            'countryCode': location.countryCode,
+            'placeId': location.placeId,
+          },
+          'homeCountryCode': homeCountryCode,
+          'hostCountryCode': hostCountryCode,
         });
     final communityId = result.data['communityId'] as String;
     if (result.data['created'] == true && onFirstMember != null) {

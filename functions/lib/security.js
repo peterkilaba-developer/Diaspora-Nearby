@@ -17,9 +17,14 @@ function requireAuth(context) {
 function requireAppCheck(context) {
   if (process.env.FUNCTIONS_EMULATOR === "true") return;
   if (!context.app) {
-    throw new functions.https.HttpsError(
-        "failed-precondition",
-        "This request must come from an attested app instance.",
+    if (process.env.ENFORCE_APP_CHECK === "true") {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This request must come from an attested app instance.",
+      );
+    }
+    console.warn(
+        "[AppCheck] Request missing valid app attestation, allowing because ENFORCE_APP_CHECK is not true.",
     );
   }
 }

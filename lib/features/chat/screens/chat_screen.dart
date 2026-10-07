@@ -1173,7 +1173,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
     if (!isGlobalUnlocked &&
         (_activeChatId == 'global_community' ||
-            widget.chatId == 'global_community')) {
+            widget.chatId == 'global_community' ||
+            _activeChatId == 'chat_global_community' ||
+            widget.chatId == 'chat_global_community')) {
       return Scaffold(
         appBar: AppBar(title: const Text('Global Community Chat')),
         body: Center(

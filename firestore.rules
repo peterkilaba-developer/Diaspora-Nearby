@@ -45,14 +45,20 @@ service cloud.firestore {
     }
     // Check if user is a participant of a chat (used by message subcollection rules)
     function isChatParticipant(chatId) {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/chats/$(chatId)) &&
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/userChats/$(chatId)) ||
         (
+          exists(/databases/$(database)/documents/chats/$(chatId)) &&
           (
-            get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []) is list &&
-            get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []).hasAny([request.auth.uid])
+            (
+              get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []) is list &&
+              get(/databases/$(database)/documents/chats/$(chatId)).data.get('participants', []).hasAny([request.auth.uid])
+            ) ||
+            get(/databases/$(database)/documents/chats/$(chatId)).data.get('type', '') == 'community' ||
+            get(/databases/$(database)/documents/chats/$(chatId)).data.get('isPublic', false) == true
           )
-        );
+        )
+      );
     }
     function isDirectChat(chatId) {
       return exists(/databases/$(database)/documents/chats/$(chatId)) &&
@@ -77,14 +83,22 @@ service cloud.firestore {
         get(/databases/$(database)/documents/organizations/$(orgId)).data.admins.hasAny([request.auth.uid]);
     }
     function isCommunityMember(communityId) {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/communities/$(communityId)) &&
+      return isAuthenticated() && (
         (
-          get(/databases/$(database)/documents/communities/$(communityId))
-            .data.get('members', []).hasAny([request.auth.uid]) ||
-          get(/databases/$(database)/documents/communities/$(communityId))
-            .data.get('memberIds', []).hasAny([request.auth.uid])
-        );
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid))
+            .data.get('communityMemberships', []).hasAny([communityId])
+        ) ||
+        (
+          exists(/databases/$(database)/documents/communities/$(communityId)) &&
+          (
+            get(/databases/$(database)/documents/communities/$(communityId))
+              .data.get('members', []).hasAny([request.auth.uid]) ||
+            get(/databases/$(database)/documents/communities/$(communityId))
+              .data.get('memberIds', []).hasAny([request.auth.uid])
+          )
+        )
+      );
     }
     // Is this chat doc a corridor-chamber chat?
     function isChamberChat(chatId) {

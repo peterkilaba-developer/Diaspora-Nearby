@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
 
 final authControllerProvider = NotifierProvider<AuthController, bool>(
@@ -179,6 +180,18 @@ class AuthController extends Notifier<bool> {
     }
   }
 
+  String _formatAuthError(dynamic e) {
+    if (e is FirebaseFunctionsException) {
+      return e.message ?? e.code;
+    }
+    if (e is FirebaseException && e.message != null && e.message!.isNotEmpty) {
+      return e.message!;
+    }
+    final raw = e.toString();
+    final firstLine = raw.split('\n').first.trim();
+    return firstLine.replaceFirst(RegExp(r'^Exception:\s*'), '');
+  }
+
   void signInWithWhatsApp(BuildContext context, String phoneNumber) async {
     state = true;
     final repository = ref.read(authRepositoryProvider);
@@ -198,9 +211,10 @@ class AuthController extends Notifier<bool> {
     } catch (e) {
       state = false;
       if (context.mounted) {
+        final message = _formatAuthError(e);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('WhatsApp request failed: $e')));
+        ).showSnackBar(SnackBar(content: Text('WhatsApp request failed: $message')));
       }
     }
   }
@@ -232,8 +246,9 @@ class AuthController extends Notifier<bool> {
       debugPrint('AuthCtrl: verifyWhatsAppOTP ERROR: $e');
       state = false;
       if (context.mounted) {
+        final message = _formatAuthError(e);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('WhatsApp verification failed: $e')),
+          SnackBar(content: Text('WhatsApp verification failed: $message')),
         );
       }
     }

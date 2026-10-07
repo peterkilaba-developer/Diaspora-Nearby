@@ -124,16 +124,16 @@ async function ensureMembership({
       created = true;
     }
 
-    if (!participants.includes(userId)) {
-      participants.push(userId);
+    const isAlreadyParticipant = participants.includes(userId);
+    if (!isAlreadyParticipant) {
       enrolled = true;
+      if (participants.length < MAX_CHAMBER_PARTICIPANTS) {
+        participants.push(userId);
+      }
     }
-    if (participants.length > MAX_CHAMBER_PARTICIPANTS) {
-      throw new functions.https.HttpsError(
-          "resource-exhausted",
-          "This chamber has reached its current membership limit.",
-      );
-    }
+    const currentMemberCount = typeof chatSnap.data()?.memberCount === "number" ?
+      chatSnap.data().memberCount : participants.length;
+    const updatedMemberCount = !isAlreadyParticipant ? currentMemberCount + 1 : currentMemberCount;
 
     const fields = officialFields(details, homeCountryCode, hostCountryCode);
     transaction.set(chatRef, {
@@ -141,7 +141,7 @@ async function ensureMembership({
       ...fields,
       description,
       participants,
-      memberCount: participants.length,
+      memberCount: updatedMemberCount,
       createdAt: chatSnap.exists ? chatSnap.data().createdAt || now : now,
       updatedAt: now,
       lastMessage: chatSnap.exists ? chatSnap.data().lastMessage || null : null,
@@ -152,7 +152,7 @@ async function ensureMembership({
       id: details.chatId,
       ...fields,
       description,
-      memberCount: participants.length,
+      memberCount: updatedMemberCount,
       createdAt: chatSnap.exists ? chatSnap.data().createdAt || now : now,
     }, {merge: true});
 
@@ -175,9 +175,12 @@ async function ensureMembership({
     }
 
     const existingOrganization = organizationSnap.exists ? organizationSnap.data() : {};
-    const followers = Array.isArray(existingOrganization.followers) ?
+    const rawFollowers = Array.isArray(existingOrganization.followers) ?
       [...new Set(existingOrganization.followers)] : [];
-    if (!followers.includes(userId)) followers.push(userId);
+    const followers = rawFollowers.includes(userId) ?
+      rawFollowers :
+      (rawFollowers.length < MAX_CHAMBER_PARTICIPANTS ? [...rawFollowers, userId] : rawFollowers);
+
     transaction.set(organizationRef, {
       id: details.chatId,
       kind: "corridor_chamber",
@@ -193,7 +196,7 @@ async function ensureMembership({
       status: "active",
       members: participants,
       followers,
-      memberCount: participants.length,
+      memberCount: updatedMemberCount,
       admins: Array.isArray(existingOrganization.admins) ?
         existingOrganization.admins : [],
       pendingAdmins: Array.isArray(existingOrganization.pendingAdmins) ?

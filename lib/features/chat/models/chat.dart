@@ -361,7 +361,8 @@ class Chat {
       !id.startsWith('home_') &&
       !id.startsWith('host_') &&
       !id.startsWith('past_') &&
-      id != 'global_community';
+      id != 'global_community' &&
+      id != 'chat_global_community';
 
   /// Value transfer is intentionally limited to a real one-to-one DM.
   bool get supportsValueTransfer => isDirect && participants.length == 2;
@@ -378,7 +379,8 @@ class Chat {
       id.startsWith('community_') ||
       id.contains('community') ||
       name.toLowerCase().contains('community') ||
-      id == 'global_community';
+      id == 'global_community' ||
+      id == 'chat_global_community';
 
   /// Check if this is a group chat
   bool get isGroup =>

@@ -217,6 +217,7 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
                   .where(
                     (chat) =>
                         chat.id != 'global_community' &&
+                        chat.id != 'chat_global_community' &&
                         chat.locationType != 'global' &&
                         chat.type != 'global' &&
                         !chat.name.toLowerCase().contains('global community'),

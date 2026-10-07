@@ -911,8 +911,8 @@ exports.awardPoints = functions
             // Build allocation map: communityId -> fraction of unit
             const fractions = {};
             const addSlot = (id, fraction) => {
-              if (!id) return;
-              fractions[id] = (fractions[id] || 0) + fraction;
+              const targetId = id || "global_community";
+              fractions[targetId] = (fractions[targetId] || 0) + fraction;
             };
 
             // Global: always full unit
@@ -1440,8 +1440,8 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
 
         const fractions = {};
         const addSlot = (id, fraction) => {
-          if (!id) return;
-          fractions[id] = (fractions[id] || 0) + fraction;
+          const targetId = id || "global_community";
+          fractions[targetId] = (fractions[targetId] || 0) + fraction;
         };
         addSlot("global_community", 1.0);
         const homeContinent = findMembership("home_continent_");
@@ -1593,8 +1593,8 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
 
         const fractions = {};
         const addSlot = (id, fraction) => {
-          if (!id) return;
-          fractions[id] = (fractions[id] || 0) + fraction;
+          const targetId = id || "global_community";
+          fractions[targetId] = (fractions[targetId] || 0) + fraction;
         };
         addSlot("global_community", 1.0);
         const homeContinent = findMembership("home_continent_");
@@ -1752,8 +1752,8 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
 
         const fractions = {};
         const addSlot = (id, fraction) => {
-          if (!id) return;
-          fractions[id] = (fractions[id] || 0) + fraction;
+          const targetId = id || "global_community";
+          fractions[targetId] = (fractions[targetId] || 0) + fraction;
         };
         addSlot("global_community", 1.0);
         const homeContinent = findMembership("home_continent_");
@@ -2221,7 +2221,10 @@ exports.retryPendingWelcomeBonuses = functions
         const xcity = find("host_city_");
 
         const slots = {};
-        const addSlot = (id, frac) => { if (id) slots[id] = (slots[id] || 0) + frac; };
+        const addSlot = (id, frac) => {
+          const targetId = id || "global_community";
+          slots[targetId] = (slots[targetId] || 0) + frac;
+        };
         addSlot("global_community", 1);
         addSlot(hcont, 1);
         if (hstate) { addSlot(hcountry, 0.5); addSlot(hstate, 0.5); } else { addSlot(hcountry, 1); }
