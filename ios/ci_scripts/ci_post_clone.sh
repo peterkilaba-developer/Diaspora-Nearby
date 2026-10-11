@@ -4,19 +4,22 @@
 set -e
 
 # The default execution directory of this script is the ci_scripts directory.
-cd $CI_PRIMARY_REPOSITORY_PATH
+cd "$CI_PRIMARY_REPOSITORY_PATH"
 
-# Install Flutter using git (stable channel)
-git clone https://github.com/flutter/flutter.git --depth 1 -b stable $HOME/flutter
+# 1. Install Flutter using git (stable channel)
+git clone https://github.com/flutter/flutter.git --depth 1 -b stable "$HOME/flutter"
 export PATH="$PATH:$HOME/flutter/bin"
 
-# Install Flutter dependencies for iOS
+# 2. Pre-download Flutter iOS artifacts
 flutter precache --ios
 
-# Install pub packages
+# 3. Fetch Flutter dependencies
 flutter pub get
 
-# Install CocoaPods dependencies
+# 4. Install CocoaPods on Xcode Cloud runner
+HOMEBREW_NO_AUTO_UPDATE=1 brew install cocoapods
+
+# 5. Install CocoaPods dependencies
 cd ios && pod install
 
 exit 0
