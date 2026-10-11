@@ -38,4 +38,19 @@ done
 # 6. Generate iOS plugin symlinks and CocoaPods configuration for production scheme
 flutter build ios --config-only --flavor production -t lib/main_production.dart --release
 
+# 7. Ensure FunctionsStreamHandler.swift in cloud_functions is patched cleanly
+for fn_file in $(find "$HOME/.pub-cache" "ios/.symlinks" -name "FunctionsStreamHandler.swift" 2>/dev/null); do
+  python3 -c "
+import sys, re
+p = sys.argv[1]
+with open(p, 'r') as f:
+    c = f.read()
+if 'var function: Callable<AnyEncodable, StreamResponse' in c:
+    repl = '''await MainActor.run {\\n      events(\\n        FlutterError(\\n          code: \"unsupported\",\\n          message: \"Streaming callable functions require Firebase 12+ SDK\",\\n          details: nil\\n        )\\n      )\\n    }\\n  }\\n}'''
+    c = re.sub(r'// Stream handling for iOS 15\+.*', repl, c, flags=re.DOTALL)
+    with open(p, 'w') as f:
+        f.write(c)
+" "$fn_file"
+done
+
 exit 0

@@ -200,7 +200,8 @@ post_install do |installer|
   if File.exist?(functions_stream_file)
     content = File.read(functions_stream_file)
     if content.include?('var function: Callable<AnyEncodable, StreamResponse')
-      content = content.sub(/\/\/ Stream handling for iOS 15\+.*?^\s*\}\s*\}\s*$/m, "await MainActor.run {\n      events(\n        FlutterError(\n          code: \"unsupported\",\n          message: \"Streaming callable functions require Firebase 12+ SDK\",\n          details: nil\n        )\n      )\n    }\n  }")
+      replacement = "await MainActor.run {\n      events(\n        FlutterError(\n          code: \"unsupported\",\n          message: \"Streaming callable functions require Firebase 12+ SDK\",\n          details: nil\n        )\n      )\n    }\n  }\n}"
+      content = content.sub(/\/\/ Stream handling for iOS 15\+.*\z/m, replacement)
       File.chmod(0644, functions_stream_file)
       File.write(functions_stream_file, content)
     end
