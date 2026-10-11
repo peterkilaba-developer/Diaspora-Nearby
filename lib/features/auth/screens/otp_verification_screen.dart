@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:sms_autofill/sms_autofill.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:whatsapp_zero_tap/whatsapp_zero_tap.dart';
 import 'auth_controller.dart';
@@ -88,7 +89,11 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   }
 
   Future<void> _startListeningForWhatsAppZeroTap() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || !widget.isWhatsApp) return;
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        !widget.isWhatsApp) {
+      return;
+    }
     try {
       final zeroTap = WhatsappZeroTap();
       final isSupported = await zeroTap.isWhatsAppOtpHandshakeSupported();
@@ -97,7 +102,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
         return;
       }
       debugPrint('WhatsApp Zero-Tap: listening for incoming OTP...');
-      final code = await zeroTap.listenForOTP(timeout: const Duration(minutes: 2));
+      final code = await zeroTap.listenForOTP(
+        timeout: const Duration(minutes: 2),
+      );
       if (code != null && code.length == 6 && mounted && !_isSubmitting) {
         debugPrint('WhatsApp Zero-Tap: OTP automatically captured: $code');
         setState(() {
@@ -115,7 +122,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   void _ensureClipboardTimer() {
     if (!widget.isWhatsApp) return;
     _clipboardTimer?.cancel();
-    _clipboardTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+    _clipboardTimer = Timer.periodic(const Duration(milliseconds: 1500), (
+      timer,
+    ) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -175,7 +184,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
         // Skip if this exact code was already submitted and failed verification
         if (extractedCode == _lastFailedCode) return;
         // Skip if already detected or submitting
-        if (extractedCode == _otpCode && (_autoDetected || _isSubmitting)) return;
+        if (extractedCode == _otpCode && (_autoDetected || _isSubmitting)) {
+          return;
+        }
 
         debugPrint('📋 Code detected from clipboard: $extractedCode');
 
@@ -338,8 +349,12 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                     child: AnimatedBuilder(
                       animation: _pulseAnimation,
                       builder: (context, child) {
-                        final scale = _autoDetected ? 1.0 : _pulseAnimation.value;
-                        final glowAlpha = _autoDetected ? 0.3 : _glowAnimation.value;
+                        final scale = _autoDetected
+                            ? 1.0
+                            : _pulseAnimation.value;
+                        final glowAlpha = _autoDetected
+                            ? 0.3
+                            : _glowAnimation.value;
 
                         return Transform.scale(
                           scale: scale,
@@ -351,9 +366,13 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                               color: accentColor.withValues(alpha: 0.12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: accentColor.withValues(alpha: glowAlpha),
+                                  color: accentColor.withValues(
+                                    alpha: glowAlpha,
+                                  ),
                                   blurRadius: _autoDetected ? 20 : 16 * scale,
-                                  spreadRadius: _autoDetected ? 4 : (scale - 1.0) * 14,
+                                  spreadRadius: _autoDetected
+                                      ? 4
+                                      : (scale - 1.0) * 14,
                                 ),
                               ],
                             ),
@@ -361,8 +380,8 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                               _autoDetected
                                   ? LucideIcons.checkCheck
                                   : (isWhatsApp
-                                      ? LucideIcons.messageCircle
-                                      : LucideIcons.shieldCheck),
+                                        ? LucideIcons.messageCircle
+                                        : LucideIcons.shieldCheck),
                               size: 38,
                               color: _autoDetected ? Colors.green : accentColor,
                             ),
@@ -476,7 +495,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                   PinFieldAutoFill(
                     decoration: BoxLooseDecoration(
                       strokeColorBuilder: FixedColorBuilder(accentColor),
-                      bgColorBuilder: FixedColorBuilder(theme.colorScheme.surface),
+                      bgColorBuilder: FixedColorBuilder(
+                        theme.colorScheme.surface,
+                      ),
                       textStyle: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -604,7 +625,11 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                             debugPrint('Could not launch WhatsApp: $e');
                           }
                         },
-                        icon: const Icon(LucideIcons.messageSquare, size: 16, color: Colors.green),
+                        icon: const Icon(
+                          LucideIcons.messageSquare,
+                          size: 16,
+                          color: Colors.green,
+                        ),
                         label: const Text(
                           'Open WhatsApp App',
                           style: TextStyle(
@@ -613,7 +638,10 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.green, width: 1.2),
+                          side: const BorderSide(
+                            color: Colors.green,
+                            width: 1.2,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),

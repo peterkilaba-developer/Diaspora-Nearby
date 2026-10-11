@@ -51,7 +51,8 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
       // If phone controller is empty or if current country was incorrectly defaulted,
       // allow SIM country to refine it cleanly.
       if (_phoneController.text.isEmpty ||
-          (_selectedCountry.code != detected.code && _selectedCountry.dialCode == detected.dialCode)) {
+          (_selectedCountry.code != detected.code &&
+              _selectedCountry.dialCode == detected.dialCode)) {
         setState(() => _selectedCountry = detected);
         debugPrint('SIM country updated: ${detected.name}');
       }
@@ -82,7 +83,9 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
           if (matched != null) {
             bestMatch = matched;
             remainingNumber = parsed.nsn;
-            debugPrint('✅ PhoneNumber.parse resolved: ${matched.name} (ISO: $iso), NSN: $remainingNumber');
+            debugPrint(
+              '✅ PhoneNumber.parse resolved: ${matched.name} (ISO: $iso), NSN: $remainingNumber',
+            );
           }
         } catch (e) {
           debugPrint('PhoneNumber.parse hint fallback: $e');
@@ -90,16 +93,18 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
 
         // 2. Fallback: Sort by dial code length descending, prioritizing US for +1
         if (bestMatch == null) {
-          final sortedCountries = List<country_data.Country>.from(
-            country_data.countries,
-          )..sort((a, b) {
-            final cmp = b.dialCode.length.compareTo(a.dialCode.length);
-            if (cmp != 0) return cmp;
-            // Always prioritize United States over overseas territories for +1
-            if (a.code == 'US') return -1;
-            if (b.code == 'US') return 1;
-            return a.name.compareTo(b.name);
-          });
+          final sortedCountries =
+              List<country_data.Country>.from(country_data.countries)..sort((
+                a,
+                b,
+              ) {
+                final cmp = b.dialCode.length.compareTo(a.dialCode.length);
+                if (cmp != 0) return cmp;
+                // Always prioritize United States over overseas territories for +1
+                if (a.code == 'US') return -1;
+                if (b.code == 'US') return 1;
+                return a.name.compareTo(b.name);
+              });
 
           for (final country in sortedCountries) {
             if (cleanNumber.startsWith(country.dialCode)) {
@@ -194,9 +199,13 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     // trunk prefix when the input has no leading "+", but we are about to
     // prepend the dial code ourselves, so we must strip it here instead.
     final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
-    final rawDialCodeDigits = _selectedCountry.dialCode.replaceAll(RegExp(r'\D'), '');
+    final rawDialCodeDigits = _selectedCountry.dialCode.replaceAll(
+      RegExp(r'\D'),
+      '',
+    );
     var cleanDigits = digits;
-    if (rawDialCodeDigits.isNotEmpty && cleanDigits.startsWith(rawDialCodeDigits)) {
+    if (rawDialCodeDigits.isNotEmpty &&
+        cleanDigits.startsWith(rawDialCodeDigits)) {
       cleanDigits = cleanDigits.substring(rawDialCodeDigits.length);
     }
     final digitsWithoutTrunk = cleanDigits.startsWith('0')
@@ -509,10 +518,12 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF25D366),
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor:
-                              const Color(0xFF25D366).withValues(alpha: 0.5),
-                          disabledForegroundColor:
-                              Colors.white.withValues(alpha: 0.7),
+                          disabledBackgroundColor: const Color(
+                            0xFF25D366,
+                          ).withValues(alpha: 0.5),
+                          disabledForegroundColor: Colors.white.withValues(
+                            alpha: 0.7,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -604,7 +615,10 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             gradientColors: [Colors.teal.shade500, Colors.blue.shade600],
           ),
           Expanded(
-            child: _buildConnectorLine([Colors.teal.shade500, Colors.blue.shade600]),
+            child: _buildConnectorLine([
+              Colors.teal.shade500,
+              Colors.blue.shade600,
+            ]),
           ),
           _buildCircleItem(
             letter: 'C',
@@ -612,7 +626,10 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             gradientColors: [Colors.blue.shade600, Colors.purple.shade600],
           ),
           Expanded(
-            child: _buildConnectorLine([Colors.blue.shade600, Colors.purple.shade600]),
+            child: _buildConnectorLine([
+              Colors.blue.shade600,
+              Colors.purple.shade600,
+            ]),
           ),
           _buildCircleItem(
             letter: 'B',

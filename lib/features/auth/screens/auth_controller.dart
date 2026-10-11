@@ -7,7 +7,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
 
 final authControllerProvider = NotifierProvider<AuthController, bool>(
@@ -222,9 +221,9 @@ class AuthController extends Notifier<bool> {
       state = false;
       if (context.mounted) {
         final message = _formatAuthError(e);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('WhatsApp request failed: $message')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('WhatsApp request failed: $message')),
+        );
       }
     }
   }
