@@ -5,4 +5,4 @@
 APP_DISPLAY_NAME=Diaspora Nearby Dev
 APP_ENV=dev
 FLUTTER_TARGET=lib/main_dev.dart
-APP_BUNDLE_ID=com.diasporanearby.diasporaFlutter.dev
+APP_BUNDLE_ID=com.diasporanearby.diasporaFlutter
