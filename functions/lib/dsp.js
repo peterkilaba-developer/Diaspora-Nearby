@@ -150,22 +150,15 @@ async function isPohQualified(userId, userDocData, pointsDocData) {
   const verificationCount = Number(trustData.uniqueVerificationCount || 0);
   const hasTenVerifications = verificationCount >= 10;
 
-  // 7. Ubuntu Emergency Fund Contribution
-  const hasEmergencyFund = !!(
-    userData.hasStakedEmergencyFund ||
-    userData.emergencyFundStaked ||
-    pointsData.emergencyFundStaked ||
-    (trustData.awardedQualificationMilestones && trustData.awardedQualificationMilestones.includes("EmergencyFund"))
-  );
-
+  // 7. Ubuntu Emergency Fund Contribution (voluntary +10 PCT once members have tokens)
+  // Excluded from the required completion gate to avoid token-requirement deadlock.
   return (
     hasLocation &&
     isProfileComplete &&
     hasTenQr &&
     hasTenFamily &&
     hasTenFriends &&
-    hasTenVerifications &&
-    hasEmergencyFund
+    hasTenVerifications
   );
 }
 
@@ -1226,8 +1219,10 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
 }
 
 /**
- * initializeUserPoints — Sets up a new user's points doc with 10,000 DSP welcome bonus.
- * Called once during signup. 1:1 Ubuntu Protocol expansion triggers automatically.
+ * initializeUserPoints — Sets up a new user's points document.
+ * Called once during signup.
+ * NOTE: The 10,000 DSP welcome bonus was deprecated in favor of Proof of Humanity (PoH)
+ * milestones to prevent Sybil attacks before verification.
  */
 exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -1235,7 +1230,6 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
   }
 
   const userId = context.auth.uid;
-  const WELCOME_BONUS = 10000;
 
   try {
     const userPointsRef = db.collection("user_points").doc(userId);
@@ -1243,7 +1237,7 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
     const docData = doc.exists ? doc.data() : null;
 
     // Already fully initialized
-    if (doc.exists && docData && docData.signupDate && docData.userId && docData.lifetimeEarnings?.welcome_bonus) {
+    if (doc.exists && docData && docData.signupDate && docData.userId) {
       return { success: true, alreadyInitialized: true };
     }
 
@@ -1255,11 +1249,11 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     if (!doc.exists) {
-      // Fresh user — full initialization with 10,000 DSP welcome bonus
+      // Fresh user — initialize points doc with 0 DSP (earned via Proof of Humanity)
       batch.set(userPointsRef, {
         userId,
-        totalPoints: WELCOME_BONUS,
-        availablePoints: WELCOME_BONUS,
+        totalPoints: 0,
+        availablePoints: 0,
         currentStreak: 0,
         dailyMessageCount: 0,
         dailyShareCount: 0,
@@ -1272,15 +1266,11 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         qrConnectionCount: 0,
         trustScore: 0,
         tgeHistory: [],
-        lifetimeEarnings: { welcome_bonus: WELCOME_BONUS },
+        lifetimeEarnings: {},
         ...(countryCode ? { homeCountryCode: countryCode } : {}),
       });
     } else {
-      // Partial doc — backfill missing fields + award welcome bonus if missing
-      const existingLifetime = docData.lifetimeEarnings || {};
-      const welcomeBonusMissing = !existingLifetime.welcome_bonus;
-      const bonusToAdd = welcomeBonusMissing ? WELCOME_BONUS : 0;
-
+      // Partial doc — backfill missing base fields
       const updates = {
         userId,
         signupDate: docData.signupDate || now,
@@ -1299,36 +1289,12 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
 
       if (countryCode) updates.homeCountryCode = countryCode;
 
-      if (bonusToAdd > 0) {
-        updates.totalPoints = (docData.totalPoints || 0) + bonusToAdd;
-        updates.availablePoints = (docData.availablePoints || 0) + bonusToAdd;
-        updates["lifetimeEarnings.welcome_bonus"] = bonusToAdd;
-      }
-
       batch.set(userPointsRef, updates, { merge: true });
-    }
-
-    // Check if welcome bonus transaction should be recorded
-    const existingLifetime = docData ? (docData.lifetimeEarnings || {}) : {};
-    const shouldAwardBonus = !doc.exists || !existingLifetime.welcome_bonus;
-
-    if (shouldAwardBonus) {
-      const txRef = db.collection("points_transactions").doc();
-      batch.set(txRef, {
-        userId,
-        type: "earn",
-        action: "welcome_bonus",
-        points: WELCOME_BONUS,
-        timestamp: now,
-        metadata: { description: "Welcome to Diaspora!" },
-      });
-
-          await distributeUbuntuMatchingSupply(batch, userId, WELCOME_BONUS, now, "welcome_bonus_match");
     }
 
     await batch.commit();
 
-    return { success: true, welcomeBonusAwarded: shouldAwardBonus };
+    return { success: true, welcomeBonusAwarded: false };
   } catch (error) {
     console.error(`[initializeUserPoints] Error:`, error.message);
     throw new functions.https.HttpsError("internal", `Failed to initialize: ${error.message}`);
@@ -2734,9 +2700,10 @@ exports.evaluateWelcomeBonus = functions.https.onCall(async (data, context) => {
   const awarded = !!lifetime.welcome_bonus;
 
   return {
-    eligible: !awarded,
-    bonusAmount: 10000,
-    awarded,
+    eligible: false,
+    bonusAmount: 0,
+    awarded: false,
+    deprecated: true,
   };
 });
 

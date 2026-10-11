@@ -420,12 +420,20 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               trustData: trustDataAsync.value,
             ),
 
+            if ((lifetimeEarnings['welcome_bonus'] ?? 0) > 0)
+              _buildActivityCard(
+                context,
+                title: 'Welcome Bonus (Legacy)',
+                subtitle: 'Legacy welcome bonus awarded upon joining',
+                amount: '10,000 DSP',
+                earned: lifetimeEarnings['welcome_bonus'] ?? 0,
+              ),
             _buildActivityCard(
               context,
-              title: 'Welcome Bonus (DSP Points)',
-              subtitle: '10,000 DSP points awarded upon joining',
+              title: 'Location Transparency',
+              subtitle: 'Keep live location active to participate in token distributions',
               amount: '10,000 DSP',
-              earned: lifetimeEarnings['welcome_bonus'] ?? 0,
+              earned: lifetimeEarnings['location_transparency'] ?? 0,
             ),
             _buildActivityCard(
               context,
@@ -3226,7 +3234,15 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     if (hasTenVerifications) completedCount++;
     if (hasEmergencyFund) completedCount++;
 
-    final bool isAllComplete = completedCount == 7;
+    // User qualifies by completing the 6 core milestones (Profile, Location, 10 QR, 10 Family, 10 Friends, 10 Verifications).
+    // Emergency Fund contribution is the 7th milestone (voluntary +10 PCT once members have tokens).
+    final bool isAllComplete =
+        hasLocation &&
+        isProfileComplete &&
+        hasTenQr &&
+        hasTenFamily &&
+        hasTenFriends &&
+        hasTenVerifications;
 
     return Card(
       elevation: 2,
@@ -3269,7 +3285,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Auto-credited to smart wallet upon completing all 7 PoH milestones (70 PCT Base)',
+                        'Auto-credited to smart wallet upon completing the 6 core PoH milestones (Emergency Fund adds +10 PCT bonus)',
                         style: TextStyle(
                           fontSize: 12,
                           color: isAllComplete
@@ -3341,7 +3357,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               isComplete: hasEmergencyFund,
               subtitle: hasEmergencyFund
                   ? 'Emergency fund active'
-                  : 'Contribute to catastrophe protection pool',
+                  : 'Contribute to catastrophe protection pool (voluntary +10 PCT)',
               textColor: isAllComplete ? Colors.white : null,
             ),
             const SizedBox(height: 16),

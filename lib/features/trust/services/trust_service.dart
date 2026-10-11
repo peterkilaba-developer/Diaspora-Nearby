@@ -513,12 +513,15 @@ class TrustService {
         isProfileCompleteMilestone;
 
     // --- Proof of Humanity (PoH) Genesis On-Chain Token Distribution (7,000 $DIASPORA) ---
+    // Members qualify by completing the 6 non-fund milestones (Profile, 10 Family, 10 Friends,
+    // 10 QR exchanges, 10 Peer verifications, and Location transparency).
+    // Contribution to Ubuntu Emergency Fund is the 7th milestone (voluntary +10 PCT once members have tokens),
+    // and is excluded from the required completion gate to avoid token-requirement deadlock.
     final isPoHComplete =
         uniqueFamilyCount >= 10 &&
         uniqueFriendCount >= 10 &&
         uniqueQrCount >= 10 &&
         uniqueVerificationIds.length >= 10 &&
-        emergencyFundPoCT >= 10 &&
         cityVisibilityPoCT >= 10 &&
         isProfileComplete;
 
