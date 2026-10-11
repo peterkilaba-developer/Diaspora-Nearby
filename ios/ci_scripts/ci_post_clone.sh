@@ -32,7 +32,7 @@ for lucide_file in $(find "$HOME/.pub-cache" -name "lucide_icons.dart" 2>/dev/nu
   sed -i.bak "s/const LucideIconData(\([^)]*\))/const IconData(\1, fontFamily: 'Lucide', fontPackage: 'lucide_icons')/g" "$lucide_file"
 done
 
-# 5. Install CocoaPods dependencies
-cd ios && pod install
+# 5. Generate iOS plugin symlinks and CocoaPods configuration for production scheme
+flutter build ios --config-only --flavor production -t lib/main_production.dart --release
 
 exit 0
