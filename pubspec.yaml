@@ -173,6 +173,9 @@ flutter_launcher_icons:
 
 # The following section is specific to Flutter packages.
 flutter:
+  config:
+    enable-swift-package-manager: false
+
   # Make `flutter run` select the production Android/iOS flavor unless a
   # developer explicitly requests dev or staging.
   default-flavor: production
