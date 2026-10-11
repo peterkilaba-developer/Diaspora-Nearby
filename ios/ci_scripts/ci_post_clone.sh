@@ -16,18 +16,12 @@ flutter precache --ios
 # 3. Fetch Flutter dependencies
 flutter pub get
 
-# 4. Patch lucide_icons (fixes 'IconData cannot be extended' in modern Flutter)
-for icon_file in $(find "$HOME/.pub-cache" -name "icon_data.dart" 2>/dev/null | grep "lucide_icons"); do
-  cat << 'EOF' > "$icon_file"
-import 'package:flutter/widgets.dart';
-typedef LucideIconData = IconData;
-EOF
+# 4. Patch lucide_icons (replace LucideIconData with IconData directly)
+for lucide_file in $(find "$HOME/.pub-cache" -name "lucide_icons.dart" 2>/dev/null); do
+  sed -i.bak "s/const LucideIconData(\([^)]*\))/const IconData(\1, fontFamily: 'Lucide', fontPackage: 'lucide_icons')/g" "$lucide_file"
 done
 
-# 5. Install CocoaPods on Xcode Cloud runner
-HOMEBREW_NO_AUTO_UPDATE=1 brew install cocoapods
-
-# 6. Install CocoaPods dependencies
+# 5. Install CocoaPods dependencies
 cd ios && pod install
 
 exit 0
