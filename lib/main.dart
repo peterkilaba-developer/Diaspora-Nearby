@@ -265,6 +265,17 @@ class _BootstrapHostState extends State<_BootstrapHost> {
                               'Diaspora Nearby could not start securely.',
                               textAlign: TextAlign.center,
                             ),
+                            if (snapshot.error != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '${snapshot.error}',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                             const SizedBox(height: 16),
                             FilledButton(
                               onPressed: () {

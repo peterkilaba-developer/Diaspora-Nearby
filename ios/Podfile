@@ -1,3 +1,4 @@
+$FirebaseSDKVersion = '11.8.0'
 platform :ios, '15.5'
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -39,6 +40,7 @@ target 'Runner' do
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  pod 'RecaptchaEnterprise', '18.6.0'
 
   target 'RunnerTests' do
     inherit! :search_paths
@@ -64,12 +66,156 @@ post_install do |installer|
     end
   end
 
-  # Fix for Xcode 15: unlock & strip Swift 6 'sending' keyword from FirebaseDataEncoder.swift
-  file_path = File.join(installer.sandbox.root, 'FirebaseSharedSwift/FirebaseSharedSwift/Sources/third_party/FirebaseDataEncoder/FirebaseDataEncoder.swift')
-  if File.exist?(file_path)
-    File.chmod(0644, file_path)
-    text = File.read(file_path)
-    new_text = text.gsub('sending ', '')
-    File.open(file_path, 'w') { |file| file.puts new_text }
+
+  # Fix Swift 6 'sending' keyword in FirebaseDataEncoder for Xcode 15 / Swift 5 compatibility
+  encoder_file = File.join(installer.sandbox.root, 'FirebaseSharedSwift/FirebaseSharedSwift/Sources/third_party/FirebaseDataEncoder/FirebaseDataEncoder.swift')
+  if File.exist?(encoder_file)
+    content = File.read(encoder_file)
+    if content.include?('throws -> sending Any')
+      File.write(encoder_file, content.gsub('throws -> sending Any', 'throws -> Any'))
+    end
+  end
+
+  # Fix isiOSAppOnVision in device_info_plus for Xcode 15 compatibility
+  device_info_file = File.expand_path('.symlinks/plugins/device_info_plus/ios/device_info_plus/Sources/device_info_plus/FPPDeviceInfoPlusPlugin.m', __dir__)
+  if File.exist?(device_info_file)
+    content = File.read(device_info_file)
+    unless content.include?('VisionCompatibility')
+      patch = "@interface NSProcessInfo (VisionCompatibility)\n- (BOOL)isiOSAppOnVision;\n@end\n\n@implementation FPPDeviceInfoPlusPlugin"
+      File.write(device_info_file, content.sub('@implementation FPPDeviceInfoPlusPlugin', patch))
+    end
+  end
+
+  # Fix parameter pack compiler crash in StripeCore Timeout.swift for Xcode 15
+  timeout_file = File.join(installer.sandbox.root, 'StripeCore/StripeCore/StripeCore/Source/Helpers/Timeout.swift')
+  if File.exist?(timeout_file)
+    content = File.read(timeout_file)
+    if content.include?('<each T>')
+      patch = "@_spi(STP) public func withTimeout<T1, T2>(\n    _ timeout: TimeInterval,\n    _ op1: @escaping () async throws -> T1,\n    _ op2: @escaping () async throws -> T2\n) async -> (Result<T1, Error>, Result<T2, Error>) {\n    async let t1 = Task<T1, Error> { try await withTimeout(timeout) { try await op1() } }.result\n    async let t2 = Task<T2, Error> { try await withTimeout(timeout) { try await op2() } }.result\n    return await (t1, t2)\n}\n\n@_spi(STP) public func withTimeout<T1>(\n    _ timeout: TimeInterval,\n    _ op1: @escaping () async throws -> T1\n) async -> (Result<T1, Error>) {\n    let t1 = await Task<T1, Error> { try await withTimeout(timeout) { try await op1() } }.result\n    return (t1)\n}\n\n@_spi(STP) public func withTimeout<T1, T2, T3>(\n    _ timeout: TimeInterval,\n    _ op1: @escaping () async throws -> T1,\n    _ op2: @escaping () async throws -> T2,\n    _ op3: @escaping () async throws -> T3\n) async -> (Result<T1, Error>, Result<T2, Error>, Result<T3, Error>) {\n    async let t1 = Task<T1, Error> { try await withTimeout(timeout) { try await op1() } }.result\n    async let t2 = Task<T2, Error> { try await withTimeout(timeout) { try await op2() } }.result\n    async let t3 = Task<T3, Error> { try await withTimeout(timeout) { try await op3() } }.result\n    return await (t1, t2, t3)\n}"
+      File.chmod(0644, timeout_file)
+      File.write(timeout_file, content.sub(/@_spi\(STP\)\s+public\s+func\s+withTimeout<each T>.*?return\s+await\s+\(repeat\s+\(each\s+timeoutTasks\)\.result\)\s*\}/m, patch))
+    end
+  end
+
+  # Fix StripePaymentSheet Xcode 15 missing SPI imports and keypath closure
+  Dir.glob(File.join(installer.sandbox.root, 'StripePaymentSheet/**/*.swift')).each do |full_path|
+    content = File.read(full_path)
+    changed = false
+    unless content.include?('import StripeCore')
+      if content.include?('@_spi(STP) import StripePayments')
+        content = content.sub('@_spi(STP) import StripePayments', "@_spi(STP) import StripeCore\n@_spi(STP) import StripePayments")
+        changed = true
+      elsif content.include?('import StripePayments')
+        content = content.sub('import StripePayments', "@_spi(STP) import StripeCore\nimport StripePayments")
+        changed = true
+      elsif content.include?('@_spi(STP) import StripePaymentsUI')
+        content = content.sub('@_spi(STP) import StripePaymentsUI', "@_spi(STP) import StripeCore\n@_spi(STP) import StripePayments\n@_spi(STP) import StripePaymentsUI")
+        changed = true
+      elsif content.include?('import UIKit')
+        content = content.sub('import UIKit', "import UIKit\n@_spi(STP) import StripeCore\n@_spi(STP) import StripePayments")
+        changed = true
+      elsif content.include?('import Foundation')
+        content = content.sub('import Foundation', "import Foundation\n@_spi(STP) import StripeCore\n@_spi(STP) import StripePayments")
+        changed = true
+      end
+    end
+    unless content =~ /import\s+StripePayments\b/
+      if content.include?('@_spi(STP) import StripeCore')
+        content = content.sub('@_spi(STP) import StripeCore', "@_spi(STP) import StripeCore\n@_spi(STP) import StripePayments")
+        changed = true
+      end
+    end
+    if content.include?('.compactMap(\.self)')
+      content = content.sub('.compactMap(\.self)', '.compactMap { $0 }')
+      changed = true
+    end
+    if content.include?('var nillableContinuation: CheckedContinuation<String, Error>? = continuation')
+      box_def = "private final class ContinuationBox<T, E: Error>: @unchecked Sendable {\n    var continuation: CheckedContinuation<T, E>?\n    init(_ continuation: CheckedContinuation<T, E>) {\n        self.continuation = continuation\n    }\n}\n"
+      content = content.sub('@_spi(STP) import StripePayments', "@_spi(STP) import StripePayments\n\n#{box_def}")
+      content = content.sub('var nillableContinuation: CheckedContinuation<String, Error>? = continuation', 'let continuationBox = ContinuationBox(continuation)')
+      content = content.sub('Task { @MainActor in', 'Task { @MainActor [weak self] in')
+      content = content.gsub('nillableContinuation', 'continuationBox.continuation')
+      changed = true
+    end
+    if changed
+      File.chmod(0644, full_path)
+      File.write(full_path, content)
+    end
+  end
+
+  # Fix stripe_ios plugin SPI imports for Xcode 15
+  stripe_sdk_file = File.expand_path('.symlinks/plugins/stripe_ios/ios/stripe_ios/Sources/stripe_ios/Stripe Sdk/StripeSdkImpl.swift', __dir__)
+  if File.exist?(stripe_sdk_file)
+    content = File.read(stripe_sdk_file)
+    changed = false
+    if content.include?('@_spi(STP) import StripeCore') && !content.include?('@_spi(DashboardOnly) @_spi(STP) import StripeCore')
+      content = content.sub('@_spi(STP) import StripeCore', '@_spi(DashboardOnly) @_spi(STP) import StripeCore')
+      changed = true
+    end
+    if content.include?("\nimport StripePaymentsUI\n")
+      content = content.sub("\nimport StripePaymentsUI\n", "\n@_spi(STP) import StripePaymentsUI\n")
+      changed = true
+    end
+    if content.include?("@_spi(EmbeddedPaymentElementPrivateBeta) @_spi(CustomerSessionBetaAccess) import StripePaymentSheet")
+      content = content.sub("@_spi(EmbeddedPaymentElementPrivateBeta) @_spi(CustomerSessionBetaAccess) import StripePaymentSheet", "@_spi(STP) @_spi(AppearanceAPIAdditionsPreview) @_spi(EmbeddedPaymentElementPrivateBeta) @_spi(CustomerSessionBetaAccess) import StripePaymentSheet")
+      changed = true
+    end
+    if changed
+      File.chmod(0644, stripe_sdk_file)
+      File.write(stripe_sdk_file, content)
+    end
+  end
+
+  stripe_ps_file = File.expand_path('.symlinks/plugins/stripe_ios/ios/stripe_ios/Sources/stripe_ios/Stripe Sdk/StripeSdkImpl+PaymentSheet.swift', __dir__)
+  if File.exist?(stripe_ps_file)
+    content = File.read(stripe_ps_file)
+    unless content.include?('import StripePayments')
+      content = content.sub('import Foundation', "import Foundation\n@_spi(STP) import StripeCore\n@_spi(STP) import StripePayments\n@_spi(STP) import StripePaymentsUI")
+      File.chmod(0644, stripe_ps_file)
+      File.write(stripe_ps_file, content)
+    end
+  end
+
+  # Fix firebase_app_check @retroactive and RecaptchaProvider for Xcode 15 and Firebase 11
+  app_check_file = File.expand_path('.symlinks/plugins/firebase_app_check/ios/firebase_app_check/Sources/firebase_app_check/FirebaseAppCheckPlugin.swift', __dir__)
+  if File.exist?(app_check_file)
+    content = File.read(app_check_file)
+    changed = false
+    if content.include?('extension FlutterError: @retroactive Error {}')
+      content = content.sub('extension FlutterError: @retroactive Error {}', "#if compiler(>=6.0)\nextension FlutterError: @retroactive Error {}\n#else\nextension FlutterError: Error {}\n#endif")
+      changed = true
+    end
+    if content.include?('delegateProvider = RecaptchaProvider')
+      content = content.sub(/case "recaptcha":.*?default:/m, "case \"recaptcha\":\n      delegateProvider = nil\n      print(\"Firebase App Check: reCAPTCHA provider is not supported in Firebase 11 SDK.\")\n    default:")
+      changed = true
+    end
+    if changed
+      File.chmod(0644, app_check_file)
+      File.write(app_check_file, content)
+    end
+  end
+
+  # Fix cloud_functions StreamResponse for Firebase 11
+  functions_stream_file = File.expand_path('.symlinks/plugins/cloud_functions/ios/cloud_functions/Sources/cloud_functions/FunctionsStreamHandler.swift', __dir__)
+  if File.exist?(functions_stream_file)
+    content = File.read(functions_stream_file)
+    if content.include?('var function: Callable<AnyEncodable, StreamResponse')
+      content = content.sub(/\/\/ Stream handling for iOS 15\+.*?^\s*\}\s*\}\s*$/m, "await MainActor.run {\n      events(\n        FlutterError(\n          code: \"unsupported\",\n          message: \"Streaming callable functions require Firebase 12+ SDK\",\n          details: nil\n        )\n      )\n    }\n  }")
+      File.chmod(0644, functions_stream_file)
+      File.write(functions_stream_file, content)
+    end
+  end
+
+  # Fix cloud_firestore execution_time for Firebase 11
+  firestore_plugin_file = File.expand_path('.symlinks/plugins/cloud_firestore/ios/cloud_firestore/Sources/cloud_firestore/FLTFirebaseFirestorePlugin.m', __dir__)
+  if File.exist?(firestore_plugin_file)
+    content = File.read(firestore_plugin_file)
+    if content.include?('[snapshot execution_time]')
+      old_block = /NSNumber\s*\*executionTime\s*=\s*FLTPipelineTimestampToMs\(\[snapshot\s+execution_time\]\);.*?if\s*\(executionTime\s*==\s*nil\)\s*\{\s*executionTime\s*=\s*@\(\(int64_t\)\(\[\[NSDate\s+date\]\s+timeIntervalSince1970\]\s*\*\s*1000\)\);\s*\}/m
+      new_block = "NSNumber *executionTime =\n                                  @((int64_t)([[NSDate date] timeIntervalSince1970] * 1000));"
+      content = content.sub(old_block, new_block)
+      File.chmod(0644, firestore_plugin_file)
+      File.write(firestore_plugin_file, content)
+    end
   end
 end

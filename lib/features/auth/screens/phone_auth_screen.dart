@@ -194,9 +194,14 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     // trunk prefix when the input has no leading "+", but we are about to
     // prepend the dial code ourselves, so we must strip it here instead.
     final digits = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
-    final digitsWithoutTrunk = digits.startsWith('0')
-        ? digits.substring(1)
-        : digits;
+    final rawDialCodeDigits = _selectedCountry.dialCode.replaceAll(RegExp(r'\D'), '');
+    var cleanDigits = digits;
+    if (rawDialCodeDigits.isNotEmpty && cleanDigits.startsWith(rawDialCodeDigits)) {
+      cleanDigits = cleanDigits.substring(rawDialCodeDigits.length);
+    }
+    final digitsWithoutTrunk = cleanDigits.startsWith('0')
+        ? cleanDigits.substring(1)
+        : cleanDigits;
     final combined = '${_selectedCountry.dialCode}$digitsWithoutTrunk';
     final normalized = normalizePhone(
       rawInput: combined,

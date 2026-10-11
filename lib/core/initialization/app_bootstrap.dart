@@ -70,7 +70,11 @@ class AppBootstrap {
       // Play Integrity works for apps distributed via Google Play (internal/closed/open/production).
       // Debug provider is used for local development builds.
       try {
-        debugPrint('  → AppCheck.activate starting...');
+        const appleDebugToken = String.fromEnvironment(
+          'APP_CHECK_DEBUG_TOKEN',
+          defaultValue: 'F559B1FA-0CAD-41EB-A83B-ECE2AFA4CDC3',
+        );
+
         final activation = FirebaseAppCheck.instance.activate(
           providerWeb: ReCaptchaV3Provider(
             '6LcBv5EqAAAAADzV3g87x4u8f-xL0-G6Y5-xL0-G',
@@ -78,7 +82,9 @@ class AppBootstrap {
           providerAndroid: kReleaseMode
               ? const AndroidPlayIntegrityProvider()
               : const AndroidDebugProvider(),
-          providerApple: const AppleDeviceCheckProvider(),
+          providerApple: appleDebugToken.isNotEmpty
+              ? const AppleDebugProvider(debugToken: appleDebugToken)
+              : const AppleDeviceCheckProvider(),
         );
         if (kIsWeb) {
           // [PERF] Don't block first paint on the reCAPTCHA script download.
