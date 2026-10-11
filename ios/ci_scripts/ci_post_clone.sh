@@ -16,7 +16,18 @@ flutter precache --ios
 # 3. Fetch Flutter dependencies
 flutter pub get
 
-# 4. Patch lucide_icons (replace LucideIconData with IconData directly)
+# 4. Patch lucide_icons:
+# (a) Patch icon_data.dart so LucideIconData does not extend final IconData
+for icon_data_file in $(find "$HOME/.pub-cache" -name "icon_data.dart" 2>/dev/null); do
+  cat << 'EOF' > "$icon_data_file"
+class LucideIconData {
+  final int codePoint;
+  const LucideIconData(this.codePoint);
+}
+EOF
+done
+
+# (b) Patch lucide_icons.dart to construct IconData directly
 for lucide_file in $(find "$HOME/.pub-cache" -name "lucide_icons.dart" 2>/dev/null); do
   sed -i.bak "s/const LucideIconData(\([^)]*\))/const IconData(\1, fontFamily: 'Lucide', fontPackage: 'lucide_icons')/g" "$lucide_file"
 done
