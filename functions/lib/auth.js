@@ -14,8 +14,7 @@ function normalizePhoneNumber(value) {
 }
 
 const TEST_PHONE_NUMBERS = new Set([
-  "+16026627003", // Peter (Primary test number)
-  "+16505551230", // Peter (Test user)
+  "+16505551230", // Test user
   "+16505551231", // Test User B
   "+16505550100", // Standard NANP test number
   "+16505550101",
@@ -220,7 +219,7 @@ exports.requestWhatsAppOtp = functions.runWith({
 
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const templateName = process.env.WHATSAPP_TEMPLATE_NAME;
+  const templateName = process.env.WHATSAPP_TEMPLATE_NAME || "diaspora_auth_otp";
   const templateLang = process.env.WHATSAPP_TEMPLATE_LANG || "en_US";
 
   // Handle test accounts for App Store / Play Store / QA testing
@@ -228,18 +227,26 @@ exports.requestWhatsAppOtp = functions.runWith({
     console.log(
         `[Test Mode] WhatsApp OTP for ${phoneNumber} is: ${otp} (test bypass: 123456)`,
     );
-    // If WhatsApp secrets are configured, also attempt delivery in background
+    // If WhatsApp secrets are configured, also attempt delivery and await it
     if (accessToken && phoneNumberId) {
-      deliverWhatsAppMessage({
-        phoneNumberId,
-        accessToken,
-        recipientPhone: phoneNumber.substring(1),
-        otp,
-        templateName,
-        templateLang,
-      }).catch((e) => console.warn("[Test Mode] Delivery note:", e.message));
+      try {
+        const delivery = await deliverWhatsAppMessage({
+          phoneNumberId,
+          accessToken,
+          recipientPhone: phoneNumber.substring(1),
+          otp,
+          templateName,
+          templateLang,
+        });
+        console.log(
+            `[Test Mode] WhatsApp OTP delivery result for ${phoneNumber}:`,
+            delivery,
+        );
+      } catch (e) {
+        console.warn("[Test Mode] Delivery note:", e.message);
+      }
     }
-    return { success: true, testMode: true };
+    return { success: true, testMode: true, testCode: "123456" };
   }
 
   if (!accessToken || !phoneNumberId) {
@@ -328,9 +335,9 @@ exports.verifyWhatsAppOtp = functions.runWith({
 
   await consumeRateLimit("otp-verify-phone", phoneNumber, 10, 15 * 60 * 1000);
 
-  // If this is an authorized test phone number, allow fixed master code "123456"
+  // If this is an authorized test phone number, allow fixed master code "123456" or legacy "000000"
   const isTest = isTestPhoneNumber(phoneNumber);
-  const isMasterTestCode = isTest && otp === "123456";
+  const isMasterTestCode = isTest && (otp === "123456" || otp === "000000");
 
   if (!isMasterTestCode) {
     const otpRef = db.collection("whatsapp_otps").doc(stableHash(phoneNumber));
@@ -387,3 +394,64 @@ exports.verifyWhatsAppOtp = functions.runWith({
     );
   }
 });
+
+/**
+ * WhatsApp Cloud API Webhook
+ * - GET: Responds to Meta verification challenge (hub.challenge)
+ * - POST: Logs delivery statuses (sent, delivered, failed) and error codes
+ */
+exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
+  if (req.method === "GET") {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    const EXPECTED_TOKEN =
+        process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "diaspora_webhook_2026";
+    if (mode === "subscribe" && token === EXPECTED_TOKEN) {
+      console.log("[WhatsApp Webhook] Handshake verified successfully!");
+      return res.status(200).send(challenge);
+    }
+    console.warn(
+        "[WhatsApp Webhook] Handshake verification failed. Received token:",
+        token,
+    );
+    return res.status(403).send("Forbidden");
+  }
+
+  if (req.method === "POST") {
+    try {
+      const body = req.body;
+      console.log("[WhatsApp Webhook Event]:", JSON.stringify(body));
+
+      if (body && body.entry) {
+        for (const entry of body.entry) {
+          if (entry.changes) {
+            for (const change of entry.changes) {
+              const value = change.value;
+              if (value && value.statuses) {
+                for (const status of value.statuses) {
+                  console.log(
+                      `[WhatsApp Status] ID: ${status.id}, Status: ${status.status}, Recipient: ${status.recipient_id}`,
+                  );
+                  if (status.errors && status.errors.length > 0) {
+                    console.error(
+                        `[WhatsApp Delivery FAILED] Code: ${status.errors[0].code}, Title: ${status.errors[0].title}, Details: ${status.errors[0].error_data ? JSON.stringify(status.errors[0].error_data) : ""}`,
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      return res.status(200).send("EVENT_RECEIVED");
+    } catch (e) {
+      console.error("[WhatsApp Webhook Error]:", e.message);
+      return res.status(200).send("EVENT_RECEIVED");
+    }
+  }
+
+  res.status(405).send("Method Not Allowed");
+});
+

@@ -122,7 +122,7 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Country & Sovereign Projects (\$1M+)',
+                'Country DDI Loans (\$1M+)',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -131,9 +131,9 @@ class _DFDIScreenState extends ConsumerState<DFDIScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Invest in large-scale sovereign projects using \$DIASPORA across 7 key sectors: Food, Healthcare, Education, Real Estate, Water, Energy, and Public-Private Partnerships. Governed by a 67% supermajority community vote.',
+                'Large-scale loans to members using \$DIASPORA across key enterprise sectors: Commercial Real Estate, Healthcare, Education, Food, Energy, and Corporate Acquisitions. Borrowing members put up 10% collateral and own 100% of the venture. Governed by a 67% supermajority community vote.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
+                style: TextStyle(fontSize: 15, color: Colors.grey, height: 1.5),
               ),
               const SizedBox(height: 40),
 

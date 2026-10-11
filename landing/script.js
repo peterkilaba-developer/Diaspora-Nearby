@@ -56,6 +56,7 @@ function detectPlatform() {
     const ua = navigator.userAgent;
     if (/android/i.test(ua)) return 'android';
     if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'ios';
+    if (/Mac/.test(ua) && navigator.maxTouchPoints > 1) return 'ios'; // iPad Safari
     if (/Mac/.test(ua)) return 'macos';
     if (/Win/.test(ua)) return 'windows';
     if (/Linux/.test(ua)) return 'linux';
@@ -68,62 +69,107 @@ const detectedPlatform = detectPlatform();
 function initPlatformUI() {
     const isAndroid = detectedPlatform === 'android';
     const isIOS = detectedPlatform === 'ios';
-    const isMobile = isAndroid || isIOS;
 
-    // Hero section platform badge
-    const heroPlatformText = document.getElementById('hero-platform-text');
-    const heroBtnText = document.getElementById('hero-btn-text');
-    const heroBadge = document.getElementById('hero-platform-badge');
+    document.body.classList.add('platform-' + detectedPlatform);
 
-    if (heroPlatformText) {
-        if (isAndroid) {
-            heroPlatformText.textContent = 'Android detected — install via Google Play';
-            if (heroBadge) heroBadge.classList.add('android');
-        } else if (isIOS) {
-            heroPlatformText.textContent = 'iOS detected — TestFlight invite';
-            if (heroBadge) heroBadge.classList.add('ios');
+    // 0. Hero Single-Platform Button Enforcement (Android vs iOS)
+    const heroBtnAndroid = document.getElementById('hero-btn-android');
+    const heroBtnIOS = document.getElementById('hero-btn-ios');
+    if (heroBtnAndroid && heroBtnIOS) {
+        if (isIOS) {
+            heroBtnAndroid.style.setProperty('display', 'none', 'important');
+            heroBtnIOS.style.setProperty('display', 'inline-flex', 'important');
         } else {
-            heroPlatformText.textContent = 'Enter your email to get the native app';
+            heroBtnAndroid.style.setProperty('display', 'inline-flex', 'important');
+            heroBtnIOS.style.setProperty('display', 'none', 'important');
         }
     }
 
-    if (heroBtnText) {
+    // 1. Dynamic Hero Platform Blocks for index.html
+    const blockAndroid = document.getElementById('hero-block-android');
+    const blockIOS = document.getElementById('hero-block-ios');
+    const blockDefault = document.getElementById('hero-block-default');
+    const pill = document.getElementById('hero-platform-pill');
+    const pillIcon = document.getElementById('hero-platform-pill-icon');
+    const pillText = document.getElementById('hero-platform-pill-text');
+
+    if (blockAndroid && blockIOS && blockDefault) {
         if (isAndroid) {
-            heroBtnText.textContent = 'Sign Up & Get the App';
+            blockAndroid.style.display = 'flex';
+            blockIOS.style.display = 'none';
+            blockDefault.style.display = 'none';
+            if (pill) {
+                pill.style.display = 'inline-flex';
+                if (pillIcon) pillIcon.textContent = '🤖 ';
+                if (pillText) pillText.textContent = 'Android detected — Google Play & Direct APK available';
+            }
         } else if (isIOS) {
-            heroBtnText.textContent = 'Sign Up for TestFlight';
+            blockAndroid.style.display = 'none';
+            blockIOS.style.display = 'flex';
+            blockDefault.style.display = 'none';
+            if (pill) {
+                pill.style.display = 'inline-flex';
+                if (pillIcon) pillIcon.textContent = '🍏 ';
+                if (pillText) pillText.textContent = 'iOS detected — Instant Web App & TestFlight Beta';
+            }
         } else {
-            heroBtnText.textContent = 'Get Early Access';
+            blockAndroid.style.display = 'none';
+            blockIOS.style.display = 'none';
+            blockDefault.style.display = 'flex';
+            if (pill) pill.style.display = 'none';
         }
     }
 
-    // Install section platform detection
+    // 2. Dynamic Hero Platform Blocks for index_v2.html
+    const blockAndroidV2 = document.getElementById('hero-block-android-v2');
+    const blockIOSV2 = document.getElementById('hero-block-ios-v2');
+    const blockDefaultV2 = document.getElementById('hero-block-default-v2');
+    const pillV2 = document.getElementById('hero-platform-pill-v2');
+    const pillIconV2 = document.getElementById('hero-platform-pill-icon-v2');
+    const pillTextV2 = document.getElementById('hero-platform-pill-text-v2');
+
+    if (blockAndroidV2 && blockIOSV2 && blockDefaultV2) {
+        if (isAndroid) {
+            blockAndroidV2.style.display = 'flex';
+            blockIOSV2.style.display = 'none';
+            blockDefaultV2.style.display = 'none';
+            if (pillV2) {
+                pillV2.style.display = 'inline-flex';
+                if (pillIconV2) pillIconV2.textContent = '🤖 ';
+                if (pillTextV2) pillTextV2.textContent = 'Android detected — Google Play & Direct APK available';
+            }
+        } else if (isIOS) {
+            blockAndroidV2.style.display = 'none';
+            blockIOSV2.style.display = 'flex';
+            blockDefaultV2.style.display = 'none';
+            if (pillV2) {
+                pillV2.style.display = 'inline-flex';
+                if (pillIconV2) pillIconV2.textContent = '🍏 ';
+                if (pillTextV2) pillTextV2.textContent = 'iOS detected — Instant Web App & TestFlight Beta';
+            }
+        } else {
+            blockAndroidV2.style.display = 'none';
+            blockIOSV2.style.display = 'none';
+            blockDefaultV2.style.display = 'flex';
+            if (pillV2) pillV2.style.display = 'none';
+        }
+    }
+
+    // 3. Install section platform detection
     const installDetectedText = document.getElementById('install-detected-text');
-    const installBtnText = document.getElementById('install-btn-text');
     const androidOpt = document.getElementById('install-android-opt');
     const iosOpt = document.getElementById('install-ios-opt');
 
     if (installDetectedText) {
         if (isAndroid) {
-            installDetectedText.textContent = 'Android detected — install from Google Play after signup';
+            installDetectedText.textContent = 'Android detected — install directly from Google Play or download APK';
         } else if (isIOS) {
-            installDetectedText.textContent = 'iOS detected — we\u2019ll send your TestFlight invite';
+            installDetectedText.textContent = 'iOS detected — launch Web App or request TestFlight invite';
         } else {
-            installDetectedText.textContent = 'We\u2019ll send you the right version for your device';
+            installDetectedText.textContent = 'Google Play (Android), Web App (iOS/Desktop), or Direct APK';
         }
     }
 
-    if (installBtnText) {
-        if (isAndroid) {
-            installBtnText.textContent = 'Sign Up & Get the App';
-        } else if (isIOS) {
-            installBtnText.textContent = 'Sign Up for TestFlight';
-        } else {
-            installBtnText.textContent = 'Get Early Access';
-        }
-    }
-
-    // Highlight detected platform in the install section
     if (isAndroid && androidOpt) {
         androidOpt.classList.add('active');
     } else if (isIOS && iosOpt) {
@@ -136,6 +182,11 @@ function initPlatformUI() {
     if (isAndroid) {
         if (playStoreDirect) playStoreDirect.style.display = 'block';
         if (apkFallback) apkFallback.style.display = 'block';
+    }
+
+    // Refresh icons inside dynamic blocks
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
     }
 
     // ── Restore persisted state: hide already-completed steps ──
@@ -392,3 +443,83 @@ const observer = new IntersectionObserver(
 );
 
 document.querySelectorAll('.fade-in').forEach((el) => observer.observe(el));
+
+// ── PSA Rewards Directory Category Filter ──
+document.addEventListener('DOMContentLoaded', () => {
+    const filterPills = document.querySelectorAll('#reward-filter-pills .pill');
+    const rewardItems = document.querySelectorAll('.rewards-grid .reward-item[data-category]');
+
+    if (filterPills.length > 0 && rewardItems.length > 0) {
+        filterPills.forEach((pill) => {
+            pill.addEventListener('click', () => {
+                filterPills.forEach((p) => p.classList.remove('active'));
+                pill.classList.add('active');
+                const cat = pill.getAttribute('data-filter');
+
+                rewardItems.forEach((item) => {
+                    const itemCat = item.getAttribute('data-category');
+                    if (cat === 'all' || itemCat === cat) {
+                        item.classList.remove('cat-hidden');
+                    } else {
+                        item.classList.add('cat-hidden');
+                    }
+                });
+            });
+        });
+    }
+
+    // ── Interactive Earnings & Trust Calculator ──
+    const sliderConn = document.getElementById('slider-connections');
+    const sliderTrust = document.getElementById('slider-trust');
+    const sliderSpend = document.getElementById('slider-spend');
+
+    const valConn = document.getElementById('val-connections');
+    const valTrust = document.getElementById('val-trust');
+    const valSpend = document.getElementById('val-spend');
+
+    const resDsp = document.getElementById('res-dsp');
+    const resDiaspora = document.getElementById('res-diaspora');
+    const resMatch = document.getElementById('res-match');
+    const resPct = document.getElementById('res-pct');
+
+    function updateEarningsCalculator() {
+        if (!sliderConn || !sliderTrust || !sliderSpend) return;
+
+        const connections = parseInt(sliderConn.value, 10) || 0;
+        const trustInteractions = parseInt(sliderTrust.value, 10) || 0;
+        const spend = parseInt(sliderSpend.value, 10) || 0;
+
+        if (valConn) valConn.textContent = connections + (connections === 1 ? ' member' : ' members');
+        if (valTrust) valTrust.textContent = trustInteractions + (trustInteractions === 1 ? ' interaction' : ' interactions');
+        if (valSpend) valSpend.textContent = '$' + spend.toLocaleString('en-US');
+
+        // Calculation Model:
+        // Base Genesis PoH = up to 70,000 DSP (prorated 7k per verified connection)
+        let baseDSP = Math.min(connections * 7000, 70000);
+        if (connections > 10) {
+            baseDSP += (connections - 10) * 1000;
+        }
+        const trustDSP = trustInteractions * 1000;
+        const spendDSP = spend * 1;
+        const totalDSP = baseDSP + trustDSP + spendDSP;
+
+        // On-chain $DIASPORA unlocked: 7,000 minted on Base when 10 connections complete
+        const tokensMinted = connections >= 10 ? 7000 : Math.round(connections * 700);
+
+        // Projected PCT Score
+        let pctScore = Math.min(connections * 7, 70) + Math.floor(trustInteractions / 2) + (spend > 0 ? 5 : 0);
+        pctScore = Math.min(Math.max(pctScore, 5), 100);
+
+        if (resDsp) resDsp.textContent = totalDSP.toLocaleString('en-US') + ' DSP';
+        if (resDiaspora) resDiaspora.textContent = tokensMinted.toLocaleString('en-US') + ' $DIASPORA';
+        if (resMatch) resMatch.textContent = totalDSP.toLocaleString('en-US') + ' DSP';
+        if (resPct) resPct.textContent = pctScore + ' PCT';
+    }
+
+    if (sliderConn && sliderTrust && sliderSpend) {
+        sliderConn.addEventListener('input', updateEarningsCalculator);
+        sliderTrust.addEventListener('input', updateEarningsCalculator);
+        sliderSpend.addEventListener('input', updateEarningsCalculator);
+        updateEarningsCalculator();
+    }
+});

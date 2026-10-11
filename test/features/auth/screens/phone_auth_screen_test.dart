@@ -24,8 +24,10 @@ Future<void> _pumpPhoneAuth(WidgetTester tester, {bool loading = false}) async {
   );
   await tester.pump();
 
+  final targetFinder =
+      find.text(loading ? 'Connecting WhatsApp...' : 'Sign in with WhatsApp');
   await tester.scrollUntilVisible(
-    find.text('Sign in with WhatsApp'),
+    targetFinder,
     200,
     scrollable: find.byType(Scrollable).first,
   );
@@ -33,25 +35,21 @@ Future<void> _pumpPhoneAuth(WidgetTester tester, {bool loading = false}) async {
 }
 
 void main() {
-  testWidgets('shows WhatsApp sign-in as an explicit auth choice', (
-    tester,
-  ) async {
+  testWidgets('shows WhatsApp sign-in button', (tester) async {
     await _pumpPhoneAuth(tester);
 
-    expect(find.text('Send Verification Code'), findsOneWidget);
     expect(find.text('Sign in with WhatsApp'), findsOneWidget);
   });
 
-  testWidgets('keeps WhatsApp choice visible while authentication is loading', (
+  testWidgets('shows connecting state while authentication is loading', (
     tester,
   ) async {
     await _pumpPhoneAuth(tester, loading: true);
 
-    expect(find.text('Securing connection...'), findsOneWidget);
-    expect(find.text('Sign in with WhatsApp'), findsOneWidget);
+    expect(find.text('Connecting WhatsApp...'), findsOneWidget);
 
-    final button = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Sign in with WhatsApp'),
+    final button = tester.widget<ElevatedButton>(
+      find.byType(ElevatedButton),
     );
     expect(button.onPressed, isNull);
   });

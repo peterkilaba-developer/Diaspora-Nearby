@@ -442,6 +442,28 @@ Public Price = Adjusted Price × 3.5 (Network Effect Multiplier)
 
 ---
 
+## 🏛️ CONTINENTAL TREASURIES & SOVEREIGN REVENUE MODEL
+
+### The 50/50 Continental Dual Mandate
+Continental Treasuries (Home Continent and Host Continent) convert their off-chain DSP tribute into on-chain $DIASPORA tokens on Base at TGE/TDE scaled by the **Average Proof of Community Trust (APCT / CPCT)** of active members. The protocol manages the resulting $DIASPORA under a **50/50 Sovereign Split**:
+
+1. **50% Sovereign Bond Allocation (Platform Revenue Engine)**:
+   - Managed directly by the protocol to purchase **government bonds and Treasury Bills** in host and home nations.
+   - **Pro-Rata Sovereign Allocation:** Earmarked pro-rata based on each country's contribution to that continental treasury (e.g., Tanzania's contribution into the African Home Treasury is allocated to buy Bank of Tanzania sovereign bonds/bills; host continent funds buy sovereign bonds in host nations like US/UK).
+   - **Regulatory Alignment:** Central banks and ministries of finance view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding, facilitating integration into national economic, banking, and payment systems (e.g., TIPS in Tanzania, FedNow).
+   - **100% Platform Revenue:** All yield, interest, and coupon payments belong **exclusively to Diaspora Nearby (the platform)** to fund infrastructure, engineering, operations, and security. Because the platform charges zero fees to users (a 100% frictionless economy), this sovereign bond mechanism serves as the protocol's self-funding revenue engine.
+2. **50% Liquid $DIASPORA Backstop**:
+   - Retained in liquid on-chain $DIASPORA tokens on Base.
+   - Acts as the regional liquidity backstop for Town and Country member DDI loans under the Upward Cascading Liquidity Protocol.
+
+### Member-Owned DDI Loans
+- **Loans to Members:** All Town and Country DDI funds are **loans to members** (individual or pooled members).
+- **10% Collateral in $DIASPORA:** Members who put up the 10% token collateral own 100% of the funded venture, assets, and profits, and owe the loan obligation.
+- **Town DDI:** Member business loans up to $1,000,000.
+- **Country DDI:** Member loans exceeding $1,000,000+ for large-scale enterprises, commercial real estate, franchises, and agriculture.
+
+---
+
 ## 🔧 IMPLEMENTATION STATUS
 
 ### ✅ Already Built (Ready to Use)

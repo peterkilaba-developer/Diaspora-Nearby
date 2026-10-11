@@ -58,11 +58,15 @@ class AuthRepository {
   }
 
   /// Custom WhatsApp Auth Flow
-  Future<void> requestWhatsAppOtp(String phoneNumber) async {
+  Future<Map<String, dynamic>> requestWhatsAppOtp(String phoneNumber) async {
     final callable = FirebaseFunctions.instance.httpsCallable(
       'requestWhatsAppOtp',
     );
-    await callable.call({'phoneNumber': phoneNumber});
+    final result = await callable.call({'phoneNumber': phoneNumber});
+    if (result.data is Map) {
+      return Map<String, dynamic>.from(result.data as Map);
+    }
+    return {'success': true};
   }
 
   Future<String> verifyWhatsAppOtp(String phoneNumber, String otp) async {

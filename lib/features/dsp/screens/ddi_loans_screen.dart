@@ -304,11 +304,12 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
           const SizedBox(height: 14),
           Text(
             isCountry
-                ? 'Country-level DDI treasuries fund large-scale sovereign investments exceeding \$1,000,000+ through community-voted capital deployment. '
+                ? 'Country-level DDI treasuries fund large-scale member loans exceeding \$1,000,000+ (for commercial real estate, corporate acquisitions, franchises, agriculture, infrastructure). '
+                      'Borrowing members who put up 10% collateral in \$DIASPORA own the venture, its assets, and the loan obligation. '
                       'Borrowers repay by buying \$DIASPORA on the open market (DEX) and depositing tokens back to the Treasury.'
-                : 'Community-powered, interest-free lending backed by \$DIASPORA tokens. '
-                      'Members can pool their collateral to access up to \$1,000,000 for Town DDI. '
-                      'Borrowers repay by buying \$DIASPORA on the open market (DEX) and depositing tokens back to the Community Treasury.',
+                : 'Community-powered, interest-free lending directly to members backed by \$DIASPORA tokens. '
+                      'Members can apply individually or pool collateral to access up to \$1,000,000 for Town DDI. '
+                      'Borrowers own the enterprise 100% and repay by buying \$DIASPORA on the open market (DEX).',
             style: TextStyle(
               fontSize: 13,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -716,7 +717,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
               ),
               subtitle: Text(
                 isCountry
-                    ? 'DDI loans require 91+ PCT, completion of all 7 Genesis Milestones, 100+ days active membership, and a 67% community vote for investments exceeding \$1,000,000+.'
+                    ? 'DDI loans require 91+ PCT, completion of all 7 Genesis Milestones, 100+ days active membership, and a 67% community vote for member loans exceeding \$1,000,000+.'
                     : 'DDI loans require 91+ PCT, completion of all 7 Genesis Milestones, 100+ days active membership, local investment, and local residence. Members may pool collateral to access up to \$1,000,000.',
                 style: TextStyle(
                   fontSize: 10,

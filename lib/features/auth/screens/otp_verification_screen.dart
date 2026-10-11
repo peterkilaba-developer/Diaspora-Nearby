@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:sms_autofill/sms_autofill.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:whatsapp_zero_tap/whatsapp_zero_tap.dart';
 import 'auth_controller.dart';
 
 class OTPVerificationScreen extends ConsumerStatefulWidget {
@@ -31,10 +33,14 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   bool _autoDetected = false;
   bool _isSubmitting = false;
   String _detectionSource = '';
+  String? _lastFailedCode;
+  String? _initialClipboardText;
+  bool _hasCapturedInitialClipboard = false;
 
   // Resend Countdown Timer
   Timer? _countdownTimer;
   int _countdownSeconds = 60;
+  Timer? _clipboardTimer;
 
   // Pulse Animation
   late AnimationController _pulseController;
@@ -62,14 +68,59 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
     _startCountdown();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       if (!widget.isWhatsApp) {
         _startListeningForCode();
       } else {
-        // Check clipboard after first frame render in case user copied it from notification
-        _checkClipboardForCode();
+        // Snapshot existing clipboard text on load so old stale codes
+        // from previous logins or other apps are never auto-submitted.
+        try {
+          final data = await Clipboard.getData(Clipboard.kTextPlain);
+          _initialClipboardText = data?.text?.trim();
+        } catch (_) {}
+        _hasCapturedInitialClipboard = true;
+
+        _ensureClipboardTimer();
+        _startListeningForWhatsAppZeroTap();
       }
+    });
+  }
+
+  Future<void> _startListeningForWhatsAppZeroTap() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || !widget.isWhatsApp) return;
+    try {
+      final zeroTap = WhatsappZeroTap();
+      final isSupported = await zeroTap.isWhatsAppOtpHandshakeSupported();
+      if (!isSupported) {
+        debugPrint('WhatsApp Zero-Tap handshake not supported on this device');
+        return;
+      }
+      debugPrint('WhatsApp Zero-Tap: listening for incoming OTP...');
+      final code = await zeroTap.listenForOTP(timeout: const Duration(minutes: 2));
+      if (code != null && code.length == 6 && mounted && !_isSubmitting) {
+        debugPrint('WhatsApp Zero-Tap: OTP automatically captured: $code');
+        setState(() {
+          _otpCode = code;
+          _autoDetected = true;
+          _detectionSource = 'WhatsApp';
+        });
+        _verify();
+      }
+    } catch (e) {
+      debugPrint('WhatsApp Zero-Tap listener completed or skipped: $e');
+    }
+  }
+
+  void _ensureClipboardTimer() {
+    if (!widget.isWhatsApp) return;
+    _clipboardTimer?.cancel();
+    _clipboardTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _checkClipboardForCode();
     });
   }
 
@@ -103,17 +154,29 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   }
 
   Future<void> _checkClipboardForCode() async {
-    if (!mounted || _autoDetected || _otpCode.length == 6 || _isSubmitting) return;
+    if (!mounted || _isSubmitting || !_hasCapturedInitialClipboard) return;
+    final isLoading = ref.read(authControllerProvider);
+    if (isLoading) return;
+
     try {
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
       if (!mounted) return;
       final text = clipboardData?.text?.trim();
       if (text == null || text.isEmpty) return;
 
+      // Ignore whatever was already in the clipboard before this screen opened
+      if (text == _initialClipboardText) return;
+
       // Match 6 consecutive digits anywhere in clipboard string
       final match = RegExp(r'\b(\d{6})\b').firstMatch(text);
       if (match != null && mounted) {
         final extractedCode = match.group(1)!;
+
+        // Skip if this exact code was already submitted and failed verification
+        if (extractedCode == _lastFailedCode) return;
+        // Skip if already detected or submitting
+        if (extractedCode == _otpCode && (_autoDetected || _isSubmitting)) return;
+
         debugPrint('📋 Code detected from clipboard: $extractedCode');
 
         // Always schedule state update and auto-verify after the current frame
@@ -139,6 +202,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
+    _clipboardTimer?.cancel();
     _pulseController.dispose();
     cancel();
     unregisterListener();
@@ -199,10 +263,24 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     }
   }
 
-  void _handleResend() {
+  void _handleResend() async {
     if (_countdownSeconds > 0) return;
+    setState(() {
+      _otpCode = '';
+      _autoDetected = false;
+      _lastFailedCode = null;
+      _isSubmitting = false;
+    });
+    // On resend, capture current clipboard content so previous attempt's code is ignored
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      _initialClipboardText = data?.text?.trim();
+    } catch (_) {}
+    if (!mounted) return;
     _startCountdown();
+    _ensureClipboardTimer();
     if (widget.isWhatsApp) {
+      _startListeningForWhatsAppZeroTap();
       ref
           .read(authControllerProvider.notifier)
           .signInWithWhatsApp(context, widget.phoneNumber);
@@ -216,12 +294,17 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Reset submission lock if loading ends (e.g. error received)
+    // Reset submission lock and clear invalid code if loading ends (e.g. error received)
     ref.listen<bool>(authControllerProvider, (previous, next) {
       if (previous == true && next == false && mounted) {
         setState(() {
           _isSubmitting = false;
+          _lastFailedCode = _otpCode;
+          _autoDetected = false;
+          _otpCode = '';
         });
+        _ensureClipboardTimer();
+        _startListeningForWhatsAppZeroTap();
       }
     });
 
@@ -310,24 +393,12 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                   ),
                   const SizedBox(height: 14),
 
-                  // Dynamic Real-time Status Badge
+                  // Dynamic Real-time Status Badge (no background on any banner or pill)
                   Center(
-                    child: Container(
+                    child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _autoDetected
-                            ? Colors.green.withValues(alpha: 0.12)
-                            : accentColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: _autoDetected
-                              ? Colors.green.withValues(alpha: 0.3)
-                              : accentColor.withValues(alpha: 0.2),
-                          width: 1,
-                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -517,6 +588,65 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                             ),
                           ),
                   ),
+
+                  if (isWhatsApp) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final uri = Uri.parse('https://wa.me/16413020012');
+                          try {
+                            await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          } catch (e) {
+                            debugPrint('Could not launch WhatsApp: $e');
+                          }
+                        },
+                        icon: const Icon(LucideIcons.messageSquare, size: 16, color: Colors.green),
+                        label: const Text(
+                          'Open WhatsApp App',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.green, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: () {
+                          ref
+                              .read(authControllerProvider.notifier)
+                              .signInWithPhone(context, widget.phoneNumber);
+                        },
+                        icon: Icon(
+                          LucideIcons.phone,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        label: Text(
+                          'Didn\'t receive code? Send via SMS instead',
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
 
                   if (!isWhatsApp) ...[
                     const SizedBox(height: 8),

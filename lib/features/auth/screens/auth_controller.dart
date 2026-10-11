@@ -59,13 +59,18 @@ class AuthController extends Notifier<bool> {
           debugPrint('Phone Auth: codeSent. ID: $verificationId');
           state = false;
           if (context.mounted) {
-            context.push(
-              '/auth/otp',
-              extra: {
-                'verificationId': verificationId,
-                'phoneNumber': phoneNumber,
-              },
-            );
+            final currentPath = GoRouterState.of(context).uri.toString();
+            final isAlreadyOnOtp = currentPath.contains('/auth/otp');
+            final extraData = {
+              'verificationId': verificationId,
+              'phoneNumber': phoneNumber,
+              'isWhatsApp': false,
+            };
+            if (isAlreadyOnOtp) {
+              context.pushReplacement('/auth/otp', extra: extraData);
+            } else {
+              context.push('/auth/otp', extra: extraData);
+            }
           }
         },
         codeAutoRetrievalTimeout: (verificationId) {
@@ -200,14 +205,18 @@ class AuthController extends Notifier<bool> {
       await repository.requestWhatsAppOtp(phoneNumber);
       state = false;
       if (context.mounted) {
-        context.push(
-          '/auth/otp',
-          extra: {
-            'verificationId': 'whatsapp',
-            'phoneNumber': phoneNumber,
-            'isWhatsApp': true,
-          },
-        );
+        final currentPath = GoRouterState.of(context).uri.toString();
+        final isAlreadyOnOtp = currentPath.contains('/auth/otp');
+        final extraData = {
+          'verificationId': 'whatsapp',
+          'phoneNumber': phoneNumber,
+          'isWhatsApp': true,
+        };
+        if (isAlreadyOnOtp) {
+          context.pushReplacement('/auth/otp', extra: extraData);
+        } else {
+          context.push('/auth/otp', extra: extraData);
+        }
       }
     } catch (e) {
       state = false;

@@ -298,8 +298,9 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           Text(
             'Diaspora Direct Investments (DDI) empower community members to access '
-            'investment loans and fund sovereign projects directly from community treasuries, '
-            'funded through the 1:1 Ubuntu community match.',
+            'investment loans directly from community treasuries, '
+            'funded through the 1:1 Ubuntu community match. Borrowing members '
+            'post 10% collateral in \$DIASPORA and own 100% of the funded venture.',
             style: TextStyle(
               fontSize: 13,
               color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
@@ -388,13 +389,20 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
       boxTitle = 'Global Reserve Operations';
       boxText =
           'The Global Reserve funds zero-fee token transfers and fiat remittance subsidies, chamber leadership operations, global charitable contributions, and overall protocol upkeep through the 10% Ubuntu community match.';
+    } else if (unitId?.contains('continent') == true) {
+      cardTitle = 'Continental Treasury';
+      cardSubtitle = '50/50 Sovereign Split & Platform Revenue';
+      iconData = LucideIcons.landmark;
+      boxTitle = 'Sovereign Bond Engine & Liquid Backstop';
+      boxText =
+          'Continental Treasuries operate on a 50/50 Sovereign Split: 50% is managed by the protocol to purchase sovereign government bonds (allocated pro-rata by member contributions, with 100% of yields funding Diaspora Nearby platform operations so users are never charged fees). The other 50% is retained in liquid \$DIASPORA as a regional backstop for Country and Town member loans.';
     } else {
       cardTitle = 'Reserve Treasury';
       cardSubtitle = 'Liquidity & Upward Loan Cascading Backstop';
       iconData = LucideIcons.shield;
       boxTitle = 'Liquidity Backstop Function';
       boxText =
-          'This reserve acts as a dynamic liquidity backstop for local community treasuries. Whenever local treasuries do not have enough funds to cover approved community loans, the requests cascade upward to this reserve to ensure community initiatives remain fully funded.';
+          'This reserve acts as a dynamic liquidity backstop for local community treasuries. Whenever local treasuries do not have enough funds to cover approved member loans, the requests cascade upward to this reserve to ensure member initiatives remain fully funded.';
     }
 
     return Container(

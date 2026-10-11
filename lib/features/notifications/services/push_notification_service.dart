@@ -75,10 +75,6 @@ class PushNotificationService {
   StreamSubscription<QuerySnapshot>?
   _electionSubscription; // Listener for new elections
   StreamSubscription<QuerySnapshot>?
-  _marketplaceInquirySubscription; // Listener for marketplace inquiries
-  StreamSubscription<QuerySnapshot>?
-  _realEstateInquirySubscription; // Listener for real estate inquiries
-  StreamSubscription<QuerySnapshot>?
   _trustVerificationSubscription; // Listener for trust verifications
   StreamSubscription<QuerySnapshot>?
   _trustVouchSubscription; // Listener for trust vouches
@@ -173,6 +169,7 @@ class PushNotificationService {
         }
       } else {
         debugPrint('PushNotificationService: User signed out.');
+        _cancelAllSubscriptions();
       }
     });
 
@@ -228,19 +225,18 @@ class PushNotificationService {
     // 13. Start listening for new elections
     _listenForElections(userId);
 
-    // 14. Start listening for marketplace inquiries
-    _listenForMarketplaceInquiries(userId);
+    // Note: Marketplace and real estate chat inquiries are handled automatically
+    // via standard Firebase Cloud Functions push notifications (chat_message type
+    // with chatId). Direct client queries on top-level /chats are forbidden by
+    // Firestore security rules (PERMISSION_DENIED).
 
-    // 15. Start listening for real estate inquiries
-    _listenForRealEstateInquiries(userId);
-
-    // 16. Start listening for trust verifications
+    // 14. Start listening for trust verifications
     _listenForTrustVerifications(userId);
 
-    // 17. Start listening for trust vouches
+    // 15. Start listening for trust vouches
     _listenForTrustVouches(userId);
 
-    // 18. Start listening for full trust stakes
+    // 16. Start listening for full trust stakes
     _listenForFullTrustStakes(userId);
   }
 
@@ -301,22 +297,7 @@ class PushNotificationService {
   Future<void> disableNotifications(String userId) async {
     try {
       await _fcm.deleteToken();
-      _relationshipSubscription?.cancel();
-      _acceptedSentRequestsSubscription?.cancel();
-      _proxyRequestSubscription?.cancel();
-      _hostingInterestSubscription?.cancel();
-      _hostingSelectionSubscription?.cancel();
-      _travelerSessionStatusSubscription?.cancel();
-      _hostSessionStatusSubscription?.cancel();
-      _bookingRequestSubscription?.cancel();
-      _bookingStatusSubscription?.cancel();
-      _eventSubscription?.cancel();
-      _electionSubscription?.cancel();
-      _marketplaceInquirySubscription?.cancel();
-      _realEstateInquirySubscription?.cancel();
-      _trustVerificationSubscription?.cancel();
-      _trustVouchSubscription?.cancel();
-      _fullTrustSubscription?.cancel();
+      _cancelAllSubscriptions();
 
       await _firestore.collection('user_private').doc(userId).set({
         'fcmToken': null,
@@ -326,6 +307,38 @@ class PushNotificationService {
     } catch (e) {
       // Error disabling notifications
     }
+  }
+
+  /// Cancels all active Firestore notification subscriptions
+  void _cancelAllSubscriptions() {
+    _relationshipSubscription?.cancel();
+    _relationshipSubscription = null;
+    _acceptedSentRequestsSubscription?.cancel();
+    _acceptedSentRequestsSubscription = null;
+    _proxyRequestSubscription?.cancel();
+    _proxyRequestSubscription = null;
+    _hostingInterestSubscription?.cancel();
+    _hostingInterestSubscription = null;
+    _hostingSelectionSubscription?.cancel();
+    _hostingSelectionSubscription = null;
+    _travelerSessionStatusSubscription?.cancel();
+    _travelerSessionStatusSubscription = null;
+    _hostSessionStatusSubscription?.cancel();
+    _hostSessionStatusSubscription = null;
+    _bookingRequestSubscription?.cancel();
+    _bookingRequestSubscription = null;
+    _bookingStatusSubscription?.cancel();
+    _bookingStatusSubscription = null;
+    _eventSubscription?.cancel();
+    _eventSubscription = null;
+    _electionSubscription?.cancel();
+    _electionSubscription = null;
+    _trustVerificationSubscription?.cancel();
+    _trustVerificationSubscription = null;
+    _trustVouchSubscription?.cancel();
+    _trustVouchSubscription = null;
+    _fullTrustSubscription?.cancel();
+    _fullTrustSubscription = null;
   }
 
   /// Setup FCM message handlers
@@ -1087,24 +1100,7 @@ class PushNotificationService {
       '🔔 [PushNotificationService] Showing hosting interest notification for request: $requestId, host: $hostId',
     );
 
-    // Look up the host's name from their profile
-    // Note: 'fullName' is a computed getter, not stored in Firestore.
-    // The actual stored fields are 'firstName' and 'lastName'.
-    String hostName = 'A host';
-    try {
-      final userDoc = await _firestore.collection('users').doc(hostId).get();
-      if (userDoc.exists) {
-        final data = userDoc.data();
-        final first = data?['firstName'] as String? ?? '';
-        final last = data?['lastName'] as String? ?? '';
-        final combined = '$first $last'.trim();
-        if (combined.isNotEmpty) {
-          hostName = combined;
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ [PushNotificationService] Error looking up host name: $e');
-    }
+    final hostName = await _lookupUserName(hostId, fallback: 'A host');
 
     final titleText = '$hostName wants to host you!';
     final bodyText = interestedCount > 1
@@ -1268,6 +1264,28 @@ class PushNotificationService {
       debugPrint('Error checking mute status: $e');
       return false;
     }
+  }
+
+  /// Look up user's full name from their profile
+  Future<String> _lookupUserName(
+    String userId, {
+    String fallback = 'A peer',
+  }) async {
+    try {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        final first = data?['firstName'] as String? ?? '';
+        final last = data?['lastName'] as String? ?? '';
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) {
+          return combined;
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [PushNotificationService] Error looking up user name: $e');
+    }
+    return fallback;
   }
 
   // =========================================================================
@@ -1686,7 +1704,7 @@ class PushNotificationService {
 
     _eventSubscription = _firestore
         .collection('events')
-        .where('participants', arrayContains: userId)
+        .where('attendees', arrayContains: userId)
         .limit(100)
         .snapshots()
         .listen(
@@ -1856,157 +1874,6 @@ class PushNotificationService {
         );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // MARKETPLACE LISTENERS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  /// Listen for chat messages that reference the user's marketplace listings
-  /// (acting as an "inquiry" notification)
-  void _listenForMarketplaceInquiries(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting marketplace inquiry listener for user: $userId',
-    );
-    _marketplaceInquirySubscription?.cancel();
-
-    final Set<String> knownInquiryIds = {};
-    bool isFirstLoad = true;
-
-    // Listen for chats where the user's listing is being discussed
-    _marketplaceInquirySubscription = _firestore
-        .collection('chats')
-        .where('metadata.listingSellerId', isEqualTo: userId)
-        .where('type', isEqualTo: 'marketplace')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownInquiryIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownInquiryIds.contains(docId)) continue;
-                knownInquiryIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final metadata =
-                    data['metadata'] as Map<String, dynamic>? ?? {};
-                final listingTitle =
-                    metadata['listingTitle'] as String? ?? 'your listing';
-                final buyerName = metadata['buyerName'] as String? ?? 'Someone';
-                final listingId = metadata['listingId'] as String?;
-
-                _showRichNotification(
-                  id: 'mkt_inquiry_$docId'.hashCode,
-                  title: 'Marketplace Inquiry',
-                  body: '$buyerName is interested in $listingTitle',
-                  payload: jsonEncode({
-                    'type': 'marketplace_inquiry',
-                    'chatId': docId,
-                    'listingId': listingId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.marketplaceInquiry,
-                  title: 'Marketplace Inquiry',
-                  body: '$buyerName is interested in $listingTitle',
-                  payload: {'chatId': docId, 'listingId': listingId ?? ''},
-                  actionRequired: true,
-                  dedupKey: 'mkt_inquiry_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in marketplace inquiry listener: $e',
-            );
-          },
-        );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // REAL ESTATE LISTENERS
-  // ═══════════════════════════════════════════════════════════════════════
-
-  /// Listen for inquiries on the user's real estate listings
-  void _listenForRealEstateInquiries(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting real estate inquiry listener for user: $userId',
-    );
-    _realEstateInquirySubscription?.cancel();
-
-    final Set<String> knownInquiryIds = {};
-    bool isFirstLoad = true;
-
-    _realEstateInquirySubscription = _firestore
-        .collection('chats')
-        .where('metadata.propertySellerId', isEqualTo: userId)
-        .where('type', isEqualTo: 'real_estate')
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownInquiryIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added) {
-                final docId = change.doc.id;
-                if (knownInquiryIds.contains(docId)) continue;
-                knownInquiryIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                final metadata =
-                    data['metadata'] as Map<String, dynamic>? ?? {};
-                final propertyTitle =
-                    metadata['propertyTitle'] as String? ?? 'your property';
-                final buyerName = metadata['buyerName'] as String? ?? 'Someone';
-
-                _showRichNotification(
-                  id: 're_inquiry_$docId'.hashCode,
-                  title: 'Property Inquiry',
-                  body: '$buyerName is interested in $propertyTitle',
-                  payload: jsonEncode({
-                    'type': 'real_estate_inquiry',
-                    'chatId': docId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.realEstateInquiry,
-                  title: 'Property Inquiry',
-                  body: '$buyerName is interested in $propertyTitle',
-                  payload: {'chatId': docId},
-                  actionRequired: true,
-                  dedupKey: 're_inquiry_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in real estate inquiry listener: $e',
-            );
-          },
-        );
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // TRUST & VERIFICATION LISTENERS
@@ -2024,11 +1891,11 @@ class PushNotificationService {
 
     _trustVerificationSubscription = _firestore
         .collection('field_verifications')
-        .where('verifiedUserId', isEqualTo: userId)
+        .where('toUserId', isEqualTo: userId)
         .limit(100)
         .snapshots()
         .listen(
-          (snapshot) {
+          (snapshot) async {
             if (isFirstLoad) {
               for (final doc in snapshot.docs) {
                 knownVerificationIds.add(doc.id);
@@ -2046,9 +1913,10 @@ class PushNotificationService {
                 final data = change.doc.data();
                 if (data == null) continue;
 
-                final verifierName =
-                    data['verifierName'] as String? ?? 'A peer';
-                final verifierId = data['verifierId'] as String?;
+                final verifierId = data['fromUserId'] as String?;
+                final verifierName = verifierId != null
+                    ? await _lookupUserName(verifierId, fallback: 'A peer')
+                    : 'A peer';
 
                 _showRichNotification(
                   id: 'trust_verify_$docId'.hashCode,
@@ -2092,11 +1960,11 @@ class PushNotificationService {
 
     _trustVouchSubscription = _firestore
         .collection('vouches')
-        .where('vouchedUserId', isEqualTo: userId)
+        .where('toUserId', isEqualTo: userId)
         .limit(100)
         .snapshots()
         .listen(
-          (snapshot) {
+          (snapshot) async {
             if (isFirstLoad) {
               for (final doc in snapshot.docs) {
                 knownVouchIds.add(doc.id);
@@ -2114,8 +1982,10 @@ class PushNotificationService {
                 final data = change.doc.data();
                 if (data == null) continue;
 
-                final voucherName = data['voucherName'] as String? ?? 'A peer';
-                final voucherId = data['voucherId'] as String?;
+                final voucherId = data['fromUserId'] as String?;
+                final voucherName = voucherId != null
+                    ? await _lookupUserName(voucherId, fallback: 'A peer')
+                    : 'A peer';
 
                 _showRichNotification(
                   id: 'trust_vouch_$docId'.hashCode,

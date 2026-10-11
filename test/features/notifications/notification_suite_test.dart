@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
+import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
 
 // Manual Fakes to bypass build_runner dependency issues
 
@@ -349,6 +350,85 @@ void main() {
       // and that the sendTextMessage API accepts mentions.
       // Full integration testing requires proper Firestore mocking.
       expect(chatService, isNotNull);
+    });
+  });
+
+  group('NotificationItem Serialization & Type Tests', () {
+    test('trustPeerVerified serializes and deserializes cleanly', () {
+      final now = DateTime.now();
+      final item = NotificationItem(
+        id: 'test_notif_1',
+        type: NotificationType.trustPeerVerified,
+        title: 'Identity Verified',
+        body: 'Kwame Mensah verified your identity',
+        payload: {'fromUserId': 'user_peer_456'},
+        actionRequired: true,
+        createdAt: now,
+      );
+
+      final map = item.toMap();
+      expect(map['type'], 'trustPeerVerified');
+      expect(map['payload']['fromUserId'], 'user_peer_456');
+
+      final reconstructed = NotificationItem.fromMap('test_notif_1', map);
+      expect(reconstructed.type, NotificationType.trustPeerVerified);
+      expect(reconstructed.payload['fromUserId'], 'user_peer_456');
+      expect(reconstructed.actionRequired, isTrue);
+    });
+
+    test('trustPeerVouched serializes and deserializes cleanly', () {
+      final now = DateTime.now();
+      final item = NotificationItem(
+        id: 'test_notif_2',
+        type: NotificationType.trustPeerVouched,
+        title: 'Peer Vouch Received',
+        body: 'A peer vouched for you',
+        payload: {'fromUserId': 'voucher_789'},
+        actionRequired: true,
+        createdAt: now,
+      );
+
+      final map = item.toMap();
+      expect(map['type'], 'trustPeerVouched');
+      final reconstructed = NotificationItem.fromMap('test_notif_2', map);
+      expect(reconstructed.type, NotificationType.trustPeerVouched);
+      expect(reconstructed.payload['fromUserId'], 'voucher_789');
+    });
+
+    test('eventUpdate and eventCancelled types round-trip accurately', () {
+      final now = DateTime.now();
+      final eventUpdate = NotificationItem(
+        id: 'evt_update_1',
+        type: NotificationType.eventUpdate,
+        title: 'Event Updated',
+        body: 'Details changed',
+        payload: {'eventId': 'evt_123'},
+        createdAt: now,
+      );
+
+      final eventCancel = NotificationItem(
+        id: 'evt_cancel_1',
+        type: NotificationType.eventCancelled,
+        title: 'Event Cancelled',
+        body: 'Event cancelled',
+        payload: {'eventId': 'evt_123'},
+        createdAt: now,
+      );
+
+      final mapUpdate = eventUpdate.toMap();
+      final mapCancel = eventCancel.toMap();
+
+      expect(mapUpdate['type'], 'eventUpdate');
+      expect(mapCancel['type'], 'eventCancelled');
+
+      expect(
+        NotificationItem.fromMap('evt_update_1', mapUpdate).type,
+        NotificationType.eventUpdate,
+      );
+      expect(
+        NotificationItem.fromMap('evt_cancel_1', mapCancel).type,
+        NotificationType.eventCancelled,
+      );
     });
   });
 }

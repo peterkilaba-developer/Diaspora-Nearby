@@ -206,7 +206,8 @@ exports.castDdiLoanVote = ddi.castDdiLoanVote;
 exports.resolveDdiLoanVoting = ddi.resolveDdiLoanVoting;
 exports.getDdiFundingCascade = ddi.getDdiFundingCascade;
 
-// Custom Auth (2)
+// Custom Auth (3)
 const auth = require("./lib/auth");
 exports.requestWhatsAppOtp = auth.requestWhatsAppOtp;
 exports.verifyWhatsAppOtp = auth.verifyWhatsAppOtp;
+exports.whatsappWebhook = auth.whatsappWebhook;

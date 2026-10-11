@@ -340,16 +340,16 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                       onTap: () => context.push('/dsp/dfdi'),
                       isComingSoon: true,
                     ),
-                  // DDI — Country Sovereign Large Projects (Admin only)
+                  // DDI — Country Member Loans (Admin only)
                   if (isAdmin)
                     _buildRow(
                       context,
                       ref: ref,
                       icon: LucideIcons.trendingUp,
                       iconColor: AppTheme.accent,
-                      title: 'Country DDI Projects',
+                      title: 'Country DDI Loans',
                       subtitle:
-                          'Large-scale sovereign investments (\$1M+) — funded by country treasury',
+                          'Large-scale member loans (\$1M+) — funded by country treasury',
                       explorationAction: ExplorationAction.economyDfdi,
                       onTap: () => context.push('/dsp/dfdi'),
                       isComingSoon: true,
