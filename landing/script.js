@@ -27,10 +27,9 @@
         });
     }
 
-    // /profile/{uid} — redirect to web app for profile viewing
+    // /profile/{uid} — redirect to mobile app download
     if (path.startsWith('/profile/')) {
-        const profilePath = path + window.location.search;
-        window.location.replace('https://app.diasporanearby.com' + profilePath);
+        window.location.replace('/#get-app');
         return;
     }
 })();
@@ -72,16 +71,20 @@ function initPlatformUI() {
 
     document.body.classList.add('platform-' + detectedPlatform);
 
-    // 0. Hero Single-Platform Button Enforcement (Android vs iOS)
+    // 0. Hero Platform Button Enforcement
     const heroBtnAndroid = document.getElementById('hero-btn-android');
     const heroBtnIOS = document.getElementById('hero-btn-ios');
     if (heroBtnAndroid && heroBtnIOS) {
         if (isIOS) {
             heroBtnAndroid.style.setProperty('display', 'none', 'important');
             heroBtnIOS.style.setProperty('display', 'inline-flex', 'important');
-        } else {
+        } else if (isAndroid) {
             heroBtnAndroid.style.setProperty('display', 'inline-flex', 'important');
             heroBtnIOS.style.setProperty('display', 'none', 'important');
+        } else {
+            // Desktop / Mac: show both platform buttons
+            heroBtnAndroid.style.setProperty('display', 'inline-flex', 'important');
+            heroBtnIOS.style.setProperty('display', 'inline-flex', 'important');
         }
     }
 
@@ -110,7 +113,7 @@ function initPlatformUI() {
             if (pill) {
                 pill.style.display = 'inline-flex';
                 if (pillIcon) pillIcon.textContent = '🍏 ';
-                if (pillText) pillText.textContent = 'iOS detected — Instant Web App & TestFlight Beta';
+                if (pillText) pillText.textContent = 'iOS detected — TestFlight Beta';
             }
         } else {
             blockAndroid.style.display = 'none';
@@ -145,7 +148,7 @@ function initPlatformUI() {
             if (pillV2) {
                 pillV2.style.display = 'inline-flex';
                 if (pillIconV2) pillIconV2.textContent = '🍏 ';
-                if (pillTextV2) pillTextV2.textContent = 'iOS detected — Instant Web App & TestFlight Beta';
+                if (pillTextV2) pillTextV2.textContent = 'iOS detected — TestFlight Beta';
             }
         } else {
             blockAndroidV2.style.display = 'none';
@@ -164,9 +167,9 @@ function initPlatformUI() {
         if (isAndroid) {
             installDetectedText.textContent = 'Android detected — install directly from Google Play or download APK';
         } else if (isIOS) {
-            installDetectedText.textContent = 'iOS detected — launch Web App or request TestFlight invite';
+            installDetectedText.textContent = 'iOS detected — request TestFlight invite';
         } else {
-            installDetectedText.textContent = 'Google Play (Android), Web App (iOS/Desktop), or Direct APK';
+            installDetectedText.textContent = 'Google Play (Android), TestFlight (iOS), or Direct APK';
         }
     }
 
@@ -176,12 +179,32 @@ function initPlatformUI() {
         iosOpt.classList.add('active');
     }
 
-    // Show Play Store and APK fallback buttons only for Android
+    // Show Play Store and APK fallback buttons for Android, TestFlight for iOS, both for Desktop/Mac
     const playStoreDirect = document.getElementById('play-store-direct');
     const apkFallback = document.getElementById('apk-fallback');
-    if (isAndroid) {
+    const installSignupBtn = document.getElementById('install-signup-btn');
+    const installIOSBtn = document.getElementById('install-ios-btn');
+    const getAppSubtitle = document.getElementById('get-app-subtitle');
+
+    if (isIOS) {
+        if (installSignupBtn) installSignupBtn.style.setProperty('display', 'none', 'important');
+        if (installIOSBtn) installIOSBtn.style.setProperty('display', 'inline-flex', 'important');
+        if (playStoreDirect) playStoreDirect.style.display = 'none';
+        if (apkFallback) apkFallback.style.display = 'none';
+        if (getAppSubtitle) getAppSubtitle.textContent = 'Join the iOS TestFlight Beta.';
+    } else if (isAndroid) {
+        if (installIOSBtn) installIOSBtn.style.setProperty('display', 'none', 'important');
+        if (installSignupBtn) installSignupBtn.style.setProperty('display', 'inline-flex', 'important');
         if (playStoreDirect) playStoreDirect.style.display = 'block';
         if (apkFallback) apkFallback.style.display = 'block';
+        if (getAppSubtitle) getAppSubtitle.textContent = 'Install the native Android app from Google Play.';
+    } else {
+        // Desktop / Mac: show both links
+        if (installSignupBtn) installSignupBtn.style.setProperty('display', 'inline-flex', 'important');
+        if (installIOSBtn) installIOSBtn.style.setProperty('display', 'inline-flex', 'important');
+        if (playStoreDirect) playStoreDirect.style.display = 'none';
+        if (apkFallback) apkFallback.style.display = 'none';
+        if (getAppSubtitle) getAppSubtitle.textContent = 'Install on Android (Google Play) or join the iOS TestFlight Beta.';
     }
 
     // Refresh icons inside dynamic blocks
@@ -399,20 +422,51 @@ function showMessage(el, text, type) {
     }
 }
 
-// ── Mobile Navigation ──
+// ── Hamburger Navigation ──
 const navToggle = document.getElementById('nav-toggle');
 const navLinks = document.getElementById('nav-links');
 
 if (navToggle && navLinks) {
-    navToggle.addEventListener('click', () => {
-        navLinks.classList.toggle('open');
+    navToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = navLinks.classList.toggle('open');
+        navToggle.classList.toggle('open', isOpen);
+        navToggle.setAttribute('aria-expanded', isOpen);
+        navToggle.innerHTML = isOpen ? '<i data-lucide="x"></i>' : '<i data-lucide="menu"></i>';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     });
 
     // Close on link click
     navLinks.querySelectorAll('a').forEach((link) => {
         link.addEventListener('click', () => {
             navLinks.classList.remove('open');
+            navToggle.classList.remove('open');
+            navToggle.setAttribute('aria-expanded', 'false');
+            navToggle.innerHTML = '<i data-lucide="menu"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         });
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!navToggle.contains(e.target) && !navLinks.contains(e.target) && navLinks.classList.contains('open')) {
+            navLinks.classList.remove('open');
+            navToggle.classList.remove('open');
+            navToggle.setAttribute('aria-expanded', 'false');
+            navToggle.innerHTML = '<i data-lucide="menu"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && navLinks.classList.contains('open')) {
+            navLinks.classList.remove('open');
+            navToggle.classList.remove('open');
+            navToggle.setAttribute('aria-expanded', 'false');
+            navToggle.innerHTML = '<i data-lucide="menu"></i>';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
     });
 }
 

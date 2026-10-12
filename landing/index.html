@@ -49,7 +49,7 @@
     </script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="styles.css?v=20261008a">
+    <link rel="stylesheet" href="styles.css?v=20261012d">
 
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
@@ -73,7 +73,7 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Diaspora Nearby",
-    "operatingSystem": "Android, iOS, Web",
+    "operatingSystem": "Android, iOS",
     "applicationCategory": "SocialNetworkingApplication",
     "offers": {
       "@type": "Offer",
@@ -81,7 +81,7 @@
       "priceCurrency": "USD"
     },
     "description": "Connect with people from your home country nearby. Earn $DIASPORA tokens through Proof of Social Activities and Proof of Community Trust.",
-    "url": "https://app.diasporanearby.com"
+    "url": "https://diasporanearby.com"
   }
   </script>
 </head>
@@ -95,27 +95,30 @@
                 <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
                 Diaspora Nearby
             </a>
-            <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
-                <i data-lucide="menu"></i>
-            </button>
+            <div class="nav-actions">
+                <a href="#get-app" class="nav-cta">Get App <i data-lucide="download"
+                            style="width:16px;height:16px"></i></a>
+                <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                    <i data-lucide="menu"></i>
+                </button>
+            </div>
             <ul class="nav-links" id="nav-links">
                 <li><a href="#dual-geography">Dual Identity</a></li>
                 <li><a href="#social">Social</a></li>
                 <li><a href="#trust">Trust</a></li>
                 <li><a href="#emergency-fund">Ubuntu Fund</a></li>
                 <li><a href="#treasuries">Treasuries</a></li>
-                <li><a href="#continental-treasuries">Continental</a></li>
-                <li><a href="#ddi">DDI Loans</a></li>
                 <li><a href="#economy">Economy</a></li>
-                <li><a href="#get-app">Get App</a></li>
-                <li><a href="https://app.diasporanearby.com" class="nav-cta">Open App <i data-lucide="arrow-right"
+                <li><a href="#ddi">DDI Loans</a></li>
+                <li><a href="#continental-treasuries">Continental</a></li>
+                <li style="margin-top: 6px;"><a href="#get-app" class="nav-cta" style="justify-content:center;">Get App <i data-lucide="download"
                             style="width:16px;height:16px"></i></a></li>
             </ul>
         </div>
     </nav>
 
     <!-- ═══ HERO ═══ -->
-    <section class="hero" id="hero" style="padding: 80px 0 32px;">
+    <section class="hero" id="hero" style="padding: 144px 0 40px;">
         <div class="container">
             <div class="hero-content">
                 <h1>
@@ -125,10 +128,10 @@
                     Bridge the gap between you and your home community. Whether you've just moved to a new city or have been abroad for years — find your people.
                 </p>
 
-                <!-- Hero Action Badges (Platform-Specific Single Link) -->
+                <!-- Hero Action Badges (Platform-Adaptive: Single on mobile, Both on desktop/Mac) -->
                 <div class="hero-actions" id="hero-actions-container">
                     <div class="hero-buttons-row">
-                        <!-- Android & Desktop Link -->
+                        <!-- Android Link -->
                         <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
                             target="_blank" rel="noopener" class="btn-play-badge" id="hero-btn-android"
                             title="Join Android Testing on Google Play">
@@ -144,9 +147,9 @@
                             </div>
                         </a>
 
-                        <!-- iOS Link (Shown on iOS Devices) -->
-                        <a href="#get-app" class="btn-apple-badge" id="hero-btn-ios" style="display:none;"
-                            title="Sign up for iOS TestFlight early access">
+                        <!-- iOS Link -->
+                        <a href="https://testflight.apple.com/join/vB3XzPKg" target="_blank" rel="noopener" class="btn-apple-badge" id="hero-btn-ios"
+                            title="Join Diaspora Nearby on iOS TestFlight">
                             <svg viewBox="0 0 170 170" width="24" height="24" fill="currentColor" aria-hidden="true">
                                 <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.42-6.53-10.13-11.45-21.78-14.76-34.96-3.31-13.18-4.97-25.04-4.97-35.59 0-14.8 3.53-26.79 10.58-35.98 7.05-9.19 16.03-13.88 26.94-14.07 5.19 0 10.99 1.34 17.42 4.02 6.43 2.68 10.59 4.12 12.49 4.34 1.56-.22 5.92-1.78 13.09-4.67 7.17-2.89 13.23-4.13 18.17-3.72 13.73.98 24.32 5.86 31.77 14.64-11.88 7.21-17.65 17.07-17.31 29.58.33 9.69 4.08 17.81 11.24 24.36 7.16 6.55 15.68 10.37 25.56 11.47-2.22 6.78-4.89 14.28-8.01 22.5zM119.22 31.84c0-7.39 2.66-14.38 7.97-20.97 5.31-6.59 11.95-10.6 19.92-12.03.33 1.19.49 2.3.49 3.35 0 7.39-2.76 14.35-8.28 20.89-5.52 6.54-12.33 10.58-20.43 12.12-.34-.98-.51-2.1-.51-3.36z"/>
                             </svg>
@@ -281,7 +284,7 @@
                     </span>
                 </div>
                 <div>
-                    <a href="https://app.diasporanearby.com" class="btn btn-sage" style="white-space: nowrap; font-size: 13px; padding: 8px 16px;">
+                    <a href="#get-app" class="btn btn-sage" style="white-space: nowrap; font-size: 13px; padding: 8px 16px;">
                         Build Your Dual Profile
                     </a>
                 </div>
@@ -891,78 +894,12 @@
                         </div>
                     </div>
                 </div>
-                <p style="font-size: 12px; color: var(--fg-muted); margin-top: 12px;">
-                    Each unit = 10% of matching DSP. 7 allocations flow to community treasuries (70%). Unset states roll up to the country level.
+                <p style="font-size: 12px; color: var(--fg-muted); margin-top: 12px; line-height: 1.6;">
+                    Each unit = 10% of matching DSP across 7 community treasuries (70%): <strong>Global Reserve</strong> (funds community operations &amp; absorbs network fees for zero-fee value transfer), <strong>Town &amp; Country Treasuries</strong> (powers DDI member loans), and <strong>Continental Treasuries</strong> (100% sovereign bond engine for platform revenue &amp; institutional backing). Unset states roll up to the country level.
                 </p>
             </div>
         </div>
     </section>
-
-    <!-- ═══ CONTINENTAL TREASURIES ═══ -->
-    <section class="section" id="continental-treasuries" style="background: var(--bg-surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
-        <div class="container">
-            <div class="section-header fade-in">
-                <div class="section-label orange"><i data-lucide="globe-2" style="width:14px;height:14px"></i>
-                    Continental Treasuries</div>
-                <h2>The Sovereign Bond Engine: Sustainable Platform Revenue &amp; Government Partnerships</h2>
-                <p>
-                    Continental Treasuries (Home &amp; Host Continent) convert member tribute into on-chain $DIASPORA tokens on Base scaled by the Average Proof of Community Trust (APCT). The protocol manages these continental funds in a 50/50 Sovereign Split: 50% buys government bonds to generate sustainable platform revenue with zero user fees, and 50% stays liquid as a regional loan backstop.
-                </p>
-                <div class="quick-glance-badges fade-in">
-                    <div class="glance-badge"><i data-lucide="file-text"></i><span>50% Sovereign Bonds</span></div>
-                    <div class="glance-badge"><i data-lucide="zap"></i><span>100% Platform Revenue (Zero User Fees)</span></div>
-                    <div class="glance-badge"><i data-lucide="pie-chart"></i><span>Pro-Rata Country Allocation</span></div>
-                    <div class="glance-badge"><i data-lucide="shield"></i><span>50% Liquid $DIASPORA Backstop</span></div>
-                </div>
-            </div>
-
-            <div class="card-grid fade-in">
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="file-text"></i></div>
-                    <h3>50% Sovereign Bond Allocation</h3>
-                    <p>50% of continental funds are used and managed by the protocol to purchase <strong>sovereign government bonds and Treasury Bills</strong>. Allocations are distributed pro-rata based on each country's contribution (e.g., Tanzania's contribution into the African Home Treasury buys Bank of Tanzania bonds; host continent funds buy bonds like US Treasuries).</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="handshake"></i></div>
-                    <h3>Government Integration &amp; Trust</h3>
-                    <p>Governments view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding for their budgets. This turns national central banks and finance ministries into willing partners eager to integrate Diaspora Nearby into national economic, banking, and payment systems (e.g., TIPS in Tanzania, FedNow).</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="coins"></i></div>
-                    <h3>100% Platform Revenue (Zero Fees)</h3>
-                    <p>Because Diaspora Nearby is a completely frictionless economy that charges <strong>zero fees to users</strong> (no listing fees, no seller fees, no hosting fees), all coupon interest from these sovereign bonds pays <strong>exclusively Diaspora Nearby</strong> to fund operations, engineering, and infrastructure.</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon orange"><i data-lucide="shield-check"></i></div>
-                    <h3>50% Liquid $DIASPORA Backstop</h3>
-                    <p>The remaining 50% is retained on Base in liquid on-chain $DIASPORA tokens, serving as the Tier 4 regional liquidity backstop for Town and Country member DDI loans under the Upward Cascading Liquidity Protocol.</p>
-                </div>
-            </div>
-
-            <!-- Bilateral Pro-Rata Flow Diagram / Highlight Box -->
-            <div class="economy-highlight fade-in" style="margin-top: 32px; border-color: var(--orange); text-align: left;">
-                <h3 style="margin-bottom: 12px; color: var(--orange); display: flex; align-items: center; gap: 8px;">
-                    <i data-lucide="repeat"></i> How Pro-Rata Continental Allocation Works (Tanzania Example)
-                </h3>
-                <div style="font-size: 13.5px; color: var(--fg-muted); line-height: 1.7;">
-                    <p style="margin-bottom: 10px;">
-                        <strong>1. Contribution Attribution:</strong> As Tanzanian diaspora members interact, complete milestones, and trade, their 1:1 Ubuntu match builds the African Home Continent Treasury. The protocol tracks Tanzania's proportional share.
-                    </p>
-                    <p style="margin-bottom: 10px;">
-                        <strong>2. APCT Conversion at TGE:</strong> At token distribution events, off-chain DSP is converted into on-chain $DIASPORA tokens on Base scaled by the Average Proof of Community Trust (APCT) of active members.
-                    </p>
-                    <p style="margin-bottom: 10px;">
-                        <strong>3. Pro-Rata Bond Purchase:</strong> If Tanzania contributed 25% of the African Continental Treasury, 25% of the 50% bond fund purchases Bank of Tanzania sovereign bonds and Treasury Bills.
-                    </p>
-                    <p style="margin: 0;">
-                        <strong>4. Mutual Win:</strong> The government gains non-predatory sovereign budget funding; 100% of the yield pays Diaspora Nearby's operating costs so members never pay fees; and the remaining 50% stays liquid in $DIASPORA to backstop member loans in Dar es Salaam, Arusha, and Mwanza!
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-
 
     <!-- ═══ GOVERNANCE ═══ -->
     <section class="section" id="governance" style="background: var(--bg-surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
@@ -1504,9 +1441,26 @@
                     <div class="glance-badge"><i data-lucide="vote"></i><span>51% Local / 67% National Vote</span></div>
                     <div class="glance-badge"><i data-lucide="trending-up"></i><span>Up to $1M+ Project Capital</span></div>
                 </div>
-                <div class="highlight-box orange-border" style="margin-top: 16px; text-align: left; background: rgba(239, 108, 0, 0.08); border-left: 4px solid var(--orange);">
-                    <p style="font-size: 14px; margin-bottom: 6px;"><strong>Member-Owned Capital:</strong> All Town and Country DDI funds are <strong>loans to members</strong> (individual or pooled groups). Borrowing members who put up the 10% collateral in $DIASPORA own and operate their funded businesses, real estate, and ventures, and owe the loan.</p>
-                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0;">The platform imposes no technical restrictions on how funds are used—the community approves loan applications through democratic voting.</p>
+            </div>
+
+            <!-- Member-Owned Capital Callout -->
+            <div class="highlight-box orange-border fade-in">
+                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                    <div style="width: 42px; height: 42px; min-width: 42px; border-radius: 10px; background: rgba(239, 108, 0, 0.15); color: var(--orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;">
+                        <i data-lucide="shield-check" style="width: 22px; height: 22px;"></i>
+                    </div>
+                    <div style="flex: 1; text-align: left;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap;">
+                            <h4 style="font-size: 16px; font-weight: 700; color: var(--orange); margin: 0; text-align: left;">Member-Owned Capital</h4>
+                            <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; background: rgba(239, 108, 0, 0.15); color: var(--orange); padding: 2px 8px; border-radius: 12px; letter-spacing: 0.04em;">100% Member Equity</span>
+                        </div>
+                        <p style="font-size: 14px; line-height: 1.65; color: var(--fg); margin-bottom: 6px; text-align: left;">
+                            All Town and Country DDI funds are <strong>loans to members</strong> (individual or pooled groups). Borrowing members who put up the 10% collateral in $DIASPORA own and operate their funded businesses, real estate, and ventures, and owe the loan.
+                        </p>
+                        <p style="font-size: 13px; line-height: 1.55; color: var(--fg-muted); margin: 0; text-align: left;">
+                            The platform imposes no technical restrictions on how funds are used—the community approves loan applications through democratic voting.
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -1570,6 +1524,70 @@
                     <div class="card-icon orange"><i data-lucide="trending-up"></i></div>
                     <h3>Dividends &amp; Buybacks</h3>
                     <p>Project profits distribute returns to investors and trigger automated token buybacks on the open market.</p>
+                </div>
+            </div>
+
+            <!-- Continental-Level DDI — The Sovereign Bond Engine -->
+            <div id="continental-treasuries" style="margin-top: 56px; padding-top: 16px;">
+                <div style="text-align: center; margin-bottom: 28px;" class="fade-in">
+                    <div class="section-label orange" style="margin-bottom: 12px;"><i data-lucide="globe-2" style="width:14px;height:14px"></i>
+                        Continental Treasuries</div>
+                    <h3 style="font-size: 24px; font-weight: 700; color: var(--fg); margin-bottom: 12px;">
+                        The Sovereign Bond Engine: Sustainable Platform Revenue &amp; Government Partnerships
+                    </h3>
+                    <p style="color: var(--fg-muted); max-width: 720px; margin: 0 auto 20px; font-size: 15px; line-height: 1.7;">
+                        Continental Treasuries (Home &amp; Host Continent) convert member tribute into on-chain $DIASPORA tokens on Base scaled by the Average Proof of Community Trust (APCT). The protocol manages these continental funds in a <strong>100% Sovereign Bond Allocation</strong>: 100% of funds purchase sovereign government bonds to generate sustainable platform revenue and establish deep sovereign partnerships.
+                    </p>
+                    <div class="quick-glance-badges fade-in">
+                        <div class="glance-badge"><i data-lucide="file-text"></i><span>100% Sovereign Bonds</span></div>
+                        <div class="glance-badge"><i data-lucide="trending-up"></i><span>Sustainable Platform Revenue</span></div>
+                        <div class="glance-badge"><i data-lucide="pie-chart"></i><span>Pro-Rata Country Allocation</span></div>
+                        <div class="glance-badge"><i data-lucide="landmark"></i><span>National Central Bank Backing</span></div>
+                    </div>
+                </div>
+
+                <div class="card-grid fade-in">
+                    <div class="card">
+                        <div class="card-icon orange"><i data-lucide="file-text"></i></div>
+                        <h3>100% Sovereign Bond Allocation</h3>
+                        <p>100% of continental funds are used and managed by the protocol to purchase <strong>sovereign government bonds and Treasury Bills</strong>. Allocations are distributed pro-rata based on each country's contribution (e.g., Tanzania's contribution into the African Home Treasury buys Bank of Tanzania bonds; host continent funds buy bonds like US Treasuries).</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon orange"><i data-lucide="handshake"></i></div>
+                        <h3>Government Integration &amp; Trust</h3>
+                        <p>Governments view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding for their budgets. This turns national central banks and finance ministries into willing partners eager to integrate Diaspora Nearby into national economic, banking, and payment systems (e.g., TIPS in Tanzania, FedNow).</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon orange"><i data-lucide="coins"></i></div>
+                        <h3>Sustainable Platform Revenue</h3>
+                        <p>Coupon interest and bond yields from sovereign government securities generate sustainable protocol revenue to maintain operations, engineering, and infrastructure long-term.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon orange"><i data-lucide="landmark"></i></div>
+                        <h3>Sovereign Reserve Security</h3>
+                        <p>By committing 100% of continental treasury capital to sovereign government bonds, the protocol establishes direct institutional alignment with central banks, securing continental reserves with sovereign credit.</p>
+                    </div>
+                </div>
+
+                <!-- Bilateral Pro-Rata Flow Diagram / Highlight Box -->
+                <div class="economy-highlight fade-in" style="margin-top: 32px; border-color: var(--orange); text-align: left;">
+                    <h3 style="margin-bottom: 12px; color: var(--orange); display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="repeat"></i> How Pro-Rata Continental Allocation Works (Tanzania Example)
+                    </h3>
+                    <div style="font-size: 13.5px; color: var(--fg-muted); line-height: 1.7;">
+                        <p style="margin-bottom: 10px; text-align: left;">
+                            <strong>1. Contribution Attribution:</strong> As Tanzanian diaspora members interact, complete milestones, and trade, their 1:1 Ubuntu match builds the African Home Continent Treasury. The protocol tracks Tanzania's proportional share.
+                        </p>
+                        <p style="margin-bottom: 10px; text-align: left;">
+                            <strong>2. APCT Conversion at TGE:</strong> At token distribution events, off-chain DSP is converted into on-chain $DIASPORA tokens on Base scaled by the Average Proof of Community Trust (APCT) of active members.
+                        </p>
+                        <p style="margin-bottom: 10px; text-align: left;">
+                            <strong>3. Pro-Rata Bond Purchase:</strong> If Tanzania contributed 25% of the African Continental Treasury, 100% of Tanzania's share (25% of the total continental pool) purchases Bank of Tanzania sovereign bonds and Treasury Bills.
+                        </p>
+                        <p style="margin: 0; text-align: left;">
+                            <strong>4. Mutual Win:</strong> The government gains non-predatory sovereign budget funding; coupon yields provide sustainable platform revenue to maintain protocol infrastructure; and the national economy benefits from direct diaspora-backed sovereign capital investment!
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -1644,7 +1662,7 @@
 
             <div class="chamber-cta fade-in">
                 <p>Live abroad. Stay connected to opportunity at home. Build commerce through trusted diaspora relationships.</p>
-                <a href="https://app.diasporanearby.com" class="btn btn-sage">
+                <a href="#get-app" class="btn btn-sage">
                     <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
                     Join Your Chamber
                 </a>
@@ -1821,9 +1839,9 @@
                 </p>
                 <div class="signup-form" style="max-width:480px; margin: 0 auto;">
                     <div class="form-row" style="justify-content:center;">
-                        <a class="btn btn-sage" href="https://app.diasporanearby.com" style="text-decoration:none;">
-                            <i data-lucide="arrow-right" style="width:16px;height:16px"></i>
-                            <span>Open the App</span>
+                        <a class="btn btn-sage" href="#get-app" style="text-decoration:none;">
+                            <i data-lucide="download" style="width:16px;height:16px"></i>
+                            <span>Get the App</span>
                         </a>
                     </div>
                 </div>
@@ -1840,34 +1858,34 @@
                 <p>Diaspora Nearby is built by diaspora members, for diaspora members.</p>
             </div>
             <div class="team-grid fade-in">
-                <div class="team-card" style="max-width: 820px; margin: 0 auto; text-align: left; padding: 28px;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;">
-                        <img src="images/peter-swai.jpg" alt="Peter Swai" class="team-avatar-img" style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 3px solid var(--orange);">
-                        <div class="team-info" style="flex: 1; min-width: 260px;">
-                            <h3 style="font-size: 22px; margin-bottom: 4px;">Peter Swai</h3>
-                            <span class="role" style="color: var(--orange); font-weight: 600; font-size: 14px;">Founder &amp; Architect — The 25-Year Diaspora Journey &amp; The Return Home</span>
-                            <div style="margin-top: 14px; font-size: 13.5px; color: var(--fg-muted); line-height: 1.7;">
-                                <p style="margin-bottom: 12px;">
-                                    Peter moved from Tanzania to the United States in <strong>1998</strong>, landing first in <strong>San Francisco, California</strong> with two friends. Within a few months, he faced the reality millions of immigrants know intimately: without a job, the high cost of living and college tuition became unaffordable.
-                                </p>
-                                <p style="margin-bottom: 12px;">
-                                    He relocated south to <strong>Santa Monica in Southern California</strong>, but living costs were equally crushing. Searching for stability and opportunity, his diaspora odyssey took him to <strong>Iowa</strong>, then to <strong>Washington, D.C.</strong>, then to <strong>Phoenix, Arizona</strong>, and eventually back to <strong>Iowa</strong> where he lives today.
-                                </p>
-                                <p style="margin-bottom: 12px;">
-                                    Across every relocation, his social circle reset to zero. He had no local credit history, no established trust, and no easy way to find verified people from home. But after <strong>over 25 years in the United States</strong>, Peter is now actively preparing his <strong>return home to Tanzania</strong>—living the other half of the diaspora equation.
-                                </p>
-                                <p style="margin-bottom: 14px;">
-                                    Peter's vision is that Diaspora Nearby must not only benefit newcomers arriving in unfamiliar cities, but crucially <strong>prepare and empower those returning home</strong>. By carrying your verified trust, sovereign community treasuries, and Home DDI member loans wherever you travel, you never start from zero—whether landing in a new host city or making your triumphant return home.
-                                </p>
-                            </div>
-                            <div style="display: flex; gap: 16px; align-items: center; margin-top: 12px;">
-                                <a href="https://www.linkedin.com/in/peter-swai" target="_blank" rel="noopener" style="font-size: 13px; color: var(--sage); display: inline-flex; align-items: center; gap: 4px;">
-                                    <i data-lucide="linkedin" style="width:14px;height:14px"></i> LinkedIn
-                                </a>
-                                <a href="https://github.com/peterkilaba-developer" target="_blank" rel="noopener" style="font-size: 13px; color: var(--sage); display: inline-flex; align-items: center; gap: 4px;">
-                                    <i data-lucide="github" style="width:14px;height:14px"></i> GitHub
-                                </a>
-                            </div>
+                <div class="founder-card">
+                    <div class="founder-avatar-wrapper">
+                        <img src="images/peter-swai.jpg" alt="Peter Swai" class="founder-avatar-img">
+                    </div>
+                    <div class="founder-info">
+                        <h3>Peter Swai</h3>
+                        <span class="role">Founder &amp; Architect — The 25-Year Diaspora Journey &amp; The Return Home</span>
+                        <div class="founder-bio">
+                            <p>
+                                Peter moved from Tanzania to the United States in <strong>1998</strong>, landing first in <strong>San Francisco, California</strong> with two friends. Within a few months, he faced the reality millions of immigrants know intimately: without a job, the high cost of living and college tuition became unaffordable.
+                            </p>
+                            <p>
+                                He relocated south to <strong>Santa Monica in Southern California</strong>, but living costs were equally crushing. Searching for stability and opportunity, his diaspora odyssey took him to <strong>Iowa</strong>, then to <strong>Washington, D.C.</strong>, then to <strong>Phoenix, Arizona</strong>, and eventually back to <strong>Iowa</strong> where he lives today.
+                            </p>
+                            <p>
+                                Across every relocation, his social circle reset to zero. He had no local credit history, no established trust, and no easy way to find verified people from home. But after <strong>over 25 years in the United States</strong>, Peter is now actively preparing his <strong>return home to Tanzania</strong>—living the other half of the diaspora equation.
+                            </p>
+                            <p>
+                                Peter's vision is that Diaspora Nearby must not only benefit newcomers arriving in unfamiliar cities, but crucially <strong>prepare and empower those returning home</strong>. By carrying your verified trust, sovereign community treasuries, and Home DDI member loans wherever you travel, you never start from zero—whether landing in a new host city or making your triumphant return home.
+                            </p>
+                        </div>
+                        <div class="founder-links">
+                            <a href="https://www.linkedin.com/in/peter-swai" target="_blank" rel="noopener" class="founder-link-btn">
+                                <i data-lucide="linkedin" style="width:14px;height:14px"></i> LinkedIn
+                            </a>
+                            <a href="https://github.com/peterkilaba-developer" target="_blank" rel="noopener" class="founder-link-btn">
+                                <i data-lucide="github" style="width:14px;height:14px"></i> GitHub
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -1883,11 +1901,11 @@
                     <i data-lucide="smartphone" style="width:40px;height:40px;color:var(--sage)"></i>
                 </div>
                 <h2>Get the App</h2>
-                <p>Install the native Android app from Google Play, or open Diaspora Nearby directly on the web.</p>
+                <p id="get-app-subtitle">Install on Android (Google Play) or join the iOS TestFlight Beta.</p>
 
                 <div class="signup-form" style="margin-top: 24px;">
-                    <div class="form-row" style="flex-direction: column;">
-                                                <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
+                    <div class="form-row" style="flex-direction: column; gap: 12px;">
+                        <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
                             target="_blank" rel="noopener" id="install-signup-btn" class="btn-play-badge"
                             style="width: 100%; justify-content: center; text-decoration:none;">
                             <svg class="play-svg" viewBox="0 0 512 512" width="24" height="24" aria-hidden="true">
@@ -1901,13 +1919,19 @@
                                 <span class="play-badge-main">Google Play</span>
                             </div>
                         </a>
-                        <a href="https://app.diasporanearby.com" class="btn btn-outline-small"
-                            style="width:100%;justify-content:center;text-decoration:none;">
-                            <i data-lucide="globe" style="width:16px;height:16px"></i>
-                            Open the Web App
+                        <!-- Direct TestFlight button for iOS users -->
+                        <a href="https://testflight.apple.com/join/vB3XzPKg"
+                            target="_blank" rel="noopener" id="install-ios-btn" class="btn-apple-badge"
+                            style="width: 100%; justify-content: center; text-decoration:none;">
+                            <svg viewBox="0 0 170 170" width="24" height="24" fill="currentColor" aria-hidden="true">
+                                <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.42-6.53-10.13-11.45-21.78-14.76-34.96-3.31-13.18-4.97-25.04-4.97-35.59 0-14.8 3.53-26.79 10.58-35.98 7.05-9.19 16.03-13.88 26.94-14.07 5.19 0 10.99 1.34 17.42 4.02 6.43 2.68 10.59 4.12 12.49 4.34 1.56-.22 5.92-1.78 13.09-4.67 7.17-2.89 13.23-4.13 18.17-3.72 13.73.98 24.32 5.86 31.77 14.64-11.88 7.21-17.65 17.07-17.31 29.58.33 9.69 4.08 17.81 11.24 24.36 7.16 6.55 15.68 10.37 25.56 11.47-2.22 6.78-4.89 14.28-8.01 22.5zM119.22 31.84c0-7.39 2.66-14.38 7.97-20.97 5.31-6.59 11.95-10.6 19.92-12.03.33 1.19.49 2.3.49 3.35 0 7.39-2.76 14.35-8.28 20.89-5.52 6.54-12.33 10.58-20.43 12.12-.34-.98-.51-2.1-.51-3.36z"/>
+                            </svg>
+                            <div class="play-badge-copy">
+                                <span class="play-badge-sub">TESTFLIGHT BETA</span>
+                                <span class="play-badge-main">Get iOS Invite</span>
+                            </div>
                         </a>
                     </div>
-                    
                 </div>
 
                 <!-- Direct Play Store button for Android users -->
@@ -1941,11 +1965,6 @@
                         </div>
                     </details>
                 </div>
-
-                <a href="https://app.diasporanearby.com" class="web-app-fallback">
-                    <i data-lucide="globe" style="width:14px;height:14px"></i>
-                    Or continue with the Web App →
-                </a>
             </div>
         </div>
     </section>
@@ -1982,7 +2001,7 @@
                 <div class="footer-links">
                     <h4>Platform</h4>
                     <ul>
-                        <li><a href="https://app.diasporanearby.com">Web App</a></li>
+                        <li><a href="#get-app">Download App</a></li>
                         <li><a href="#social">Community</a></li>
                         <li><a href="#economy">Economy</a></li>
                         <li><a href="#treasuries">Treasuries</a></li>
@@ -2079,7 +2098,7 @@
         });
     </script>
 
-    <script src="script.js?v=20261008a"></script>
+    <script src="script.js?v=20261012d"></script>
 </body>
 
 </html>
