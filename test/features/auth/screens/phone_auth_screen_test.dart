@@ -24,8 +24,9 @@ Future<void> _pumpPhoneAuth(WidgetTester tester, {bool loading = false}) async {
   );
   await tester.pump();
 
-  final targetFinder =
-      find.text(loading ? 'Connecting WhatsApp...' : 'Sign in with WhatsApp');
+  final targetFinder = find.text(
+    loading ? 'Connecting WhatsApp...' : 'Sign in with WhatsApp',
+  );
   await tester.scrollUntilVisible(
     targetFinder,
     200,
@@ -48,9 +49,7 @@ void main() {
 
     expect(find.text('Connecting WhatsApp...'), findsOneWidget);
 
-    final button = tester.widget<ElevatedButton>(
-      find.byType(ElevatedButton),
-    );
+    final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
     expect(button.onPressed, isNull);
   });
 }

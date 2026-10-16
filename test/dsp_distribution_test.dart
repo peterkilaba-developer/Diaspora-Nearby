@@ -446,49 +446,76 @@ void main() {
     // SCENARIO E: Same Home and Host Location (e.g., Nairobi, Kenya → Nairobi, Kenya)
     // Both home and host in same city and country
     // =========================================================================
-    test('Scenario E: Same home and host location (e.g., Nairobi KE → Nairobi KE)', () {
-      final result = simulateDistribution(
-        amount: 1000,
-        memberships: [
-          'global_community',
-          'home_continent_af',
-          'home_country_ke',
-          'home_city_ke_no-state_nairobi',
-          'host_continent_af',
-          'host_country_ke_ke',
-          'host_city_ke_no-state_nairobi_ke',
-        ],
-      );
+    test(
+      'Scenario E: Same home and host location (e.g., Nairobi KE → Nairobi KE)',
+      () {
+        final result = simulateDistribution(
+          amount: 1000,
+          memberships: [
+            'global_community',
+            'home_continent_af',
+            'home_country_ke',
+            'home_city_ke_no-state_nairobi',
+            'host_continent_af',
+            'host_country_ke_ke',
+            'host_city_ke_no-state_nairobi_ke',
+          ],
+        );
 
-      print('\n=== SCENARIO E: Same Home & Host Location ===');
-      result.forEach((k, v) => print('  $k: $v DSP'));
+        print('\n=== SCENARIO E: Same Home & Host Location ===');
+        result.forEach((k, v) => print('  $k: $v DSP'));
 
-      // Community treasuries
-      expect(result['global_community'], 100, reason: 'Global: full unit');
-      expect(result['home_continent_af'], 100, reason: 'Home Continent: full');
-      expect(result['home_country_ke'], 100, reason: 'Home Country: full');
-      expect(result['home_city_ke_no-state_nairobi'], 100, reason: 'Home City: full');
-      expect(result['host_continent_af'], 100, reason: 'Host Continent: full');
-      expect(result['host_country_ke_ke'], 100, reason: 'Host Country: full with _ke suffix');
-      expect(result['host_city_ke_no-state_nairobi_ke'], 100, reason: 'Host City: full with _ke suffix');
+        // Community treasuries
+        expect(result['global_community'], 100, reason: 'Global: full unit');
+        expect(
+          result['home_continent_af'],
+          100,
+          reason: 'Home Continent: full',
+        );
+        expect(result['home_country_ke'], 100, reason: 'Home Country: full');
+        expect(
+          result['home_city_ke_no-state_nairobi'],
+          100,
+          reason: 'Home City: full',
+        );
+        expect(
+          result['host_continent_af'],
+          100,
+          reason: 'Host Continent: full',
+        );
+        expect(
+          result['host_country_ke_ke'],
+          100,
+          reason: 'Host Country: full with _ke suffix',
+        );
+        expect(
+          result['host_city_ke_no-state_nairobi_ke'],
+          100,
+          reason: 'Host City: full with _ke suffix',
+        );
 
-      // System treasuries
-      expect(result['founders'], 100);
-      expect(result['liquidity'], 100);
-      expect(result['burn'], 100);
+        // System treasuries
+        expect(result['founders'], 100);
+        expect(result['liquidity'], 100);
+        expect(result['burn'], 100);
 
-      final communityTotal = result.entries
-          .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
-          .fold<int>(0, (sum, e) => sum + e.value);
-      final systemTotal =
-          result['founders']! + result['liquidity']! + result['burn']!;
+        final communityTotal = result.entries
+            .where((e) => !['founders', 'liquidity', 'burn'].contains(e.key))
+            .fold<int>(0, (sum, e) => sum + e.value);
+        final systemTotal =
+            result['founders']! + result['liquidity']! + result['burn']!;
 
-      expect(communityTotal, 700, reason: 'Community pool must be 700');
-      expect(systemTotal, 300, reason: 'System pool must be 300');
-      expect(communityTotal + systemTotal, 1000, reason: 'Total must be 1000');
-      print('  Community Total: $communityTotal');
-      print('  System Total: $systemTotal');
-      print('  Grand Total: ${communityTotal + systemTotal} ✅');
-    });
+        expect(communityTotal, 700, reason: 'Community pool must be 700');
+        expect(systemTotal, 300, reason: 'System pool must be 300');
+        expect(
+          communityTotal + systemTotal,
+          1000,
+          reason: 'Total must be 1000',
+        );
+        print('  Community Total: $communityTotal');
+        print('  System Total: $systemTotal');
+        print('  Grand Total: ${communityTotal + systemTotal} ✅');
+      },
+    );
   });
 }

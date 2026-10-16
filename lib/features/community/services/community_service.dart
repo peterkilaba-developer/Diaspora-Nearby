@@ -105,8 +105,9 @@ class CommunityService {
     // FAST PATH: Single Server-Side Batch Provisioning (1 HTTP call, <400ms)
     // =========================================================================
     try {
-      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('provisionSignupCommunities');
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('provisionSignupCommunities');
       final result = await callable.call<Map<String, dynamic>>({
         'homeLocation': {
           'city': homeParsed.city,
@@ -133,7 +134,9 @@ class CommunityService {
         chatIds.addAll(cIds);
 
         // Corridor Chamber (only if different countries)
-        if (_ref != null && hostCountryCode != 'XX' && homeCountryCode != hostCountryCode) {
+        if (_ref != null &&
+            hostCountryCode != 'XX' &&
+            homeCountryCode != hostCountryCode) {
           try {
             final chamberResult = await FirebaseFunctions.instanceFor(
               region: 'us-central1',
@@ -151,7 +154,9 @@ class CommunityService {
         return communityIds;
       }
     } catch (e) {
-      debugPrint('⚠️ Fast batch provisioning failed, falling back to tier-by-tier: $e');
+      debugPrint(
+        '⚠️ Fast batch provisioning failed, falling back to tier-by-tier: $e',
+      );
     }
 
     // =========================================================================
@@ -211,7 +216,9 @@ class CommunityService {
     // ========================================
     // 3.5 CORRIDOR CHAMBER OF COMMERCE (Organization)
     // ========================================
-    if (_ref != null && hostCountryCode != 'XX' && homeCountryCode != hostCountryCode) {
+    if (_ref != null &&
+        hostCountryCode != 'XX' &&
+        homeCountryCode != hostCountryCode) {
       try {
         final result = await FirebaseFunctions.instanceFor(
           region: 'us-central1',

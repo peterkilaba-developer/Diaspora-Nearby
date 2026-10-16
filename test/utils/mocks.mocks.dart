@@ -239,13 +239,17 @@ class MockAuthRepository extends _i1.Mock implements _i6.AuthRepository {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<void> requestWhatsAppOtp(String? phoneNumber) =>
+  _i5.Future<Map<String, dynamic>> requestWhatsAppOtp(String? phoneNumber) =>
       (super.noSuchMethod(
             Invocation.method(#requestWhatsAppOtp, [phoneNumber]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+            returnValueForMissingStub: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i5.Future<void>);
+          as _i5.Future<Map<String, dynamic>>);
 
   @override
   _i5.Future<String> verifyWhatsAppOtp(String? phoneNumber, String? otp) =>

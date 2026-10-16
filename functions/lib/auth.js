@@ -16,6 +16,7 @@ function normalizePhoneNumber(value) {
 const TEST_PHONE_NUMBERS = new Set([
   "+16505551230", // Test user
   "+16505551231", // Test User B
+  "+16505551234", // App Store Review / TestFlight test user
   "+16505550100", // Standard NANP test number
   "+16505550101",
 ]);
@@ -27,8 +28,9 @@ function isTestPhoneNumber(phoneNumber) {
     const list = process.env.TEST_WHATSAPP_NUMBERS.split(",").map((s) => s.trim());
     if (list.includes(phoneNumber)) return true;
   }
-  // Standard NANP fictitious phone numbers (e.g. +1-650-555-01xx)
+  // Standard NANP fictitious phone numbers (e.g. +1-650-555-01xx or +1-650-555-12xx)
   if (/^\+1\d{3}55501\d{2}$/.test(phoneNumber)) return true;
+  if (/^\+1\d{3}55512\d{2}$/.test(phoneNumber)) return true;
   return false;
 }
 
