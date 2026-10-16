@@ -182,13 +182,19 @@ exports.placesProxy = functions
 
     if (process.env.FUNCTIONS_EMULATOR !== 'true') {
       const token = req.header('X-Firebase-AppCheck');
-      if (!token) throw new Error('missing token');
-      const decoded = await admin.appCheck().verifyToken(token);
-      if (!decoded.appId && stableAppCheckSubject(decoded) === 'unknown') {
-        throw new Error('invalid app token');
+      if (token) {
+        const decoded = await admin.appCheck().verifyToken(token);
+        if (!decoded.appId && stableAppCheckSubject(decoded) === 'unknown') {
+          throw new Error('invalid app token');
+        }
+      } else if (process.env.ENFORCE_APP_CHECK === 'true') {
+        throw new Error('missing token');
+      } else {
+        console.warn('[PlacesProxy] Request missing AppCheck header; allowing because ENFORCE_APP_CHECK is not true.');
       }
     }
-  } catch (_) {
+  } catch (err) {
+    console.warn('[PlacesProxy] Auth/AppCheck error:', err.message);
     res.status(401).json({ error: 'Authentication and app attestation are required' });
     return;
   }

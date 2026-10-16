@@ -39,8 +39,10 @@ const SMART_WALLET_ABI = [
 const { assertOnChainConfig } = require("./on_chain_config");
 
 const TGE_CONTROLLER_ABI = [
-  "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
-  "function distributeWelcomeBonus(address[] recipients, uint256[] amounts) external",
+  "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies, bytes32 merkleRoot) external",
+  "function distributeWelcomeBonus(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
+  "function distributeGenesisTokens(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
+  "function claimTdeTokens(address recipient, uint256 epoch, uint256 tdeEvent, uint256 earnedAmount, uint8 efficiency, bytes32[] proof) external",
   "function currentEpoch() view returns (uint256)",
   "function currentTgeEvent() view returns (uint256)",
   "function tgeCount() view returns (uint256)",
@@ -408,7 +410,7 @@ exports.getOrCreateSmartWallet = functions
   } else {
     userUpdate.walletDeploymentPending = false;
   }
-  await db.collection("users").doc(userId).update(userUpdate);
+  await db.collection("users").doc(userId).set(userUpdate, { merge: true });
 
   // 5. Also update user_points collection
   await db.collection("user_points").doc(userId).set(

@@ -22,7 +22,7 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
-val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY") ?: ""
+val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY") ?: "AIzaSyAj0oAGYEX5osyDa_2Pn828clvv72UhEF8"
 
 android {
     namespace = "com.diasporanearby.diasporanearby"

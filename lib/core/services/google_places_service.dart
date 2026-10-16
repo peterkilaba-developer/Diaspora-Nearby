@@ -25,13 +25,21 @@ class GooglePlacesService {
 
   GooglePlacesService(String apiKey);
 
-  Future<Map<String, String>> _proxyHeaders() async {
-    if (!kIsWeb) return const {};
-    final appCheckToken = await FirebaseAppCheck.instance.getToken();
-    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+  Future<Map<String, String>> _proxyHeaders({required bool useProxy}) async {
+    if (!useProxy) return const {};
     final headers = <String, String>{};
-    if (appCheckToken != null) headers['X-Firebase-AppCheck'] = appCheckToken;
-    if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
+    try {
+      final appCheckToken = await FirebaseAppCheck.instance.getToken();
+      if (appCheckToken != null) headers['X-Firebase-AppCheck'] = appCheckToken;
+    } catch (e) {
+      debugPrint('[Places] AppCheck token fetch warning: $e');
+    }
+    try {
+      final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (idToken != null) headers['Authorization'] = 'Bearer $idToken';
+    } catch (e) {
+      debugPrint('[Places] Auth token fetch warning: $e');
+    }
     return headers;
   }
 
@@ -61,6 +69,7 @@ class GooglePlacesService {
     try {
       _ensureSessionToken();
       final apiKey = Env.googleMapsApiKey;
+      final useProxy = kIsWeb || apiKey.isEmpty;
 
       // Default to cities to enforce strict locality/city-level matching if no filter provided
       // For VENUES, we don't pass a 'types' param (fetch all), but we filter client-side.
@@ -80,10 +89,10 @@ class GooglePlacesService {
       }
       // For VENUES, we leave requestTypes as null to fetch everything, then filter in code
 
-      // On web, use the Cloud Functions proxy to avoid CORS issues
-      // On mobile, call the Google Places API directly
+      // On web (or if client API key is not embedded), use the Cloud Functions proxy
+      // On mobile with an API key, call the Google Places API directly
       final Uri url;
-      if (kIsWeb) {
+      if (useProxy) {
         url = Uri.parse(_placesProxyBaseUrl).replace(
           queryParameters: {
             'type': 'autocomplete',
@@ -106,9 +115,12 @@ class GooglePlacesService {
       }
 
       debugPrint(
-        '[Places] Autocomplete request (web=$kIsWeb): ${kIsWeb ? 'via proxy' : 'direct'}',
+        '[Places] Autocomplete request (web=$kIsWeb): ${useProxy ? 'via proxy' : 'direct'}',
       );
-      final response = await http.get(url, headers: await _proxyHeaders());
+      final response = await http.get(
+        url,
+        headers: await _proxyHeaders(useProxy: useProxy),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -174,14 +186,15 @@ class GooglePlacesService {
   Future<FetchPlaceResponse?> _fetchPlaceHttp(String placeId) async {
     try {
       final apiKey = Env.googleMapsApiKey;
+      final useProxy = kIsWeb || apiKey.isEmpty;
       // Pass the session token to link this selection to the search
       // Request critical fields and rich data
       final fields =
           'formatted_address,geometry,name,place_id,types,address_components,website,international_phone_number,url,rating,user_ratings_total,opening_hours,photos,price_level,editorial_summary';
 
-      // On web, use the Cloud Functions proxy to avoid CORS issues
+      // On web (or if client API key is not embedded), use the Cloud Functions proxy
       final Uri url;
-      if (kIsWeb) {
+      if (useProxy) {
         url = Uri.parse(_placesProxyBaseUrl).replace(
           queryParameters: {
             'type': 'details',
@@ -199,10 +212,13 @@ class GooglePlacesService {
         });
       }
       debugPrint(
-        '[Places] Details request (web=$kIsWeb): ${kIsWeb ? 'via proxy' : 'direct'}',
+        '[Places] Details request (web=$kIsWeb): ${useProxy ? 'via proxy' : 'direct'}',
       );
 
-      final response = await http.get(url, headers: await _proxyHeaders());
+      final response = await http.get(
+        url,
+        headers: await _proxyHeaders(useProxy: useProxy),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
