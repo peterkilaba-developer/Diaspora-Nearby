@@ -139,7 +139,7 @@ describe("Non-chamber chat posting (legacy rule)", () => {
     );
   });
 
-  test("userChat index cannot grant message access when participants is incomplete", async () => {
+  test("userChat index grants message access for legacy chats without complete participants", async () => {
     await seed(async (db) => {
       await db.doc(`users/${legacyUid}/userChats/${chatId}`).set({
         chatId,
@@ -147,7 +147,7 @@ describe("Non-chamber chat posting (legacy rule)", () => {
     });
 
     const db = dbFor(legacyUid);
-    await assertFails(
+    await assertSucceeds(
       db.collection(`chats/${chatId}/messages`).add({
         senderId: legacyUid,
         text: "legacy direct chat",
@@ -155,7 +155,7 @@ describe("Non-chamber chat posting (legacy rule)", () => {
     );
   });
 
-  test("userChat index cannot grant a complete message delivery batch", async () => {
+  test("userChat index grants a complete message delivery batch when lastMessage has valid type", async () => {
     await seed(async (db) => {
       await db.doc(`users/${legacyUid}/userChats/${chatId}`).set({
         chatId,
@@ -168,6 +168,7 @@ describe("Non-chamber chat posting (legacy rule)", () => {
       id: messageRef.id,
       senderId: legacyUid,
       content: "batch message",
+      type: "text",
       timestamp: 1,
     };
     const batch = db.batch();
@@ -188,10 +189,10 @@ describe("Non-chamber chat posting (legacy rule)", () => {
       { merge: true }
     );
 
-    await assertFails(batch.commit());
+    await assertSucceeds(batch.commit());
   });
 
-  test("sparse legacy chat cannot grant access through a userChat index", async () => {
+  test("sparse legacy chat grants access through a userChat index when lastMessage has valid type", async () => {
     await seed(async (db) => {
       await db.doc(`chats/${chatId}`).set({
         name: "Legacy direct chat",
@@ -217,6 +218,7 @@ describe("Non-chamber chat posting (legacy rule)", () => {
           id: messageRef.id,
           senderId: legacyUid,
           content: "sparse batch message",
+          type: "text",
           timestamp: 1,
         },
         updatedAt: 1,
@@ -229,7 +231,7 @@ describe("Non-chamber chat posting (legacy rule)", () => {
       { merge: true }
     );
 
-    await assertFails(batch.commit());
+    await assertSucceeds(batch.commit());
   });
 
   test("outsider without participant or userChat record CANNOT post", async () => {

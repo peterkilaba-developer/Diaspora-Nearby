@@ -431,7 +431,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             _buildActivityCard(
               context,
               title: 'Location Transparency',
-              subtitle: 'Keep live location active to participate in token distributions',
+              subtitle:
+                  'Keep live location active to participate in token distributions',
               amount: '10,000 DSP',
               earned: lifetimeEarnings['location_transparency'] ?? 0,
             ),
