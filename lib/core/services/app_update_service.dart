@@ -56,6 +56,7 @@ class AppUpdateService {
 
     // 2. Check Firestore `system_stats/app_version` metadata (works for iOS,
     // TestFlight, Play Store, and sideloaded Android APKs).
+    if (!context.mounted) return;
     await _checkRemoteVersionDoc(context);
   }
 
