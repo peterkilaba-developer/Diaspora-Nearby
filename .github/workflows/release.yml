@@ -2,19 +2,19 @@ name: Release & CD
 
 on:
   push:
-    branches: [production, staging]
+    branches: [production]
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       track:
-        description: "Google Play release track (alpha = Open Testing, internal, beta, production)"
+        description: "Google Play release track (beta = Open Testing, alpha = Closed Testing, internal, production)"
         required: false
-        default: "alpha"
+        default: "beta"
         type: choice
         options:
+          - beta
           - alpha
           - internal
-          - beta
           - production
       deploy_firebase:
         description: "Deploy Firebase Functions, Firestore Rules, and Storage Rules"
@@ -237,28 +237,19 @@ jobs:
             --title "Diaspora Nearby v1.2.6 (Build ${{ env.BUILD_NUMBER }})" \
             --notes "Automated production release (Build ${{ env.BUILD_NUMBER }}, commit ${{ github.sha }})." \
             --latest || true
+          gh release upload latest \
+            build/app/outputs/flutter-apk/app-production-release.apk \
+            build/app/outputs/bundle/productionRelease/app-production-release.aab \
+            --clobber || true
 
-      - name: Publish to Google Play Console
-        id: play_prod
-        continue-on-error: true
+      - name: Publish to Google Play Console (Open Testing / Beta Track)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.diasporanearby.diasporanearby
           releaseFiles: build/app/outputs/bundle/productionRelease/app-production-release.aab
-          track: ${{ inputs.track || (github.ref_name == 'production' && 'production' || 'beta') }}
-          status: completed
-          inAppUpdatePriority: 5
-
-      - name: Fallback to Beta Track if Production Track Requires Country Selection
-        if: ${{ steps.play_prod.outcome == 'failure' && (github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true) }}
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.diasporanearby.diasporanearby
-          releaseFiles: build/app/outputs/bundle/productionRelease/app-production-release.aab
-          track: beta
+          track: ${{ inputs.track || 'beta' }}
           status: completed
           inAppUpdatePriority: 5
 
