@@ -188,7 +188,9 @@ jobs:
       - name: Build Signed Production App Bundle (.aab)
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -XX:+HeapDumpOnOutOfMemoryError"
         run: |
+          sed -i 's/-Xmx8G/-Xmx3G/g; s/-Xmx4G/-Xmx3G/g; s/-Xmx6G/-Xmx3G/g' android/gradle.properties || true
           flutter build appbundle --release \
             --flavor production \
             -t lib/main_production.dart \
