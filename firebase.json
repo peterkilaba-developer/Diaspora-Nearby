@@ -28,9 +28,28 @@
                 "**/.*",
                 "**/node_modules/**"
             ],
+            "redirects": [
+                {
+                    "source": "/downloads/diaspora-nearby.apk",
+                    "destination": "https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk",
+                    "type": 302
+                }
+            ],
             "rewrites": [
                 {
                     "source": "/invite",
+                    "destination": "/index.html"
+                },
+                {
+                    "source": "/invite/**",
+                    "destination": "/index.html"
+                },
+                {
+                    "source": "/download",
+                    "destination": "/index.html"
+                },
+                {
+                    "source": "/download/**",
                     "destination": "/index.html"
                 },
                 {
@@ -44,6 +63,10 @@
                 {
                     "source": "/terms-of-service",
                     "destination": "/terms-of-service.html"
+                },
+                {
+                    "source": "/child-safety",
+                    "destination": "/child-safety.html"
                 },
                 {
                     "source": "/liquidity_treasury",

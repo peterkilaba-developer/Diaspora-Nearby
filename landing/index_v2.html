@@ -39,6 +39,49 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Prevent Theme Flash -->
+    <script>
+        (function() {
+            try {
+                var mode = localStorage.getItem('dn_theme_mode') || 'system';
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-mode', mode);
+                document.documentElement.style.colorScheme = theme;
+            } catch (e) {}
+        })();
+    </script>
+
+    <!-- Immediate Route & Platform Redirect for /invite and /download -->
+    <script>
+        (function() {
+            try {
+                var rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
+                if (rawPath === '/invite' || rawPath === '/download') {
+                    var params = new URLSearchParams(window.location.search);
+                    var code = params.get('code') || params.get('ref');
+                    if (code) {
+                        try { localStorage.setItem('dn_referral_code', code); } catch(e) {}
+                    }
+                    var ua = navigator.userAgent || '';
+                    var isAndroid = /android/i.test(ua);
+                    var isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
+
+                    if (isIOS) {
+                        window.location.replace('https://testflight.apple.com/join/vB3XzPKg');
+                    } else if (isAndroid) {
+                        var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
+                        if (code) {
+                            playUrl += '&referrer=' + encodeURIComponent('utm_source=invite&referral_code=' + code);
+                        }
+                        window.location.replace(playUrl);
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
+
     <!-- Styles -->
     <link rel="stylesheet" href="styles.css?v=20261012d">
 </head>
@@ -53,6 +96,11 @@
                 <span>Diaspora Nearby</span>
             </a>
             <div class="nav-actions">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme mode" title="Theme: System (Auto)">
+                    <i data-lucide="sun" class="theme-icon-light"></i>
+                    <i data-lucide="moon" class="theme-icon-dark"></i>
+                    <i data-lucide="laptop" class="theme-icon-system"></i>
+                </button>
                 <a href="#get-app" class="nav-cta">Get App <i data-lucide="arrow-right"
                             style="width:16px;height:16px"></i></a>
                 <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
@@ -125,9 +173,9 @@
                     <!-- Android Action Block -->
                     <div class="hero-platform-block" id="hero-block-android-v2" style="display:none;">
                         <div class="hero-buttons-row">
-                            <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
+                            <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
                                 target="_blank" rel="noopener" class="btn-play-badge"
-                                title="Join Android Testing on Google Play">
+                                title="Download Diaspora Nearby on Google Play">
                                 <svg class="play-svg" viewBox="0 0 512 512" width="24" height="24" aria-hidden="true">
                                     <path fill="#4285F4" d="M47.7 27.6c-4.4 4.7-6.9 12.3-6.9 22.1v412.6c0 9.8 2.5 17.4 6.9 22.1l2.4 2.2 230.9-230.9v-5.4L49.9 25.4l-2.2 2.2z"/>
                                     <path fill="#FBBC04" d="M358.5 336.5l-77.5-77.7v-5.6l77.6-77.7 1.8 1 92 52.3c26.2 14.9 26.2 39.3 0 54.3l-92 52.4-1.9 1z"/>
@@ -180,9 +228,9 @@
                     <!-- Default / Desktop Action Block -->
                     <div class="hero-platform-block" id="hero-block-default-v2">
                         <div class="hero-buttons-row">
-                            <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
+                            <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
                                 target="_blank" rel="noopener" class="btn-play-badge"
-                                title="Join Android Testing on Google Play">
+                                title="Download Diaspora Nearby on Google Play">
                                 <svg class="play-svg" viewBox="0 0 512 512" width="24" height="24" aria-hidden="true">
                                     <path fill="#4285F4" d="M47.7 27.6c-4.4 4.7-6.9 12.3-6.9 22.1v412.6c0 9.8 2.5 17.4 6.9 22.1l2.4 2.2 230.9-230.9v-5.4L49.9 25.4l-2.2 2.2z"/>
                                     <path fill="#FBBC04" d="M358.5 336.5l-77.5-77.7v-5.6l77.6-77.7 1.8 1 92 52.3c26.2 14.9 26.2 39.3 0 54.3l-92 52.4-1.9 1z"/>
@@ -206,7 +254,7 @@
                                 </div>
                             </a>
 
-                            <a href="downloads/diaspora-nearby.apk" download class="btn" style="background: var(--surface); border: 1px solid var(--border); padding: 10px 20px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
+                            <a href="https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk" download class="btn" style="background: var(--surface); border: 1px solid var(--border); padding: 10px 20px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
                                 <i data-lucide="download" style="width:16px;height:16px"></i> Download APK
                             </a>
                         </div>
@@ -229,7 +277,7 @@
                         <i data-lucide="headphones" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>Listen: The Dual Geographic Revolution &amp; Sovereign Social Wealth
                     </div>
                     <audio controls style="width: 100%; height: 36px; outline: none;">
-                        <source src="audio/Minting_Liquid_Wealth_With_Diaspora_Nearby_social.mp3" type="audio/mpeg">
+                        <source src="audio/How_Diaspora_Nearby_Tokenizes_Trust_social.mp3" type="audio/mpeg">
                         Your browser does not support the audio element.
                     </audio>
                 </div>
@@ -306,9 +354,9 @@
                                 </div>
                             </div>
                             <ul style="font-size: 13px; color: var(--fg-muted); padding-left: 18px; margin: 0; line-height: 1.7;">
-                                <li><strong>Home Continent</strong> (e.g., Africa, Asia, Latin America, Europe)</li>
-                                <li><strong>Home Country</strong> (e.g., Tanzania, Nigeria, Ghana, Colombia, Philippines)</li>
                                 <li><strong>Home City / Town / Village</strong> (e.g., Moshi, Ikeja, Kumasi, Medellín)</li>
+                                <li><strong>Home Country</strong> (e.g., Tanzania, Nigeria, Ghana, Colombia, Philippines)</li>
+                                <li><strong>Home Continent</strong> (e.g., Africa, Asia, Latin America, Europe)</li>
                             </ul>
                         </div>
                         <div style="margin-top: 18px; padding: 10px 14px; background: rgba(45, 90, 71, 0.08); border-radius: 8px; font-size: 12px; color: var(--sage); font-weight: 500;">
@@ -327,9 +375,9 @@
                                 </div>
                             </div>
                             <ul style="font-size: 13px; color: var(--fg-muted); padding-left: 18px; margin: 0; line-height: 1.7;">
-                                <li><strong>Host Continent</strong> (e.g., North America, Europe, Australia)</li>
-                                <li><strong>Host Country</strong> (e.g., United States, United Kingdom, Canada)</li>
                                 <li><strong>Host City / Town</strong> (e.g., Dallas-Fort Worth, London, Toronto)</li>
+                                <li><strong>Host Country</strong> (e.g., United States, United Kingdom, Canada)</li>
+                                <li><strong>Host Continent</strong> (e.g., North America, Europe, Australia)</li>
                             </ul>
                         </div>
                         <div style="margin-top: 18px; padding: 10px 14px; background: rgba(229, 147, 58, 0.08); border-radius: 8px; font-size: 12px; color: var(--orange); font-weight: 500;">
@@ -350,7 +398,7 @@
                 <div class="card">
                     <div class="card-icon sage"><i data-lucide="layers"></i></div>
                     <h3>2. 7-Tier Nested Matching Treasuries</h3>
-                    <p>Every single point (DSP) and token ($DIASPORA) you earn mints an identical 1:1 matching reward split across your 7 community levels: Global + Home Continent, Country, State, City + Host Continent, Country, State, City. Your daily activity builds wealth for your ancestral home and your local neighborhood simultaneously.</p>
+                    <p>Every single point (DSP) and token ($DIASPORA) you earn mints an identical 1:1 matching reward split across your 7 community levels: Global + Home City, Country, Continent + Host City, Country, Continent. Your daily activity builds wealth for your ancestral home and your local neighborhood simultaneously.</p>
                 </div>
 
                 <div class="card">
@@ -457,7 +505,7 @@
                     <div class="card-icon sage"><i data-lucide="search"></i></div>
                     <div style="font-size:11px; color:var(--orange); font-weight:700; text-transform:uppercase; margin-bottom:4px;">1. Onboarding Search</div>
                     <h3>Hometown &amp; Host City Search</h3>
-                    <p>Search and select your <strong>Hometown</strong> (Google Places auto-resolves town, state, and home country) and your <strong>Host City</strong>. Instantly receive your <strong>10,000 DSP Welcome Bonus</strong>.</p>
+                    <p>Search and select your <strong>Hometown</strong> (Google Places auto-resolves town, state, and home country) and your <strong>Host City</strong> to automatically establish and join your sovereign 5-tier community hierarchy.</p>
                 </div>
 
                 <!-- Step 2: Nearby Discovery -->
@@ -501,13 +549,13 @@
             <!-- 4 Pillars Cards -->
             <h3 style="margin-bottom:16px; color: var(--sage);" class="fade-in">
                 <i data-lucide="award" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
-                The 4 Pillars of Proof of Humanity (PoH) — 70,000 DSP &amp; 70 PCT Base
+                Proof of Humanity (PoH) — 6 Base Milestones &amp; Post-Genesis Mutual Aid
             </h3>
             <div class="card-grid fade-in">
                 <div class="card">
                     <div class="card-icon sage"><i data-lucide="map-pin"></i></div>
                     <h3>Location Transparency</h3>
-                    <p>Keep your live location visible to earn <strong>10,000 DSP and 10 PCT</strong>. Must be enabled at every TDE. If disabled, the awarded 10,000 DSP is permanently burned and 10 PCT forfeited.</p>
+                    <p>Keep your live location visible to earn <strong>10,000 DSP and 10 PCT</strong>. Must be enabled at every TDE. If deliberately toggled off in the app, the awarded 10,000 DSP is permanently burned and 10 PCT forfeited (involuntary GPS/network drops do not trigger penalties).</p>
                 </div>
                 <div class="card">
                     <div class="card-icon sage"><i data-lucide="user-check"></i></div>
@@ -536,8 +584,8 @@
                 </div>
                 <div class="card">
                     <div class="card-icon sage"><i data-lucide="shield-alert"></i></div>
-                    <h3>Ubuntu Emergency Fund</h3>
-                    <p>Contribute to the mutual catastrophe protection pool to earn <strong>10,000 DSP and 10 PCT</strong>. Collective solidarity directly unlocks sovereign trust.</p>
+                    <h3>Ubuntu Emergency Fund (Deferred Post-Genesis)</h3>
+                    <p>Contribute to the mutual catastrophe protection pool to earn <strong>10,000 DSP and 10 PCT</strong>. Deferred post-genesis so new members can access Genesis distribution upfront; required before requesting emergency relief.</p>
                 </div>
             </div>
 
@@ -629,15 +677,15 @@
                     Managed by the elected <strong>Community Secretaries</strong> of your dual geographic locations (home/host town and home/host country).
                 </p>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; text-align: left;">
-                    <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--card-shadow);">
                         <strong style="color: var(--sage); display: block; margin-bottom: 4px;"><i data-lucide="shield-check" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>Standard Tier (Up to $1,000)</strong>
                         <span style="font-size: 13px; color: var(--fg-muted);">Instant review for urgent micro-emergencies (prescriptions, local transit).</span>
                     </div>
-                    <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--card-shadow);">
                         <strong style="color: var(--sage); display: block; margin-bottom: 4px;"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>Fast-Track ($1,001 - $50,000)</strong>
                         <span style="font-size: 13px; color: var(--fg-muted);">Authorized within <strong>24 hours</strong> by your Host Town &amp; Host Country Secretaries.</span>
                     </div>
-                    <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--card-shadow);">
                         <strong style="color: var(--orange); display: block; margin-bottom: 4px;"><i data-lucide="vote" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>Community Vote (&gt; $50,000)</strong>
                         <span style="font-size: 13px; color: var(--fg-muted);">Requires a 48-hour local vote of 91+ PCT members with &gt;50% (51%+) majority approval.</span>
                     </div>
@@ -724,14 +772,14 @@
                     Native Payment &amp; Checkout Infrastructure
                 </h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: stretch; text-align: left;">
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
+                    <div style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--card-shadow); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
                         <div class="card-icon sage" style="margin: 0; width: 40px; height: 40px; min-width: 40px;"><i data-lucide="wallet"></i></div>
                         <div>
                             <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--fg);">Smart Wallet Checkout</h4>
                             <p style="margin: 0; font-size: 13px; color: var(--fg-muted); text-align: left; line-height: 1.5;">Self-Custodial Smart Wallet auto-created from your phone number with gasless transactions via Account Abstraction on Base. Pay for any marketplace item, peer stay, or travel booking with a single tap.</p>
                         </div>
                     </div>
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
+                    <div style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--card-shadow); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
                         <div class="card-icon orange" style="margin: 0; width: 40px; height: 40px; min-width: 40px;"><i data-lucide="landmark"></i></div>
                         <div>
                             <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--fg);">Organization Invoicing &amp; B2B</h4>
@@ -765,10 +813,6 @@
                 <p>
                     $DIASPORA is not a speculative token — it is the world's first <strong>Social Equity Asset</strong>. Powered by the 1:1 Ubuntu Protocol, every constructive action mints equal wealth for your local and homeland treasuries.
                 </p>
-                <div style="margin-top: 16px; padding: 16px; background: rgba(126, 87, 194, 0.1); border-radius: 8px; border: 1px solid rgba(126, 87, 194, 0.3); text-align: left;">
-                    <strong style="color: #7e57c2; display: block; margin-bottom: 8px; font-size: 15px;"><i data-lucide="repeat" style="width:16px;height:16px;vertical-align:middle;margin-right:6px;"></i>Bi-Directional Earning</strong>
-                    <span style="font-size: 14px; color: var(--fg-muted); line-height: 1.5; display: block;">For 1-to-1 interactions like messaging, vouching, and verifying, <strong>both parties earn DSP</strong>. When you interact with someone, you literally make them money, and they make you money.</span>
-                </div>
             </div>
 
             <!-- DSP vs $DIASPORA Decoupled Grid -->
@@ -897,13 +941,6 @@
                     <div class="reward-info">
                         <div class="reward-action">Ubuntu Emergency Fund Contribution</div>
                         <div class="reward-amount">10,000 DSP &amp; 10 PCT</div>
-                    </div>
-                </div>
-                <div class="reward-item">
-                    <div class="reward-icon sage"><i data-lucide="link" style="width:18px;height:18px"></i></div>
-                    <div class="reward-info">
-                        <div class="reward-action">Referral (Both)</div>
-                        <div class="reward-amount">10,000 DSP each</div>
                     </div>
                 </div>
                 <div class="reward-item">
@@ -1051,24 +1088,25 @@
                     <div class="hierarchy-flow">
                         <div class="hierarchy-col">
                             <div class="hier-heading"><i data-lucide="home" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i> Home Country</div>
-                            <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1 unit</span></div>
-                            <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1 unit</span></div>
-                            <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5 unit</span></div>
                             <div class="hier-node"><i data-lucide="map-pin"></i> City / Town <span class="hier-label">1 unit</span></div>
+                            <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">1 unit</span></div>
+                            <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1 unit</span></div>
                         </div>
                         <div class="hierarchy-col-center">
-                            <div class="vline"></div>
                             <div class="vline"></div>
                             <div class="vline"></div>
                             <div class="vline"></div>
                         </div>
                         <div class="hierarchy-col">
                             <div class="hier-heading"><i data-lucide="plane" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i> Host Country</div>
-                            <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1 unit</span></div>
-                            <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1 unit</span></div>
-                            <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5 unit</span></div>
                             <div class="hier-node"><i data-lucide="map-pin"></i> City / Town <span class="hier-label">1 unit</span></div>
+                            <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">1 unit</span></div>
+                            <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1 unit</span></div>
                         </div>
+                    </div>
+                    <div style="margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); font-size: 11.5px; color: var(--fg-muted); line-height: 1.5;">
+                        <i data-lucide="info" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:5px;color:var(--sage)"></i>
+                        <strong>Disclaimer:</strong> In specific three-tier countries (such as the United States and approximately 22 federal countries with state or provincial systems), matched DSP is split 50/50 (0.5 unit each) with their location between city and country like state or province.
                     </div>
                 </div>
             </div>

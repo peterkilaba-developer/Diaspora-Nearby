@@ -3,59 +3,23 @@
    Lucide, platform detection, early access signup, nav, animations
    ═══════════════════════════════════════════════════════ */
 
-// ── Route Handling (/invite, /profile) ──
-(function handleRoutes() {
-    const path = window.location.pathname;
-    const params = new URLSearchParams(window.location.search);
-
-    // /invite?code=XXX — capture referral code, scroll to get-app
-    if (path === '/invite') {
-        const code = params.get('code');
-        if (code) {
-            localStorage.setItem('dn_referral_code', code);
-        }
-        // Scroll to get-app section after DOM loads
-        document.addEventListener('DOMContentLoaded', () => {
-            const getAppSection = document.getElementById('get-app');
-            if (getAppSection) {
-                setTimeout(() => {
-                    const offset = 64;
-                    const y = getAppSection.getBoundingClientRect().top + window.pageYOffset - offset;
-                    window.scrollTo({ top: y, behavior: 'smooth' });
-                }, 300);
-            }
-        });
-    }
-
-    // /profile/{uid} — redirect to mobile app download
-    if (path.startsWith('/profile/')) {
-        window.location.replace('/#get-app');
-        return;
-    }
-})();
-
-// ── Lucide Icons ──
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-});
-
 // ── Download URLs ──
-const APK_DOWNLOAD_URL = '/downloads/diaspora-nearby.apk';
-// Google Play closed testing opt-in link — testers who are in the Google Group can join
-const PLAY_STORE_TEST_URL = 'https://play.google.com/apps/testing/com.diasporanearby.diasporanearby';
-// Google Group join page — testers must join this group to get Play Store access
+const APK_DOWNLOAD_URL = 'https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk';
+// Deep link & listing for Google Play Store
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
+const PLAY_STORE_TEST_URL = PLAY_STORE_URL;
+const PLAY_STORE_LISTING_URL = PLAY_STORE_URL;
+// Apple TestFlight Invite URL
+const TESTFLIGHT_URL = 'https://testflight.apple.com/join/vB3XzPKg';
+// Google Group join page (kept for testing reference)
 const GOOGLE_GROUP_JOIN_URL = 'https://groups.google.com/g/diaspora-nearby-testers';
-// Deep link that opens the app listing in the Play Store app on the device
-const PLAY_STORE_LISTING_URL = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
 
 // ── Platform Detection ──
 function detectPlatform() {
-    const ua = navigator.userAgent;
+    const ua = navigator.userAgent || '';
     if (/android/i.test(ua)) return 'android';
     if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'ios';
-    if (/Mac/.test(ua) && navigator.maxTouchPoints > 1) return 'ios'; // iPad Safari
+    if (/Mac/.test(ua) && navigator.maxTouchPoints > 1) return 'ios'; // iPad Safari with desktop UA
     if (/Mac/.test(ua)) return 'macos';
     if (/Win/.test(ua)) return 'windows';
     if (/Linux/.test(ua)) return 'linux';
@@ -63,6 +27,129 @@ function detectPlatform() {
 }
 
 const detectedPlatform = detectPlatform();
+
+// ── Route Handling (/invite, /download, /profile) ──
+(function handleRoutes() {
+    const rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code') || params.get('ref');
+
+    if (code) {
+        try {
+            localStorage.setItem('dn_referral_code', code);
+        } catch (e) {}
+    }
+
+    // /invite or /download: redirect mobile users directly to their phone platform store
+    if (rawPath === '/invite' || rawPath === '/download') {
+        const platform = detectedPlatform;
+
+        if (platform === 'ios') {
+            renderRedirectScreen('ios', TESTFLIGHT_URL);
+            window.location.replace(TESTFLIGHT_URL);
+            return;
+        } else if (platform === 'android') {
+            let androidUrl = PLAY_STORE_URL;
+            if (code) {
+                androidUrl += '&referrer=' + encodeURIComponent('utm_source=invite&referral_code=' + code);
+            }
+            renderRedirectScreen('android', androidUrl);
+            window.location.replace(androidUrl);
+            return;
+        } else {
+            // Desktop / Mac / PC: show landing page, scroll to #get-app
+            document.addEventListener('DOMContentLoaded', () => {
+                const getAppSection = document.getElementById('get-app');
+                if (getAppSection) {
+                    setTimeout(() => {
+                        const offset = 64;
+                        const y = getAppSection.getBoundingClientRect().top + window.pageYOffset - offset;
+                        window.scrollTo({ top: y, behavior: 'smooth' });
+                    }, 300);
+                }
+
+                if (code) {
+                    showInviteToast(code);
+                }
+            });
+        }
+    }
+
+    // /profile/{uid} — redirect to mobile app download
+    if (rawPath.startsWith('/profile/')) {
+        window.location.replace('/#get-app');
+        return;
+    }
+})();
+
+// ── Fallback UI for mobile in-app browsers ──
+function renderRedirectScreen(platform, targetUrl) {
+    const isIOS = platform === 'ios';
+    const storeName = isIOS ? 'Apple TestFlight' : 'Google Play Store';
+    const btnLabel = isIOS ? 'Open in TestFlight' : 'Open in Google Play';
+
+    const inject = () => {
+        if (document.getElementById('platform-redirect-overlay')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'platform-redirect-overlay';
+        overlay.className = 'redirect-overlay';
+        overlay.innerHTML = `
+            <div class="redirect-card">
+                <img src="icons/Icon-192.png" alt="Diaspora Nearby" class="redirect-app-icon" onerror="this.src='favicon.png'">
+                <div class="redirect-spinner"></div>
+                <h2>Opening Diaspora Nearby...</h2>
+                <p>Redirecting you to <strong>${storeName}</strong> to download the app.</p>
+                <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn">
+                    <span>${btnLabel}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                </a>
+                <div style="margin-top: 18px;">
+                    <button type="button" class="redirect-cancel-link" onclick="dismissRedirectOverlay(event)">
+                        Or view full website
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.prepend(overlay);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    };
+
+    if (document.body) {
+        inject();
+    } else {
+        document.addEventListener('DOMContentLoaded', inject);
+    }
+}
+
+function dismissRedirectOverlay(e) {
+    if (e) e.preventDefault();
+    const overlay = document.getElementById('platform-redirect-overlay');
+    if (overlay) overlay.remove();
+}
+
+function showInviteToast(code) {
+    const toast = document.createElement('div');
+    toast.className = 'invite-toast';
+    toast.innerHTML = `
+        <span style="font-size: 20px;">🎉</span>
+        <div style="text-align: left;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--fg);">You were invited to Diaspora Nearby!</div>
+            <div style="font-size: 12px; color: var(--fg-muted);">Referral code <code>${code}</code> saved for signup.</div>
+        </div>
+        <button type="button" style="background:none;border:none;color:var(--fg-muted);cursor:pointer;padding:4px;margin-left:8px;font-size:16px;" onclick="this.parentElement.remove()">✕</button>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+    }, 8000);
+}
+
+// ── Lucide Icons ──
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+});
 
 // ── Update UI based on platform ──
 function initPlatformUI() {
@@ -338,13 +425,12 @@ function triggerAPKDownload() {
 }
 
 /**
- * Shows the 2-step tester onboarding guide below the signup message.
- * Step 1: Join the Google Group (grants Play Store access)
- * Step 2: Accept the test on Google Play
+ * Shows the install options below the signup message.
+ * Option 1: Install from Google Play
+ * Option 2: Direct APK Download
  */
 function showTesterSteps(msgEl) {
     if (!msgEl) return;
-    // Create the steps container below the message
     let stepsContainer = document.getElementById('tester-steps');
     if (!stepsContainer) {
         stepsContainer = document.createElement('div');
@@ -353,35 +439,29 @@ function showTesterSteps(msgEl) {
         msgEl.parentNode.insertBefore(stepsContainer, msgEl.nextSibling);
     }
 
-    // Check if Join Group was already clicked
-    const joinGroupDone = localStorage.getItem('dn_join_group_clicked');
-
     stepsContainer.innerHTML = `
-        ${joinGroupDone ? '' : `
-        <div class="tester-step" id="tester-step-join-group">
+        <div class="tester-step">
             <span class="step-number">1</span>
             <div class="step-content">
-                <strong>Join our Testers Group</strong>
-                <p>This grants you Play Store access</p>
-                <a href="${GOOGLE_GROUP_JOIN_URL}" target="_blank" rel="noopener" class="step-btn step-btn-primary" onclick="markJoinGroupDone()">
-                    <i data-lucide="users" style="width:16px;height:16px"></i> Join Group
+                <strong>Install from Google Play</strong>
+                <p>Download directly to your Android device</p>
+                <a href="${PLAY_STORE_LISTING_URL}" target="_blank" rel="noopener" class="step-btn step-btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Open Google Play
                 </a>
             </div>
         </div>
-        `}
         <div class="tester-step">
-            <span class="step-number">${joinGroupDone ? '1' : '2'}</span>
+            <span class="step-number">2</span>
             <div class="step-content">
-                <strong>Accept the test on Google Play</strong>
-                <p>Then install the app</p>
-                <a href="${PLAY_STORE_TEST_URL}" target="_blank" rel="noopener" class="step-btn step-btn-secondary">
-                    <i data-lucide="play" style="width:16px;height:16px"></i> Open Google Play
+                <strong>Or Download Direct APK</strong>
+                <p>Instant install without Google Play</p>
+                <a href="${APK_DOWNLOAD_URL}" download class="step-btn step-btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download APK
                 </a>
             </div>
         </div>
     `;
     stepsContainer.style.display = 'block';
-    // Re-render Lucide icons inside the new elements
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -577,3 +657,94 @@ document.addEventListener('DOMContentLoaded', () => {
         updateEarningsCalculator();
     }
 });
+
+// ── System Theme Mode & Theme Toggle ──
+(function initTheme() {
+    const THEME_KEY = 'dn_theme_mode'; // 'system' | 'light' | 'dark'
+    const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function getSavedMode() {
+        try {
+            return localStorage.getItem(THEME_KEY) || 'system';
+        } catch (e) {
+            return 'system';
+        }
+    }
+
+    function applyTheme(mode) {
+        const prefersDark = mediaQuery ? mediaQuery.matches : false;
+        const resolvedTheme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+
+        document.documentElement.setAttribute('data-theme', resolvedTheme);
+        document.documentElement.setAttribute('data-theme-mode', mode);
+        document.documentElement.style.colorScheme = resolvedTheme;
+
+        const toggleBtns = document.querySelectorAll('.theme-toggle');
+        toggleBtns.forEach(btn => {
+            if (mode === 'system') {
+                btn.setAttribute('title', `Theme: System (${resolvedTheme}) — click for Light`);
+                btn.setAttribute('aria-label', `Theme: System (${resolvedTheme}) — click for Light`);
+            } else if (mode === 'light') {
+                btn.setAttribute('title', 'Theme: Light — click for Dark');
+                btn.setAttribute('aria-label', 'Theme: Light — click for Dark');
+            } else {
+                btn.setAttribute('title', 'Theme: Dark — click for System (Auto)');
+                btn.setAttribute('aria-label', 'Theme: Dark — click for System (Auto)');
+            }
+        });
+    }
+
+    // OS / System listener for dynamic changes in real time
+    if (mediaQuery) {
+        const listener = () => {
+            if (getSavedMode() === 'system') {
+                applyTheme('system');
+            }
+        };
+        if (mediaQuery.addEventListener) {
+            mediaQuery.addEventListener('change', listener);
+        } else if (mediaQuery.addListener) {
+            mediaQuery.addListener(listener);
+        }
+    }
+
+    function setupButtons() {
+        const toggleBtns = document.querySelectorAll('.theme-toggle');
+        toggleBtns.forEach(btn => {
+            if (btn.dataset.themeBound) return;
+            btn.dataset.themeBound = 'true';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const currentMode = getSavedMode();
+                let nextMode;
+                if (currentMode === 'system') {
+                    nextMode = 'light';
+                } else if (currentMode === 'light') {
+                    nextMode = 'dark';
+                } else {
+                    nextMode = 'system';
+                }
+
+                try {
+                    localStorage.setItem(THEME_KEY, nextMode);
+                } catch (err) {}
+
+                applyTheme(nextMode);
+
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            applyTheme(getSavedMode());
+            setupButtons();
+        });
+    } else {
+        applyTheme(getSavedMode());
+        setupButtons();
+    }
+})();

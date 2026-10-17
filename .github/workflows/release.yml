@@ -113,7 +113,8 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
           export GOOGLE_APPLICATION_CREDENTIALS="/tmp/firebase-sa.json"
-          firebase deploy --project diaspora-nearby-a3dac --only firestore:rules,storage,functions --non-interactive --force
+          firebase target:apply hosting landing diaspora-nearby-a3dac || true
+          firebase deploy --project diaspora-nearby-a3dac --only firestore:rules,storage,functions,hosting:landing --non-interactive --force
           rm -f /tmp/firebase-sa.json
 
   build-and-release-android:
@@ -238,6 +239,8 @@ jobs:
             --latest || true
 
       - name: Publish to Google Play Console
+        id: play_prod
+        continue-on-error: true
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true }}
         uses: r0adkll/upload-google-play@v1
         with:
@@ -248,8 +251,8 @@ jobs:
           status: completed
           inAppUpdatePriority: 5
 
-      - name: Fallback to Beta Track if Production Track Requires Manual Promotion
-        if: ${{ failure() && (github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true) && (inputs.track == '' && github.ref_name == 'production') }}
+      - name: Fallback to Beta Track if Production Track Requires Country Selection
+        if: ${{ steps.play_prod.outcome == 'failure' && (github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true) }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
@@ -281,12 +284,12 @@ jobs:
               latestBuildNumber: buildNum,
               androidBuildNumber: buildNum,
               androidMinBuildNumber: buildNum,
-              iosBuildNumber: 25,
-              iosMinBuildNumber: 25,
+              iosBuildNumber: 26,
+              iosMinBuildNumber: 26,
               forceUpdate: false,
               androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
               androidApkUrl: "https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk",
-              iosUpdateUrl: "https://apps.apple.com/app/id6821194997",
+              iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
               releaseNotes: "Profile signup permission fix, legacy profile compatibility, and automatic in-app updates.",
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true }).then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(0); });
