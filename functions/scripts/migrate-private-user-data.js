@@ -23,7 +23,6 @@ function publicLocation(value) {
   const country = value.country || null;
   return {
     formatted_address: [city, state, country].filter(Boolean).join(", "),
-    place_id: "",
     city,
     state,
     country,
@@ -54,7 +53,10 @@ async function main() {
         }
       }
       for (const field of ["homeLocation", "hostLocation"]) {
-        if (data[field] && (data[field].geometry || data[field].place_id)) {
+        if (data[field] && (
+          Object.prototype.hasOwnProperty.call(data[field], "geometry") ||
+          Object.prototype.hasOwnProperty.call(data[field], "place_id")
+        )) {
           privateData[field] = data[field];
           publicUpdates[field] = publicLocation(data[field]);
         }
@@ -63,6 +65,13 @@ async function main() {
         privateData.businessProfile = data.businessProfile;
         publicUpdates.businessProfile = {...data.businessProfile};
         delete publicUpdates.businessProfile.taxId;
+      } else if (Object.prototype.hasOwnProperty.call(data, "businessProfile") &&
+          data.businessProfile === null) {
+        publicUpdates.businessProfile = admin.firestore.FieldValue.delete();
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "cityVisibilityForfeited") &&
+          data.cityVisibilityForfeited === null) {
+        publicUpdates.cityVisibilityForfeited = admin.firestore.FieldValue.delete();
       }
       if (data.currentLocation && data.showCurrentLocationName === true) {
         const summary = publicLocation(data.currentLocation);

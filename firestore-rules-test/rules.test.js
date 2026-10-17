@@ -5,6 +5,7 @@ const {
   assertSucceeds,
   assertFails,
 } = require("@firebase/rules-unit-testing");
+const { deleteField } = require("firebase/firestore");
 
 const PROJECT_ID = "diaspora-nearby-rules-test";
 
@@ -479,6 +480,111 @@ describe("organizations/{orgId} (kind == 'corridor_chamber')", () => {
 });
 
 // ─── Enterprise security regression tests ─────────────────────────────────
+
+describe("profile completion", () => {
+  const uid = "signup-user";
+  const summary = {
+    formatted_address: "Dar es Salaam, Tanzania",
+    city: "Dar es Salaam", state: null, country: "Tanzania", country_code: "TZ",
+  };
+  const profile = {
+    firstName: "Test", lastName: "User", profilePhoto: "https://example.com/photo.jpg",
+    homeLocation: summary, hostLocation: summary, showCurrentLocationName: true,
+  };
+
+  test("owner can atomically complete and retry a profile with private locations", async () => {
+    const db = dbFor(uid);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const batch = db.batch();
+      batch.set(db.doc(`users/${uid}`), profile, { merge: true });
+      batch.set(db.doc(`user_private/${uid}`), {
+        phone: "+255123456789",
+        homeLocation: { ...summary, place_id: "private-id", geometry: { location: { lat: -6.8, lng: 39.2 } } },
+      }, { merge: true });
+      await assertSucceeds(batch.commit());
+    }
+  });
+
+  test("public summaries still reject precise location identifiers", async () => {
+    await assertFails(dbFor(uid).doc(`users/${uid}`).set({
+      ...profile, homeLocation: { ...summary, place_id: "" },
+    }));
+  });
+
+  test.each(["businessProfile", "cityVisibilityForfeited"])(
+    "explicit null %s is rejected even with otherwise valid signup data",
+    async (field) => {
+      await assertFails(dbFor(uid).doc(`users/${uid}`).set({
+        ...profile, [field]: null,
+      }));
+    }
+  );
+
+  test("new users can choose hidden city without a forfeiture milestone", async () => {
+    await assertSucceeds(dbFor(uid).doc(`users/${uid}`).set({
+      ...profile, showCurrentLocationName: false,
+    }));
+  });
+
+  test("signup update succeeds when getOrCreateSmartWallet has already created the user doc", async () => {
+    await seed((db) => db.doc(`users/${uid}`).set({
+      walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      walletType: "smart",
+      walletSaltVersion: 2,
+      walletDeploymentPending: true,
+    }));
+    const db = dbFor(uid);
+    await assertSucceeds(db.doc(`users/${uid}`).set(profile, { merge: true }));
+    await assertSucceeds(db.doc(`users/${uid}`).set({
+      ...profile, showCurrentLocationName: false,
+    }, { merge: true }));
+  });
+
+  test("merged write on legacy user doc fails if legacy place_id/geometry are retained, and succeeds when deleted", async () => {
+    await seed((db) => db.doc(`users/${uid}`).set({
+      firstName: "Legacy",
+      lastName: "User",
+      currentLocation: {
+        ...summary,
+        place_id: "legacy-current-id",
+        geometry: { location: { lat: -6.8, lng: 39.2 } },
+      },
+      homeLocation: {
+        ...summary,
+        place_id: "legacy-home-id",
+        geometry: { location: { lat: -6.8, lng: 39.2 } },
+      },
+      hostLocation: {
+        ...summary,
+        place_id: "",
+        geometry: { location: { lat: -6.8, lng: 39.2 } },
+      },
+    }));
+    const db = dbFor(uid);
+    // Without deleting legacy keys, deep merge retains place_id/geometry/currentLocation and fails rules
+    await assertFails(db.doc(`users/${uid}`).set(profile, { merge: true }));
+
+    // With explicit FieldValue.delete() cleanup (matching ProfileRepository._cleanLegacyPublicFields), merged write succeeds
+    await assertSucceeds(db.doc(`users/${uid}`).set({
+      ...profile,
+      currentLocation: deleteField(),
+      homeLocation: {
+        ...summary,
+        place_id: deleteField(),
+        geometry: deleteField(),
+      },
+      hostLocation: {
+        ...summary,
+        place_id: deleteField(),
+        geometry: deleteField(),
+      },
+    }, { merge: true }));
+  });
+
+  test("another user cannot complete someone else's profile", async () => {
+    await assertFails(dbFor("other-user").doc(`users/${uid}`).set(profile));
+  });
+});
 
 describe("privilege escalation containment", () => {
   const uid = "regular-user";

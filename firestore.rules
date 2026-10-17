@@ -567,6 +567,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+    match /system_stats/app_version {
+      allow read: if true;
+      allow write: if false;
+    }
     match /system_stats/{statId} {
       allow read: if isAuthenticated();
       allow write: if false; // Cloud Functions admin SDK ONLY

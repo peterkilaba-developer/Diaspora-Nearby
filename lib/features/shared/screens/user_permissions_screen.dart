@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/router.dart' show invalidatePermissionCache;
+import 'package:diaspora_nearby/core/services/app_update_service.dart';
 
 class UserPermissionsScreen extends ConsumerStatefulWidget {
   const UserPermissionsScreen({super.key});
@@ -31,6 +33,11 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
     _isProcessing = false;
     // Check permissions immediately to update UI state.
     _checkPermissions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(AppUpdateService.instance.checkForUpdate(context));
+      }
+    });
   }
 
   @override

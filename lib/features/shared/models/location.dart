@@ -5,7 +5,7 @@ part 'location.g.dart';
 class UserLocation {
   @JsonKey(name: 'formatted_address')
   final String formattedAddress;
-  @JsonKey(name: 'place_id')
+  @JsonKey(name: 'place_id', defaultValue: '')
   final String placeId;
 
   final String? city;

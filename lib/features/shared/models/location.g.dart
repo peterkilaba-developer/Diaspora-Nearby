@@ -8,7 +8,7 @@ part of 'location.dart';
 
 UserLocation _$UserLocationFromJson(Map<String, dynamic> json) => UserLocation(
   formattedAddress: json['formatted_address'] as String,
-  placeId: json['place_id'] as String,
+  placeId: json['place_id'] as String? ?? '',
   geometry: json['geometry'] == null
       ? null
       : UserLocationGeometry.fromJson(json['geometry'] as Map<String, dynamic>),

@@ -195,11 +195,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Signed Production App Bundle (.aab)
+      - name: Build Signed Production App Bundle (.aab) & APK (.apk)
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
-          BUILD_NUMBER=$((10 + ${{ github.run_number }}))
+          BUILD_NUMBER=$((20 + ${{ github.run_number }}))
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
           echo "Building version code: $BUILD_NUMBER"
           flutter build appbundle --release \
             --flavor production \
@@ -207,14 +208,34 @@ jobs:
             --target-platform android-arm,android-arm64 \
             --build-number=$BUILD_NUMBER \
             --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
+          flutter build apk --release \
+            --flavor production \
+            -t lib/main_production.dart \
+            --target-platform android-arm,android-arm64 \
+            --build-number=$BUILD_NUMBER \
+            --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
           df -h
 
-      - name: Upload Release Artifact (.aab)
+      - name: Upload Release Artifacts (.aab & .apk)
         uses: actions/upload-artifact@v4
         with:
           name: android-production-release-${{ github.sha }}
-          path: build/app/outputs/bundle/productionRelease/app-production-release.aab
+          path: |
+            build/app/outputs/bundle/productionRelease/app-production-release.aab
+            build/app/outputs/flutter-apk/app-production-release.apk
           retention-days: 30
+
+      - name: Publish Signed APK & AAB to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="v1.2.6-build.${{ env.BUILD_NUMBER }}"
+          gh release create "$TAG_NAME" \
+            build/app/outputs/flutter-apk/app-production-release.apk \
+            build/app/outputs/bundle/productionRelease/app-production-release.aab \
+            --title "Diaspora Nearby v1.2.6 (Build ${{ env.BUILD_NUMBER }})" \
+            --notes "Automated production release (Build ${{ env.BUILD_NUMBER }}, commit ${{ github.sha }})." \
+            --latest || true
 
       - name: Publish to Google Play Console
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true }}
@@ -223,9 +244,54 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.diasporanearby.diasporanearby
           releaseFiles: build/app/outputs/bundle/productionRelease/app-production-release.aab
-          track: ${{ inputs.track || 'beta' }}
+          track: ${{ inputs.track || (github.ref_name == 'production' && 'production' || 'beta') }}
           status: completed
-          inAppUpdatePriority: 2
+          inAppUpdatePriority: 5
+
+      - name: Fallback to Beta Track if Production Track Requires Manual Promotion
+        if: ${{ failure() && (github.event_name != 'workflow_dispatch' || inputs.publish_play_store == true) && (inputs.track == '' && github.ref_name == 'production') }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.diasporanearby.diasporanearby
+          releaseFiles: build/app/outputs/bundle/productionRelease/app-production-release.aab
+          track: beta
+          status: completed
+          inAppUpdatePriority: 5
+
+      - name: Update Firestore system_stats/app_version Metadata
+        if: ${{ !cancelled() }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            exit 0
+          fi
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS="/tmp/firebase-sa.json"
+          npm --prefix functions ci --omit=dev
+          node -e '
+            const admin = require("./functions/node_modules/firebase-admin");
+            admin.initializeApp({ projectId: "diaspora-nearby-a3dac" });
+            const buildNum = Number(process.env.BUILD_NUMBER || 25);
+            admin.firestore().doc("system_stats/app_version").set({
+              latestVersion: "1.2.6",
+              androidVersion: "1.2.6",
+              iosVersion: "1.2.6",
+              latestBuildNumber: buildNum,
+              androidBuildNumber: buildNum,
+              androidMinBuildNumber: buildNum,
+              iosBuildNumber: 25,
+              iosMinBuildNumber: 25,
+              forceUpdate: false,
+              androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
+              androidApkUrl: "https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk",
+              iosUpdateUrl: "https://apps.apple.com/app/id6821194997",
+              releaseNotes: "Profile signup permission fix, legacy profile compatibility, and automatic in-app updates.",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true }).then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(0); });
+          ' || true
+          rm -f /tmp/firebase-sa.json
 
       - name: Clean Up Ephemeral Signing Files
         if: always()

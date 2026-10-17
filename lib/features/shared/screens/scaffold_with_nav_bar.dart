@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +25,7 @@ import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/chat/services/audio_playback_service.dart';
 
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
+import 'package:diaspora_nearby/core/services/app_update_service.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -49,6 +51,9 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _triggerDailyCheckIn();
       _ensureBackgroundService();
+      if (mounted) {
+        unawaited(AppUpdateService.instance.checkForUpdate(context));
+      }
     });
   }
 
@@ -115,6 +120,9 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
       _triggerDailyCheckIn();
       // Re-check background service state on resume
       _ensureBackgroundService();
+      if (mounted) {
+        unawaited(AppUpdateService.instance.checkForUpdate(context));
+      }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       // STOP Chat Audio when backgrounded (prevents MediaCodec leakage/errors)

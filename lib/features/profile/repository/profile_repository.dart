@@ -109,7 +109,6 @@ class ProfileRepository {
     ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
     return {
       'formatted_address': summary,
-      'place_id': '',
       'city': city,
       'state': state,
       'country': country,
@@ -128,6 +127,14 @@ class ProfileRepository {
     }
     for (final key in _serverFields) {
       publicData.remove(key);
+    }
+    // Optional model fields serialize as null, but the rules expect an
+    // omitted business profile and a boolean city visibility forfeiture flag.
+    if (publicData['businessProfile'] == null) {
+      publicData.remove('businessProfile');
+    }
+    if (publicData['cityVisibilityForfeited'] == null) {
+      publicData.remove('cityVisibilityForfeited');
     }
     for (final key in const ['homeLocation', 'hostLocation']) {
       if (publicData.containsKey(key)) {
@@ -155,12 +162,55 @@ class ProfileRepository {
     return (publicData: publicData, privateData: privateData);
   }
 
+  /// Cleans legacy keys on an existing public user document so merged/partial
+  /// writes do not retain rule-rejected fields (`place_id`, `geometry`,
+  /// `currentLocation`, or explicit-null `businessProfile` /
+  /// `cityVisibilityForfeited`).
+  void _cleanLegacyPublicFields(
+    Map<String, dynamic> publicData,
+    Map<String, dynamic>? existingPublicDoc,
+  ) {
+    if (existingPublicDoc == null) return;
+    if (existingPublicDoc.containsKey('businessProfile') &&
+        existingPublicDoc['businessProfile'] == null &&
+        !publicData.containsKey('businessProfile')) {
+      publicData['businessProfile'] = cf.FieldValue.delete();
+    }
+    if (existingPublicDoc.containsKey('cityVisibilityForfeited') &&
+        existingPublicDoc['cityVisibilityForfeited'] == null &&
+        !publicData.containsKey('cityVisibilityForfeited')) {
+      publicData['cityVisibilityForfeited'] = cf.FieldValue.delete();
+    }
+    if (existingPublicDoc.containsKey('currentLocation')) {
+      publicData['currentLocation'] = cf.FieldValue.delete();
+    }
+    for (final key in const ['homeLocation', 'hostLocation']) {
+      final summary = publicData[key];
+      final existingLoc = existingPublicDoc[key];
+      if (summary is Map<String, dynamic> && existingLoc is Map) {
+        if (existingLoc.containsKey('place_id')) {
+          summary['place_id'] = cf.FieldValue.delete();
+        }
+        if (existingLoc.containsKey('geometry')) {
+          summary['geometry'] = cf.FieldValue.delete();
+        }
+      }
+    }
+  }
+
   Future<Map<String, dynamic>> _mergeOwnPrivateData(
     String uid,
     Map<String, dynamic> publicData,
   ) async {
-    if (FirebaseAuth.instance.currentUser?.uid != uid) return publicData;
     try {
+      String? currentUid;
+      try {
+        currentUid = FirebaseAuth.instance.currentUser?.uid;
+      } catch (_) {
+        // In unit tests without Firebase.initializeApp(), allow merging own private doc.
+        currentUid = uid;
+      }
+      if (currentUid != uid) return publicData;
       final privateDoc = await _privateRef(uid).get();
       if (privateDoc.exists) return {...publicData, ...?privateDoc.data()};
     } catch (_) {
@@ -379,6 +429,8 @@ class ProfileRepository {
   Future<void> updateProfileData(String uid, Map<String, dynamic> data) async {
     data['updatedAt'] = cf.FieldValue.serverTimestamp();
     final split = _splitSensitiveData(data);
+    final docSnapshot = await _firestore.collection('users').doc(uid).get();
+    _cleanLegacyPublicFields(split.publicData, docSnapshot.data());
     final batch = _firestore.batch();
     if (split.publicData.isNotEmpty) {
       batch.update(_firestore.collection('users').doc(uid), split.publicData);
@@ -405,6 +457,7 @@ class ProfileRepository {
     if (!docSnapshot.exists || docSnapshot.data()?['createdAt'] == null) {
       split.publicData['createdAt'] = cf.FieldValue.serverTimestamp();
     }
+    _cleanLegacyPublicFields(split.publicData, docSnapshot.data());
     final batch = _firestore.batch();
     batch.set(
       _firestore.collection('users').doc(uid),
@@ -550,7 +603,8 @@ class ProfileRepository {
 
     if (!doc.exists) throw Exception('User not found');
 
-    final currentData = ProfileData.fromJson(doc.data()!);
+    final mergedData = await _mergeOwnPrivateData(uid, doc.data()!);
+    final currentData = ProfileData.fromJson(mergedData);
     final oldLocation = currentData.hostLocation;
 
     // Create past location entry
@@ -559,14 +613,21 @@ class ProfileRepository {
       until: DateTime.now().toIso8601String(),
     );
 
-    // Update Firestore
-    await docRef.update({
-      'hostLocation': newLocation.toJson(),
+    final publicUpdates = <String, dynamic>{
+      'hostLocation': _publicLocation(newLocation.toJson()),
       'hostCountry': newCountry,
       'hostCountryCode': newCountryCode,
-      'pastLocations': cf.FieldValue.arrayUnion([pastLocation.toJson()]),
       'updatedAt': cf.FieldValue.serverTimestamp(),
-    });
+    };
+    _cleanLegacyPublicFields(publicUpdates, doc.data());
+
+    final batch = _firestore.batch();
+    batch.update(docRef, publicUpdates);
+    batch.set(_privateRef(uid), {
+      'hostLocation': newLocation.toJson(),
+      'pastLocations': cf.FieldValue.arrayUnion([pastLocation.toJson()]),
+    }, cf.SetOptions(merge: true));
+    await batch.commit();
   }
 
   Future<String> uploadProfileImage(String uid, XFile image) async {

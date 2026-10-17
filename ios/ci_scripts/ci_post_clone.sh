@@ -38,7 +38,7 @@ done
 # 5.5 Ensure ios/Runner/GoogleService-Info.plist exists for Xcode archive
 if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
   echo "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > "ios/Runner/GoogleService-Info.plist"
-elif [ ! -f "ios/Runner/GoogleService-Info.plist" ]; then
+else
   cat << 'EOF' > "ios/Runner/GoogleService-Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,7 +51,7 @@ elif [ ! -f "ios/Runner/GoogleService-Info.plist" ]; then
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.diasporanearby.diasporanearby</string>
+	<string>com.diasporanearby.diasporaFlutter</string>
 	<key>PROJECT_ID</key>
 	<string>diaspora-nearby-a3dac</string>
 	<key>STORAGE_BUCKET</key>
@@ -67,7 +67,7 @@ elif [ ! -f "ios/Runner/GoogleService-Info.plist" ]; then
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:512074182214:ios:49c9f76543d41143b92447</string>
+	<string>1:512074182214:ios:60cf4efcfcb7d872b92447</string>
 	<key>DATABASE_URL</key>
 	<string>https://diaspora-nearby-a3dac-default-rtdb.firebaseio.com</string>
 </dict>
@@ -75,9 +75,11 @@ elif [ ! -f "ios/Runner/GoogleService-Info.plist" ]; then
 EOF
 fi
 
-# 6. Generate iOS plugin symlinks and CocoaPods configuration for production scheme
+# 6. Generate iOS plugin symlinks, build number, and CocoaPods configuration for production scheme
 MAPS_KEY="${GOOGLE_MAPS_API_KEY:-AIzaSyAj0oAGYEX5osyDa_2Pn828clvv72UhEF8}"
-flutter build ios --config-only --flavor production -t lib/main_production.dart --release --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
+IOS_BUILD_NUMBER=$((20 + ${CI_BUILD_NUMBER:-5}))
+echo "Configuring iOS production build number: $IOS_BUILD_NUMBER"
+flutter build ios --config-only --flavor production -t lib/main_production.dart --release --build-number="$IOS_BUILD_NUMBER" --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
 
 # 7. Ensure FunctionsStreamHandler.swift in cloud_functions is patched cleanly
 for fn_file in $(find "$HOME/.pub-cache" "ios/.symlinks" -name "FunctionsStreamHandler.swift" 2>/dev/null); do
