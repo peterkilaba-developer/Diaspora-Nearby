@@ -131,8 +131,11 @@ jobs:
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/share/chromium
           sudo rm -rf /usr/local/lib/android/sdk/system-images
+          sudo rm -rf /usr/local/lib/android/sdk/ndk/25* /usr/local/lib/android/sdk/ndk/26* /usr/local/lib/android/sdk/ndk/27*
+          sudo docker image prune --all --force || true
           df -h
 
       - name: Setup Java 17
@@ -191,22 +194,11 @@ jobs:
             -t lib/main_production.dart \
             --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
 
-      - name: Build Signed Production APK (.apk)
-        env:
-          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-        run: |
-          flutter build apk --release \
-            --flavor production \
-            -t lib/main_production.dart \
-            --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
-
-      - name: Upload Release Artifacts (.aab & .apk)
+      - name: Upload Release Artifact (.aab)
         uses: actions/upload-artifact@v4
         with:
           name: android-production-release-${{ github.sha }}
-          path: |
-            build/app/outputs/bundle/productionRelease/app-production-release.aab
-            build/app/outputs/flutter-apk/app-production-release.apk
+          path: build/app/outputs/bundle/productionRelease/app-production-release.aab
           retention-days: 30
 
       - name: Publish to Google Play Console
