@@ -125,7 +125,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Free up runner disk space
+      - name: Free up runner disk space & configure swap
         run: |
           df -h
           sudo rm -rf /usr/share/dotnet
@@ -136,6 +136,11 @@ jobs:
           sudo rm -rf /usr/local/lib/android/sdk/system-images
           sudo rm -rf /usr/local/lib/android/sdk/ndk/25* /usr/local/lib/android/sdk/ndk/26* /usr/local/lib/android/sdk/ndk/27*
           sudo docker image prune --all --force || true
+          sudo fallocate -l 8G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
           df -h
 
       - name: Setup Java 17
@@ -188,9 +193,7 @@ jobs:
       - name: Build Signed Production App Bundle (.aab)
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -XX:+HeapDumpOnOutOfMemoryError"
         run: |
-          sed -i 's/-Xmx8G/-Xmx3G/g; s/-Xmx4G/-Xmx3G/g; s/-Xmx6G/-Xmx3G/g' android/gradle.properties || true
           flutter build appbundle --release \
             --flavor production \
             -t lib/main_production.dart \
