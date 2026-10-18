@@ -43,8 +43,11 @@ async function ensureSocialConfigEnv() {
         META_PAGE_ACCESS_TOKEN: d.metaPageAccessToken,
         LINKEDIN_CLIENT_ID: d.linkedInClientId,
         LINKEDIN_CLIENT_SECRET: d.linkedInClientSecret,
+        LINKEDIN_ORG_CLIENT_ID: d.linkedInOrgClientId,
+        LINKEDIN_ORG_CLIENT_SECRET: d.linkedInOrgClientSecret,
         LINKEDIN_ORG_ID: d.linkedInOrgId,
         LINKEDIN_ACCESS_TOKEN: d.linkedInAccessToken,
+        LINKEDIN_ORG_ACCESS_TOKEN: d.linkedInOrgAccessToken,
         LINKEDIN_MEMBER_SUB: d.linkedInMemberSub,
       };
       for (const [envKey, val] of Object.entries(map)) {
@@ -215,12 +218,14 @@ async function postToLinkedIn(text, options = {}) {
 
   // 1. Fetch OAuth token from Firestore config (or fallback to env vars)
   let accessToken = process.env.LINKEDIN_ACCESS_TOKEN || null;
+  let orgAccessToken = process.env.LINKEDIN_ORG_ACCESS_TOKEN || null;
   let memberSub = process.env.LINKEDIN_MEMBER_SUB || null;
 
   const configDoc = await db.collection("_internalConfig").doc("linkedin").get();
   if (configDoc.exists) {
     const data = configDoc.data();
     accessToken = data.accessToken || accessToken;
+    orgAccessToken = data.orgAccessToken || orgAccessToken;
     memberSub = data.memberSub || memberSub;
     const expiresAt = data.expiresAt;
     const expiry = expiresAt?.toDate ? expiresAt.toDate() : (expiresAt ? new Date(expiresAt) : null);
@@ -361,8 +366,9 @@ async function postToLinkedIn(text, options = {}) {
 
   // 3. Cross-post to Organization (Diaspora Nearby Company Page) if configured
   const orgId = process.env.LINKEDIN_ORG_ID || "112722655";
+  const effectiveOrgToken = orgAccessToken || accessToken;
   let orgPostUrl = null;
-  if (options.postToOrg !== false && orgId) {
+  if (options.postToOrg !== false && orgId && effectiveOrgToken) {
     try {
       const orgPayload = {
         author: `urn:li:organization:${orgId}`,
@@ -372,7 +378,7 @@ async function postToLinkedIn(text, options = {}) {
       };
       const orgRes = await axios.post("https://api.linkedin.com/v2/ugcPosts", orgPayload, {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${effectiveOrgToken}`,
           "Content-Type": "application/json",
           "X-Restli-Protocol-Version": "2.0.0",
         },
@@ -601,9 +607,14 @@ exports.postToLinkedIn = functions.https.onRequest(async (req, res) => {
 
   if (req.method === "GET") {
     // Support OAuth 2.0 callback or auth URL generation
-    const { code, action } = req.query;
-    const clientId = process.env.LINKEDIN_CLIENT_ID;
-    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+    const { code, action, state: queryState } = req.query;
+    const isOrgOAuth = req.query.org === "true" || (typeof queryState === "string" && queryState.startsWith("org_"));
+    const clientId = isOrgOAuth
+      ? process.env.LINKEDIN_ORG_CLIENT_ID || process.env.LINKEDIN_CLIENT_ID
+      : process.env.LINKEDIN_CLIENT_ID;
+    const clientSecret = isOrgOAuth
+      ? process.env.LINKEDIN_ORG_CLIENT_SECRET || process.env.LINKEDIN_CLIENT_SECRET
+      : process.env.LINKEDIN_CLIENT_SECRET;
     const redirectUri =
       req.query.redirectUri ||
       process.env.LINKEDIN_REDIRECT_URI ||
@@ -614,15 +625,15 @@ exports.postToLinkedIn = functions.https.onRequest(async (req, res) => {
         res.status(400).json({ error: "LINKEDIN_CLIENT_ID is not set." });
         return;
       }
-      const includeOrg = req.query.org === "true";
-      const scope = includeOrg
-        ? "openid profile email w_member_social w_organization_social"
+      const scope = isOrgOAuth
+        ? "w_organization_social r_organization_social"
         : "openid profile email w_member_social";
-      const state = Math.random().toString(36).substring(2, 15);
+      const statePrefix = isOrgOAuth ? "org_" : "personal_";
+      const state = statePrefix + Math.random().toString(36).substring(2, 15);
       const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(
         redirectUri
       )}&scope=${encodeURIComponent(scope)}&state=${state}`;
-      res.json({ authUrl, redirectUri, scope });
+      res.json({ authUrl, redirectUri, scope, isOrgOAuth, clientId });
       return;
     }
 
@@ -640,6 +651,27 @@ exports.postToLinkedIn = functions.https.onRequest(async (req, res) => {
         });
 
         const { access_token: accessToken, expires_in: expiresIn, refresh_token: refreshToken } = tokenRes.data;
+        const expiresAt = new Date(Date.now() + (expiresIn || 5184000) * 1000);
+
+        if (isOrgOAuth) {
+          await db.collection("_internalConfig").doc("linkedin").set(
+            {
+              orgAccessToken: accessToken,
+              orgExpiresAt: expiresAt,
+              ...(refreshToken ? { orgRefreshToken: refreshToken } : {}),
+              orgClientId: clientId,
+              orgUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+          res.json({
+            success: true,
+            message: `LinkedIn Business Page (org: ${process.env.LINKEDIN_ORG_ID || "112722655"}) token connected!`,
+            orgExpiresAt: expiresAt.toISOString(),
+          });
+          return;
+        }
+
         let memberSub = null;
         let memberName = "Peter Swai";
         try {
@@ -657,16 +689,18 @@ exports.postToLinkedIn = functions.https.onRequest(async (req, res) => {
             [meRes.data?.localizedFirstName, meRes.data?.localizedLastName].filter(Boolean).join(" ") ||
             memberName;
         }
-        const expiresAt = new Date(Date.now() + (expiresIn || 5184000) * 1000);
 
-        await db.collection("_internalConfig").doc("linkedin").set({
-          accessToken,
-          expiresAt,
-          ...(refreshToken ? { refreshToken } : {}),
-          memberSub,
-          memberName,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        await db.collection("_internalConfig").doc("linkedin").set(
+          {
+            accessToken,
+            expiresAt,
+            ...(refreshToken ? { refreshToken } : {}),
+            memberSub,
+            memberName,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
 
         res.json({
           success: true,
