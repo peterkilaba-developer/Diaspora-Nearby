@@ -13,12 +13,16 @@ const { ethers } = require("ethers");
 // inside the handler so the failure mode is loud if the binding is missing.
 const { assertOnChainConfig, readOptionalConfig } = require("./on_chain_config");
 
+const { MerkleTree } = require("merkletreejs");
+
 const TGE_CONTROLLER_ABI = [
-  "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies) external",
+  "function executeTGE(address[] recipients, uint256[] amounts, uint8[] efficiencies, bytes32 merkleRoot) external",
   "function mintEpochSupply(uint256 amount) external",
-  // V2 signature: explicit user vs treasury split with Merkle root commitment.
-  // (Pre-V2 deployment: the old signature was `(address[] recipients, uint256[] amounts)`.)
   "function distributeWelcomeBonus(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
+  "function distributeGenesisTokens(address userRecipient, uint256 userAmount, address[] treasuryRecipients, uint256[] treasuryAmounts, bytes32 merkleRoot) external",
+  "function publishTdeRoot(uint256 epoch, uint256 tdeEvent, bytes32 merkleRoot, uint256 totalBatchAmount) external",
+  "function claimTdeTokens(address recipient, uint256 epoch, uint256 tdeEvent, uint256 earnedAmount, uint8 efficiency, bytes32[] proof) external",
+  "function tdeClaimed(bytes32 key) view returns (bool)",
   "function currentEpoch() view returns (uint256)",
   "function currentTgeEvent() view returns (uint256)",
   "function tgeCount() view returns (uint256)",
@@ -423,7 +427,43 @@ async function performTGE(triggerSource) {
     console.log(`[TGE Oracle] ✅ Pre-minted Epoch ${epochBefore} supply: ${mintTx.hash}`);
   }
 
-  const tx = await tgeController.executeTGE(recipients, amounts, efficiencies);
+  const keccak256 = ethers.keccak256;
+  const leaves = [];
+  const recipientsMap = {};
+
+  for (let i = 0; i < recipients.length; i++) {
+    const leaf = keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "uint256", "uint256", "uint256", "uint8"],
+        [recipients[i], epochBefore, eventBefore, amounts[i], efficiencies[i]]
+      )
+    );
+    leaves.push(leaf);
+  }
+  const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
+  const merkleRoot = tree.getHexRoot();
+
+  for (const snap of snapshotDetails) {
+    if (snap.userId) {
+      recipientsMap[snap.userId] = {
+        walletAddress: snap.wallet,
+        earnedAmount: ethers.parseUnits(snap.dsp.toString(), 18).toString(),
+        efficiency: snap.efficiency,
+      };
+    }
+  }
+
+  // Save snapshot for individual anytime pull claims
+  await db.collection("tde_snapshots").doc(`epoch_${epochBefore}_tde_${eventBefore}`).set({
+    epoch: epochBefore,
+    tdeEvent: eventBefore,
+    merkleRoot,
+    totalBatchAmount: batchTotalNeeded.toString(),
+    recipients: recipientsMap,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const tx = await tgeController.executeTGE(recipients, amounts, efficiencies, merkleRoot);
   const receipt = await tx.wait();
 
   const statsAfter = await tgeController.getStats();
@@ -439,6 +479,7 @@ async function performTGE(triggerSource) {
     epoch: epochBefore,
     tgeEvent: eventBefore,
     txHash: receipt.hash,
+    merkleRoot,
     totalDsp,
     totalRecipients: recipients.length,
     usersIncluded,
@@ -769,8 +810,8 @@ exports.awardPoints = functions
 
   // Security: Only the user themselves can earn points (or a known system action)
   const SELF_ACTIONS = [
-    'welcome_bonus', 'message_sent', 'daily_message', 'exploration',
-    'share_content', 'referral_signup', 'voice_call', 'video_call',
+    'message_sent', 'daily_message', 'exploration',
+    'share_content', 'voice_call', 'video_call',
     'event_attendance', 'marketplace_listing', 'real_estate_listing',
     'flight_booking', 'car_rental', 'bereavement_contribution',
     'profile_completion', 'daily_streak',
@@ -782,7 +823,6 @@ exports.awardPoints = functions
   // party's action on this user (e.g. when someone QR-scans the user, the
   // scanner's session ends up calling awardPoints for the scannee).
   const CROSS_USER_ACTIONS = [
-    'referral_signup', 'referral_reward_referrer', 'referral_reward_referee',
     'trust_vouch_reward', 'vouch_reward',
     'family_connection', 'friend_connection',
     'identity_qr_exchange',
@@ -957,9 +997,7 @@ exports.awardPoints = functions
               }, { merge: true });
 
               // Governance doc (maps community -> governance unit)
-              const govId = commId === "global_community"
-                ? "global_community"
-                : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+              const govId = commId;
               batch.set(db.collection("governance").doc(govId), {
                 id: govId,
                 communityId: commId,
@@ -1201,9 +1239,7 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
           updatedAt: now,
         }, { merge: true });
 
-        const govId = commId === "global_community"
-          ? "global_community"
-          : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+        const govId = commId;
         batch.set(db.collection("governance").doc(govId), {
           id: govId,
           communityId: commId,
@@ -1445,8 +1481,7 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
             awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          const govId = commId === "global_community" ? "global_community"
-            : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+          const govId = commId;
           transaction.set(db.collection("governance").doc(govId), {
             id: govId, communityId: commId, type: "community",
             treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
@@ -1598,8 +1633,7 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
             awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          const govId = commId === "global_community" ? "global_community"
-            : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+          const govId = commId;
           transaction.set(db.collection("governance").doc(govId), {
             id: govId, communityId: commId, type: "community",
             treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
@@ -1757,8 +1791,7 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
             awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          const govId = commId === "global_community" ? "global_community"
-            : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+          const govId = commId;
           transaction.set(db.collection("governance").doc(govId), {
             id: govId, communityId: commId, type: "community",
             treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
@@ -2008,9 +2041,7 @@ exports.syncTreasuryBalances = functions
         await commitIfNeeded();
 
         // Governance doc
-        const govId = commId === "global_community"
-          ? "global_community"
-          : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+        const govId = commId;
         batch.set(db.collection("governance").doc(govId), {
           treasuryBalance: communityPointsMap[commId] || 0,
           averagePoCT: avgPoCT,
@@ -2533,9 +2564,10 @@ exports.onVouchWrite = functions.firestore
   });
 
 /**
- * getOrCreateReferralCode — Generates or retrieves the authenticated user's referral code.
+ * evaluatePoHGenesisStatus — Evaluates PoH 6 base milestones and Genesis 7,000 $DIASPORA claim status.
+ * Milestone 7 (Ubuntu Emergency Fund) is deferred post-genesis.
  */
-exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) => {
+exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -2545,167 +2577,237 @@ exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError("not-found", "User profile not found.");
   }
   const userData = userDoc.data();
-  if (userData.referralCode) {
-    return { code: userData.referralCode, isNew: false };
-  }
+  const poh = userData.pohMilestones || {};
 
-  const existingSnap = await db.collection("referral_codes")
-    .where("userId", "==", userId)
-    .limit(1)
-    .get();
+  const locationEnabled = !!userData.locationSharingEnabled || !!poh.locationEnabled;
+  const profileComplete = !!userData.isProfileComplete || !!poh.profileComplete;
+  const qrCount = Number(poh.qrExchangesCount || 0);
+  const familyCount = Number(poh.familyConnectionsCount || 0);
+  const friendCount = Number(poh.friendConnectionsCount || 0);
+  const peerVerificationsCount = Number(poh.peerVerificationsCount || 0);
 
-  if (!existingSnap.empty) {
-    const code = existingSnap.docs[0].id;
-    await db.collection("users").doc(userId).update({ referralCode: code });
-    return { code, isNew: false };
-  }
+  const baseMilestonesComplete = (
+    locationEnabled &&
+    profileComplete &&
+    qrCount >= 10 &&
+    familyCount >= 10 &&
+    friendCount >= 10 &&
+    peerVerificationsCount >= 10
+  );
 
-  const firstName = (userData.firstName || "MEMBER").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 8);
-  const countryCode = (userData.homeCountryCode || "DN").toUpperCase().slice(0, 2);
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const code = `${firstName}-${countryCode}-${randomSuffix}`;
-
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const batch = db.batch();
-  batch.set(db.collection("referral_codes").doc(code), {
-    userId,
-    code,
-    firstName: userData.firstName || "",
-    countryCode,
-    usesCount: 0,
-    createdAt: now,
-  });
-  batch.update(db.collection("users").doc(userId), { referralCode: code });
-  await batch.commit();
-
-  return { code, isNew: true };
-});
-
-/**
- * redeemReferralCode — Redeems a referral code, awarding 10,000 DSP to both referee and referrer,
- * and triggering dual 1:1 Ubuntu Protocol matching supply expansions.
- */
-exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
-  }
-  const userId = context.auth.uid;
-  const code = typeof data?.code === "string" ? data.code.trim().toUpperCase() : "";
-
-  if (!code) {
-    throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
-  }
-
-  const codeDoc = await db.collection("referral_codes").doc(code).get();
-  if (!codeDoc.exists) {
-    throw new functions.https.HttpsError("not-found", "Invalid referral code.");
-  }
-
-  const codeData = codeDoc.data();
-  const referrerId = codeData.userId;
-
-  if (referrerId === userId) {
-    throw new functions.https.HttpsError("failed-precondition", "You cannot redeem your own referral code.");
-  }
-
-  const userPointsDoc = await db.collection("user_points").doc(userId).get();
-  const userPointsData = userPointsDoc.exists ? userPointsDoc.data() : {};
-  if (userPointsData.referredBy || (userPointsData.lifetimeEarnings && userPointsData.lifetimeEarnings.referral_reward_referee)) {
-    return { success: true, alreadyRedeemed: true, referrerId };
-  }
-
-  const REFERRAL_BONUS = 10000;
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const batch = db.batch();
-
-  // 1. Award referee 10,000 DSP
-  const refereePointsRef = db.collection("user_points").doc(userId);
-  batch.set(refereePointsRef, {
-    userId,
-    referredBy: referrerId,
-    referralCodeUsed: code,
-    totalPoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
-    availablePoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
-    ["lifetimeEarnings.referral_reward_referee"]: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
-    lastUpdated: now,
-  }, { merge: true });
-
-  const refereeTxRef = db.collection("points_transactions").doc();
-  batch.set(refereeTxRef, {
-    userId,
-    type: "earn",
-    action: "referral_reward_referee",
-    points: REFERRAL_BONUS,
-    timestamp: now,
-    metadata: {
-      description: `Referral bonus for joining via ${code}`,
-      referrerId,
-      code,
-    },
-  });
-
-  // 2. Award referrer 10,000 DSP
-  const referrerPointsRef = db.collection("user_points").doc(referrerId);
-  batch.set(referrerPointsRef, {
-    totalPoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
-    availablePoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
-    ["lifetimeEarnings.referral_reward_referrer"]: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
-    lastUpdated: now,
-  }, { merge: true });
-
-  const referrerTxRef = db.collection("points_transactions").doc();
-  batch.set(referrerTxRef, {
-    userId: referrerId,
-    type: "earn",
-    action: "referral_reward_referrer",
-    points: REFERRAL_BONUS,
-    timestamp: now,
-    metadata: {
-      description: `Referral bonus: invited new member`,
-      refereeId: userId,
-      code,
-    },
-  });
-
-  // 3. Increment code usage
-  batch.update(codeDoc.ref, {
-    usesCount: admin.firestore.FieldValue.increment(1),
-    lastUsedAt: now,
-  });
-
-  // 4. Fire 1:1 Ubuntu expansion for BOTH referee (10,000 DSP) and referrer (10,000 DSP)
-  await distributeUbuntuMatchingSupply(batch, userId, REFERRAL_BONUS, now, "referral_referee_match");
-  await distributeUbuntuMatchingSupply(batch, referrerId, REFERRAL_BONUS, now, "referral_referrer_match");
-
-  await batch.commit();
+  const genesisClaimed = !!userData.tokenGenesisDistributionSent || !!userData.tokenWelcomeBonusSent;
 
   return {
-    success: true,
-    referrerId,
-    pointsAwarded: REFERRAL_BONUS,
+    baseMilestonesComplete,
+    genesisClaimed,
+    milestones: {
+      locationEnabled,
+      profileComplete,
+      qrCount,
+      familyCount,
+      friendCount,
+      peerVerificationsCount,
+      emergencyFundDeferred: true,
+      emergencyFundContributed: !!poh.emergencyFundContributed,
+    },
+    genesisAmount: 7000,
   };
 });
 
 /**
- * evaluateWelcomeBonus — Checks welcome bonus qualification status.
+ * generateTdeClaimProof — Generates Merkle proof for user pull claim.
+ * Users can claim their earned tokens anytime without epoch expiration.
  */
-exports.evaluateWelcomeBonus = functions.https.onCall(async (data, context) => {
+exports.generateTdeClaimProof = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
   const userId = context.auth.uid;
-  const userPointsDoc = await db.collection("user_points").doc(userId).get();
-  const data_ = userPointsDoc.exists ? userPointsDoc.data() : {};
-  const lifetime = data_.lifetimeEarnings || {};
-  const awarded = !!lifetime.welcome_bonus;
+  const epoch = Number(data?.epoch) || 1;
+  const tdeEvent = Number(data?.tdeEvent) || 0;
+
+  const tdeDoc = await db.collection("tde_snapshots").doc(`epoch_${epoch}_tde_${tdeEvent}`).get();
+  if (!tdeDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "TDE event snapshot not found.");
+  }
+
+  const snapshot = tdeDoc.data();
+  const userEntry = (snapshot.recipients || {})[userId];
+  if (!userEntry) {
+    throw new functions.https.HttpsError("not-found", "User is not eligible for this TDE.");
+  }
+
+  const userDoc = await db.collection("users").doc(userId).get();
+  const walletAddress = userDoc.data()?.walletAddress;
+  if (!walletAddress) {
+    throw new functions.https.HttpsError("failed-precondition", "User has no wallet address.");
+  }
+
+  const { MerkleTree } = require("merkletreejs");
+  const ethers = require("ethers");
+  const keccak256 = ethers.keccak256;
+
+  const leaves = [];
+  let userLeaf = null;
+
+  for (const [uid, alloc] of Object.entries(snapshot.recipients)) {
+    const leaf = keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "uint256", "uint256", "uint256", "uint8"],
+        [alloc.walletAddress, epoch, tdeEvent, alloc.earnedAmount, alloc.efficiency]
+      )
+    );
+    leaves.push(leaf);
+    if (uid === userId) {
+      userLeaf = leaf;
+    }
+  }
+
+  const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
+  const proof = tree.getHexProof(userLeaf);
 
   return {
-    eligible: false,
-    bonusAmount: 0,
-    awarded: false,
-    deprecated: true,
+    proof,
+    walletAddress,
+    epoch,
+    tdeEvent,
+    earnedAmount: userEntry.earnedAmount,
+    efficiency: userEntry.efficiency,
+    root: tree.getHexRoot(),
   };
 });
+
+/**
+ * claimTdeTokens — Relayed execution of on-chain claimTdeTokens for gasless user claims.
+ * Tokens are claimable anytime without epoch expiration.
+ * Scores below 91 PCT do NOT freeze claims; efficiency decile determines liquid tokens.
+ * Only tokens lost from the efficiency gate get burned to 0x...dEaD.
+ */
+exports.claimTdeTokens = functions
+  .runWith({ timeoutSeconds: 60, memory: "256MB", secrets: ["BACKEND_SIGNER_PRIVATE_KEY"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+    }
+    const userId = context.auth.uid;
+    const epoch = Number(data?.epoch);
+    const tdeEvent = Number(data?.tdeEvent);
+
+    if (isNaN(epoch) || isNaN(tdeEvent)) {
+      throw new functions.https.HttpsError("invalid-argument", "Epoch and tdeEvent are required numbers.");
+    }
+
+    const tdeDoc = await db.collection("tde_snapshots").doc(`epoch_${epoch}_tde_${tdeEvent}`).get();
+    if (!tdeDoc.exists) {
+      throw new functions.https.HttpsError("not-found", "TDE event snapshot not found.");
+    }
+
+    const snapshot = tdeDoc.data();
+    const userEntry = (snapshot.recipients || {})[userId];
+    if (!userEntry) {
+      throw new functions.https.HttpsError("not-found", "User has no allocation for this TDE.");
+    }
+
+    const userDoc = await db.collection("users").doc(userId).get();
+    const walletAddress = userDoc.data()?.walletAddress;
+    if (!walletAddress) {
+      throw new functions.https.HttpsError("failed-precondition", "User has no wallet address.");
+    }
+
+    const backendSignerKey = process.env.BACKEND_SIGNER_PRIVATE_KEY;
+    const tgeControllerAddress = process.env.TGE_CONTROLLER_ADDRESS || process.env.DSP_DISTRIBUTOR_ADDRESS;
+    if (!backendSignerKey || !tgeControllerAddress) {
+      throw new functions.https.HttpsError("internal", "Smart contract relayer not configured.");
+    }
+
+    const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+    const signer = new ethers.Wallet(backendSignerKey, provider);
+    const tgeController = new ethers.Contract(tgeControllerAddress, TGE_CONTROLLER_ABI, signer);
+
+    const leaves = [];
+    let userLeaf = null;
+
+    for (const [uid, alloc] of Object.entries(snapshot.recipients)) {
+      const leaf = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "uint256", "uint256", "uint256", "uint8"],
+          [alloc.walletAddress, epoch, tdeEvent, alloc.earnedAmount, alloc.efficiency]
+        )
+      );
+      leaves.push(leaf);
+      if (uid === userId) {
+        userLeaf = leaf;
+      }
+    }
+
+    if (!userLeaf) {
+      throw new functions.https.HttpsError("not-found", "Leaf not generated for user.");
+    }
+
+    const tree = new MerkleTree(leaves, ethers.keccak256, { sortPairs: true });
+    const proof = tree.getHexProof(userLeaf);
+
+    const earnedBn = BigInt(userEntry.earnedAmount);
+    const eff = Number(userEntry.efficiency);
+    const liquidBn = (earnedBn * BigInt(eff)) / 100n;
+    const burnedBn = earnedBn - liquidBn;
+
+    const claimKey = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "uint256", "uint256"],
+        [walletAddress, epoch, tdeEvent]
+      )
+    );
+    const isAlreadyClaimed = await tgeController.tdeClaimed(claimKey);
+    if (isAlreadyClaimed) {
+      return {
+        alreadyClaimed: true,
+        message: "Tokens for this TDE have already been claimed.",
+      };
+    }
+
+    const tx = await tgeController.claimTdeTokens(
+      walletAddress,
+      epoch,
+      tdeEvent,
+      earnedBn,
+      eff,
+      proof
+    );
+    const receipt = await tx.wait();
+
+    // Mark claimed in user_points
+    const userRef = db.collection("user_points").doc(userId);
+    const userSnap = await userRef.get();
+    if (userSnap.exists) {
+      const pointsData = userSnap.data();
+      const tgeHistory = (pointsData.tgeHistory || []).map((entry) => {
+        if (entry.epoch === epoch && (entry.tdeNumber === tdeEvent + 1 || entry.tgeNumber === tdeEvent)) {
+          return {
+            ...entry,
+            claimed: true,
+            claimedAt: admin.firestore.Timestamp.now(),
+            txHash: receipt.hash,
+          };
+        }
+        return entry;
+      });
+      await userRef.update({
+        tgeHistory,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    return {
+      success: true,
+      txHash: receipt.hash,
+      liquid: ethers.formatUnits(liquidBn, 18),
+      burned: ethers.formatUnits(burnedBn, 18),
+      efficiency: eff,
+    };
+  });
+
+exports.evaluateWelcomeBonus = exports.evaluatePoHGenesisStatus;
 
 /**
  * recordDailyCheckIn — Records daily check-in, tracking streaks and awarding retention rewards.

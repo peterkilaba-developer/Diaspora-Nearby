@@ -127,18 +127,6 @@ exports.getTokenBalance = transfer.getTokenBalance;
 exports.getBatchTokenBalances = transfer.getBatchTokenBalances;
 
 // Travel (1)
-
-// Chamber Leadership (1) — Triggered on leadershipRequests doc update.
-// Performs the actual appointment when an admin flips `approved: true`.
-exports.onChamberLeadershipRequestApproved =
-    chamberLeadership.onChamberLeadershipRequestApproved;
-
-// Transfer (3)
-exports.transferDiaspora = transfer.transferDiaspora;
-exports.getTokenBalance = transfer.getTokenBalance;
-exports.getBatchTokenBalances = transfer.getBatchTokenBalances;
-
-// Travel (1)
 exports.amadeusProxy = travel.amadeusProxy;
 
 // Payments (2)
@@ -153,14 +141,15 @@ exports.getEmergencyFundStats = emergencyFund.getEmergencyFundStats;
 exports.stakeEmergencyFundPromissory = emergencyFund.stakeEmergencyFundPromissory;
 exports.slashPromissoryForFraud = emergencyFund.slashPromissoryForFraud;
 
-// DSP (10)
+// DSP (12)
 exports.onVouchWrite = dsp.onVouchWrite;
 exports.onGlobalDspMilestone = dsp.onGlobalDspMilestone;
 exports.executeTGE = dsp.executeTGE;
 exports.awardPoints = dsp.awardPoints;
 exports.backfillLifetimeEarnings = dsp.backfillLifetimeEarnings;
-exports.getOrCreateReferralCode = dsp.getOrCreateReferralCode;
-exports.redeemReferralCode = dsp.redeemReferralCode;
+exports.evaluatePoHGenesisStatus = dsp.evaluatePoHGenesisStatus;
+exports.generateTdeClaimProof = dsp.generateTdeClaimProof;
+exports.claimTdeTokens = dsp.claimTdeTokens;
 exports.deductPoints = dsp.deductPoints;
 exports.initializeUserPoints = dsp.initializeUserPoints;
 exports.evaluateWelcomeBonus = dsp.evaluateWelcomeBonus;
@@ -211,3 +200,20 @@ const auth = require("./lib/auth");
 exports.requestWhatsAppOtp = auth.requestWhatsAppOtp;
 exports.verifyWhatsAppOtp = auth.verifyWhatsAppOtp;
 exports.whatsappWebhook = auth.whatsappWebhook;
+
+// Social Media Automation & Founder Authority (4)
+const socialMedia = require("./lib/social_media");
+exports.xMarketingPublish = socialMedia.xMarketingPublish;
+exports.postToLinkedIn = socialMedia.postToLinkedInFunc;
+exports.diasporaSocialCron = socialMedia.diasporaSocialCron;
+exports.forceDiasporaSocialCron = socialMedia.forceDiasporaSocialCron;
+
+// YouTube Automation (1)
+const youtube = require("./lib/youtube_automation");
+const { functions } = require("./lib/shared");
+exports.youtubeGenerateShortScript = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  return await youtube.generateYouTubeShortContent({ topic: data?.topic });
+});
+
+
