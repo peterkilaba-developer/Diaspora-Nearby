@@ -15,6 +15,61 @@ const axios = require("axios");
 
 const GRAPH_API_BASE = "https://graph.facebook.com/v19.0";
 
+const VISUAL_CARD_POOL = [
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-1-find-your-people.png",
+    keywords: ["nearby", "proximity", "find your people", "city", "landing"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-2-dual-identity.png",
+    keywords: ["dual", "identity", "home", "host"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-3-dsp-base-blockchain.png",
+    keywords: ["epoch", "web3", "web2", "token", "mint"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-4-ubuntu-treasury.png",
+    keywords: ["ubuntu", "1:1", "treasury", "match", "homeland"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-5-proof-of-trust.png",
+    keywords: ["pct", "proof of community trust", "efficiency", "reputation"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-6-trust-vouching.png",
+    keywords: ["hosting", "stranger", "family", "vouch", "travel"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-7-communities-chambers.png",
+    keywords: ["chamber", "community", "neighborhood", "campus"],
+  },
+  {
+    url: "https://diasporanearby.com/images/social-cards/card-8-sovereign-ecosystem.png",
+    keywords: ["ddi", "loan", "collateral", "staking", "enterprise"],
+  },
+];
+
+/**
+ * Selects a 1080x1080 visual card matching the topic (or rotates daily/randomly across the 8-card pool)
+ */
+function getRotatingVisualCardUrl(topic = "") {
+  if (process.env.SOCIAL_SHARE_IMAGE_URL) {
+    return process.env.SOCIAL_SHARE_IMAGE_URL;
+  }
+  const lower = (topic || "").toLowerCase();
+  if (lower) {
+    const matched = VISUAL_CARD_POOL.find((card) =>
+      card.keywords.some((kw) => lower.includes(kw))
+    );
+    if (matched) {
+      return matched.url;
+    }
+  }
+  const dayIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 12)) % VISUAL_CARD_POOL.length;
+  return VISUAL_CARD_POOL[dayIndex].url;
+}
+
 function getMetaCredentials() {
   const pageAccessToken = process.env.META_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
   const pageId = process.env.META_PAGE_ID || process.env.FACEBOOK_PAGE_ID || "455143491012634";
@@ -226,6 +281,8 @@ async function postPhotoToInstagram({ imageUrl, caption = "" }) {
 }
 
 module.exports = {
+  VISUAL_CARD_POOL,
+  getRotatingVisualCardUrl,
   getMetaCredentials,
   checkMetaStatus,
   postToFacebookPage,

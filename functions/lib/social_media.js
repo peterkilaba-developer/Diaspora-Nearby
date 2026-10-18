@@ -867,15 +867,20 @@ async function executeDailySocialPublication() {
   // ── 3. Native Direct Post to Facebook Page (AI-generated copy) ──
   let facebookResult = null;
   const metaPublisher = require("./meta_publisher");
+  const rotatingCardUrl = metaPublisher.getRotatingVisualCardUrl(selectedTopic);
   if (process.env.META_PAGE_ACCESS_TOKEN) {
     try {
       const fbMessage = await generateDiasporaContent({ platform: "facebook", topic: selectedTopic });
-      facebookResult = await metaPublisher.postToFacebookPage({ message: fbMessage });
-      console.log(`✅ [Free Native] Facebook Page post published: ${facebookResult.postUrl}`);
+      facebookResult = await metaPublisher.postPhotoToFacebookPage({
+        imageUrl: rotatingCardUrl,
+        caption: fbMessage,
+      });
+      console.log(`✅ [Free Native] Facebook Page photo post published: ${facebookResult.postUrl}`);
 
       await db.collection("_socialFacebookPosts").add({
-        postId: facebookResult.postId,
+        postId: facebookResult.photoId || facebookResult.postId,
         postUrl: facebookResult.postUrl,
+        imageUrl: rotatingCardUrl,
         text: fbMessage,
         topic: selectedTopic,
         postedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -893,7 +898,7 @@ async function executeDailySocialPublication() {
   if (process.env.META_PAGE_ACCESS_TOKEN) {
     try {
       const igCaption = await generateDiasporaContent({ platform: "instagram", topic: selectedTopic });
-      const igImageUrl = process.env.SOCIAL_SHARE_IMAGE_URL || "https://diasporanearby.com/images/og-share-card.png";
+      const igImageUrl = rotatingCardUrl;
       instagramResult = await metaPublisher.postPhotoToInstagram({
         imageUrl: igImageUrl,
         caption: igCaption,

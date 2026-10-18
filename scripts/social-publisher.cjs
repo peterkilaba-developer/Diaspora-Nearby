@@ -375,29 +375,36 @@ Examples:
       process.exit(0);
     }
 
-    if (args.includes("--facebook")) {
-      const idx = args.indexOf("--facebook");
+    if (args.includes("--facebook") || args.includes("--fb")) {
+      const idx = args.includes("--facebook") ? args.indexOf("--facebook") : args.indexOf("--fb");
       const message = args[idx + 1];
+      const imageUrl = args.includes("--image") ? args[args.indexOf("--image") + 1] : null;
       if (!message) {
-        console.error("❌ Please provide message text: --facebook 'Your message'");
+        console.error("❌ Please provide message text: --facebook 'Your message' [--image <url>]");
         process.exit(1);
       }
       console.log("👥 Posting to Facebook Page (Diaspora Nearby)...");
-      const res = await metaPublisher.postToFacebookPage({ message });
+      const res = imageUrl
+        ? await metaPublisher.postPhotoToFacebookPage({ imageUrl, caption: message })
+        : await metaPublisher.postToFacebookPage({ message });
       console.log(`✅ [Facebook Page] Post Published!`);
       console.log(`   URL: ${res.postUrl}`);
       process.exit(0);
     }
 
-    if (args.includes("--instagram")) {
-      const idx = args.indexOf("--instagram");
-      const imageUrl = args[idx + 1];
-      const caption = args.includes("--caption") ? args[args.indexOf("--caption") + 1] : "";
-      if (!imageUrl) {
-        console.error("❌ Please provide public image URL: --instagram <imageUrl> [--caption '...']");
-        process.exit(1);
-      }
-      console.log("📸 Publishing to Instagram (@diasporanearby)...");
+    if (args.includes("--instagram") || args.includes("--ig")) {
+      const idx = args.includes("--instagram") ? args.indexOf("--instagram") : args.indexOf("--ig");
+      const argVal = args[idx + 1] || "";
+      const isUrl = argVal.startsWith("http://") || argVal.startsWith("https://");
+      const caption = args.includes("--caption")
+        ? args[args.indexOf("--caption") + 1]
+        : (isUrl ? "" : argVal);
+      const imageUrl = args.includes("--image")
+        ? args[args.indexOf("--image") + 1]
+        : (isUrl ? argVal : metaPublisher.getRotatingVisualCardUrl(caption));
+
+      console.log(`📸 Publishing to Instagram (@diasporanearby)...`);
+      console.log(`   Visual Card: ${imageUrl}`);
       const res = await metaPublisher.postPhotoToInstagram({ imageUrl, caption });
       console.log(`✅ [Instagram] Post Published!`);
       console.log(`   URL: ${res.postUrl}`);
@@ -416,7 +423,7 @@ Examples:
         console.log("4. Click 'Generate Access Token'.");
         console.log("5. Paste into functions/.env:");
         console.log("   META_PAGE_ACCESS_TOKEN=your_token_here");
-        console.log("   META_PAGE_ID=61566733779638\n");
+        console.log("   META_PAGE_ID=455143491012634\n");
       } else if (!status.valid) {
         console.log(`⚠️ Meta Token configured, but returned error: ${status.error}`);
       } else {
@@ -450,14 +457,18 @@ Examples:
         const liRes = await postToLinkedIn(pack.textCopy.linkedIn, { postToOrg: true });
         console.log(`   ✅ LinkedIn: ${liRes.postUrl}`);
       } catch (liErr) {
-        console.error(`   ❌ LinkedIn error: ${liErr.message}`);
+        console.error(`   ❌ LinkedIn error: ${liRes.message}`);
       }
 
-      // 3. Post to Facebook Page (if Meta token configured)
+      // 3. Post to Facebook Page & Instagram (if Meta token configured)
       if (process.env.META_PAGE_ACCESS_TOKEN) {
+        const rotatingCardUrl = metaPublisher.getRotatingVisualCardUrl(topic || pack.theme);
         try {
-          console.log("\n3️⃣ Publishing to Facebook Page...");
-          const fbRes = await metaPublisher.postToFacebookPage({ message: pack.textCopy.facebook });
+          console.log(`\n3️⃣ Publishing to Facebook Page with Visual Card (${rotatingCardUrl})...`);
+          const fbRes = await metaPublisher.postPhotoToFacebookPage({
+            imageUrl: rotatingCardUrl,
+            caption: pack.textCopy.facebook,
+          });
           console.log(`   ✅ Facebook: ${fbRes.postUrl}`);
         } catch (fbErr) {
           console.error(`   ❌ Facebook error: ${fbErr.message}`);
@@ -465,10 +476,9 @@ Examples:
 
         // 4. Post to Instagram Professional Account
         try {
-          console.log("\n4️⃣ Publishing to Instagram (@diasporanearby)...");
-          const igImageUrl = process.env.SOCIAL_SHARE_IMAGE_URL || "https://diasporanearby.com/images/og-share-card.png";
+          console.log(`\n4️⃣ Publishing to Instagram (@diasporanearby) with Visual Card (${rotatingCardUrl})...`);
           const igRes = await metaPublisher.postPhotoToInstagram({
-            imageUrl: igImageUrl,
+            imageUrl: rotatingCardUrl,
             caption: pack.textCopy.instagramCaption,
           });
           console.log(`   ✅ Instagram: ${igRes.postUrl}`);
