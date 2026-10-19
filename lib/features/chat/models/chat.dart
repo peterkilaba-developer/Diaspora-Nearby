@@ -302,6 +302,38 @@ class Chat {
 
   /// Apply per-user preferences from userChats subcollection
   Chat withUserPreferences(Map<String, dynamic> userChatData) {
+    int parseTs(dynamic value, [int defaultValue = 0]) {
+      if (value == null) return defaultValue;
+      if (value is Timestamp) return value.millisecondsSinceEpoch;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value) ?? defaultValue;
+      return defaultValue;
+    }
+
+    LastMessage? effectiveLastMessage = lastMessage;
+    int effectiveUpdatedAt = updatedAt;
+
+    final rawUserLastMsg = userChatData['lastMessage'];
+    if (rawUserLastMsg is Map) {
+      final userLastMsg = LastMessage.fromFirestore(
+        Map<String, dynamic>.from(rawUserLastMsg),
+      );
+      if (effectiveLastMessage == null ||
+          userLastMsg.timestamp >= effectiveLastMessage.timestamp) {
+        effectiveLastMessage = userLastMsg;
+      }
+    }
+
+    final userUpdatedAt = parseTs(userChatData['updatedAt']);
+    if (userUpdatedAt > effectiveUpdatedAt) {
+      effectiveUpdatedAt = userUpdatedAt;
+    }
+    if (effectiveLastMessage != null &&
+        effectiveLastMessage.timestamp > effectiveUpdatedAt) {
+      effectiveUpdatedAt = effectiveLastMessage.timestamp;
+    }
+
     return copyWith(
       isPinned:
           userChatData['isPinned'] == true || userChatData['pinned'] == true,
@@ -310,6 +342,8 @@ class Chat {
           userChatData['pinnedBottom'] == true,
       isMuted: userChatData['isMuted'] == true || userChatData['muted'] == true,
       unreadCount: userChatData['unreadCount'] as int? ?? 0,
+      lastMessage: effectiveLastMessage,
+      updatedAt: effectiveUpdatedAt,
     );
   }
 

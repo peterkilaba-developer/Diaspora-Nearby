@@ -12,6 +12,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <!-- Prevent Theme Flash -->
+    <script>
+        (function() {
+            try {
+                var mode = localStorage.getItem('dn_theme_mode') || 'system';
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-mode', mode);
+                document.documentElement.style.colorScheme = theme;
+            } catch (e) {}
+        })();
+    </script>
     <!-- Microsoft Clarity Analytics -->
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
@@ -72,31 +85,41 @@
                 <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
                 Diaspora Nearby
             </a>
-            <ul class="nav-links">
+            <div class="nav-actions">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme mode" title="Theme: System (Auto)">
+                    <i data-lucide="sun" class="theme-icon-light"></i>
+                    <i data-lucide="moon" class="theme-icon-dark"></i>
+                    <i data-lucide="laptop" class="theme-icon-system"></i>
+                </button>
+                <a href="/#get-app" class="nav-cta">Get App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a>
+                <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                    <i data-lucide="menu"></i>
+                </button>
+            </div>
+            <ul class="nav-links" id="nav-links">
                 <li><a href="/">Home</a></li>
                 <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
                 <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
-                <li><a href="/#get-app" class="nav-cta">Get App →</a></li>
+                <li style="margin-top: 6px;"><a href="/#get-app" class="nav-cta" style="justify-content:center;">Get App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a></li>
             </ul>
         </div>
     </nav>
 
     <div class="legal-content">
-        <h1>Terms of Service</h1>
-        <p class="date">Last Updated: February 13, 2026</p>
+        <h1>Terms of Service &amp; Child Safety Standards</h1>
+        <p class="date">Last Updated: October 15, 2026 &nbsp;|&nbsp; App: <strong>Diaspora Nearby</strong> (<code>com.diasporanearby.diasporanearby</code>) &nbsp;|&nbsp; Developer: <strong>Peter Swai</strong></p>
 
         <h2>1. Acceptance of Terms</h2>
-        <p>By accessing and using the Diaspora Nearby mobile application ("App"), you agree to be bound by these Terms
-            of Service. If you do not agree to these terms, please do not use the App.</p>
+        <p>By accessing and using the <strong>Diaspora Nearby</strong> mobile application and web platform ("App"), developed and published by <strong>Peter Swai</strong> ("Developer," "we," "our," or "us"), you agree to be bound by these Terms of Service and our <a href="/child-safety">Child Safety Standards Policy</a>. If you do not agree to these terms, please do not use the App.</p>
 
         <h2>2. Description of Service</h2>
-        <p>Diaspora Nearby is a location-based social networking platform that connects diaspora communities globally.
+        <p><strong>Diaspora Nearby</strong> is a location-based social networking platform that connects diaspora communities globally.
             The App allows users to discover nearby community members, communicate, attend events, access marketplace
             services, and earn $DIASPORA tokens through Proof of Social Activities (PSA) and Proof of Community Trust (PCT).</p>
 
-        <h2>3. User Accounts</h2>
+        <h2>3. User Accounts &amp; Age Eligibility</h2>
         <ul>
-            <li>You must be at least 13 years old to use the App.</li>
+            <li>You must be at least 18 years old to register for an account, access peer hosting/marketplace features, or participate in community governance on Diaspora Nearby (or at least 13 years old where permitted by applicable local law, subject to strict child safety protections).</li>
             <li>You are responsible for maintaining the confidentiality of your account credentials.</li>
             <li>You agree to provide accurate and complete information during registration.</li>
             <li>One account per person. Multiple accounts are prohibited.</li>
@@ -105,15 +128,46 @@
         <h2>4. User Conduct</h2>
         <p>You agree not to:</p>
         <ul>
-            <li>Use the App for any unlawful purpose.</li>
-            <li>Harass, abuse, or threaten other users.</li>
+            <li>Use the App for any unlawful purpose or in violation of any local, state, national, or international law.</li>
+            <li>Upload, post, transmit, share, solicit, or otherwise make available any content that involves <strong>Child Sexual Abuse and Exploitation (CSAE)</strong> or <strong>Child Sexual Abuse Material (CSAM)</strong>, or engage in any conduct that harms, exploits, grooms, or endangers minors in any way.</li>
+            <li>Harass, abuse, stalk, or threaten other users.</li>
             <li>Impersonate another person or entity.</li>
             <li>Distribute spam, malware, or other harmful content.</li>
             <li>Attempt to manipulate the $DIASPORA token economy through fraudulent activity.</li>
             <li>Create automated accounts or use bots to interact with the platform.</li>
         </ul>
 
-        <h2>5. $DIASPORA Tokens (DSP)</h2>
+        <h2 id="child-safety">5. Child Safety Standards &amp; Zero-Tolerance Policy Against Child Sexual Abuse and Exploitation (CSAE)</h2>
+        <p><strong>Diaspora Nearby</strong> (developed and operated by <strong>Peter Swai</strong>) maintains an absolute, <strong>zero-tolerance policy against Child Sexual Abuse and Exploitation (CSAE)</strong> and <strong>Child Sexual Abuse Material (CSAM)</strong>. Protecting children and preventing any form of minor exploitation on our platform is a top priority.</p>
+        <ul>
+            <li><strong>Explicit Prohibition of CSAE and CSAM:</strong> We strictly prohibit the creation, uploading, sharing, distribution, possession, solicitation, or promotion of Child Sexual Abuse Material (CSAM) or any content, communication, or activity that facilitates or depicts Child Sexual Abuse and Exploitation (CSAE). This includes, without limitation:
+                <ul>
+                    <li>Any visual depiction (photos, videos, AI-generated or computer-generated imagery, or illustrations) of sexually explicit conduct involving a minor (anyone under the age of 18).</li>
+                    <li>Predatory behavior, online grooming, inappropriate interaction with minors, sexual solicitation of minors, child sextortion, or child sex trafficking.</li>
+                    <li>Sharing links, external URLs, invite codes, or references to off-platform resources that host or promote CSAM or CSAE.</li>
+                </ul>
+            </li>
+            <li><strong>In-App Reporting &amp; User Feedback Mechanism:</strong> Diaspora Nearby provides built-in, easily accessible in-app reporting tools across the entire application. Users can report any suspected child safety concern, CSAE/CSAM violation, abusive message, profile, community chat, or post directly within the App by tapping the <strong>Report / Block User</strong> action on any user profile, direct message, community post, or event, or via <strong>Settings &rarr; Help &amp; Support</strong>. Reports are prioritized and reviewed 24/7 by our Trust &amp; Safety team.</li>
+            <li><strong>Enforcement &amp; Method for Addressing CSAM:</strong> Upon detecting or receiving a report of actual or suspected CSAM or CSAE:
+                <ul>
+                    <li>We immediately remove and disable access to the offending content.</li>
+                    <li>We immediately and permanently terminate the account(s) of any user involved, blocking their phone number, email, device identifiers, and wallet addresses from re-registering on Diaspora Nearby.</li>
+                    <li>We preserve relevant digital evidence and account records in accordance with applicable legal obligations.</li>
+                </ul>
+            </li>
+            <li><strong>Mandatory Reporting to NCMEC &amp; Law Enforcement Compliance:</strong> Diaspora Nearby complies with all applicable regional, national, and international child safety laws and regulations (including 18 U.S.C. &sect; 2258A). We promptly report all apparent or suspected instances of CSAM and CSAE to the <strong>National Center for Missing &amp; Exploited Children (NCMEC)</strong> via the CyberTipline (<a href="https://www.cybertipline.org" target="_blank" rel="noopener">www.cybertipline.org</a>) as well as to relevant national and regional law enforcement authorities worldwide.</li>
+            <li><strong>Designated Child Safety Point of Contact:</strong> If you encounter any suspected CSAE/CSAM on Diaspora Nearby or have questions regarding our Child Safety Standards, please contact our designated Child Safety Point of Contact immediately:
+                <ul>
+                    <li><strong>App Name:</strong> Diaspora Nearby (<code>com.diasporanearby.diasporanearby</code>)</li>
+                    <li><strong>Developer:</strong> Peter Swai</li>
+                    <li><strong>Child Safety Contact Person / Team:</strong> Peter Swai — Diaspora Nearby Child Safety &amp; Trust Team</li>
+                    <li><strong>Child Safety Email:</strong> <a href="mailto:support@diasporanearby.com">support@diasporanearby.com</a></li>
+                    <li><strong>Dedicated Child Safety Policy Page:</strong> <a href="https://diasporanearby.com/child-safety">https://diasporanearby.com/child-safety</a></li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>6. $DIASPORA Tokens (DSP)</h2>
         <ul>
             <li>$DIASPORA tokens are earned through on-platform activity and are not purchased.</li>
             <li>Pre-TDE DSP points are not transferable and have no cash value until the Token Distribution Event (TDE).
@@ -122,7 +176,7 @@
             <li>We reserve the right to modify token distribution mechanics with community notice.</li>
         </ul>
 
-        <h2>6. Content and Intellectual Property</h2>
+        <h2>7. Content and Intellectual Property</h2>
         <ul>
             <li>You retain ownership of content you create and share on the platform.</li>
             <li>By posting content, you grant Diaspora Nearby a non-exclusive license to display and distribute that
@@ -130,27 +184,28 @@
             <li>All platform branding, design, and technology are the intellectual property of Diaspora Nearby.</li>
         </ul>
 
-        <h2>7. Privacy</h2>
+        <h2>8. Privacy</h2>
         <p>Your use of the App is also governed by our <a href="/privacy-policy">Privacy Policy</a>, which describes how
             we collect, use, and protect your personal information, including location data.</p>
 
-        <h2>8. Limitation of Liability</h2>
+        <h2>9. Limitation of Liability</h2>
         <p>Diaspora Nearby is provided "as is" without warranties of any kind. We are not liable for any indirect,
             incidental, or consequential damages arising from your use of the App, including but not limited to the
             value or conversion of $DIASPORA tokens.</p>
 
-        <h2>9. Termination</h2>
-        <p>We reserve the right to suspend or terminate your account for violations of these terms, fraudulent activity,
+        <h2>10. Termination</h2>
+        <p>We reserve the right to suspend or terminate your account for violations of these terms, including any violation of our Child Safety Standards (CSAE/CSAM policy), fraudulent activity,
             or any conduct that undermines the trust and safety of the community.</p>
 
-        <h2>10. Changes to Terms</h2>
+        <h2>11. Changes to Terms</h2>
         <p>We may update these Terms of Service from time to time. Continued use of the App after changes constitutes
             acceptance of the revised terms.</p>
 
-        <h2>11. Contact Us</h2>
-        <p>For questions about these Terms of Service, please contact us at:</p>
+        <h2>12. Contact Us</h2>
+        <p>For questions about these Terms of Service or to report child safety / CSAE concerns, please contact us at:</p>
         <ul>
-            <li><strong>Email:</strong> <a href="mailto:support@diasporanearby.com">support@diasporanearby.com</a></li>
+            <li><strong>App &amp; Developer:</strong> Diaspora Nearby (Developer: Peter Swai)</li>
+            <li><strong>General &amp; Child Safety Email:</strong> <a href="mailto:support@diasporanearby.com">support@diasporanearby.com</a></li>
             <li><strong>Website:</strong> <a href="https://diasporanearby.com">diasporanearby.com</a></li>
         </ul>
     </div>
@@ -162,6 +217,8 @@
             </div>
         </div>
     </footer>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="script.js?v=20261012d"></script>
 </body>
 
 </html>

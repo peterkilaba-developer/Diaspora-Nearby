@@ -551,36 +551,21 @@ class ChatRepository {
             correctType = 'organization';
           }
           if (correctType != null && storedType != correctType) {
-            debugPrint(
-              '🔄 Self-healing type for $chatId: $storedType → $correctType',
-            );
-            final healData = <String, dynamic>{'type': correctType};
             // Also ensure communityId is set for community chats
             if (correctType == 'community' && data['communityId'] == null) {
               final communityId = chatId.startsWith('chat_')
                   ? chatId.substring(5) // Remove 'chat_' prefix
                   : chatId;
-              healData['communityId'] = communityId;
               chat = chat.copyWith(type: correctType, communityId: communityId);
             } else {
               chat = chat.copyWith(type: correctType);
             }
-            try {
-              _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
-            } catch (e) {
-              debugPrint('Skipping heal type write due to permissions: $e');
-            }
           }
         }
 
-        // Self-healing: If participants are empty for a direct chat, reconstruct them
+        // Self-healing: If participants are empty for a direct chat, reconstruct them in memory
         if (chat.participants.isEmpty && currentUserId != null) {
-          debugPrint(
-            '🔄 Self-healing: Chat $chatId has empty participants. Reconstructing...',
-          );
           final healedParticipants = <String>[currentUserId!];
-
-          // Check createdBy and adminId from the document
           final data = chatDoc.data() ?? {};
           final createdBy = data['createdBy'] as String?;
           final adminId = data['adminId'] as String?;
@@ -592,59 +577,7 @@ class ChatRepository {
             healedParticipants.add(adminId);
           }
 
-          // If still only one participant for a direct chat, try scanning userChats
-          if (healedParticipants.length < 2 && chat.isDirect) {
-            try {
-              // Query all users who have this chatId in their userChats
-              // Since we can't query across user subcollections directly,
-              // we'll check if the chat was created by someone else
-              // by looking at messages for other senderIds
-              final messagesSnap = await _messagesCol(
-                chatId,
-              ).orderBy('timestamp', descending: true).limit(10).get();
-              for (final msgDoc in messagesSnap.docs) {
-                final senderId = msgDoc.data()['senderId'] as String?;
-                if (senderId != null &&
-                    !healedParticipants.contains(senderId)) {
-                  healedParticipants.add(senderId);
-                }
-              }
-            } catch (e) {
-              debugPrint('⚠️ Error scanning messages for participants: $e');
-            }
-          }
-
-          if (healedParticipants.length > 1 || healedParticipants.isNotEmpty) {
-            debugPrint(
-              '✅ Healed participants for $chatId: $healedParticipants',
-            );
-
-            // Write the healed data back to Firestore (fire-and-forget)
-            final healData = <String, dynamic>{
-              'participants': healedParticipants,
-            };
-            if (chat.type == 'direct' || chatId.startsWith('direct_')) {
-              healData['type'] = 'direct';
-            } else if (chatId.startsWith('chat_') ||
-                chatId.startsWith('home_') ||
-                chatId.startsWith('host_') ||
-                chatId.startsWith('past_') ||
-                chatId == 'global_community') {
-              healData['type'] = 'community';
-            } else if (chatId.startsWith('event_')) {
-              healData['type'] = 'event';
-            } else if (chatId.startsWith('org_')) {
-              healData['type'] = 'organization';
-            }
-            try {
-              _chatsCol.doc(chatId).set(healData, SetOptions(merge: true));
-            } catch (e) {
-              debugPrint(
-                'Skipping heal participants write due to permissions: $e',
-              );
-            }
-
-            // Rebuild the chat object with healed participants
+          if (healedParticipants.isNotEmpty) {
             chat = chat.copyWith(participants: healedParticipants);
           }
         }

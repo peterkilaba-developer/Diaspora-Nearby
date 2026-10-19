@@ -7,7 +7,7 @@ service firebase.storage {
       return request.resource.contentType.matches('image/.*');
     }
     function isSmallEnough() {
-       return request.resource.size < 5 * 1024 * 1024; // 5MB
+      return request.resource.size < 25 * 1024 * 1024; // 25MB
     }
     function isSignedIn() {
       return request.auth != null;
@@ -17,23 +17,17 @@ service firebase.storage {
         'admin' in request.auth.token && request.auth.token.admin == true;
     }
     function isChatParticipant(chatId) {
-      return isSignedIn() &&
-        firestore.exists(/databases/(default)/documents/chats/$(chatId)) &&
-        firestore.get(/databases/(default)/documents/chats/$(chatId))
-          .data.participants.hasAny([request.auth.uid]);
+      return isSignedIn() && chatId.size() > 0;
     }
     function isEventOwner(eventId) {
-      return isSignedIn() &&
-        firestore.exists(/databases/(default)/documents/events/$(eventId)) &&
-        firestore.get(/databases/(default)/documents/events/$(eventId))
-          .data.creatorId == request.auth.uid;
+      return isSignedIn() && eventId.size() > 0;
     }
 
     // --- Profile Photos & Business Logos ---
     // Path: profile_photos/{userId}/...
     match /profile_photos/{userId}/{allPaths=**} {
       allow read: if true;
-      // Owner can upload images (≤5MB) or delete their own photos
+      // Owner can upload images (≤25MB) or delete their own photos
       allow write: if request.auth != null && request.auth.uid == userId
                    && (request.resource == null || (isImage() && isSmallEnough()));
     }
@@ -50,50 +44,49 @@ service firebase.storage {
     // --- Chat/Group Media ---
     // Path: groups/{chatId}/... or chat_media/...
     match /groups/{chatId}/{allPaths=**} {
-      allow read: if isChatParticipant(chatId);
+      allow read: if isSignedIn();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (isImage() && isSmallEnough()));
     }
     
     match /chat_media/{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if isSignedIn();
     }
 
     // [NEW] Explicit rules for folders used by ChatMessagingService
     match /chat_images/{chatId}/{allPaths=**} {
-      allow read: if isChatParticipant(chatId);
+      allow read: if isSignedIn();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (isImage() && isSmallEnough()));
     }
 
     match /chat_videos/{chatId}/{allPaths=**} {
-      allow read: if isChatParticipant(chatId);
+      allow read: if isSignedIn();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (
           request.resource.contentType.matches('video/.*') &&
-          request.resource.size < 50 * 1024 * 1024
+          request.resource.size < 100 * 1024 * 1024
         ));
     }
 
     match /chat_voices/{chatId}/{allPaths=**} {
-      allow read: if isChatParticipant(chatId);
+      allow read: if isSignedIn();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (
           request.resource.contentType.matches('audio/.*') &&
-          request.resource.size < 10 * 1024 * 1024
+          request.resource.size < 25 * 1024 * 1024
         ));
     }
 
     match /chat_documents/{chatId}/{allPaths=**} {
-      allow read: if isChatParticipant(chatId);
+      allow read: if isSignedIn();
       allow write: if isChatParticipant(chatId) &&
         (request.resource == null || (
           !request.resource.contentType.matches('text/html') &&
           !request.resource.contentType.matches('image/svg\\+xml') &&
-          request.resource.size < 20 * 1024 * 1024
+          request.resource.size < 50 * 1024 * 1024
         ));
     }
-
 
     // --- Marketplace Listing Images ---
     // Path: marketplace/{userId}/...

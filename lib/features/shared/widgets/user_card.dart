@@ -642,27 +642,33 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: SearchHighlightUtils.highlightText(
-                                    isLocal
-                                        ? () {
-                                            final loc =
-                                                widget.user.homeLocation;
-                                            if (loc.city?.isNotEmpty ?? false) {
-                                              final state = loc.state;
-                                              if (state?.isNotEmpty ?? false) {
-                                                return '${loc.city}, ${formatLocationName(state)}';
-                                              }
-                                              return loc.city!;
-                                            }
-                                            return formatFullAddress(
-                                              loc.formattedAddress,
-                                            );
-                                          }()
-                                        : formatFullAddress(
-                                            widget
-                                                .user
-                                                .homeLocation
-                                                .formattedAddress,
-                                          ),
+                                    () {
+                                      final loc = widget.user.homeLocation;
+                                      final countryCode =
+                                          widget.user.homeCountryCode;
+                                      if (countryCode != null &&
+                                          country_data
+                                              .hasStateLevelHierarchyFromData(
+                                                countryCode,
+                                              )) {
+                                        return formatFullAddress(
+                                          loc.formattedAddress,
+                                        );
+                                      }
+                                      if (loc.city?.isNotEmpty ?? false) {
+                                        final fullCountry = formatLocationName(
+                                          loc.country ??
+                                              widget.user.homeCountry,
+                                        );
+                                        if (fullCountry.isNotEmpty) {
+                                          return '${loc.city}, $fullCountry';
+                                        }
+                                        return loc.city!;
+                                      }
+                                      return formatFullAddress(
+                                        loc.formattedAddress,
+                                      );
+                                    }(),
                                     widget.searchQuery,
                                     theme.textTheme.bodySmall?.copyWith(
                                       fontSize: 12,

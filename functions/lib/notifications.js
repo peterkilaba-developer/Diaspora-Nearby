@@ -42,13 +42,24 @@ exports.onPointsTransactionCreated = functions.firestore
     console.log(`[Points] Notifying for ${context.params.txId}. Type: ${tx.type}, Action: ${tx.action}, Points: ${tx.points}`);
 
     // We only notify on EARN or RECEIVED TRANSFER
-    if (tx.type !== 'earn' && tx.type !== 'transfer_received') return null;
+    if (tx.type !== 'earn' && tx.type !== 'transfer_received' && tx.action !== 'token_transfer_received') return null;
     if (tx.points <= 0) return null; // Don't notify for 0 or negative
 
     let title = "DSP Received!";
     let body = `You received ${tx.points} DSP`;
 
-    if (tx.action === 'transfer_received') {
+    if (tx.action === 'token_transfer_received') {
+      title = "$DIASPORA Received";
+      body = `🪙 You received ${tx.points} $DIASPORA in your wallet.`;
+      await sendPushToUser(userId, {
+        title: title,
+        body: body,
+        type: "points_update",
+        targetUserId: tx.fromUserId || "",
+        city: ""
+      });
+      return null;
+    } else if (tx.action === 'transfer_received') {
       title = "Transfer Received";
       body = `🪙 You received ${tx.points} DSP. check your wallet.`;
     } else if (tx.action === 'welcome_bonus') {
@@ -90,7 +101,20 @@ exports.manageUserFCMTopics = functions.firestore
 
     // Token check
     const oldToken = beforeData ? beforeData.fcmToken : null;
-    const newToken = afterData.fcmToken;
+    let newToken = afterData.fcmToken;
+
+    // [SELF-HEAL] If a client profile save (saveUserProfile / updateProfileData)
+    // accidentally serialized `fcmToken: null` into user_private/{userId} while
+    // notifications were NOT explicitly disabled (notificationsEnabled !== false),
+    // restore the previous valid fcmToken immediately so push notifications keep working.
+    if (!newToken && oldToken && afterData.notificationsEnabled !== false) {
+      console.log(`[FCM] Restoring accidentally nulled fcmToken for user ${context.params.userId}`);
+      await change.after.ref.set({
+        fcmToken: oldToken,
+        notificationsEnabled: beforeData.notificationsEnabled !== false,
+      }, { merge: true });
+      newToken = oldToken;
+    }
 
     // Country check
     const profile = await db.collection('users').doc(context.params.userId).get();
@@ -122,5 +146,3 @@ exports.manageUserFCMTopics = functions.firestore
     await Promise.all(promises);
     return null;
   });
-
-

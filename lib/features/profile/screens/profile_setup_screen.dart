@@ -20,8 +20,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/referral_provider.dart';
-import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart'; // [NEW]
-import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW] Share reward toast
+import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 
 // googlePlacesServiceProvider moved to lib/services/google_places_service.dart
 
@@ -43,7 +43,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _referralCodeController = TextEditingController(); // [NEW]
+  final _referralCodeController = TextEditingController();
 
   // Current step in the flow
   SetupStep _currentStep = SetupStep.home;
@@ -83,14 +83,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _firstNameController.addListener(_onNameChanged);
     _lastNameController.addListener(_onNameChanged);
 
-    // [NEW] Check for pending referral code from deep link
+    // Check for pending referral code from deep link
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final pendingCode = ref.read(pendingReferralCodeProvider);
       if (pendingCode != null && pendingCode.isNotEmpty) {
         debugPrint('ProfileSetup: Auto-filling referral code: $pendingCode');
         _referralCodeController.text = pendingCode;
-        // Optionally clear it here so it doesn't persist across fresh attempts
-        // if user backs out, but usually better to clear on submit success.
       }
     });
   }
@@ -110,7 +108,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _hostSearchController.dispose();
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _referralCodeController.dispose(); // [NEW]
+    _referralCodeController.dispose();
 
     super.dispose();
   }
@@ -431,20 +429,24 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   /// Upload profile image to Firebase Storage
   Future<String?> _uploadProfileImage(String userId) async {
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('profile_photos')
+        .child(userId)
+        .child('profile.jpg');
+
     if (_profileImage == null) {
-      debugPrint('Ã¢ÂšÂ Ã¯Â¸Â No profile image to upload');
-      return null;
+      debugPrint('⚠️ No profile image selected; checking for prior upload');
+      try {
+        return await storageRef.getDownloadURL();
+      } catch (_) {
+        return null;
+      }
     }
 
     try {
-      debugPrint('Ã°ÂŸÂ“Â¸ Uploading profile image for user: $userId');
-      debugPrint('Ã°ÂŸÂ“Â¸ File path: ${_profileImage!.path}');
-
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('profile_photos')
-          .child(userId)
-          .child('profile.jpg');
+      debugPrint('📸 Uploading profile image for user: $userId');
+      debugPrint('📸 File path: ${_profileImage!.path}');
 
       UploadTask uploadTask;
       final metadata = SettableMetadata(contentType: 'image/jpeg');
@@ -453,20 +455,38 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         final bytes = await _profileImage!.readAsBytes();
         uploadTask = storageRef.putData(bytes, metadata);
       } else {
-        uploadTask = storageRef.putFile(File(_profileImage!.path), metadata);
+        final file = File(_profileImage!.path);
+        if (!await file.exists()) {
+          // If the temporary file from an earlier attempt was cleared by the OS,
+          // check if the previous attempt already uploaded profile.jpg to Storage.
+          try {
+            final existingUrl = await storageRef.getDownloadURL();
+            if (existingUrl.isNotEmpty) return existingUrl;
+          } catch (_) {}
+          throw Exception('Selected photo file is no longer available.');
+        }
+        uploadTask = storageRef.putFile(file, metadata);
       }
       final snapshot = await uploadTask;
       debugPrint(
-        'Ã°ÂŸÂ“Â¸ Upload complete. Bytes transferred: ${snapshot.bytesTransferred}',
+        '📸 Upload complete. Bytes transferred: ${snapshot.bytesTransferred}',
       );
 
       final downloadUrl = await snapshot.ref.getDownloadURL();
-      debugPrint('Ã°ÂŸÂ“Â¸ Download URL: $downloadUrl');
+      debugPrint('📸 Download URL: $downloadUrl');
 
       return downloadUrl;
     } catch (e, stack) {
-      debugPrint('Ã¢ÂÂŒ Error uploading image: $e');
-      debugPrint('Ã¢ÂÂŒ Stack trace: $stack');
+      debugPrint('❌ Error uploading image: $e');
+      debugPrint('❌ Stack trace: $stack');
+      // Fallback: if a previous signup attempt already uploaded the photo, recover it
+      try {
+        final existingUrl = await storageRef.getDownloadURL();
+        if (existingUrl.isNotEmpty) {
+          debugPrint('📸 Recovered previously uploaded profile image: $existingUrl');
+          return existingUrl;
+        }
+      } catch (_) {}
       return null;
     }
   }
@@ -540,7 +560,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       String profileImageUrl = '';
       if (_profileImage != null) {
         final url = await _uploadProfileImage(user.uid);
-        if (url != null) profileImageUrl = url;
+        if (url == null || url.isEmpty) {
+          throw Exception(
+            'Failed to upload profile photo. Please re-select your photo and try again.',
+          );
+        }
+        profileImageUrl = url;
       }
 
       // 3. Create Profile Data
@@ -776,8 +801,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                             // Award DSP for sharing
                             if (user != null) {
                               try {
-                                // Share reward — deprecated tracking functions
-                                // (actual DSP is awarded via referral signup when recipient signs up)
                                 if (ctx.mounted) {
                                   showExplorationRewardToast(
                                     ctx,
@@ -933,7 +956,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           showLocation: _showCurrentLocationName,
           onLocationToggleChanged: (v) =>
               setState(() => _showCurrentLocationName = v),
-          referralCodeController: _referralCodeController, // [NEW]
+          referralCodeController: _referralCodeController,
         );
     }
   }

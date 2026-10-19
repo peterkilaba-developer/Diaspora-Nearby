@@ -108,6 +108,34 @@ function communityIdentity(type, locationType, location, homeCountryCode) {
   return {id, name, continent: CONTINENT_NAMES[continentKey]};
 }
 
+function buildJoinedSystemMessage(chatRef, chatId, uid, profile, timestamp) {
+  const fullName = [profile.firstName, profile.lastName]
+    .filter((s) => typeof s === "string" && s.trim().length > 0)
+    .join(" ")
+    .trim() || "Member";
+  const msgRef = chatRef.collection("messages").doc();
+  const messageData = {
+    id: msgRef.id,
+    chatId,
+    senderId: uid,
+    senderName: fullName,
+    content: "joined the community",
+    type: "system",
+    timestamp,
+    status: "read",
+  };
+  const lastMessageData = {
+    id: msgRef.id,
+    content: `${fullName} joined the community`,
+    timestamp,
+    senderId: uid,
+    senderName: fullName,
+    type: "system",
+    status: "read",
+  };
+  return {msgRef, messageData, lastMessageData};
+}
+
 exports.ensureCommunity = functions.https.onCall(async (data, context) => {
   requireAppCheck(context);
   const uid = requireAuth(context);
@@ -162,6 +190,10 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       return {communityId: identity.id, chatId, name: existing.name || identity.name, created: false};
     }
 
+    const nowMs = Date.now();
+    const {msgRef, messageData, lastMessageData} = buildJoinedSystemMessage(
+        chatRef, chatId, uid, profile, nowMs,
+    );
     const batch = db.batch();
     const rawMembers = Array.isArray(existing.members) ? existing.members : [];
     const needsMemberAdd = rawMembers.length < MAX_COMMUNITY_MEMBERS && !rawMembers.includes(uid);
@@ -179,10 +211,27 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       const needsChatAdd = rawChatParticipants.length < MAX_COMMUNITY_MEMBERS && !rawChatParticipants.includes(uid);
       batch.set(chatRef, {
         memberCount: admin.firestore.FieldValue.increment(1),
-        updatedAt: Date.now(),
+        updatedAt: nowMs,
+        lastMessage: lastMessageData,
         ...(needsChatAdd ? {participants: admin.firestore.FieldValue.arrayUnion(uid)} : {}),
       }, {merge: true});
+    } else {
+      batch.set(chatRef, {
+        id: chatId,
+        communityId: identity.id,
+        type: "community",
+        name: existing.name || identity.name,
+        participants: [uid],
+        memberCount: 1,
+        admins: [],
+        createdBy: "platform",
+        isPublic: existing.isPrivate !== true,
+        createdAt: nowMs,
+        updatedAt: nowMs,
+        lastMessage: lastMessageData,
+      }, {merge: true});
     }
+    batch.set(msgRef, messageData);
 
     batch.set(user.ref, {
       communityMemberships: admin.firestore.FieldValue.arrayUnion(identity.id),
@@ -191,8 +240,13 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
     const userChatRef = user.ref.collection("userChats").doc(chatId);
     batch.set(userChatRef, {
       chatId,
-      lastRead: Date.now(),
-      addedAt: Date.now(),
+      name: existing.name || identity.name,
+      type: "community",
+      lastMessage: lastMessageData,
+      lastRead: nowMs,
+      addedAt: nowMs,
+      updatedAt: nowMs,
+      isDeleted: false,
     }, {merge: true});
 
     await batch.commit();
@@ -276,6 +330,11 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       rawChatParticipants :
       (rawChatParticipants.length < MAX_COMMUNITY_MEMBERS ? [...rawChatParticipants, uid] : rawChatParticipants);
 
+    const nowMs = Date.now();
+    const {msgRef, messageData, lastMessageData} = buildJoinedSystemMessage(
+        chatRef, chatId, uid, profile, nowMs,
+    );
+
     transaction.set(chatRef, {
       id: chatId,
       communityId: identity.id,
@@ -286,18 +345,26 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       admins,
       createdBy: existingChat.createdBy || "platform",
       isPublic: existing.isPrivate !== true,
-      createdAt: chat.exists ? existingChat.createdAt || Date.now() : Date.now(),
-      updatedAt: Date.now(),
-      lastMessage: chat.exists ? existingChat.lastMessage || null : null,
+      createdAt: chat.exists ? existingChat.createdAt || nowMs : nowMs,
+      updatedAt: nowMs,
+      lastMessage: isNewMember ? lastMessageData : (chat.exists ? existingChat.lastMessage || null : lastMessageData),
     }, {merge: true});
+    if (isNewMember) {
+      transaction.set(msgRef, messageData);
+    }
     transaction.set(user.ref, {
       communityMemberships: admin.firestore.FieldValue.arrayUnion(identity.id),
     }, {merge: true});
     const userChatRef = user.ref.collection("userChats").doc(chatId);
     transaction.set(userChatRef, {
       chatId,
-      lastRead: Date.now(),
-      addedAt: Date.now(),
+      name: identity.name,
+      type: "community",
+      ...(isNewMember ? {lastMessage: lastMessageData} : {}),
+      lastRead: nowMs,
+      addedAt: nowMs,
+      updatedAt: nowMs,
+      isDeleted: false,
     }, {merge: true});
   });
   return {communityId: identity.id, chatId, name: identity.name, created};
@@ -430,6 +497,9 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
     );
   }
   const profile = userSnap.data() || {};
+  const existingMemberships = new Set(
+      Array.isArray(profile.communityMemberships) ? profile.communityMemberships : [],
+  );
   const homeCountryCode = String(
       data?.homeCountryCode || profile.homeCountryCode || "",
   ).trim().toUpperCase();
@@ -468,13 +538,25 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
     communityIds.push(commId);
     chatIds.push(chatId);
 
+    const existingComm = commSnap.exists ? (commSnap.data() || {}) : {};
+    const rawMembers = Array.isArray(existingComm.members) ? existingComm.members : [];
+    const existingChat = chatSnap.exists ? (chatSnap.data() || {}) : {};
+    const rawParticipants = Array.isArray(existingChat.participants) ? existingChat.participants : [];
+    const isAlreadyJoined = existingMemberships.has(commId) ||
+        rawMembers.includes(uid) ||
+        rawParticipants.includes(uid);
+
+    const {msgRef, messageData, lastMessageData} = buildJoinedSystemMessage(
+        chatSnap.ref, chatId, uid, profile, nowMs + i,
+    );
+
     if (commSnap.exists) {
-      const existing = commSnap.data() || {};
-      const rawMembers = Array.isArray(existing.members) ? existing.members : [];
       const needsMemberAdd = rawMembers.length < MAX_COMMUNITY_MEMBERS && !rawMembers.includes(uid);
       batch.set(commSnap.ref, {
-        memberCount: admin.firestore.FieldValue.increment(1),
-        totalMembers: admin.firestore.FieldValue.increment(1),
+        ...(!isAlreadyJoined ? {
+          memberCount: admin.firestore.FieldValue.increment(1),
+          totalMembers: admin.firestore.FieldValue.increment(1),
+        } : {}),
         updatedAt: now,
         ...(needsMemberAdd ? {members: admin.firestore.FieldValue.arrayUnion(uid)} : {}),
       }, {merge: true});
@@ -504,12 +586,13 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
     }
 
     if (chatSnap.exists) {
-      const existingChat = chatSnap.data() || {};
-      const rawParticipants = Array.isArray(existingChat.participants) ? existingChat.participants : [];
       const needsParticipantAdd = rawParticipants.length < MAX_COMMUNITY_MEMBERS && !rawParticipants.includes(uid);
       batch.set(chatSnap.ref, {
-        memberCount: admin.firestore.FieldValue.increment(1),
-        updatedAt: nowMs,
+        ...(!isAlreadyJoined ? {
+          memberCount: admin.firestore.FieldValue.increment(1),
+          lastMessage: lastMessageData,
+        } : {}),
+        updatedAt: nowMs + i,
         ...(needsParticipantAdd ? {participants: admin.firestore.FieldValue.arrayUnion(uid)} : {}),
       }, {merge: true});
     } else {
@@ -523,17 +606,26 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
         admins: [],
         createdBy: "platform",
         isPublic: true,
-        createdAt: nowMs,
-        updatedAt: nowMs,
-        lastMessage: null,
+        createdAt: nowMs + i,
+        updatedAt: nowMs + i,
+        lastMessage: lastMessageData,
       });
+    }
+
+    if (!isAlreadyJoined) {
+      batch.set(msgRef, messageData);
     }
 
     const userChatRef = userRef.collection("userChats").doc(chatId);
     batch.set(userChatRef, {
       chatId,
-      lastRead: nowMs,
-      addedAt: nowMs,
+      name: item.identity.name,
+      type: "community",
+      ...(!isAlreadyJoined ? {lastMessage: lastMessageData} : {}),
+      lastRead: nowMs + i,
+      addedAt: nowMs + i,
+      updatedAt: nowMs + i,
+      isDeleted: false,
     }, {merge: true});
   }
 

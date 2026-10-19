@@ -72,8 +72,6 @@ Before a member can extract value (TGE), they must prove their humanity and reac
 
 | Activity Category | Action | Reward (DSP) | Logic |
 | :--- | :--- | :--- | :--- |
-| **Growth** | New Signup (Welcome Bonus) | 10,000 | Baseline entry + 1:1 Ubuntu Protocol expansion. |
-| **Viral** | Referral (Both Inviter & Invitee) | 10,000 each | Rewarding the expansion of the network + dual 1:1 matches. |
 | **Social** | Relationship Accepted | 1,000 | Validating the social graph. |
 | **Chat** | New DM Conversation (Both) | 100 each | Starting new connections. |
 | **Chat** | Community Post | 100 | Community engagement. |
@@ -98,21 +96,22 @@ Before a member can extract value (TGE), they must prove their humanity and reac
 **Status**: The Universal Reputation & Governance Filter.
 **$DIASPORA** represents **Proof of Trust (PCT)**, which is derived directly from continuous Proof of Activity (P.O.A). A user's **Trust Score (0-100 PCT)** measures their verified community standing.
 
-#### 🛡️ 1. The Full Prerequisite Gate (7 Proof of Humanity Milestones + 91+ PCT)
-To unlock high-trust privileges, a member **must complete all 7 Proof of Humanity (PoH) Milestones AND possess a 91+ PCT score**. This dual qualification is mandatory for:
+#### 🛡️ 1. The Full Prerequisite Gate (Proof of Humanity + 91+ PCT)
+To unlock high-trust privileges, a member **must complete the base Proof of Humanity (PoH) Milestones AND possess a 91+ PCT score**. This dual qualification is mandatory for:
 1. **Peer Hosting**: Hosting fellow community members in your home.
 2. **Peer Stay**: Staying as a guest in host homes within the network.
 3. **Leadership Candidacy**: Running for or holding an elected Community Leader position.
 4. **Voting Rights**: Voting on Community Leaders and Community Loan Applications.
 
-#### 🏛️ The 4 Pillars of Proof of Humanity (PoH) Genesis (70,000 DSP and 70 PCT Base)
-The 7 PoH milestones establish the user's sovereign, verified human baseline (accumulating 70,000 DSP and 70 PCT Base total). **Each milestone is awarded individually and immediately upon completion (10,000 DSP & 10 PCT each)**:
-- **Instant On-Chain Proof of Humanity Distribution**: Upon completing all 7 milestones, 7,000 DSP (10%) is automatically converted into **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (the *only* on-chain transaction prior to macro TDE).
-- **Remaining Off-Chain Balance**: 63,000 DSP remains in the off-chain ledger to convert at scheduled global TDE epochs based on dynamic PCT efficiency.
+#### 🏛️ The 4 Pillars of Proof of Humanity (PoH) Genesis (70,000 DSP and 70 PCT Base Total)
+The PoH milestones establish the user's sovereign, verified human baseline:
+- **Instant On-Chain Proof of Humanity Distribution (7,000 $DIASPORA)**: The Genesis Gate unlocks upon completing the **first 6 base milestones** (Self-Sovereign Identity, Physical Attestation, and Circles of Trust). Upon completing these 6 milestones, 7,000 DSP (10%) is automatically converted and claimable as **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (the *only* on-chain distribution prior to macro TDE).
+- **Remaining Off-Chain Balance**: The remaining off-chain DSP balance converts at scheduled global TDE epochs based on dynamic PCT efficiency via individual user pull claims.
+- **Deferred Milestone 7 (Ubuntu Emergency Fund Contribution)**: Excluded from the initial Genesis Gate so new members can access their Genesis distribution without upfront token requirements. The contribution is deferred post-genesis, payable from earned tokens, and is required before a member can receive assistance from the Emergency Fund.
 
 1. **Pillar 1: Self-Sovereign Identity (Individual Proof)**:
    - **Profile Completion (10 Fields)**: Complete all 10 profile fields → **10,000 DSP and 10 PCT** (Awarded immediately upon 10/10).
-   - **Location Transparency**: Active live location → **10,000 DSP and 10 PCT** (Awarded immediately upon enabling; *if toggled off: permanently burns 10,000 DSP and forfeits 10 PCT*).
+   - **Location Transparency**: Active live location → **10,000 DSP and 10 PCT** (Awarded immediately upon enabling; *if deliberately toggled off inside the app settings: permanently burns 10,000 DSP and forfeits 10 PCT; does not apply to OS background optimizations or signal dropouts*).
 2. **Pillar 2: Physical & Peer Attestation (Cryptographic Grounding)**:
    - **Identity QR Exchanges (10 Scans)**: In-person scans → **10,000 DSP and 10 PCT** (Awarded immediately at 10 scans; **1,000 DSP** per scan for scan 11+).
    - **Peer Profile Verifications (10 Fields)**: Peer verification of profile claims → **10,000 DSP and 10 PCT** (Awarded immediately at 10 verifications).
@@ -120,13 +119,14 @@ The 7 PoH milestones establish the user's sovereign, verified human baseline (ac
    - **Family Circle (10 Connections)**: Reciprocal family bonds → **10,000 DSP and 10 PCT** (Awarded immediately at 10 connections).
    - **Friend Circle (10 Connections)**: Reciprocal friend bonds → **10,000 DSP and 10 PCT** (Awarded immediately at 10 connections).
    - *Bilateral Chat Prerequisite*: Direct chat must have at least 1 message sent by each user before a relationship request can be sent.
-   - *Anti-Collusion Firewall*: Circle of Trust members (20 people) CAN perform QR scans & profile verifications, but CANNOT participate in Trust Slider Staking/Vouching.
-4. **Pillar 4: Ubuntu Economic Solidarity (Collective Wealth)**:
-   - **Ubuntu Emergency Fund Contribution**: Active contribution/stake via earned in-app balance or $DIASPORA token → **10,000 DSP and 10 PCT** (Awarded immediately upon contribution).
+   - *Anti-Collusion Firewall*: Circle of Trust members (20 people maximum) CAN perform QR scans & profile verifications, but CANNOT participate in Trust Slider Staking/Vouching on each other to prevent artificial score inflation.
+   - *Slashing Contagion*: Accepting a Circle of Trust relationship directly binds your trust score and economic standing together. If any member in your Circle of Trust commits fraud, malicious behavior, or protocol violations that incur DSP or PCT slashing penalties, **the identical slashing penalty is deducted from your account as well (slashing contagion)**. This creates collective family/friend moral accountability—members only connect with individuals whose real-world character they fully back.
+4. **Pillar 4: Ubuntu Economic Solidarity (Collective Wealth - Post-Genesis Milestone)**:
+   - **Ubuntu Emergency Fund Contribution (Deferred)**: Active contribution/stake via earned in-app balance or $DIASPORA token → **10,000 DSP and 10 PCT** (Awarded immediately upon contribution; required before requesting emergency assistance).
      - *Governance & Custodianship*: Managed by the elected **Community Secretaries** of the member's dual geographic identity (home/host town and home/host country).
      - *Standard Tier (Up to $1,000)*: Instant / standard assistance review for urgent micro-emergencies.
      - *Fast-Track Tier ($1,001 to $50,000)*: When a local member requests emergency support (medical, legal, bereavement, repatriation), the **host town secretary** and **host country secretary** can authorize disbursement up to **$50,000 within 24 hours**.
-     - *Community Vote Tier (> $50,000)*: Disbursements exceeding **$50,000** require a local community vote of **10 full trust score members (91+ PCT)** with **>50% majority (51%+) approval within 48 hours** to authorize disbursement.
+     - *Community Vote Tier (> $50,000)*: Disbursements exceeding **$50,000** require a local community vote of **10 full trust score members (91+ PCT)** with **>50% majority (51%+) approval** to authorize disbursement.
 
 #### ⏱️ 2. The 100-Day P.O.A Health Index & Status Pause
 - **Active Standing**: Members must perform at least 1 Proof of Activity (P.O.A) action every **100 days** to maintain active 91+ PCT standing.
@@ -136,7 +136,7 @@ The 7 PoH milestones establish the user's sovereign, verified human baseline (ac
 To maintain active governance and prevent community apathy:
 - **Notification Stop Rule**: Qualified voters receive **1 daily digest notification UNTIL they vote**. Notifications stop immediately once pending ballots are cast or abstained.
 - **Leadership Voting Cadence**: Members must vote for leadership across their hierarchical locations at least **1 time per year**.
-- **Auto-Exemption**: Unqualified members (who have not completed the 7 PoH Milestones) are exempt from missed-vote penalties.
+- **Auto-Exemption**: Members who have not completed the base PoH Milestones are exempt from missed-vote penalties.
 - **"Abstain / Reviewed" Option**: Ballots feature an "Abstain" choice, allowing members to satisfy mandatory participation without forcing uneducated decisions.
 - **Base-10 Missed-Vote Penalties**:
   - Standard Qualified Member: **1 PCT point deduction** per missed loan application or leadership election vote.
@@ -151,6 +151,7 @@ To maintain active governance and prevent community apathy:
 - **Venue-Based Events (Public / Commercial Spaces)**: Captures the physical venue address or Google Plus Code for festivals, halls, and community centers. Automatic geofencing detects arrival and event duration, awarding **1,000 DSP** seamlessly with zero manual lines.
 - **Peer Stay Feedback Loop (Mutual 5-Star Reviews)**: Awards **1 PCT point** to both host and guest.
 - **Verified Misconduct Violation**: Triggers a **10 PCT points penalty**, immediately dropping bad actors below the 91+ threshold.
+- **Standing Drops Below 91+ PCT**: Immediately revokes high-trust privileges (Peer Hosting, Peer Stay, Community Leadership candidacy, and DDI loan eligibility). However, **a score below 91 does NOT freeze TDE distribution**; members continue to convert and claim their earned tokens according to their PCT efficiency decile.
 
 #### 🏷️ 5. Dual Profile Trust Badges
 - 🛡️ **PoH Verified**: Completed all 7 Proof of Humanity Milestones.
@@ -178,21 +179,21 @@ For every $1 earned by a user, the protocol mints $1 which is distributed as fol
 - **10% to Founders & Core Team**: Fixed 100% Efficiency.
 - **10% to Liquidity Treasury**: DEX Liquidity deployed on Aerodrome DEX (5% of total epoch supply, 100% conversion).
 - **10% Fixed Burn**: Immediate deflationary pressure.
-- **70% Community Sovereignty**: (7 Slots) Subject to CPCT (Community Proof of Community Trust) efficiency. Any unassigned slot is BURNED.
+- **70% Community Sovereignty**: (7 Slots) Subject to CPCT (Community Proof of Community Trust) efficiency.
 
 #### The Community Slots & Reserve Structure
 - **Town & City Level (Home Town & Host Town)**: **Town DDI Treasuries** — Dedicated to local member business loans (up to $1,000,000). Only borrowing members who put up 10% $DIASPORA collateral own the loan and venture.
 - **State & Province Level (Home State & Host State)**: **State Reserve Treasuries** — Dedicated liquidity reserves acting as the first-line backstop for local Town DDI loan requests.
 - **Country Level (Home Country & Host Country)**: **Country DDI Treasuries** — Dedicated to large-scale member loans exceeding $1,000,000+ (for commercial real estate, corporate acquisitions, franchises, agriculture, infrastructure). Borrowing members who put up 10% $DIASPORA collateral own the assets and owe the loan.
-- **Continent Level (Home Continent & Host Continent)**: **Continent Treasuries (50/50 Sovereign Split)** — Managed directly by the protocol under a dual-mandate structure:
-  - **50% Sovereign Bond Allocation:** Managed by the protocol to purchase **government bonds and Treasury Bills** in host and home nations. Allocations are calculated pro-rata based on each country's contribution to that continental treasury (e.g., Tanzania's contribution into the African Home Treasury is allocated to buy Bank of Tanzania sovereign bonds/bills; host continent funds buy sovereign bonds in host nations like US/UK). Governments view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding, incentivizing central banks and ministries of finance to integrate Diaspora Nearby into national economic, banking, and payment systems (e.g., TIPS). **100% Platform Revenue:** All yield, interest, and coupon payments from these bonds belong **exclusively to Diaspora Nearby (the platform)** to fund infrastructure, engineering, and operations. Because the platform charges zero fees to users (frictionless economy), this sovereign bond mechanism serves as the protocol's self-funding revenue engine.
-  - **50% Liquid $DIASPORA Backstop:** Retained directly in on-chain $DIASPORA tokens on Base to serve as the regional liquidity backstop for Town and Country member DDI loans under the Upward Cascading Liquidity Protocol.
-- **Global Level**: **Global Reserve** — Zero-fee value transfers & remittances subsidies, leadership & chamber operations, global charitable contributions, platform upkeep, and final global liquidity backstop (100% TDE efficiency).
+- **Continent Level (Home Continent & Host Continent)**: **Continent Treasuries (100% Sovereign Bond & Treasury Bill Allocation)**:
+  - **100% Sovereign Bond & T-Bill Allocation:** Managed directly by the protocol to purchase **government bonds and Treasury Bills** in host and home nations. Allocations are calculated pro-rata based on each country's contribution to that continental treasury (e.g., Tanzania's contribution into the African Home Treasury is allocated to buy Bank of Tanzania sovereign bonds/bills; host continent funds buy sovereign bonds in host nations like US Treasuries or UK Gilts). Governments view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding, incentivizing central banks and ministries of finance to integrate Diaspora Nearby into national economic, banking, and payment systems (e.g., TIPS in Tanzania, FedNow in the US).
+  - **100% Platform Revenue:** All yield, interest, and coupon payments from these bonds belong **exclusively to Diaspora Nearby (the operating entity)** to fund infrastructure, engineering, mobile development, smart contract audits, and corporate security. It serves strictly as the platform's self-funding revenue engine.
+- **Global Level**: **Global Reserve** — Enables all free activities across the platform. Absorbs network transaction costs, subsidizes remittance fees paid to legacy money transfer companies (so legacy companies still get paid while users send money completely free), finances community operations, funds Bilateral Chambers of Commerce, pays salaries for elected Community Council officers, and serves as the final liquidity backstop (100% TDE efficiency).
 
-### 3.3 The Constant-10 Rule & Overflow
+### 3.3 The Constant-10 Rule & Locality-Driven Hierarchy
 - **Fixed Infrastructure Burn**: Exactly 10% of every matching expansion is destroyed.
-- **Constant Occupation**: All 10 slots (Founders, Investors, Burn, 7 Communities) are always filled.
-- **Global Overflow**: If a member has not joined a specific regional tier, that allocation is automatically directed to the **Global Reserve**. This ensures the 1:1 match is never broken and community wealth is always preserved.
+- **Constant Occupation**: All 10 slots (Founders, Liquidity Treasury, Deflationary Burn, 7 Community Tiers) are always populated.
+- **Locality-Driven Inclusion**: Because users search and select their specific locality (city/town via Google Places auto-resolve), their complete geographic hierarchy (city, state/province if applicable, and country) is established deterministically upon joining. Every community tier is linked, ensuring community wealth is perpetually preserved across all 10 slots.
 
 ### 3.4 Diaspora Direct Investments (DDI) — 2-Tier Unified Framework (Member Loans)
 Community treasuries fund member wealth and economic independence across two standardized loan tiers. All DDI allocations are **loans to members** (individual members or pooled member groups). Members who put up **10% collateral in $DIASPORA** own the business, land, or assets, and owe the loan obligation.
@@ -216,14 +217,13 @@ When an approved DDI loan application exceeds the liquidity balance currently he
 1. **Town DDI Treasury** (First drawdown from local balance)
 2. $\to$ **State Reserve Treasury** (Draws remaining shortfall from State Reserve backstop)
 3. $\to$ **Country DDI Treasury** (Draws remaining shortfall from Country DDI pool)
-4. $\to$ **Continent Reserve Treasury** (Draws remaining shortfall from Continental Treasury's 50% Liquid $DIASPORA Backstop)
-5. $\to$ **Global Reserve** (Draws remaining shortfall from Global Reserve final backstop)
+4. $\to$ **Global Reserve** (Draws remaining shortfall from Global Reserve final backstop)
 
 This multi-tier cascading mechanism guarantees that viable, community-approved local businesses and member enterprises are never blocked by temporary localized liquidity shortages.
 
 ---
 
-## ⚡ 4. THE GREAT RESET: TOKEN GENERATION EVENT (TGE)
+## ⚡ 4. THE GREAT RESET: TOKEN GENERATION EVENT (TGE) & TDE
 TGE is the "Crystalization" event where off-chain DSP points become on-chain liquid $DIASPORA currency.
 
 ### 4.1 Distributed DSP Trigger
@@ -231,15 +231,15 @@ TGE triggers when cumulative distributed DSP crosses the next supply milestone
 (e.g., 1,000,000 DSP for Epoch 1). Verified population is tracked as an
 informational network-growth benchmark, but it does not gate TGE execution.
 
-### 4.2 The 10-TGE Event Cycle
-Each Epoch consists of **10 TGE events**.
+### 4.2 The 10-TGE / TDE Event Cycle & Individual Pull Claims
+Each Epoch consists of **10 Token Distribution Events (TDEs)**.
 - Each event distributes **10%** of the Epoch's total supply target.
-- This creates 10 specific- **Wealth Windows**: TGE events happen in 10% increments of the supply milestone.
+- **Individual Pull Claims**: Distribution is executed via an in-app **"Claim $DIASPORA"** button for each qualified user using cryptographic on-chain verification (Merkle pull claims), eliminating push-batch gas bottlenecks and ensuring infinite horizontal scalability.
 - **System Exemption**: Founders convert at **100% efficiency**, reflecting their fixed commitment to platform infrastructure.
 
-### 4.3 Universal Participation
-- **Universal Inclusion**: Every registered user, regardless of their personal balance or verification status, participates in the TGE conversion once the global triggers are met.
-- This ensures absolute inclusion for the entire Diaspora community while maintaining the integrity of the network expansion.
+### 4.3 Universal Participation & TDE Reset
+- **Universal Inclusion**: Every registered member who reaches the distributed milestone participates in the TDE conversion.
+- **Off-Chain Reset**: Upon claiming on-chain $DIASPORA, the corresponding off-chain DSP balance is reset to **0** for that cycle, starting fresh accumulation for subsequent epochs.
 
 ---
 
@@ -320,16 +320,15 @@ All penalties are 100% code-verifiable and follow a unified standard: **-1,000 D
 | **Expired Order Fulfillment** | -1,000 DSP | -1 PCT per 10 | Seller fails to fulfill paid order before expiry timer |
 | **Late DDI Loan Repayment** | -1,000 DSP | -1 PCT per 10 | Borrower misses scheduled repayment beyond 10-day grace |
 | **Peer Verification Revoked** | -1,000 DSP | -1 PCT per 10 | Peer explicitly retracts a previously verified field |
-| **Location Disabled at TGE** | Burn 10k DSP | 10 PCT Forfeited | Live location toggled OFF at time of TGE reset |
+| **Location Disabled Inside App** | Burn 10k DSP | 10 PCT Forfeited | Live location deliberately toggled OFF in app settings |
 
 ### 7.3 Dual-Currency Acceptance Requirement ($DIASPORA & Local Fiat)
 All providers across Diaspora Nearby — including marketplace merchants, freelance service providers, peer homestay hosts, peer car owners, and real estate sellers/lessors — are **strictly required to accept both $DIASPORA token and local fiat currency**. This ensures frictionless accessibility for all members while driving organic utility and real-world circulation for the $DIASPORA token.
 
 ### 7.4 Protocol Burns
 - **10% Fixed Expansion Burn**: 10% of every 1:1 system match is permanently destroyed.
-- **Unassigned Slot Burn**: Community slots without members are burned.
-- **Unclaimed TGE Burn**: Tokens below gates (user < 10,000 or community < 1,000,000) are burned on-chain.
-- **PCT Efficiency**: Low trust scores reduce conversion rates, effectively burning unconverted $DIASPORA.
+- **Claim Earned Tokens Anytime**: Members can claim their earned tokens anytime without expiration or epoch time windows.
+- **PCT Efficiency**: Low trust scores reduce conversion rates, automatically burning unconverted $DIASPORA on-chain to the canonical dead address (0x000...dEaD).
 
 ---
 

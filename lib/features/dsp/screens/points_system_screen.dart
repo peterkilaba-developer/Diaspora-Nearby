@@ -420,14 +420,13 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               trustData: trustDataAsync.value,
             ),
 
-            if ((lifetimeEarnings['welcome_bonus'] ?? 0) > 0)
-              _buildActivityCard(
-                context,
-                title: 'Welcome Bonus (Legacy)',
-                subtitle: 'Legacy welcome bonus awarded upon joining',
-                amount: '10,000 DSP',
-                earned: lifetimeEarnings['welcome_bonus'] ?? 0,
-              ),
+            _buildActivityCard(
+              context,
+              title: 'Welcome Bonus (DSP Points)',
+              subtitle: '10,000 DSP points awarded upon joining',
+              amount: '10,000 DSP',
+              earned: lifetimeEarnings['welcome_bonus'] ?? 0,
+            ),
             _buildActivityCard(
               context,
               title: 'Location Transparency',
@@ -455,11 +454,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Invite Family & Friends',
               subtitle:
-                  'Someone signs up using your referral code (10,000 DSP for both)',
-              amount: '10,000 DSP each',
+                  'Someone signs up using your referral code (1,000 DSP per invite)',
+              amount: '1,000 DSP',
               earned:
                   (lifetimeEarnings['referral_reward_referrer'] ?? 0) +
-                  (lifetimeEarnings['referral_reward_referee'] ?? 0),
+                  (lifetimeEarnings['referral_reward_referee'] ?? 0) +
+                  (lifetimeEarnings['referral_signup'] ?? 0),
             ),
             _buildActivityCard(
               context,

@@ -19,7 +19,7 @@ transactions with the deployer key or with a soon-to-exist Gnosis Safe.
 - [x] **OZ manifest synced** — `.openzeppelin/base.json` now tracks `0x55d7e7d0…` (live token proxy) and `0xb6C049…` (live TGE proxy). Future `upgrades.upgradeProxy` calls will work without `forceImport`. (#8 below.)
 - [x] **`DiasporaToken.sol` comments fixed** — `$DSP` → `$DIASPORA`, with explicit DSP-vs-DIASPORA distinction. (#11.)
 - [x] **`DiasporaSmartWallet` hardened** — added `_disableInitializers()` in constructor (the implementation can no longer be initialized directly), and the `execute()` function now bubbles up revert reasons and emits a separate `ExecutionFailed` event on the failure path. (#12 + #14.)
-- [x] **`DiasporaTGEControllerV2` written** — adds per-recipient welcome-bonus cap, lifetime received-bonus tracking, Merkle root commitments per batch, `getReconciliation()` view, and tightens `executeTGE` accounting. Storage-layout-compatible upgrade target. Sits in `contracts/DiasporaTGEControllerV2.sol`, ready to deploy via `upgrades.upgradeProxy` once a Safe is in place. (#4 + #10.)
+- [x] **`DiasporaTGEControllerV2` written & upgraded** — deployed with per-recipient distribution cap, lifetime received tracking, Merkle root commitments per batch, `getReconciliation()` view, and tightens `executeTGE` accounting. Storage-layout-compatible upgrade target. (Configured for Genesis PoH 7,000 $DIASPORA distribution upon completing 6 base milestones). (#4 + #10.)
 - [x] **TGE controller tests added** — 20 new tests in `test/DiasporaTGEController.test.js` cover mint/distribute/burn/epoch-rollover/efficiency/access-control. Combined with existing wallet tests, the suite is 33/33 passing. (#13.)
 - [x] **Admin scripts written** for `scripts/admin/`:
   - `migrate-to-safe.js` — already run; granted Safe `DEFAULT_ADMIN_ROLE` + `UPGRADER_ROLE` on all 3 contracts.
@@ -133,7 +133,7 @@ Coordinated upgrade — contract upgrade + backend redeploy must land within min
 2. From the Safe (https://app.safe.global → Apps → Transaction Builder), execute the printed `upgradeToAndCall(...)` against `0xb6C049…`. Sets `maxWelcomeBonusPerRecipient = 1000 DIASPORA` via the bundled `initializeV2` call. Requires 2 of 3 Safe signatures.
 3. `cd functions && firebase deploy --only functions` — pushes the updated `dsp.js`.
 
-Between steps 2 and 3, new signups will queue DSP points correctly but the on-chain $DIASPORA welcome bonus will fail. Stay coordinated.
+Between steps 2 and 3, members reaching Genesis PoH will queue DSP points correctly while on-chain Genesis PoH distribution is scheduled. Stay coordinated.
 
 ### 5. `rotateAllWallets()` on WalletFactory
 
@@ -259,7 +259,7 @@ Add an "End-to-end flow" diagram showing how:
 - User signs up → Cloud Function calls `WalletFactory.createWallet(phoneHash)`
 - DSP milestones accumulate off-chain in Firestore
 - Oracle calls `TGEController.mintEpochSupply()` then `executeTGE()` to convert DSP → DIASPORA
-- Welcome bonuses fast-path through `distributeWelcomeBonus`
+- Genesis PoH completion triggers 7,000 $DIASPORA on-chain distribution, and TDE distributions are claimed by users
 
 Right now this is implicit — a new contributor has to read three contracts and infer it.
 

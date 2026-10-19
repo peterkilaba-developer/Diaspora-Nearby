@@ -765,11 +765,11 @@ class ChatMessagingService {
 
     try {
       final newMsgRef = _messagesCol(chatId).doc();
-      await newMsgRef.set(messageData);
-
-      final lastMessageData = {
+      final lastMessageData = <String, dynamic>{
         'id': newMsgRef.id,
-        'content': 'Location',
+        'content': caption?.trim().isNotEmpty == true
+            ? caption!.trim()
+            : 'Location',
         'timestamp': now,
         'senderId': senderIdOverride ?? currentUserId,
         'senderName': senderNameOverride ?? '$firstName $lastName'.trim(),
@@ -777,40 +777,31 @@ class ChatMessagingService {
         'status': 'sent',
       };
 
-      await _chatsCol.doc(chatId).set({
-        'lastMessage': lastMessageData,
-        'updatedAt': now,
-      }, SetOptions(merge: true));
-
-      final userIdsToUpdate = Set<String>.from(participants ?? []);
-      if (senderIdOverride != null) {
-        userIdsToUpdate.add(senderIdOverride);
-      } else if (currentUserId != null) {
-        userIdsToUpdate.add(currentUserId!);
-      }
-
-      for (final userId in userIdsToUpdate) {
-        try {
-          final userChatUpdates = <String, dynamic>{
+      final batch = _firestore.batch();
+      batch.set(newMsgRef, messageData);
+      batch.set(
+        _chatsCol.doc(chatId),
+        {'lastMessage': lastMessageData, 'updatedAt': now},
+        SetOptions(merge: true),
+      );
+      if (currentUserId != null) {
+        batch.set(
+          _userChatsCol(currentUserId!).doc(chatId),
+          {
+            'chatId': chatId,
             'lastMessage': lastMessageData,
             'updatedAt': now,
             'isDeleted': false,
-          };
-          if (userId != currentUserId) {
-            userChatUpdates['unreadCount'] = FieldValue.increment(1);
-          }
-          await _userChatsCol(
-            userId,
-          ).doc(chatId).set(userChatUpdates, SetOptions(merge: true));
-        } catch (e) {
-          debugPrint('Error updating userChat for $userId: $e');
-        }
+          },
+          SetOptions(merge: true),
+        );
       }
+      await batch.commit();
 
       return Message.fromFirestoreData(newMsgRef.id, chatId, messageData);
     } catch (e) {
       debugPrint('Error sending location message: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -937,7 +928,7 @@ class ChatMessagingService {
         'content': caption?.trim() ?? '',
         'type': type,
         'timestamp': now,
-        'metadata': metadata, // [NEW]
+        'metadata': ?metadata,
         'storagePath': storageRef.fullPath,
         'status': 'sent',
       };
@@ -963,7 +954,6 @@ class ChatMessagingService {
       }
 
       final newMsgRef = _messagesCol(chatId).doc();
-      await newMsgRef.set(messageData);
 
       // Icon for last message
       String icon = type == 'image'
@@ -987,28 +977,26 @@ class ChatMessagingService {
         'metadata': ?metadata,
       };
 
-      final chatDocMediaUpdate = <String, dynamic>{
-        'lastMessage': lastMessageData,
-        'updatedAt': now,
-      };
-      // Self-heal type from chatId pattern
-      if (chatId.startsWith('direct_')) {
-        chatDocMediaUpdate['type'] = 'direct';
-      } else if (chatId.startsWith('chat_') ||
-          chatId.startsWith('home_') ||
-          chatId.startsWith('host_') ||
-          chatId.startsWith('past_') ||
-          chatId == 'global_community') {
-        chatDocMediaUpdate['type'] = 'community';
-      } else if (chatId.startsWith('event_')) {
-        chatDocMediaUpdate['type'] = 'event';
-      } else if (chatId.startsWith('org_')) {
-        chatDocMediaUpdate['type'] = 'organization';
+      final batch = _firestore.batch();
+      batch.set(newMsgRef, messageData);
+      batch.set(
+        _chatsCol.doc(chatId),
+        {'lastMessage': lastMessageData, 'updatedAt': now},
+        SetOptions(merge: true),
+      );
+      if (currentUserId != null) {
+        batch.set(
+          _userChatsCol(currentUserId!).doc(chatId),
+          {
+            'chatId': chatId,
+            'lastMessage': lastMessageData,
+            'updatedAt': now,
+            'isDeleted': false,
+          },
+          SetOptions(merge: true),
+        );
       }
-
-      await _chatsCol
-          .doc(chatId)
-          .set(chatDocMediaUpdate, SetOptions(merge: true));
+      await batch.commit();
 
       if (onConfirmed != null) {
         onConfirmed(

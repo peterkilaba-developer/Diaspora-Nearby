@@ -625,7 +625,10 @@ class PointsRepository {
   ) async {
     final response = await _functions
         .httpsCallable('getOrCreateReferralCode')
-        .call<Map<String, dynamic>>({});
+        .call<Map<String, dynamic>>({
+          'firstName': firstName,
+          'countryCode': countryCode,
+        });
     final code = response.data['code'] as String?;
     if (code == null || code.isEmpty) {
       throw StateError('Referral service returned no code.');

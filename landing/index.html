@@ -48,6 +48,49 @@
         })(window, document, "clarity", "script", "vwwrhkj22s");
     </script>
 
+    <!-- Prevent Theme Flash -->
+    <script>
+        (function() {
+            try {
+                var mode = localStorage.getItem('dn_theme_mode') || 'system';
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-mode', mode);
+                document.documentElement.style.colorScheme = theme;
+            } catch (e) {}
+        })();
+    </script>
+
+    <!-- Immediate Route & Platform Redirect for /invite and /download -->
+    <script>
+        (function() {
+            try {
+                var rawPath = window.location.pathname.replace(/\/+$/, '') || '/';
+                if (rawPath === '/invite' || rawPath === '/download') {
+                    var params = new URLSearchParams(window.location.search);
+                    var code = params.get('code') || params.get('ref');
+                    if (code) {
+                        try { localStorage.setItem('dn_referral_code', code); } catch(e) {}
+                    }
+                    var ua = navigator.userAgent || '';
+                    var isAndroid = /android/i.test(ua);
+                    var isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
+
+                    if (isIOS) {
+                        window.location.replace('https://testflight.apple.com/join/vB3XzPKg');
+                    } else if (isAndroid) {
+                        var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
+                        if (code) {
+                            playUrl += '&referrer=' + encodeURIComponent('utm_source=invite&referral_code=' + code);
+                        }
+                        window.location.replace(playUrl);
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
+
     <!-- Styles -->
     <link rel="stylesheet" href="styles.css?v=20261012d">
 
@@ -96,6 +139,11 @@
                 Diaspora Nearby
             </a>
             <div class="nav-actions">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme mode" title="Theme: System (Auto)">
+                    <i data-lucide="sun" class="theme-icon-light"></i>
+                    <i data-lucide="moon" class="theme-icon-dark"></i>
+                    <i data-lucide="laptop" class="theme-icon-system"></i>
+                </button>
                 <a href="#get-app" class="nav-cta">Get App <i data-lucide="download"
                             style="width:16px;height:16px"></i></a>
                 <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
@@ -132,9 +180,9 @@
                 <div class="hero-actions" id="hero-actions-container">
                     <div class="hero-buttons-row">
                         <!-- Android Link -->
-                        <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
+                        <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
                             target="_blank" rel="noopener" class="btn-play-badge" id="hero-btn-android"
-                            title="Join Android Testing on Google Play">
+                            title="Download Diaspora Nearby on Google Play">
                             <svg class="play-svg" viewBox="0 0 512 512" width="26" height="26" aria-hidden="true">
                                 <path fill="#4285F4" d="M47.7 27.6c-4.4 4.7-6.9 12.3-6.9 22.1v412.6c0 9.8 2.5 17.4 6.9 22.1l2.4 2.2 230.9-230.9v-5.4L49.9 25.4l-2.2 2.2z"/>
                                 <path fill="#FBBC04" d="M358.5 336.5l-77.5-77.7v-5.6l77.6-77.7 1.8 1 92 52.3c26.2 14.9 26.2 39.3 0 54.3l-92 52.4-1.9 1z"/>
@@ -162,12 +210,12 @@
                 </div>
 
                 <!-- Hero Audio Player -->
-                <div class="hero-audio-player" style="margin: 24px auto 0; max-width: 480px; background: rgba(0, 0, 0, 0.05); padding: 12px 24px; border-radius: 20px; border: 1px solid var(--border); text-align: center;">
+                <div class="hero-audio-player" style="margin: 24px auto 0; max-width: 480px; background: var(--surface); padding: 12px 24px; border-radius: 20px; border: 1px solid var(--border); box-shadow: var(--card-shadow); text-align: center;">
                     <div style="font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; font-weight: 600;">
-                        <i data-lucide="headphones" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>Listen: How Diaspora Nearby Works (Audio Overview)
+                        <i data-lucide="headphones" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>Listen: How Diaspora Nearby Works
                     </div>
                     <audio controls style="width: 100%; height: 36px; outline: none;">
-                        <source src="audio/Minting_Liquid_Wealth_With_Diaspora_Nearby_social.mp3" type="audio/mpeg">
+                        <source src="audio/Turning_Immigrant_Trust_Into_Financial_Capital_social.mp3" type="audio/mpeg">
                         Your browser does not support the audio element.
                     </audio>
                 </div>
@@ -203,9 +251,9 @@
                                 </div>
                             </div>
                             <ul style="font-size: 13px; color: var(--fg-muted); padding-left: 18px; margin: 0; line-height: 1.7;">
-                                <li><strong>Home Continent (ex.):</strong> Africa</li>
-                                <li><strong>Home Country (ex.):</strong> Tanzania</li>
                                 <li><strong>Home City (ex.):</strong> Kilimanjaro, Zanzibar, Arusha</li>
+                                <li><strong>Home Country (ex.):</strong> Tanzania</li>
+                                <li><strong>Home Continent (ex.):</strong> Africa</li>
                             </ul>
                         </div>
                     </div>
@@ -221,9 +269,9 @@
                                 </div>
                             </div>
                             <ul style="font-size: 13px; color: var(--fg-muted); padding-left: 18px; margin: 0; line-height: 1.7;">
-                                <li><strong>Host Continent (ex.):</strong> North America, Europe, Asia, Australia</li>
-                                <li><strong>Host Country (ex.):</strong> United States, United Kingdom, Canada, UAE</li>
                                 <li><strong>Host City (ex.):</strong> Dallas-Fort Worth, London, Toronto, Dubai</li>
+                                <li><strong>Host Country (ex.):</strong> United States, United Kingdom, Canada, UAE</li>
+                                <li><strong>Host Continent (ex.):</strong> North America, Europe, Asia, Australia</li>
                             </ul>
                         </div>
                     </div>
@@ -269,7 +317,7 @@
                 <div class="card">
                     <div class="card-icon sage"><i data-lucide="users-2"></i></div>
                     <h3>Community Leaders &amp; Admins</h3>
-                    <p>Leading WhatsApp or cultural groups. Turn unpaid community stewardship into liquid sovereign equity, streak rewards, and elected council governance.</p>
+                    <p>Leading WhatsApp or cultural groups. Transition your community to a sovereign network, govern local community treasuries, and qualify for elected, salaried council leadership.</p>
                 </div>
             </div>
 
@@ -399,10 +447,10 @@
                 <div class="section-label sage"><i data-lucide="shield" style="width:14px;height:14px"></i> Trust &amp; Identity</div>
                 <h2>Your Trust is Your Multiplier</h2>
                 <p>
-                    Trust is earned, not bought. Real members verify each other in person and through everyday interactions. Complete all 7 Proof of Humanity milestones to automatically unlock <strong>7,000 real on-chain $DIASPORA tokens on Base</strong>, peer hosting, marketplace services, and community voting rights.
+                    Trust is earned, not bought. Real members verify each other in person and through everyday interactions. Complete the <strong>6 Base Proof of Humanity milestones</strong> to automatically unlock <strong>7,000 real on-chain $DIASPORA tokens on Base</strong>, peer hosting, marketplace services, and community voting rights (with Milestone 7 deferred post-genesis).
                 </p>
                 <div class="quick-glance-badges fade-in">
-                    <div class="glance-badge"><i data-lucide="award"></i><span>7 Verified Milestones</span></div>
+                    <div class="glance-badge"><i data-lucide="award"></i><span>6 Base Milestones</span></div>
                     <div class="glance-badge"><i data-lucide="coins"></i><span>7,000 $DIASPORA on Base</span></div>
                     <div class="glance-badge"><i data-lucide="sliders"></i><span>1–100 Trust Slider</span></div>
                 </div>
@@ -412,10 +460,10 @@
             <h3 style="margin-bottom:8px; color: var(--sage);" class="fade-in">
                 <i data-lucide="award"
                     style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:6px"></i>
-                7 Proof of Humanity Milestones — 70,000 DSP &amp; 70 PCT Base
+                Proof of Humanity (PoH) — 6 Base Milestones &amp; Post-Genesis Mutual Aid
             </h3>
             <p style="color: var(--fg-muted); font-size: 14px; margin-bottom: 20px;" class="fade-in">
-                Complete these seven foundational steps to verify your identity with peers and unlock token minting.
+                Complete the six base steps to verify your identity with peers and unlock your 7,000 on-chain $DIASPORA Genesis distribution directly to your smart wallet.
             </p>
             <div class="card-grid fade-in">
                 <div class="card">
@@ -450,8 +498,8 @@
                 </div>
                 <div class="card">
                     <div class="card-icon sage"><i data-lucide="shield-alert"></i></div>
-                    <h3>Ubuntu Emergency Fund</h3>
-                    <p>Contribute to the mutual catastrophe protection pool to earn <strong>10,000 DSP and 10 PCT</strong>.</p>
+                    <h3>Ubuntu Emergency Fund (Deferred Post-Genesis)</h3>
+                    <p>Contribute to the mutual catastrophe protection pool to earn <strong>10,000 DSP and 10 PCT</strong>. Deferred post-genesis so new members can access Genesis distribution upfront; required before requesting emergency aid.</p>
                 </div>
             </div>
 
@@ -702,15 +750,15 @@
                     Members contribute $100 in $DIASPORA annually directly to an on-chain treasury. The fund is governed by elected <strong>Community Secretaries</strong> across your home and host locations.
                 </p>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; text-align: left;">
-                    <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--card-shadow);">
                         <strong style="color: var(--sage); display: block; margin-bottom: 4px;"><i data-lucide="shield-check" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>Standard Tier (Up to $1,000)</strong>
                         <span style="font-size: 13px; color: var(--fg-muted);">Rapid review and relief for urgent local micro-emergencies and immediate member assistance.</span>
                     </div>
-                    <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--card-shadow);">
                         <strong style="color: var(--sage); display: block; margin-bottom: 4px;"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>Fast-Track (Up to $50,000)</strong>
                         <span style="font-size: 13px; color: var(--fg-muted);">Your host town secretary and host country secretary can authorize up to <strong>$50,000 within 24 hours</strong>.</span>
                     </div>
-                    <div style="background: rgba(255,255,255,0.04); padding: 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="background: var(--surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--card-shadow);">
                         <strong style="color: var(--orange); display: block; margin-bottom: 4px;"><i data-lucide="vote" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>Community Vote (&gt; $50,000)</strong>
                         <span style="font-size: 13px; color: var(--fg-muted);">Amounts exceeding <strong>$50,000</strong> require a 48-hour community vote by high-trust members (91+ PCT) with a 51%+ majority.</span>
                     </div>
@@ -790,7 +838,7 @@
                     Community Treasuries</div>
                 <h2>The Engine of Localized Economic Sovereignty</h2>
                 <p>
-                    Every DSP-earning activity automatically funds 7 community treasuries—from your local city and state to your country and continent. These treasuries build collective wealth governed entirely by members.
+                    Every DSP-earning activity automatically funds 7 community treasuries—from your local city and country to your continent and global reserve. These treasuries build collective wealth governed entirely by members.
                 </p>
                 <div class="quick-glance-badges fade-in">
                     <div class="glance-badge"><i data-lucide="landmark"></i><span>7 Community Treasuries</span></div>
@@ -865,17 +913,11 @@
                         <div class="hier-heading"><i data-lucide="home"
                                 style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
                             Home Country</div>
-                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1
-                                unit</span></div>
-                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1
-                                unit</span></div>
-                        <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5
-                                unit</span></div>
-                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span>
-                        </div>
+                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span></div>
+                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">1 unit</span></div>
+                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1 unit</span></div>
                     </div>
                     <div class="hierarchy-col-center">
-                        <div class="vline"></div>
                         <div class="vline"></div>
                         <div class="vline"></div>
                         <div class="vline"></div>
@@ -884,19 +926,18 @@
                         <div class="hier-heading"><i data-lucide="plane"
                                 style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
                             Host Country</div>
-                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1
-                                unit</span></div>
-                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">0.5–1
-                                unit</span></div>
-                        <div class="hier-node"><i data-lucide="map"></i> State / Province <span class="hier-label">0.5
-                                unit</span></div>
-                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span>
-                        </div>
+                        <div class="hier-node"><i data-lucide="map-pin"></i> City <span class="hier-label">1 unit</span></div>
+                        <div class="hier-node"><i data-lucide="flag"></i> Country <span class="hier-label">1 unit</span></div>
+                        <div class="hier-node"><i data-lucide="globe-2"></i> Continent <span class="hier-label">1 unit</span></div>
                     </div>
                 </div>
                 <p style="font-size: 12px; color: var(--fg-muted); margin-top: 12px; line-height: 1.6;">
-                    Each unit = 10% of matching DSP across 7 community treasuries (70%): <strong>Global Reserve</strong> (funds community operations &amp; absorbs network fees for zero-fee value transfer), <strong>Town &amp; Country Treasuries</strong> (powers DDI member loans), and <strong>Continental Treasuries</strong> (100% sovereign bond engine for platform revenue &amp; institutional backing). Unset states roll up to the country level.
+                    Each unit = 10% of matching DSP across 7 community treasuries (70%): <strong>Global Reserve</strong> (funds community operations, pays council salaries, and subsidizes legacy remittance fees for zero-fee value transfers), <strong>Town &amp; Country Treasuries</strong> (powers DDI member loans), and <strong>Continental Treasuries</strong> (100% sovereign bond engine for platform revenue &amp; institutional backing).
                 </p>
+                <div style="margin-top: 10px; padding: 10px 14px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); font-size: 11.5px; color: var(--fg-muted); line-height: 1.5;">
+                    <i data-lucide="info" style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:5px;color:var(--sage)"></i>
+                    <strong>Disclaimer:</strong> In specific three-tier countries (such as the United States and approximately 22 federal countries with state or provincial systems), matched DSP is split 50/50 (0.5 unit each) with their location between city and country like state or province.
+                </div>
             </div>
         </div>
     </section>
@@ -987,12 +1028,6 @@
                 </div>
             </div>
 
-            <!-- Bi-Directional Earning Callout -->
-            <div style="margin: 0 auto 32px; max-width: 720px; padding: 18px 22px; background: rgba(126, 87, 194, 0.1); border-radius: 10px; border: 1px solid rgba(126, 87, 194, 0.3); text-align: left;" class="fade-in">
-                <strong style="color: #7e57c2; display: block; margin-bottom: 8px; font-size: 15px;"><i data-lucide="repeat" style="width:16px;height:16px;vertical-align:middle;margin-right:6px;"></i>Bi-Directional Earning</strong>
-                <span style="font-size: 14px; color: var(--fg-muted); line-height: 1.5; display: block;">For direct 1-to-1 interactions like messaging, vouching, and verifying, <strong>both members earn DSP</strong>. Making connections creates measurable value for both you and your peers.</span>
-            </div>
-
             <!-- Interactive Earnings & Trust Calculator -->
             <div class="calculator-card fade-in" id="earnings-calc">
                 <div class="calc-header">
@@ -1072,13 +1107,6 @@
                     <div class="reward-info">
                         <div class="reward-action" style="font-weight: 700;">Bi-Directional Social &amp; Economic Rewards</div>
                         <div class="reward-amount" style="color: var(--sage); font-weight: 600;">Every interaction earns DSP for both you and your community peers</div>
-                    </div>
-                </div>
-                <div class="reward-item" data-category="marketplace" style="background: rgba(239, 108, 0, 0.06); border-color: rgba(239, 108, 0, 0.25);">
-                    <div class="reward-icon orange"><i data-lucide="users" style="width:18px;height:18px"></i></div>
-                    <div class="reward-info">
-                        <div class="reward-action">Member Referral (Both)</div>
-                        <div class="reward-amount" style="color: var(--orange);">1,000 DSP each (+ streak bonuses)</div>
                     </div>
                 </div>
                     <div class="reward-item" data-category="social">
@@ -1678,7 +1706,7 @@
                     Zero-Fee Value Transfer</div>
                 <h2>Send Value Anywhere, Pay Nothing</h2>
                 <p>
-                    Transfer value in <strong>DSP</strong>, <strong>$DIASPORA</strong>, or <strong>Fiat</strong> with zero intermediary commissions. The Global Reserve absorbs network fees so you pay zero.
+                    Transfer value in <strong>DSP</strong>, <strong>$DIASPORA</strong>, or <strong>Fiat</strong> with zero intermediary commissions. The Global Reserve subsidizes legacy remittance fees and absorbs network costs—legacy rails still get paid their fees, while you send money home completely free.
                 </p>
             </div>
             <div class="card-grid fade-in">
@@ -1762,14 +1790,14 @@
                     Native Payment &amp; Checkout Infrastructure
                 </h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: stretch; text-align: left;">
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
+                    <div style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--card-shadow); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
                         <div class="card-icon sage" style="margin: 0; width: 40px; height: 40px; min-width: 40px;"><i data-lucide="wallet"></i></div>
                         <div>
                             <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--fg);">Smart Wallet Checkout</h4>
                             <p style="margin: 0; font-size: 13px; color: var(--fg-muted); text-align: left; line-height: 1.5;">Self-custodial smart wallet created with your phone number. Enjoy 1-tap gasless checkout for travel, stays, and marketplace purchases on Base.</p>
                         </div>
                     </div>
-                    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
+                    <div style="background: var(--surface); border: 1px solid var(--border); box-shadow: var(--card-shadow); border-radius: 10px; padding: 18px; display: flex; gap: 14px; align-items: flex-start;">
                         <div class="card-icon orange" style="margin: 0; width: 40px; height: 40px; min-width: 40px;"><i data-lucide="landmark"></i></div>
                         <div>
                             <h4 style="margin: 0 0 6px; font-size: 15px; color: var(--fg);">Organization Invoicing &amp; B2B</h4>
@@ -1905,7 +1933,7 @@
 
                 <div class="signup-form" style="margin-top: 24px;">
                     <div class="form-row" style="flex-direction: column; gap: 12px;">
-                        <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby"
+                        <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby"
                             target="_blank" rel="noopener" id="install-signup-btn" class="btn-play-badge"
                             style="width: 100%; justify-content: center; text-decoration:none;">
                             <svg class="play-svg" viewBox="0 0 512 512" width="24" height="24" aria-hidden="true">
@@ -1937,9 +1965,9 @@
                 <!-- Direct Play Store button for Android users -->
                 <div id="play-store-direct" class="play-store-direct" style="display:none;">
                     <p style="color:var(--fg-muted); font-size:14px; margin-bottom:12px;">
-                        Already a tester? Install directly from Google Play:
+                        Install directly from Google Play:
                     </p>
-                    <a href="https://play.google.com/apps/testing/com.diasporanearby.diasporanearby" target="_blank" rel="noopener" class="btn btn-play-store" style="text-decoration:none;">
+                    <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby" target="_blank" rel="noopener" class="btn btn-play-store" style="text-decoration:none;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                         <span>Install from Google Play</span>
                     </a>
@@ -2024,6 +2052,7 @@
                     <ul>
                         <li><a href="/privacy-policy">Privacy Policy</a></li>
                         <li><a href="/terms-of-service">Terms of Service</a></li>
+                        <li><a href="/child-safety">Child Safety Standards</a></li>
                         <li><a href="mailto:support@diasporanearby.com">Support</a></li>
                     </ul>
                 </div>

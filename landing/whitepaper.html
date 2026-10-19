@@ -26,6 +26,19 @@
             y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
         })(window, document, "clarity", "script", "vwwrhkj22s");
     </script>
+    <!-- Prevent Theme Flash -->
+    <script>
+        (function() {
+            try {
+                var mode = localStorage.getItem('dn_theme_mode') || 'system';
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-mode', mode);
+                document.documentElement.style.colorScheme = theme;
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="styles.css?v=20261012d">
     <style>
         html,body{overflow-x:hidden;}
@@ -102,6 +115,11 @@
                 Diaspora Nearby
             </a>
             <div class="nav-actions">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme mode" title="Theme: System (Auto)">
+                    <i data-lucide="sun" class="theme-icon-light"></i>
+                    <i data-lucide="moon" class="theme-icon-dark"></i>
+                    <i data-lucide="laptop" class="theme-icon-system"></i>
+                </button>
                 <a href="/#get-app" class="nav-cta">Get App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a>
                 <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
                     <i data-lucide="menu"></i>
@@ -261,19 +279,22 @@
 
             <h3>Proof of Community Trust (PCT)</h3>
             <p>
-                Your PCT score (0-100) dictates how efficiently your DSP converts to $DIASPORA at each TDE. Scores 1-10 convert at 0%, 11-90 convert at exact percentage, and 91-100 convert at 100%.
+                Your PCT score (0-100) dictates how efficiently your DSP converts to $DIASPORA at each TDE. Scores 1-10 convert at 0%, 11-90 convert at exact percentage, and 91-100 convert at 100%. A score below 91 revokes high-trust privileges (hosting, stay, leadership, DDI loan eligibility), but does <strong>not freeze TDE distribution</strong> — members participate in all TDE events at their respective efficiency decile.
             </p>
             <p>
-                The foundation of trust is established across the <strong>4 Pillars of Proof of Humanity (PoH)</strong>, each milestone worth <strong>10,000 DSP and 10 PCT</strong> (70,000 DSP and 70 PCT Base Max). Upon completing all 7 PoH milestones, the protocol automatically executes the <strong>Proof of Humanity Genesis Distribution: converting 7,000 DSP into 7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase</strong> (the only pre-TDE on-chain distribution), while the remaining 63,000 DSP converts at the scheduled global TDE epoch:
+                Tokens earned can be <strong>claimed anytime</strong> on Base L2 directly to smart wallets via individual pull claims; earned tokens do not expire with epoch progression. Only tokens lost through the efficiency gate (earned amount minus liquid distribution) are permanently burned to the canonical dead address (<code>0x000000000000000000000000000000000000dEaD</code>).
+            </p>
+            <p>
+                The foundation of trust is established across the <strong>4 Pillars of Proof of Humanity (PoH)</strong>. The Genesis Gate unlocks upon completing the <strong>first 6 base milestones</strong> (Self-Sovereign Identity, Physical Attestation, and Circles of Trust). Upon completing these 6 milestones, 7,000 DSP (10%) is automatically converted and claimable as the <strong>Proof of Humanity Genesis Distribution: 7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase</strong> (the only pre-TDE on-chain distribution), while the remaining 63,000 DSP converts at scheduled global TDE epochs via individual user pull claims:
             </p>
             <ul>
-                <li><strong>1. Current Location Transparency:</strong> Real-time live location. Turning it off permanently forfeits the 10 PCT and burns the awarded 10,000 DSP.</li>
+                <li><strong>1. Current Location Transparency:</strong> Real-time live location. Deliberately toggling it off in app settings permanently forfeits the 10 PCT and burns the awarded 10,000 DSP (does not apply to OS background optimizations or signal dropouts).</li>
                 <li><strong>2. Profile Completion:</strong> Complete all 10 required fields for 10,000 DSP and 10 PCT.</li>
                 <li><strong>3. QR Identity Exchanges:</strong> 10 unique in-person exchanges for 10,000 DSP and 10 PCT (1,000 DSP per scan 11+).</li>
                 <li><strong>4. Family Connections (Circle of Trust):</strong> 10 verified family connections (10,000 DSP and 10 PCT). Requires bilateral chat history; mutual slashing contagion applies.</li>
                 <li><strong>5. Friend Connections (Circle of Trust):</strong> 10 verified friend connections (10,000 DSP and 10 PCT). Requires bilateral chat history; mutual slashing contagion applies.</li>
                 <li><strong>6. Verified by Peers:</strong> 10 unique peer profile field verifications (10,000 DSP and 10 PCT). Verifiers must be in Circle of Trust or QR-met with bilateral chat.</li>
-                <li><strong>7. Ubuntu Emergency Fund:</strong> Contribution to the mutual catastrophe protection pool for 10,000 DSP and 10 PCT.</li>
+                <li><strong>7. Ubuntu Emergency Fund (Post-Genesis Deferred Milestone):</strong> Mutual catastrophe protection contribution for 10,000 DSP and 10 PCT. Deferred post-genesis so new members can access Genesis distribution without upfront token requirements; required prior to requesting emergency assistance.</li>
             </ul>
         </div>
 
@@ -287,15 +308,13 @@
             <div class="wp-table-scroll">
             <table class="wp-epoch-table">
                 <tr><th>Activity</th><th>Reward / Penalty</th></tr>
-                <tr><td>New Signup (Welcome Bonus)</td><td><strong>10,000 DSP</strong> (+ 1:1 Ubuntu Protocol expansion)</td></tr>
                 <tr><td>Complete Profile (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 fields)</td></tr>
                 <tr><td>Location Transparency (PoH)</td><td><strong>10,000 DSP</strong> (Dual Home/Host Community Attribution)</td></tr>
                 <tr><td>QR Identity Exchanges (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 scans) + <strong>1,000 DSP / scan (11+)</strong></td></tr>
                 <tr><td>Family Circle (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 connections)</td></tr>
                 <tr><td>Friend Circle (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 connections)</td></tr>
                 <tr><td>Peer Profile Verification (PoH)</td><td><strong>10,000 DSP Lump Sum</strong> (10 verifications)</td></tr>
-                <tr><td>Ubuntu Emergency Fund (PoH)</td><td><strong>10,000 DSP</strong></td></tr>
-                <tr><td>Refer a Friend (Both Inviter & Invitee)</td><td><strong>10,000 DSP each</strong></td></tr>
+                <tr><td>Ubuntu Emergency Fund (PoH - Deferred)</td><td><strong>10,000 DSP</strong></td></tr>
                 <tr><td>Trust Slider Rating</td><td><strong>1,000 DSP</strong> (Free rating 11-90; Staked rating locks 1,000 DSP)</td></tr>
                 <tr><td>Community Event Attendance</td><td><strong>1,000 DSP</strong></td></tr>
                 <tr><td>Host a Traveler</td><td><strong>1,000 DSP each</strong></td></tr>
@@ -571,7 +590,7 @@
                 <li><strong>100 days</strong> active participation minimum</li>
                 <li>Must be an <strong>admin of a 100+ member group</strong></li>
                 <li><strong>PCT score ≥ 91</strong> (Proof of Community Trust)</li>
-                <li>Staking requirement: PCT score must stay above 90 (at 91+)</li>
+                <li>Staking requirement: PCT score must stay above 90 (at 91+). If a member's PCT drops below 91, governance rights, leadership candidacy, peer hosting, and DDI loan eligibility are suspended, but their TDE token distribution is <strong>never frozen</strong> — they continue to convert at their respective efficiency decile.</li>
             </ul>
 
             <h3>Governance Types</h3>

@@ -15,18 +15,18 @@
 *Copy and paste this exact block into NotebookLM's Audio Overview Customization Field:*
 
 ```text
-Create an engaging, deeply insightful, high-energy deep dive introducing Diaspora Nearby to the world! The two AI podcast hosts should speak DIRECTLY to our target audience—the global diaspora community—with genuine empathy, excitement, and clarity.
+Create an engaging, deeply insightful, high-energy deep dive introducing Diaspora Nearby to the world! The two AI podcast hosts should speak DIRECTLY to our target audience—the global diaspora community and community group admins—with genuine empathy, excitement, and analytical depth. Dive deep into every single feature without leaving anything out!
 
 WHO IS THE TARGET AUDIENCE?
 The hosts must explicitly speak directly to listeners who live with a dual geographic identity:
 - Expats, international professionals, and diplomats working abroad.
 - International students studying away from home.
 - Immigrants and naturalized citizens who have built lives in new countries.
-- Travelers and digital nomads moving between locations.
-- Refugees and displaced individuals seeking sanctuary and trusted community.
+- City-to-city internal migrants: ANYONE who has a home town or home city but is living in another city—whether in another country or within the same country, temporarily or permanently! The diaspora experience is about having roots in one place while living in another.
+- Travelers and digital nomads moving between destinations.
+- Refugees and displaced individuals seeking sanctuary, mutual aid, and trusted community.
 - Returning Diaspora & Repatriates: Millions of diaspora members preparing to return home or actively reintegrating back home after years or decades abroad!
-- AND crucially: ANYONE who has a home town or home city but is living in another city—whether in another country or within the same country, temporarily or permanently! The diaspora experience is about having roots in one place while living in another.
-- Diaspora group organizers & admins: Leaders of WhatsApp chats, Facebook groups, Telegram channels, and cultural associations who have been managing communities for $0 return.
+- Diaspora group organizers & admins: Leaders of WhatsApp chats, Facebook groups, Telegram channels, and cultural associations who have been managing communities for $0 return while Big Tech extracts billions from their work.
 
 CENTRAL CASE STUDY — FOUNDER PETER SWAI (THE 25-YEAR ODYSSEY & THE RETURN HOME):
 The hosts MUST ground the entire conversation in the deeply relatable personal story of founder Peter Swai:
@@ -42,20 +42,97 @@ The hosts MUST ground the entire conversation in the deeply relatable personal s
 - How Diaspora Nearby solves both sides of the diaspora journey:
   1. Welcomes Newcomers: Anchors you in your host city with nearby discovery and instant peer verification so you never start from zero.
   2. Empowers Returnees: Prepares your return home with portable cryptographic trust (PCT/PoH), unbroken ties to home city/country councils, and access to Home DDI Member Loans (up to $1M in Home Town and $1M+ in Home Country) with 10% collateral so returnees can launch farms, enterprises, or community projects back home with collective sovereignty!
-  3. The Sovereign On-Chain Moment: Completing 7 Genesis Milestones converts 7,000 DSP into 7,000 on-chain $DIASPORA tokens on Base (Coinbase's Layer 2).
-  4. The 1:1 Ubuntu Matching Protocol: When you earn DSP, a 1:1 match funds 7 nested community treasuries across both home and host worlds simultaneously (City, State, Country, Continent for both, plus Global Reserve).
-  5. CONTINENTAL TREASURIES — THE 50/50 SOVEREIGN BOND ENGINE (DEDICATED SEGMENT):
-     Continental treasuries convert DSP into on-chain $DIASPORA tokens on Base scaled by APCT. The protocol manages continental funds in a 50/50 Sovereign Split:
-     - 50% buys sovereign government bonds pro-rata (Tanzania's share buys Bank of Tanzania bonds; North America buys US Treasuries), providing governments with guaranteed, reliable, low-interest funds so they eagerly open national payment rails to Diaspora Nearby.
-     - Crucially, 100% of the bond interest pays Diaspora Nearby the company, allowing the platform to charge ZERO fees to users!
-     - The other 50% stays in liquid $DIASPORA as a regional backstop for member loans.
-  6. The Ubuntu Emergency Fund: If a diaspora member faces a medical emergency, bereavement, or legal crisis, a $100/yr mutual aid pool allows local Community Secretaries to fast-track up to $50,000 within 24 hours.
-  7. Diaspora Direct Investments (DDI Member Loans): When members want to invest back home in Tanzania or buy a business in the host country, they can access member loans with 10% collateral and community voting. Borrowing members own the business 100% and owe the loan. DEX buybacks on Base on repayment!
-  8. Group Admins: Diaspora WhatsApp and Facebook group admins earn 1,000 DSP per member referral + streak bonuses (1,000 at 10 members, 10,000 at 100 members), monetizing their social capital and qualifying for elected Community Leadership!
-  9. Free Peer Hosting ($0 via ✈️ Free Host icon) vs Paid Stays: Trusted community members (91+ PCT) can host traveling diaspora members for $0 or book peer stays with zero middleman platform commissions.
+
+DIRECT COMPARE & CONTRAST: WHATSAPP & FACEBOOK GROUPS VS DIASPORA NEARBY (URGE TO SIGN UP):
+The hosts must explicitly call out the extractive reality of Web2:
+- On WhatsApp and Facebook: Group admins spend 10 to 20 hours a week moderating for $0 compensation. Meta monetizes their attention with intrusive ads while returning zero equity. Profiles are anonymous, spam is rampant, scams abound, remittances extract 6% to 8%, and when a medical crisis hits, families are reduced to desperate GoFundMe begging.
+- On Diaspora Nearby: It is an active capital, sovereign social network. Group activity mints real community wealth. Group admins qualify for elected, salaried Community Council governance. Remittances are free. Emergency medical aid up to $50,000 is fast-tracked through community council approval. Member loans up to $1M+ let diaspora members own businesses instead of remaining tenants.
+- The hosts must deliver a passionate, direct call-to-action urging group admins and diaspora listeners to stop handing their social capital to Silicon Valley, download Diaspora Nearby, and move their communities today!
+
+EXHAUSTIVE FEATURE DEEP DIVES (DO NOT LEAVE ANYTHING OUT):
+
+1. DUAL GEOGRAPHIC IDENTITY & PRIVACY ARCHITECTURE:
+   - Simultaneous membership in two complete hierarchies: Host World (Continent -> Country -> State -> City, e.g., North America -> USA -> Arizona -> Phoenix) and Home World (Continent -> Country -> State -> City, e.g., Africa -> Tanzania -> Coastal Region -> Dar es Salaam). One-tap toggle to switch perspectives.
+   - Geohash Privacy: Live proximity is shown (e.g., "0.8 miles away"), but private home addresses and coordinates are NEVER exposed.
+   - Grassroots Automated Geofencing: Proximity within 100 feet (~30m) for over 60 minutes automatically mints 1,000 DSP to both parties without awkward forms or check-in lines!
+
+2. PROOF OF HUMANITY (PoH) & GENESIS ON-CHAIN TOKEN MINT:
+   - 4 Pillars / 6 Base PoH Milestones (60,000 DSP & 60 PCT Base) + Deferred Milestone 7: Live Location Transparency, Profile Completion (10 fields), 10 In-Person QR Scans (1,000 DSP per scan beyond 10), 10 Family Connections, 10 Friend Connections, and 10 Peer Verifications (restricted to Circle of Trust, QR peers, or bilateral chat dialogue).
+   - The Sovereign On-Chain Moment: Completing the 6 base milestones unlocks the Genesis Gate, immediately minting 7,000 DSP into 7,000 on-chain $DIASPORA tokens on Base (Coinbase's Layer 2) directly into your self-custodial smart wallet—the only pre-TDE on-chain distribution! Milestone 7 (Ubuntu Emergency Fund contribution) is deferred post-genesis, enabling members to join the mutual aid pool before requesting emergency relief disbursements.
+
+3. CIRCLE OF TRUST (FAMILY & FRIENDS) WITH SLASHING CONTAGION:
+   - Up to 10 family connections and 10 friend connections (20 people maximum). Requires bilateral confirmation and prior direct chat dialogue.
+   - Anti-Collusion Firewall: Circle of Trust members are strictly forbidden from participating in Trust Slider staking (1–10 or 91–100) on each other, stopping fraudulent collusion cartels from inflating scores.
+   - Slashing Contagion: Accepting a Circle of Trust relationship directly binds your trust score and economic standing together. If any member in your Circle of Trust commits fraud, scams, or protocol misconduct that incurs DSP or PCT slashing penalties, THE IDENTICAL SLASHING PENALTY IS DEDUCTED FROM YOUR ACCOUNT AS WELL (slashing contagion)! This enforces collective moral accountability—you only invite people whose real-world character you are willing to stake your own standing on!
+
+4. THE TRUST SLIDER — CHARACTER PREDICTION MARKET:
+   - Long-press any message in chat to rate a member from 1 to 100 across 10 decile bands.
+   - Score 1–10 (No Trust): 1,000 DSP staked AGAINST the user.
+   - Score 11–90 (Standard Trust): Neutral free signal, earning 1,000 DSP for community participation.
+   - Score 91–100 (Full Trust): 1,000 DSP staked IN FAVOR of the user.
+   - Stake Combat & Prediction Market: Real token staking. Backing integrity is rewarded; vouching for bad actors incurs losses as future community consensus moves the stake.
+   - Gated TDE Efficiency: 91–100 PCT = 100% full conversion; 11–90 PCT = 1% per point; 0–10 PCT = 0% conversion (all unearned tokens permanently burned).
+
+5. THE 1:1 UBUNTU MATCHING PROTOCOL & NON-OVERLAPPING TREASURY ROLES:
+   - 1.0 DSP earned = 1.0 DSP matching minted, distributed across 10 distinct allocation slots with ZERO overlap:
+   - Town DDI Treasuries (Home & Host — 10% each): Dedicated strictly to local member business loans up to $1,000,000 with 10% collateral in $DIASPORA, 0% interest, and 51%+ democratic approval.
+   - State Reserve Treasuries (Home & Host — 5% each): Dedicated regional liquidity backstops. They DO NOT originate competing loans; they serve as the Tier 2 upward cascading backstop when Town DDI loan requests exceed local treasury balances, and fund state-level licensing and cultural centers.
+   - Country DDI Treasuries (Home & Host — 5% each): Dedicated to large-scale national member loans exceeding $1,000,000+ (for commercial real estate, corporate acquisitions, franchises, agriculture, hospitals, and infrastructure). Approved by 67% supermajority vote.
+   - Continental Treasuries (Home & Host — 10% each) — THE 100% SOVEREIGN BOND ENGINE:
+     * 100% of continental funds purchase sovereign government bonds and Treasury Bills pro-rata based on each country's contribution (e.g., Bank of Tanzania bonds for Tanzania; US Treasuries for the US).
+     * Platform Revenue Engine: 100% of bond coupon yields belong exclusively to Diaspora Nearby (the operating entity) to fund infrastructure, engineering, mobile development, smart contract audits, and corporate security. It serves strictly as the platform's self-funding revenue model.
+     * Central Bank Alignment: Governments view these treasuries as reliable, non-predatory sovereign budget funding, incentivizing central banks and finance ministries to eagerly open national payment rails (like TIPS in Tanzania, FedNow in the US, and M-Pesa).
+   - Global Reserve (10%) — ENABLER OF ALL FREE ACTIVITIES ACROSS THE PLATFORM:
+     * Absorbs platform transaction costs and network fees.
+     * Subsidizes legacy remittance fees paid to traditional money transfer companies (so legacy companies still get paid, but diaspora members send money completely free).
+     * Funds local community operations and events.
+     * Finances Bilateral Chambers of Commerce operations.
+     * Pays salaries for elected Community Council officers (President, Treasurer, Secretary).
+     * Final cascading liquidity backstop (100% TDE efficiency).
+   - System Allocations (30%): 10% Founders (100% efficiency), 10% Liquidity Treasury (DEX liquidity on Aerodrome DEX, 5% of total epoch supply released equally across 10 TDEs at 100% conversion), and 10% Permanent Deflationary Burn (sent to 0x...dEaD).
+   - Upward Cascading Liquidity Protocol: Town DDI -> State Reserve -> Country DDI -> Global Reserve. Local member initiatives are never stalled by localized liquidity shortages.
+
+6. OPEN MARKET BUYBACKS ON AERODROME DEX:
+   - Crucial economic cycle: All DDI member loans (both Town up to $1M and Country $1M+) are member-owned. Borrowing members own 100% of the enterprise and owe the loan.
+   - Borrowers repay by purchasing $DIASPORA directly on the open market (Aerodrome DEX on Ethereum Base Blockchain) and depositing tokens back to the Treasury.
+   - Every successful enterprise generates real fiat revenues that convert into direct, continuous open-market buy pressure on the DEX!
+
+7. DYNAMIC PRICE FLOOR & VALUATION ENGINE:
+   - Unified mathematical formula:
+     Dynamic Price Floor = [BasePrice ($0.001) * (1 + NetworkMultiplier + DeflationRatio) * EpochScarcity] + (Total Fiat GDP / Circulating Supply)
+   - Where NetworkMultiplier = log10(users) / 10; DeflationRatio = min(burned/minted, 0.5); EpochScarcity = 1.0 + (epoch * 0.1).
+   - Additive Real-World Fiat GDP: Every single economic transaction—marketplace sales, car rentals, peer stays, flight/hotel bookings via Amadeus, zero-fee remittances—adds directly to cumulative Fiat GDP.
+   - This creates a mathematically verifiable, rising price floor backed by real-world GDP velocity below which the token cannot fall!
+
+8. GROUP ADMIN ECONOMICS & SALARIED COUNCIL GOVERNANCE:
+   - Group admins are the natural civic leaders of the diaspora. Diaspora Nearby transitions them from uncompensated moderators into sovereign, salaried community leaders.
+   - Managing an active 100+ member group chat is the mandatory prerequisite to qualify for elected Community Council seats (President, Treasurer, Secretary).
+   - Council officers receive official salaries paid directly by the Global Reserve, rewarding proven community leaders for governing local treasuries, reviewing emergency aid, and championing local enterprise.
+
+9. THE UBUNTU EMERGENCY FUND:
+   - $100/yr mutual aid pool in $DIASPORA (awards 10,000 DSP and 10 PCT).
+   - 3 Fast-Track Tiers: Micro-emergencies up to $1,000 (instant); Fast-track relief from $1,001 to $50,000 within 24 hours (authorized by elected Host Town and Host Country Secretaries); Major disbursements exceeding $50,000 (48h local community vote of 91+ PCT members, >50% approval).
+   - 4 Pillars: Medical Emergency, Legal Aid, Bereavement Support, Repatriation.
+
+10. FRICTIONLESS ZERO-FEE ECOSYSTEM LAYER & MANDATORY DUAL-CURRENCY STANDARD:
+    - Products & Services Marketplace (0% listing fees, 0% commission).
+    - Peer Stays & Free Hosting: Trusted members (91+ PCT) can host traveling peers for $0 via the ✈️ Free Host icon or book peer stays with 0% platform commissions.
+    - Peer Car Rentals, Real Estate Marketplace with GPS plot survey tools, Flights & Hotels with Amadeus integration (+1,000 DSP per booking).
+    - Zero-Fee Value Transfers: Eliminates the fee burden of the multi-billion dollar remittance industry by having the Global Reserve subsidize legacy remittance fees directly—legacy rails still get paid, while users send value for free!
+    - Self-custodial smart wallet on Base created automatically from phone number with gasless transactions.
+    - Mandatory Dual-Currency Standard: All merchants and service providers must accept both $DIASPORA tokens and local fiat currency.
+
+11. 10-EPOCH SCALING MODEL & LIQUIDITY TREASURY TRADING:
+    - 10 Epochs scaling 10x per epoch (Epoch 1: 1M DSP trigger, 10 members; Epoch 10: 10B members, 1 Quadrillion tokens).
+    - 10 TDEs per epoch (each releasing 10% of that epoch's supply).
+    - Liquidity Treasury deploys 5% of total epoch supply to Aerodrome DEX pools (USDC and ETH pairs) with equal decile releases across the 10 TDEs, open to everyone with no minimums, no VC presales, and no lot sizes.
+
+12. BILATERAL CHAMBERS OF COMMERCE & CENTRAL BANK RAILS:
+    - Official bilateral trade chambers (e.g., Tanzania-United States Chamber of Commerce) connecting diaspora businesses, legal advisors, and cross-border trade.
+    - 100% Sovereign Bond purchases align national central banks and finance ministries, opening national payment switches (TIPS in Tanzania, FedNow in the US, M-Pesa).
 
 TONE & STYLE:
-Warm, articulate, conversational, visionary, and empowering. The hosts should feel like two knowledgeable tech and culture commentators who have uncovered a paradigm shift in how human trust and global communities are organized.
+Warm, articulate, conversational, visionary, and empowering. The hosts should sound like two knowledgeable tech and culture commentators who have uncovered a paradigm shift in how human trust and global communities are organized.
 ```
 
 ---
@@ -68,7 +145,7 @@ Warm, articulate, conversational, visionary, and empowering. The hosts should fe
 
 The platform was architected by **Peter Swai**, a full-stack and blockchain engineer whose personal journey embodies the diaspora experience:
 - **Home Roots:** Born and raised in **Dar es Salaam, Tanzania** (East Africa).
-- **The 25-Year American Odyssey:** Peter moved to the United States in **1998**, first landing in **San Francisco, California** with two friends. Within a few months, the reality of life as a newcomer set in: without a job, the high cost of living and the college he attended became unaffordable. He moved down to Southern California in **Santa Monica**, but there too the cost of living was too high. In search of survival, stability, and education, he moved to **Iowa**, then to **Washington, D.C.**, then southwest to **Phoenix, Arizona**, and eventually back to **Iowa**, where he currently lives today.
+- **The 25-Year American Odyssey:** Peter moved to the United States in **1998**, first landing in **San Francisco, California** with two friends. Within a few months, the reality of life as a newcomer set in: without a job, the high cost of living and the college he attended became completely unaffordable. He moved down to Southern California in **Santa Monica**, but there too the cost of living was too high. In search of survival, stability, and education, he moved to **Iowa**, then to **Washington, D.C.**, then southwest to **Phoenix, Arizona**, and eventually back to **Iowa**, where he currently lives today.
 - **The Return Home:** Now, after **over 25 years in the United States**, Peter is actively preparing his own **return home to Tanzania**.
 
 Like hundreds of millions of people worldwide, Peter experienced both halves of the diaspora equation:
@@ -77,17 +154,31 @@ Like hundreds of millions of people worldwide, Peter experienced both halves of 
 
 Peter Swai built Diaspora Nearby so that diaspora members never start from zero at either end of the bridge. The platform is designed not only to welcome and ground newcomers in new cities, but crucially to **prepare and empower those returning home**—ensuring their verified trust, collective wealth, and Home DDI member loans travel with them.
 
-Yet today, diaspora communities are forced onto extractive Web2 social networks (Facebook Groups, WhatsApp chats, Telegram channels). These platforms:
-1. **Monetize Attention & Data:** Meta and big tech extract billions from user attention while returning **$0 financial equity** to the community members generating the value.
-2. **Exploit Community Leaders:** Group admins spend hundreds of hours organizing, moderating, and welcoming new members for **zero financial compensation**.
-3. **Lack Verifiable Trust:** Profiles are anonymous, spam is rampant, and scams in unverified group chats are common.
-4. **Fragment Financial Life:** Remittances cost an average of 6% to 8% in fees, mutual emergency aid is handled through ad-hoc GoFundMe campaigns, and investing in home-country projects is plagued by lack of transparency.
+---
 
-Peter Swai built Diaspora Nearby to turn this broken dynamic upside down. By combining **location-aware discovery, cryptographic Proof of Humanity (PoH), Proof of Community Trust (PCT), the African philosophy of Ubuntu, and the Ethereum Base blockchain**, Diaspora Nearby converts human connection into collective, sovereign wealth.
+## 2. Compare & Contrast: Web2 Extractive Silos (WhatsApp & Facebook) vs Diaspora Nearby
+
+Today, diaspora communities are trapped on extractive Web2 social networks (Facebook Groups, WhatsApp chats, Telegram channels). The hosts should directly contrast these broken models:
+
+| Dimension | Web2 Platforms (Facebook Groups & WhatsApp) | Diaspora Nearby Sovereign Trust Platform |
+|---|---|---|
+| **Value Ownership** | **Extractive:** Meta monetizes community attention with ads; members and admins get **$0 equity**. | **User-Owned:** Every verified connection, message, and transaction mints **DSP points** & liquid **$DIASPORA** tokens on Base. |
+| **Group Admin Reality** | **$0 Compensation:** Admins manage 500+ member groups for free, absorbing moderation stress while Meta profits. | **Salaried Governance:** Admins of 100+ member chats qualify for elected **Community Council seats** with salaries paid by the Global Reserve. |
+| **Identity & Trust** | **Anonymous & Unverified:** Trolls, fake profiles, and scammers operate freely without accountability. | **Cryptographic Trust:** In-person **Identity QR Exchanges**, 7 Genesis Milestones, and a real-time **PCT score (0–100)**. |
+| **Family & Friends** | **Passive Friend Lists:** Unvetted contacts that create zero economic or social accountability. | **Circle of Trust & Slashing Contagion:** Reciprocal family/friend links where misconduct by one member deducts identical penalties from you. |
+| **Character Evaluation** | **Superficial Likes:** Vanity upvotes that mean nothing and can be botted. | **Trust Slider Prediction Market:** 1–10 (1,000 DSP staked against), 11–90 (free signal), 91–100 (1,000 DSP staked in favor). |
+| **Geographic Identity** | **Single, Static Location:** Apps force you to pick one city, ignoring your roots. | **Dual Geographic Identity:** Simultaneous presence in **Host City** (e.g., Phoenix) and **Home City** (e.g., Dar es Salaam). |
+| **Community Wealth** | **Zero Collective Capital:** Money leaves the community to payment processors and ad platforms. | **Nested Dual Treasuries:** Every earned point triggers a 1:1 match across 7 geographic community treasuries. |
+| **Remittance Burden** | **Extractive Fees:** Legacy remittance operators extract 6% to 8% in fees from hardworking diaspora families. | **Zero-Fee Value Transfer:** Global Reserve subsidizes legacy remittance fees directly—legacy rails get paid, users pay **$0**. |
+| **Mutual Aid & Safety Net** | **Desperate Crowdfunding:** GoFundMe links with high fees and delayed payouts. | **Ubuntu Emergency Fund:** $100/yr mutual aid pool; up to **$50,000 fast-tracked within 24 hours** by local Community Secretaries. |
+| **Cross-Border Investment** | **Opaque & Risky:** Sending money to relatives for construction often leads to lost funds. | **Diaspora Direct Investments (DDI):** 10% collateral loans backed by community votes and open-market DEX buybacks. |
+
+### The Call-to-Action for Group Admins & Diaspora Members
+The AI hosts should urge group admins: *"If you are running a diaspora WhatsApp or Facebook group, you are generating millions in ad revenue for Mark Zuckerberg while your community gets nothing. Stop doing uncompensated labor for Silicon Valley. Move your community to Diaspora Nearby, turn your social stewardship into salaried council governance, and build sovereign wealth for your people."*
 
 ---
 
-## 2. Who Is the Target Market? Dual Geographic Identity
+## 3. Dual Geographic Identity & Privacy Architecture
 
 Diaspora Nearby redefines what it means to be part of a "diaspora." A diaspora is **not limited to people living in another country**. It encompasses **anyone who has a home town or home city but is living in another city, temporarily or permanently**.
 
@@ -98,240 +189,359 @@ The platform is purpose-built for:
 4. **Internal Migrants (City-to-City):** Individuals who moved from their home city/province (e.g., from Dar es Salaam, Kilimanjaro, or Zanzibar) to another commercial hub or country for work.
 5. **Travelers & Digital Nomads:** Global explorers who want authentic, trusted peer stays, free community hosting, and seamless zero-fee value transfers.
 6. **Refugees & Displaced Persons:** Individuals seeking safety who need rapid zero-barrier cryptographic identity verification, emergency mutual aid, and free community shelter ($0 Free Host).
-7. **Diaspora Group Admins & Community Organizers:** The unsung heroes managing diaspora Facebook groups, WhatsApp chats, and cultural associations who can now turn their social capital into real, liquid economic equity.
+7. **Diaspora Group Admins & Community Organizers:** Civic stewards who can now transition their groups to a sovereign platform and qualify for salaried council governance.
 8. **Returning Diaspora & Repatriates:** Diaspora members preparing to return home or currently navigating their repatriation after years or decades abroad, requiring unbroken community ties, portable credit/trust, and Home DDI member loans to build enterprises back home.
 
----
+### Dual Geographic Presence
+When a user signs up, the app anchors them in two simultaneous geographic hierarchies:
+- **Host Hierarchy:** Host Continent $\rightarrow$ Host Country $\rightarrow$ Host State/Province $\rightarrow$ Host Town/City (e.g., North America $\rightarrow$ United States $\rightarrow$ Arizona $\rightarrow$ Phoenix).
+- **Home Hierarchy:** Home Continent $\rightarrow$ Home Country $\rightarrow$ Home Region/State $\rightarrow$ Home Town/City (e.g., Africa $\rightarrow$ Tanzania $\rightarrow$ Coastal Region $\rightarrow$ Dar es Salaam).
 
-## 3. Compare & Contrast: Web2 Extractive Silos vs Diaspora Nearby
+With a single tap on the Dual Identity toggle, users can switch perspectives—viewing nearby diaspora peers, local businesses, and events in Phoenix, or exploring municipal treasury proposals, investments, and community gatherings back home in Dar es Salaam.
 
-| Dimension | Web2 Platforms (Facebook Groups & WhatsApp) | Diaspora Nearby Sovereign Trust Platform |
-|---|---|---|
-| **Value Ownership** | **Extractive:** Meta monetizes attention with ads; members and admins get **$0 equity**. | **User-Owned:** Every verified connection, message, and referral mints **DSP points** & liquid **$DIASPORA** tokens on Base. |
-| **Group Admin Economics** | **$0 Compensation:** Admins manage 500+ member groups for free while taking on moderation stress. | **Massive Social Capital Monetization:** Admins earn **1,000 DSP per member** + streak bonuses (up to 10,000 DSP) + qualify for elected Council Leadership. |
-| **Identity & Trust** | **Anonymous & Unverified:** Trolls, fake reviews, scammers, and bots operate freely. | **Cryptographic Trust:** In-person **Identity QR Exchanges**, 7 Genesis Milestones, and a real-time **PCT score (0–100)**. |
-| **Geographic Identity** | **Single, Static Location:** Apps force you to choose one city, ignoring your roots. | **Dual Geographic Identity:** Simultaneous presence in **Host City** (e.g., Phoenix) and **Home City** (e.g., Dar es Salaam). |
-| **Community Wealth** | **Zero Collective Capital:** Money leaves the community to payment processors and ad platforms. | **Nested Dual Treasuries:** Every earned point triggers a 1:1 match across 7 geographic community treasuries. |
-| **Mutual Aid & Safety Net** | **Desperate Crowdfunding:** GoFundMe links with high fees and delayed payouts. | **Ubuntu Emergency Fund:** $100/yr mutual aid pool; up to **$50,000 fast-tracked within 24 hours** by local Community Secretaries. |
-| **Cross-Border Investment** | **Opaque & Risky:** Sending money to relatives for construction often leads to lost funds. | **Diaspora Direct Investments (DDI):** 10% collateral loans backed by community votes and Aerodrome DEX buybacks. |
+### Privacy-Preserving Geohash Discovery
+- The app uses hierarchical geohashing to display approximate distances (e.g., "0.8 miles away") on nearby discovery feeds.
+- Private residential addresses, precise GPS coordinates, and personal movement histories are **never exposed or sold**.
+- **Automated Grassroots Geofencing:** When two verified diaspora members attend a local cultural festival, religious service, or community dinner and remain within 100 feet (~30m) of each other for more than 60 minutes, the protocol automatically verifies the encounter and mints **1,000 DSP to both parties** without awkward forms, paper check-ins, or privacy invasions.
 
 ---
 
-## 4. The Journey of Peter Swai: How the Platform Works in Real Life
+## 4. Proof of Humanity (PoH) & The Sovereign Genesis On-Chain Mint
 
-To understand Diaspora Nearby, look at founder **Peter Swai** as the concrete example:
+To prevent sybil attacks, duplicate bots, and malicious actors from exploiting the economy, Diaspora Nearby establishes real-world identity through the **4 Pillars of Proof of Humanity (PoH)**, structured into **6 Base Genesis Milestones** (plus deferred Milestone 7).
 
-### Step 1: Dual Geographic Enrollment
-When Peter signs up in Phoenix, he doesn't just pick "Phoenix, AZ." The platform automatically links him to both of his worlds:
-- **Host Geography:** North America $\rightarrow$ United States $\rightarrow$ Arizona $\rightarrow$ **Phoenix**
-- **Home Geography:** Africa $\rightarrow$ Tanzania $\rightarrow$ Coastal Region $\rightarrow$ **Dar es Salaam**
-
-He exists in both hierarchies simultaneously. When he opens the app, he can see what is happening in the Phoenix Tanzanian community, and with one tap, see what is happening back home in Dar es Salaam.
-
-### Step 2: Nearby Discovery with Real-Time Privacy
-Peter activates **Current Location Transparency**. Using privacy-preserving geohashing, the app shows him other verified diaspora members nearby in Phoenix:
-- Distance is shown (e.g., "0.8 miles away").
-- Exact home addresses are NEVER exposed.
-- If Peter attends a cultural festival or a friend's gathering, automated geofencing detects when members are within 100 feet (~30m) for over 60 minutes, automatically verifying the encounter and minting **1,000 DSP to both parties** without awkward forms or check-in lines!
-
-### Step 3: Completing the 7 Proof of Humanity (PoH) Milestones
-To establish real trust, Peter completes the 4 Pillars of Proof of Humanity (7 Genesis Milestones), each awarding **10,000 DSP and 10 PCT** (70,000 DSP & 70 PCT total):
-1. **Current Location Transparency:** Keeps location enabled (10,000 DSP, 10 PCT).
-2. **Profile Completion:** Completes bio, profession, roots, and emergency contact (10,000 DSP, 10 PCT).
+Each completed milestone awards **10,000 DSP and 10 PCT** (60,000 DSP & 60 PCT Base):
+1. **Live Location Transparency:** Keeps current location enabled (10,000 DSP, 10 PCT).
+2. **Profile Completion:** Completes all 10 profile fields including bio, profession, roots, and emergency contact (10,000 DSP, 10 PCT).
 3. **Identity QR Exchanges:** Meets 10 peers in person and scans their cryptographic QR codes (10,000 DSP, 10 PCT). Beyond 10, every unique scan continues to award 1,000 DSP!
-4. **Peer Profile Verifications:** 10 peers confirm his professional and community identity (10,000 DSP, 10 PCT).
-5. **Family Circle:** 10 verified family connections (10,000 DSP, 10 PCT).
-6. **Friend Circle:** 10 verified friend connections (10,000 DSP, 10 PCT).
-7. **Ubuntu Emergency Fund Contribution:** Contributes his annual $100 in $DIASPORA to the collective mutual aid pool (10,000 DSP, 10 PCT).
+4. **Family Circle:** 10 verified family connections with bilateral chat history (10,000 DSP, 10 PCT).
+5. **Friend Circle:** 10 verified friend connections with bilateral chat history (10,000 DSP, 10 PCT).
+6. **Peer Profile Verifications:** 10 unique peers verify profile fields (10,000 DSP, 10 PCT). Restricted to Circle of Trust, QR peers, or bilateral chat dialogue.
+*(Deferred Milestone 7 — Ubuntu Emergency Fund Contribution: Contributes annual $100 in $DIASPORA to the collective mutual aid pool post-genesis; required to unlock emergency relief disbursements).*
 
-### Step 4: The Sovereign On-Chain Moment
-The moment Peter completes his 7th milestone, the system automatically executes a sovereign on-chain transaction:
-- **7,000 DSP is converted immediately into 7,000 on-chain $DIASPORA tokens on Base (Coinbase's Ethereum Layer 2)** and deposited directly into Peter's self-custodial smart wallet!
-- This gives Peter immediate, tangible crypto assets before macro Token Generation Events (TGE), cementing his verified human identity on the blockchain.
-- The remaining 63,000 DSP converts at the scheduled macro TGE according to his PCT efficiency score.
-
-### Step 5: Preparing the Triumphant Return Home to Tanzania
-After over 25 years in the United States, Peter is now actively preparing his return home to Tanzania. In the past, returning home after a quarter century meant navigating severe isolation and financial friction—local banks wouldn't honor foreign credit, childhood circles were dispersed, and starting enterprises meant high vulnerability.
-
-With Diaspora Nearby:
-1. **Portable Reputation Precedes Him:** Peter lands at Julius Nyerere International Airport in Dar es Salaam with his 91+ PCT score, on-chain verified identity, and active connections already visible in the Dar es Salaam diaspora hub.
-2. **Access to Home DDI Member Loans:** Peter can tap up to $1,000,000 in Home Town DDI or apply for $1,000,000+ in Home Country DDI member loans by pledging 10% collateral in $DIASPORA. The community votes to back his local Tanzanian enterprise (agricultural processing, tech development, or real estate), and Peter owns the enterprise 100%.
-3. **Bilateral Chamber of Commerce:** The official Tanzania-US Chamber of Commerce connects Peter to verified cross-border trade, suppliers, and legal advisors who understand both American and Tanzanian regulatory environments.
-4. **He Never Left:** Because Peter's interactions abroad continuously funded the Dar es Salaam City Treasury and Tanzania National Treasury via the 1:1 Ubuntu match, he returns not as an estranged outsider, but as an active economic pillar of his homeland community.
+### The Sovereign On-Chain Moment
+The moment a member completes the 6 Base Genesis Milestones:
+- **7,000 DSP is converted immediately into 7,000 on-chain $DIASPORA tokens on Base (Coinbase's Ethereum Layer 2)** and deposited directly into the user's self-custodial smart wallet!
+- This gives members real, tangible crypto assets on-chain before macro Token Generation Events (TDE), cementing their verified human identity on the blockchain.
+- The remaining 53,000+ DSP converts at scheduled macro TDE pull claims according to their PCT efficiency score.
 
 ---
 
-## 5. The 1:1 Ubuntu Matching Protocol & The 7 Nested Community Treasuries
+## 5. Circle of Trust (Family & Friends) with Slashing Contagion
 
-The defining economic breakthrough of Diaspora Nearby is the **1:1 Ubuntu Matching Protocol**, rooted in the African proverb *"Ubuntu: I am because we are."*
+Unlike superficial social media follower graphs, forming a **Circle of Trust** on Diaspora Nearby is a profound economic and moral commitment.
 
-Whenever a user earns **1.0 DSP** through positive community actions (referrals, hosting, verifying peers, organizing events), the protocol mints an identical **1.0 DSP match** distributed across **10 equal allocation slots (10% each)**:
+### 1. Requirements for Connection
+- Up to **10 Family Members** and **10 Friends** (maximum 20 people).
+- Requires reciprocal bilateral confirmation and prior direct chat dialogue (both parties must have exchanged messages).
 
-| Slot # | Allocation Target | Share | Why This Matters for Peter Swai |
+### 2. The Anti-Collusion Firewall
+- Family and close friends have natural conflicts of interest.
+- Members in your Circle of Trust are **strictly forbidden from participating in Trust Slider staking (1–10 or 91–100) on each other**.
+- They can leave standard free ratings (11–90), but cannot stake DSP to artificially inflate each other's reputation scores. High-trust stakes must be earned from independent peers, business partners, and community members.
+
+### 3. Slashing Contagion: Collective Moral Accountability
+- When you accept a friend or family member into your Circle of Trust, your trust scores and economic standing are **directly linked**.
+- **The Contagion Rule:** If any member of your Circle of Trust commits fraud, malicious scams, default, or protocol violations that result in DSP or PCT slashing penalties, **the identical slashing penalty is automatically deducted from your account as well (slashing contagion)**!
+- **Why This Matters:** In traditional crypto or social apps, bad actors create throwaway accounts or invite fake identities. Under Slashing Contagion, bad actors immediately harm their own closest family and friends. This introduces real-world social pressure and family integrity, ensuring that only honest, verified individuals enter the trust network.
+
+---
+
+## 6. The Trust Slider — Two-Sided Character Prediction Market
+
+Diaspora Nearby replaces broken 5-star rating systems with **The Trust Slider**, transforming reputation into a **two-sided character prediction market**.
+
+### Mechanics of the Trust Slider
+- **Access:** Long-press any message in chat or tap the Trust Slider on any member's profile.
+- **Scale:** 1 to 100, divided into 10 decile bands (1–10, 11–20, ..., 91–100).
+- **The Three Behavioral Tiers:**
+  1. **Score 1–10 (No Trust — Staked Against):** The rater stakes **1,000 DSP against** the target member. This flags bad actors, scammers, and toxic participants.
+  2. **Score 11–90 (Standard Trust — Free Signal):** A neutral community endorsement that requires no stake and awards **1,000 DSP** to the rater for contributing active social signal.
+  3. **Score 91–100 (Full Trust — Staked In Favor):** The rater stakes **1,000 DSP in favor** of the target member, putting their own balance on the line to vouch for exceptional integrity.
+
+### Prediction Market Dynamics ("Stake Combat")
+Staking DSP on a peer's character creates a real prediction market:
+- If a member vouched with Full Trust (91–100) continues to act honorably, provide safe hosting, repay loans, and support peers, future community raters confirm their high PCT, securing the staker's position.
+- If a vouched member turns out to be dishonest, commits fraud, or fails obligations, subsequent raters move the slider down to No Trust (1–10). This shifts the staked pool, causing the negligent vouching party to lose tokens. Backing character carries skin in the game.
+
+### Gated TDE Conversion Efficiency
+Your Proof of Community Trust (PCT) score (0–100) dictates how much of your earned off-chain DSP converts into liquid on-chain $DIASPORA tokens at macro TGE:
+- **91 – 100 PCT:** **100% Full Conversion** (Elite community trust).
+- **11 – 90 PCT:** **1% per PCT point** (e.g., 65 PCT = 65% conversion).
+- **0 – 10 PCT:** **0% Conversion** (All unearned tokens are permanently burned).
+
+---
+
+## 7. The 1:1 Ubuntu Matching Protocol & The 10-Slot Allocation Model
+
+Rooted in the African philosophy *"Ubuntu: I am because we are,"* Diaspora Nearby ensures that individual wealth creation automatically builds collective community wealth.
+
+Whenever a user earns **1.0 DSP** through positive community actions (hosting, verifying peers, chat dialogues, organizing gatherings), the protocol mints an identical **1.0 DSP match** distributed across **10 equal allocation slots (10% each)**:
+
+| Slot # | Allocation Target | Share | Primary Role in the Sovereign Economy |
 |---|---|---|---|
-| **Slot 1** | Global Community Reserve | 10% | Powers global protocol development, security grants, and international liquidity. |
-| **Slot 2** | Home Continent Treasury (Africa) — 50/50 Sovereign Split | 10% | **50% Sovereign Bond Allocation:** Managed by protocol to buy Bank of Tanzania and African sovereign bonds pro-rata (100% of yield pays Diaspora Nearby platform operations so users pay zero fees). **50% Liquid $DIASPORA Backstop:** Regional upward loan backstop. |
-| **Slot 3** | Home Country Treasury (Tanzania) | 5% | Dedicated capital for large-scale member loans ($1M+) in Tanzania. |
-| **Slot 4** | **Home State / Region Treasury (Dar es Salaam Region)** | **5%** | Dedicated liquidity reserve for regional member loans in Dar es Salaam. |
-| **Slot 5** | Home City Treasury (Dar es Salaam City) | 10% | Local municipal treasury for member business loans up to $1M in Dar es Salaam. |
-| **Slot 6** | Host Continent Treasury (North America) — 50/50 Sovereign Split | 10% | **50% Sovereign Bond Allocation:** Buys US Treasuries to fund platform operations with zero user fees. **50% Liquid $DIASPORA Backstop:** Regional upward loan backstop. |
-| **Slot 7** | Host Country Treasury (United States) | 5% | National US diaspora business development and legal advocacy. |
-| **Slot 8** | **Host State Treasury (State of Arizona)** | **5%** | Backs Arizona state-level diaspora initiatives, cultural centers, and small business support. |
-| **Slot 9** | Host City Treasury (City of Phoenix) | 10% | Directly finances local Phoenix diaspora community events, emergency reserves, and gatherings. |
-| **Slot 10** | System Allocations (Founders 10%, Liquidity 10%, Deflationary Burn 10%) | 30% | 10% to core founders, 10% to locked decentralized exchange liquidity, and 10% permanently burned to induce token scarcity. |
+| **Slot 1** | Global Community Reserve | 10% | **Enables All Free Activities:** Subsidizes legacy remittance fees, funds community operations, supports Chambers of Commerce, and pays council salaries. |
+| **Slot 2** | Home Continent Treasury (e.g., Africa) | 10% | **100% Sovereign Bond Allocation:** Buys Bank of Tanzania & African sovereign bonds pro-rata. Yields fund Diaspora Nearby platform revenue. |
+| **Slot 3** | Home Country DDI Treasury (e.g., Tanzania) | 5% | Dedicated capital for large-scale member loans ($1M+) for national agriculture, infrastructure, and commercial real estate. |
+| **Slot 4** | Home State / Region Reserve Treasury (e.g., Dar es Salaam Region) | 5% | Dedicated regional liquidity backstop for Town DDI loan shortfalls and provincial initiatives. |
+| **Slot 5** | Home Town / City DDI Treasury (e.g., Dar es Salaam City) | 10% | Local municipal treasury for member business loans up to $1M in home city. |
+| **Slot 6** | Host Continent Treasury (e.g., North America) | 10% | **100% Sovereign Bond Allocation:** Buys US Treasuries pro-rata. Yields fund Diaspora Nearby platform revenue. |
+| **Slot 7** | Host Country DDI Treasury (e.g., United States) | 5% | Dedicated capital for large-scale member loans ($1M+) to acquire profitable businesses and commercial property in host country. |
+| **Slot 8** | Host State Reserve Treasury (e.g., State of Arizona) | 5% | Dedicated state liquidity backstop for Host Town DDI loan shortfalls and state licensing/cultural support. |
+| **Slot 9** | Host Town / City DDI Treasury (e.g., City of Phoenix) | 10% | Local municipal treasury for member business loans up to $1M in host city. |
+| **Slot 10** | System Allocations (Founders 10%, Liquidity 10%, Deflationary Burn 10%) | 30% | 10% to core founders, 10% to DEX Liquidity Treasury on Aerodrome DEX, and 10% permanently burned to 0x...dEaD. |
 
-### The Genius of the State/Province Split
-For decentralized, federated nations like the **United States (50 States)** or regional powerhouses like **Tanzania (31 Regions)**, splitting the country allocation between Country (5%) and State/Province (5%) is an economic masterpiece:
-- Peter lives under the municipal and commercial jurisdiction of the **State of Arizona**. Phoenix diaspora entrepreneurs need state-level licensing assistance, local business grants, and state cultural centers.
-- Back home, **Dar es Salaam** is the commercial engine of Tanzania. Having a dedicated regional and municipal treasury ensures that local community projects in Dar es Salaam receive direct funding, rather than disappearing into a generalized national bucket.
-- **Result:** Every time Peter has a coffee with a verified friend in Phoenix, **BOTH Phoenix, Arizona and Dar es Salaam, Tanzania accumulate treasury reserves!**
+### Locality-Driven Deterministic Allocation
+Because users select their specific locality (city/town), their complete geographic hierarchy (city, state/province if applicable, and country) is established deterministically upon joining. Every community tier is linked, ensuring community wealth is perpetually preserved across all 10 slots.
 
 ---
 
-## 6. Continental Treasuries: The 50/50 Sovereign Bond Engine & Zero-Fee Platform Revenue
+## 8. The Hierarchical Treasuries: Distinct Roles with Zero Overlap
 
-While city, state, and country treasuries fund local member business loans and regional reserves, the **Continental Treasuries (Home Continent and Host Continent)** perform a revolutionary dual economic and geopolitical role.
+To ensure complete institutional clarity, each tier in Diaspora Nearby's treasury hierarchy performs a strictly defined, non-overlapping function:
 
-### The Conversion: Powered by APCT
-Continental treasuries accumulate off-chain DSP from the 1:1 Ubuntu Community match. At Token Generation & Distribution Events (TGE/TDE), these balances are converted into on-chain **$DIASPORA tokens on the Ethereum Base blockchain**, scaled by the **Average Proof of Community Trust (APCT / CPCT)** of the active members within that continent.
+### 1. Town / City DDI Treasuries (Home Town & Host Town — 10% each)
+- **Role:** Direct local member business loans up to **$1,000,000**.
+- **Collateral & Ownership:** Borrowing members put up **10% collateral in $DIASPORA**, own 100% of the venture, and owe the loan.
+- **Terms:** 0% interest, 51%+ democratic approval by local community (10-day window, 10-member quorum).
+- **Repayment:** Loan repayments trigger automated open-market buybacks on Aerodrome DEX.
 
-### The 50/50 Sovereign Split
-The protocol manages the resulting $DIASPORA tokens under a strict 50/50 dual-mandate structure:
+### 2. State / Province Reserve Treasuries (Home State & Host State — 5% each)
+- **Role:** Dedicated **regional liquidity reserves**.
+- **No Loan Overlap:** State treasuries **do not originate separate loans**. Instead, they act as the Tier 2 upward cascading liquidity backstop when local Town DDI loan requests exceed available town funds.
+- **Additional Function:** Backs state/provincial diaspora business licensing, state cultural festivals, and interstate trade corridors.
 
-1. **50% Sovereign Bond Allocation (The Government Alignment Engine):**
-   - Managed directly by the protocol to purchase **sovereign government bonds and Treasury Bills** in host and home nations.
-   - **Pro-Rata National Contribution:** Earmarked pro-rata based on each country's contribution to that continental treasury. For example, the proportion contributed by Tanzanian diaspora members into the African Home Treasury is allocated to buy Bank of Tanzania sovereign debt; host continental funds (e.g., North America, Europe) buy sovereign bonds like US Treasuries or UK Gilts.
-   - **Why Governments Love It:** Developing nations and host governments constantly struggle to raise reliable, non-predatory budget financing. Governments see Diaspora Nearby's continental treasuries as an almost guaranteed, friendly, low-interest source of sovereign funds. This turns central banks and ministries of finance from potential regulatory skeptics into enthusiastic institutional partners, willing to integrate Diaspora Nearby into national payment switches (like TIPS in Tanzania, M-Pesa rails, or FedNow in the US).
+### 3. Country DDI Treasuries (Home Country & Host Country — 5% each)
+- **Role:** Large-scale national member business loans **exceeding $1,000,000+**.
+- **Host Country Scope:** Funding syndicates to acquire existing profitable corporate enterprises, franchises, and commercial real estate in the host nation.
+- **Home Country Scope:** Funding national-scale industrial agriculture, medical centers, schools, technology campuses, and infrastructure back home.
+- **Terms:** 10% collateral in $DIASPORA, 67% supermajority vote (100-day window). Repayments fuel open-market DEX buybacks.
 
-2. **100% Platform Revenue (Zero Fees to Users):**
-   - Diaspora Nearby is committed to a **100% frictionless economy**—it never taxes users, charges no listing fees, no seller commissions, and no hosting fees.
-   - **How the platform funds itself:** All bond interest, yields, and coupon payments belong **exclusively to Diaspora Nearby (the operating entity)**. This non-extractive, sovereign interest stream funds servers, development, security audits, and global operations without taxing community members.
+### 4. Continental Treasuries (Home Continent & Host Continent — 10% each)
+- **Role:** **100% Sovereign Bond & Treasury Bill Allocation** (Platform Revenue Engine).
+- **No Loan Overlap:** Continental treasuries do not originate member loans. They purchase sovereign government debt instruments to fund platform operations and secure central bank regulatory alignment.
 
-3. **50% Liquid $DIASPORA Backstop:**
-   - The remaining 50% is retained directly on Base in liquid on-chain $DIASPORA tokens.
-   - It acts as the Tier 4 regional liquidity backstop in the Upward Cascading Liquidity Protocol for Town and Country member DDI loans, ensuring local member initiatives are never frozen by localized capital shortages.
-
----
-
-## 7. Supercharging Diaspora Group Admins: From $0 to Sovereign Equity
-
-Millions of WhatsApp and Facebook group admins currently run diaspora groups completely unpaid. Diaspora Nearby turns them into high-earning community stakeholders:
-
-1. **Instant Dual Referral Rewards:** When an admin shares their invitation link with their 500-person WhatsApp group, **both the admin and each joining member receive 1,000 DSP instantly**.
-2. **Exponential Streak Bonuses:**
-   - Onboard 10 members: **+1,000 DSP bonus**.
-   - Onboard 100 members: **+10,000 DSP bonus**.
-   - An admin transitioning a 500-member community can easily generate **550,000+ DSP** before token launch!
-3. **Elected Leadership Eligibility:** To run for an elected **Community Leadership Council** seat (which manages local treasury spending and community representation), a member must satisfy 4 criteria:
-   - 100+ days active on the platform.
-   - All 7 Genesis Milestones completed.
-   - 91+ PCT score.
-   - **Must be an administrator of a 100+ member group chat.**
-   Group leaders are rewarded for their proven ability to build and care for communities!
+### 5. Global Community Reserve (10%)
+- **Role:** **The Enabler of All Free Activities & Civic Salaries**.
+- **Functions:** Subsidizes legacy remittance fees so users send money for free; pays salaries for elected Community Council officers; finances Bilateral Chambers of Commerce; funds local community operations; and serves as the ultimate Tier 4 backstop for the Upward Cascading Liquidity Protocol.
 
 ---
 
-## 8. The Ubuntu Emergency Fund: Real-Time Mutual Aid Safety Net
+## 9. Continental Treasuries: The 100% Sovereign Bond Engine & Platform Revenue
 
-Traditional diaspora emergency relief relies on frantic WhatsApp messages, mobile money collections, or GoFundMe links where platforms take cuts and funds take days to settle.
+Continental Treasuries (Home Continent and Host Continent) convert accumulated off-chain DSP tribute into on-chain **$DIASPORA tokens on Ethereum Base Blockchain**, scaled by the **Average Proof of Community Trust (APCT / CPCT)** of active members within that continent.
 
-The **Ubuntu Emergency Fund** replaces this with an automated, transparent safety net:
-- **Annual Contribution:** $100 per year contributed in $DIASPORA into the collective emergency treasury.
-- **Trust Reward:** Completing the annual contribution grants a **10 PCT Trust Bonus** and **10,000 DSP**.
-- **Fast-Track Grants (Up to $50,000 within 24 Hours):** If a local community member in Phoenix or Dar es Salaam suffers an acute medical emergency, accident, legal crisis, or bereavement, the elected **Community Secretaries** of their host town and host country can review and authorize up to **$50,000 within 24 hours**.
-- **Major Disbursements (Over $50,000):** Requests exceeding $50,000 trigger a democratic local community vote of **10 high-trust members (PCT 91+)** with **>50% approval required within 48 hours**.
-- **Zero Platform Fees:** 100% of emergency payouts go directly to the verified recipient's wallet.
+The protocol manages 100% of these continental funds under a strict **Sovereign Bond Mandate**:
 
----
+### 1. 100% Sovereign Government Securities Purchase
+- 100% of continental funds purchase **sovereign government bonds and Treasury Bills**.
+- **Pro-Rata Country Allocation:** Funds are allocated strictly pro-rata based on each nation's contribution to that continental pool.
+  - *Example:* If Tanzanian diaspora members generate 25% of the African Home Continent Treasury, 100% of Tanzania's 25% share is deployed to purchase Bank of Tanzania sovereign bonds and Treasury Bills.
+  - *Host Example:* North American continental funds purchase US Treasuries; European funds purchase UK Gilts or German Bunds.
 
-## 9. Diaspora Direct Investments (DDI) — Member-Owned Loans & Aerodrome DEX Buybacks
+### 2. Institutional Central Bank Alignment
+- Developing nations and host governments face constant challenges securing reliable, non-predatory, low-interest funding for national development budgets.
+- Governments view Diaspora Nearby's continental treasuries as an almost guaranteed, friendly, long-term source of sovereign funding.
+- **The Strategic Payoff:** Central banks and ministries of finance transform from skeptical regulators into eager institutional partners. They open national clearing houses and payment switches—such as **TIPS (Tanzania Instant Payment System), M-Pesa rails, and FedNow in the United States**—to integrate Diaspora Nearby directly into national banking infrastructure!
 
-Remittances to developing nations exceed **$900 Billion annually**, yet over 90% is spent on immediate consumption rather than wealth creation. **Diaspora Direct Investments (DDI)** channels diaspora capital into member-owned enterprises across 2 tiers.
-
-All Town and Country DDI funds are **loans to members** (individual members or pooled syndicates). Borrowing members who put up the **10% collateral in $DIASPORA** own 100% of the funded businesses, real estate, or agricultural enterprises, and owe the loan obligation.
-
-### Tier 1: Town-Level Member Loans (Up to $1,000,000)
-- **Use Cases:** A member or pooled group launching a diaspora medical clinic, private school, logistics fleet, retail business, or local agricultural processing in Dar es Salaam or Phoenix.
-- **Sole Member Ownership:** The borrowing member(s) who pledge collateral own 100% of the enterprise and its profits.
-- **Collateral Requirement:** The applicant or pooled group deposits **10% collateral in $DIASPORA**.
-- **Democratic Approval:** Approved by a **51%+ vote** of local community members (10-day voting window, 10-member quorum).
-- **Eligibility:** Applicant must have completed all 7 Genesis Milestones, 100+ days active, and hold a **91+ PCT score**.
-
-### Tier 2: Country-Level Member Loans ($1,000,000+)
-- **Host Country Member Loans:** Borrowing members acquire cash-flowing commercial real estate, corporate franchises, or technology enterprises in the host nation (e.g., acquiring commercial plazas in Arizona).
-- **Home Country Member Loans:** Borrowing members finance national-scale commercial agriculture, solar energy installations, manufacturing plants, or private health facilities back home in Tanzania.
-- **Sole Member Ownership:** Owned 100% by the borrowing members who post the 10% $DIASPORA collateral.
-- **Democratic Approval:** Requires a **67% supermajority vote** of country members over a 100-day window.
-
-### The Aerodrome DEX Buyback Engine
-What makes DDI revolutionary for every token holder:
-When DDI loan repayments and dividend yields flow back to the treasury, the smart contract automatically executes **Open-Market Buybacks of $DIASPORA on the Aerodrome Decentralized Exchange (DEX) on Base**!
-- This constant, non-speculative buy pressure absorbs circulating token supply.
-- The success of a solar project in Tanzania or a real estate acquisition in Arizona directly increases the value of $DIASPORA for every member worldwide!
+### 3. Platform Revenue Engine (Self-Funding Protocol)
+- 100% of the coupon interest, bond yields, and Treasury Bill payouts belong **exclusively to Diaspora Nearby (the operating entity)**.
+- This sovereign yield generates reliable recurring revenue to pay for server infrastructure, mobile engineering, smart contract security audits, and global legal compliance. It is strictly the company's self-funding revenue model.
+- *(Note: All free user activities, zero-fee remittances, and community operational costs are funded separately by the Global Reserve).*
 
 ---
 
-## 10. Free Community Peer Hosting vs Paid Marketplace Stays
+## 10. The Global Reserve: Enabling Zero-Fee Value Transfers & Salaried Governance
 
-Diaspora Nearby eliminates exploitative hotel and travel booking fees through two distinct models:
+While Continental Treasuries fund platform engineering, the **Global Reserve** is the economic heart that enables freedom for users and communities:
 
-### 1. Free Community Peer Hosting ($0 Free Host)
-- **Identified by:** A bright **airplane icon (✈️ Free Host)** in the nested community tree.
-- **Cost:** **100% FREE ($0)**.
-- **For:** Diaspora travelers, exchange students, and refugees arriving in a new city.
-- **Trust Gate:** Travelers with a **PCT score of 91+** can request a stay with verified local hosts.
-- **Cultural Value:** Hosts offer spare bedrooms or guest rooms out of cultural hospitality, solidarity, and mutual trust, earning community reputation and DSP points.
+### 1. Eliminating the Remittance Fee Burden by Subsidizing Legacy Companies
+- Remittances to developing countries exceed **$900 Billion annually**, with legacy companies (Western Union, MoneyGram, banks) extracting 6% to 8% in fees.
+- Diaspora Nearby **does not ask users to wait for legacy rails to disappear**.
+- Instead, **the Global Reserve subsidizes the transaction fees paid to legacy money transfer companies and switches directly**.
+- **The Result:** Legacy money transfer companies still make their money and process transfers, but the diaspora member and their recipient pay **$0 in fees**. The remittance burden on immigrants is completely eliminated!
 
-### 2. Paid Peer Stays & Vehicle Rentals (Airbnb & Turo Alternatives)
-- **Identified by:** An explicit **`Paid Peer Stay (Airbnb Alt)`** badge and clear nightly rate.
-- **Cost:** Set by host (e.g., $60/night, $120/night).
-- **Zero Commission:** Hosts keep 100% of their booking revenue without 15%–20% platform deductions.
-- **Multi-Currency Settlement:** Payments accepted in USD (via Stripe), DSP points, or $DIASPORA tokens with instant settlement.
+### 2. Funding Community Operations & Chambers of Commerce
+- Provides operational grants for local community cultural events, language schools, and diaspora town halls.
+- Finances the operations of official **Bilateral Chambers of Commerce** (e.g., Tanzania-United States Chamber of Commerce) to negotiate trade corridors, certifications, and business agreements.
 
----
-
-## 11. Bi-Directional Value Transfer in 1:1 Chats
-
-Inside direct 1:1 chats, Diaspora Nearby turns conversation into a financial bridge:
-- **Bi-Directional Earning:** Both parties earn DSP when messaging, exchanging vouches, and verifying each other.
-- **The Value Transfer Bar:** Tapping the attachment icon (`+`) in a 1:1 chat opens a three-way transfer drawer:
-  1. **DSP Tab:** Transfer off-chain community social points instantly.
-  2. **$DIASPORA Tab:** Send liquid on-chain tokens with sub-cent gas fees via the Base blockchain.
-  3. **USD/Fiat Tab:** Send low-cost remittances directly to bank accounts or mobile wallets globally.
-- **Clean Public Chats:** In group and community chats, the transfer bar is automatically hidden, ensuring public discussions remain focused on community news, cultural announcements, and media sharing.
+### 3. Paying Salaries for Elected Community Council Officers
+- Governance is not unpaid volunteer work.
+- The Global Reserve pays direct **monthly salaries to elected Community Council officers** (President, Treasurer, Secretary) across host and home cities.
+- This ensures that community leadership is a professional, accountable, and highly respected civic duty.
 
 ---
 
-## 12. Proof of Community Trust (PCT) & The Prediction Market Trust Slider
+## 11. Diaspora Direct Investments (DDI) & Open Market Buybacks on Aerodrome DEX
 
-Web2 social platforms rely on unverified 5-star review systems where fake reviews can be bought for pennies. Diaspora Nearby introduces **Proof of Community Trust (PCT)**, a 0–100 dynamic trust score:
+Global remittances are traditionally spent on immediate subsistence rather than lasting wealth creation. When diaspora members attempt to invest back home—sending funds to relatives to build homes or launch businesses—capital is frequently mismanaged or lost.
 
-- **0–70 PCT (Genesis Base):** Earned through the 4 Pillars and 7 Genesis Milestones.
-- **71–100 PCT (Peer Evaluation via Trust Slider):**
-  - Members evaluate peers (outside their 20-person Circle of Trust) using a continuous **1–100 Trust Slider**.
-  - **Free Rating (11 to 90):** Gives an honest peer assessment and awards the rater 1,000 DSP without locking stake.
-  - **Staked Rating (Full Trust 91–100 or No Trust 1–10):** To assign an extreme rating, the rater **locks 1,000 DSP in escrow**. If the rated user is later proven to be fraudulent or malicious, the rater's stake is slashed!
-  - This turns reputation into a self-policing **Two-Sided Prediction Market** where dishonesty is financially penalized and truth is rewarded.
+**Diaspora Direct Investments (DDI)** channels diaspora capital into member-owned, community-vetted enterprises across two unified tiers.
 
-### PCT Token Conversion Efficiency at TGE
-When Token Generation Events (TGE) occur across 10 exponential epochs (from 10 users to 10 billion users), your PCT score dictates your token conversion:
-- **0–10 PCT:** **0% Conversion** (100% of DSP is permanently burned).
-- **11–90 PCT:** **Pro-Rata Conversion** (e.g., 75 PCT = 75% converted to $DIASPORA; remaining 25% burned).
-- **91–100 PCT:** **100% Full Conversion** (All DSP converts to liquid $DIASPORA).
+### 100% Member Ownership
+- DDI allocations are **not passive grants or platform equity investments**.
+- They are **member-owned loans**.
+- The borrowing member (or pooled syndicate) who pledges **10% collateral in $DIASPORA** owns 100% of the enterprise, its revenues, its real estate, and its equipment. The platform and community take zero equity.
+
+### Open Market Buybacks on Aerodrome DEX
+The primary economic flywheel of Diaspora Nearby is the repayment mechanism:
+- Borrowers do not repay loans through a private closed ledger.
+- **Open-Market Execution:** Borrowers take their real-world enterprise revenues (whether in USD, EUR, or Tanzanian Shillings) and **buy $DIASPORA tokens directly on the open market (Aerodrome DEX on Ethereum Base Blockchain)**, depositing the tokens back into the Treasury to settle their loan obligation.
+- **Economic Impact:** Every successful diaspora business—whether a catering enterprise in Phoenix or a commercial avocado farm in Arusha—generates recurring, structural commercial buying demand on the open market, supporting token valuation and rewarding all holding members.
 
 ---
 
-## 13. Summary Call-to-Action for Listeners
+## 12. The Upward Cascading Liquidity Protocol
 
-Diaspora Nearby is not just an application; it is the infrastructure for a **self-sovereign global diaspora nation**. 
+To guarantee that community-approved member business loans are never frozen by localized capital shortages, Diaspora Nearby implements an **Upward Cascading Drawdown**:
 
-Whether you are an expat working in Dubai, an international student in London, an immigrant entrepreneur in Phoenix like Peter Swai, a group admin managing 500 members on WhatsApp, or someone who moved from their hometown to the capital city:
-- **Your trust is an asset.**
-- **Your community is your wealth.**
-- **Your dual identity is your superpower.**
+When an approved Town DDI loan application exceeds the liquidity balance currently held in the local Town DDI Treasury, the protocol cascades upward:
 
-**Get started today:**
-- **Landing Page:** https://diasporanearby.com
-- **Web App:** https://app.diasporanearby.com
-- **Android App:** Available on Google Play Store (`com.diasporanearby.diasporanearby`)
-- Complete your 7 Genesis Milestones, meet a peer to scan Identity QR codes, unlock your 7,000 on-chain $DIASPORA tokens on Base, and take your seat in the global sovereign diaspora economy!
+```
+[Approved Town DDI Loan]
+         │
+         ▼
+1. Town DDI Treasury (Draws all available local funds)
+         │  (Shortfall remains?)
+         ▼
+2. State Reserve Treasury (Draws remaining shortfall from regional reserve)
+         │  (Shortfall remains?)
+         ▼
+3. Country DDI Treasury (Draws remaining shortfall from country pool)
+         │  (Shortfall remains?)
+         ▼
+4. Global Reserve (Draws remaining shortfall from international reserve)
+```
+
+Because State Reserves, Country Treasuries, and the Global Reserve act as continuous upward liquidity shock absorbers, ambitious entrepreneurs in small towns can access up to $1,000,000 without waiting months for their local town balance to accumulate.
+
+---
+
+## 13. The Dynamic Price Floor & Valuation Engine
+
+Diaspora Nearby rejects pure speculative crypto volatility. Instead, the protocol establishes an **on-chain, mathematically verified Dynamic Price Floor** backed by real-world economic velocity.
+
+### The Unified Price Floor Formula
+The token valuation mirrors `ValuationService.dart` in the mobile app and `liquidity_treasury.js` on the web:
+
+$$\text{Dynamic Price Floor} = \left[ \text{BasePrice} \times (1 + \text{NetworkMultiplier} + \text{DeflationRatio}) \times \text{EpochScarcity} \right] + \frac{\text{Total Real-World Fiat GDP}}{\text{Circulating Supply}}$$
+
+### Breakdown of the 4 Mathematical Factors:
+1. **Base Price:** Constant fixed at **$0.001 USD**.
+2. **Network Multiplier (Metcalfe’s Growth):**
+   $$\text{NetworkMultiplier} = \frac{\log_{10}(\max(\text{Total Users}, 1))}{10}$$
+   Reflects exponential network utility as the user base expands.
+3. **Deflation Ratio:**
+   $$\text{DeflationRatio} = \min\left(\frac{\text{Total Burned}}{\text{Total Minted}}, 0.5\right)$$
+   Measures permanent scarcity induced by protocol burns (capped at a 50% bonus).
+4. **Epoch Scarcity Multiplier:**
+   $$\text{EpochScarcity} = 1.0 + (\text{Current Epoch} \times 0.1)$$
+   Provides a step-up scarcity multiplier across the 10 macro epochs.
+5. **Additive Real-World Fiat GDP Floor:**
+   $$\text{GDP Floor per Token} = \frac{\text{Total Fiat GDP Processed}}{\text{Circulating Supply}}$$
+
+### Why the Price Floor Never Drops from Economic Activity
+Every real-world transaction processed through the platform—products purchased, services hired, peer stays booked, car rentals completed, flights and hotels reserved via Amadeus, and remittances transferred—adds directly to **Cumulative Fiat GDP**.
+
+Because Fiat GDP is additive and permanent, each transaction permanently lifts the mathematical price floor. Users know that holding $DIASPORA is backed by the real economic output of a thriving global diaspora.
+
+---
+
+## 14. Group Admin Economics: Turning Unpaid Admins into Salaried Civic Leaders
+
+Millions of community leaders spend 10 to 20 hours every week moderating diaspora WhatsApp chats, Facebook groups, and Telegram channels—resolving disputes, welcoming newcomers, and sharing housing leads for **$0 financial return**.
+
+Diaspora Nearby transforms these unsung community heroes into equity-backed leaders:
+
+### 1. Sovereign Transition
+Admins are given tools to transition their communities to Diaspora Nearby. Rather than enriching Mark Zuckerberg with ad revenue, the community's daily interactions, chats, and meetings mint 1:1 matching capital for their own local city and country treasuries.
+
+### 2. Mandatory Qualification for Elected Council Leadership
+Elected Community Councils govern local treasury disbursements, represent the community, and approve emergency aid. To run for an executive council seat (President, Treasurer, Secretary), an applicant must satisfy **4 strict requirements**:
+1. 100+ days active on the platform.
+2. All 7 Genesis Milestones completed.
+3. Elite Proof of Community Trust score (91+ PCT).
+4. **Must be an active administrator of a 100+ member group chat.**
+
+### 3. Salaried Civic Governance
+Elected council officers are paid **regular salaries directly by the Global Reserve**. This recognizes that community organization is valuable work that deserves professional, dignified compensation.
+
+---
+
+## 15. The Ubuntu Emergency Fund: Fast-Track Mutual Aid Protocol
+
+When diaspora members face medical crises, sudden bereavement abroad, or immigration emergencies, traditional crowdfunding campaigns take days to verify, deduct heavy platform fees, and leave families stranded.
+
+The **Ubuntu Emergency Fund** replaces ad-hoc charity with an automated, transparent mutual aid protocol:
+- **Member-Funded:** Every member contributes **$100 per year in $DIASPORA** into the collective mutual aid pool, earning **10,000 DSP and 10 PCT**.
+- **Three Structured Relief Tiers:**
+  1. **Standard Micro-Relief (Up to $1,000):** Instant review for emergency prescriptions, short-term lodging, or transit.
+  2. **Fast-Track Emergency Relief ($1,001 to $50,000):** Authorized and disbursed expeditiously by the elected **Host Town Secretary** and **Host Country Secretary**.
+  3. **Major Community Vote (Exceeding $50,000):** Requires a local community vote among 91+ PCT members with a **>50% majority approval**.
+- **4 Dedicated Support Areas:**
+  - 🩺 **Medical Emergency:** Urgent surgeries, hospitalization, and critical care abroad.
+  - ⚖️ **Legal Aid:** Immigration defense, wrongful detention, and emergency legal representation.
+  - 🕊️ **Bereavement Support:** Funeral arrangements and immediate family relief.
+  - ✈️ **Repatriation Assistance:** Safe travel arrangements to return ill members or their remains home with dignity.
+- **Zero Fees:** 100% of authorized aid is disbursed directly to the recipient's smart wallet without platform deductions.
+
+---
+
+## 16. Zero-Fee Marketplace, Housing, Travel & Mandatory Dual-Currency Standard
+
+Diaspora Nearby creates a complete circular economy for daily diaspora commerce:
+
+1. **Products & Services Marketplace:** Buy, sell, and hire within verified diaspora networks. Authentic ethnic groceries, crafts, apparel, and professional freelance services (legal consulting, translations, tax preparation)—with **0% listing fees and 0% sales commission**.
+2. **Peer Stays & Free Community Hosting:**
+   - Members with **91+ PCT** can display the ✈️ **Free Host** badge to host traveling students, newcomers, or displaced diaspora for **$0**.
+   - Standard peer stays can be booked with **zero platform commissions** (compared to Airbnb's 15%–20% cut).
+3. **Peer Car Rentals:** Rent vehicles directly from verified peers wherever you travel without rental company markups.
+4. **Flights & Hotels Integration:** Global travel booking powered by direct **Amadeus API integration**. Every completed flight or hotel reservation awards **1,000 DSP** to the traveler.
+5. **Real Estate Marketplace:** Buy, sell, and lease land and properties back home and abroad, featuring built-in **GPS plot boundary survey tools** to prevent land fraud.
+6. **Zero-Fee Value Transfers & Remittances:** Send $DIASPORA tokens instantly with zero gas fees on Base, or transfer local fiat remittances with transfer fees subsidized by the Global Reserve.
+
+### Mandatory Dual-Currency Standard
+Every marketplace vendor, host, and service provider on Diaspora Nearby is required to accept both:
+1. **$DIASPORA on-chain tokens**, and
+2. **Local national fiat currency** (USD, TZS, EUR, GBP).
+
+This guarantees immediate real-world purchasing power for $DIASPORA tokens while ensuring absolute usability for non-crypto members.
+
+---
+
+## 17. The Liquidity Treasury, Open Market Trading & 10-Epoch Macro Scaling
+
+Diaspora Nearby eliminates private VC rounds, insider presales, and token launch manipulation.
+
+### The Liquidity Treasury on Aerodrome DEX
+- **5% of Total Epoch Supply:** Dedicated directly to DEX liquidity pools on Ethereum Base Blockchain (representing 10% of the 1:1 Ubuntu matched half).
+- **Equal Decile Releases:** At each of the 10 TDE milestones per epoch, exactly 10% of the liquidity allocation is deployed directly to Aerodrome DEX pools at **100% conversion efficiency**.
+- **Primary Pairs:**
+  - **$DIASPORA / USDC:** Primary stablecoin pair for predictable pricing and direct alignment with the dynamic price floor.
+  - **$DIASPORA / ETH:** Secondary pair capturing DeFi-native demand with auto-routing.
+- **Open Market Access:** Anyone can trade any amount on equal terms—no minimums, no lot sizes, and no whitelist gating.
+
+### The 10-Epoch Progressive Scaling Model
+The sovereign currency scales across 10 progressive epochs by orders of magnitude (10x Growth Model):
+
+| Epoch | Distributed DSP Milestone Trigger | Benchmark Verified Population | Total Epoch Supply ($DIASPORA) | Liquidity Treasury (5%) |
+|:---:|:---:|:---:|:---:|:---:|
+| **1** | 1,000,000 DSP | 10 Members | 1,000,000 | 50,000 |
+| **2** | 10,000,000 DSP | 100 Members | 10,000,000 | 500,000 |
+| **3** | 100,000,000 DSP | 1,000 Members | 100,000,000 | 5,000,000 |
+| **4** | 1,000,000,000 DSP | 10,000 Members | 1,000,000,000 | 50,000,000 |
+| **5** | 10,000,000,000 DSP | 100,000 Members | 10,000,000,000 | 500,000,000 |
+| **6** | 100,000,000,000 DSP | 1,000,000 Members | 100,000,000,000 | 5,000,000,000 |
+| **7** | 1,000,000,000,000 DSP | 10,000,000 Members | 1,000,000,000,000 | 50,000,000,000 |
+| **8** | 10,000,000,000,000 DSP | 100,000,000 Members | 10,000,000,000,000 | 500,000,000,000 |
+| **9** | 100,000,000,000,000 DSP | 1,000,000,000 Members | 100,000,000,000,000 | 5,000,000,000,000 |
+| **10** | 1,000,000,000,000,000 DSP | 10,000,000,000 Members | 1,000,000,000,000,000 | 50,000,000,000,000 |
+
+---
+
+## 18. Bilateral Chambers of Commerce & Central Bank Rail Integration
+
+To ensure long-term commercial sovereignty, Diaspora Nearby connects municipal and national economies through formal **Bilateral Chambers of Commerce**:
+- **Structured Commercial Corridors:** Bilateral chambers (such as the official **Tanzania–United States Chamber of Commerce**) connect verified diaspora entrepreneurs with trade certifications, import/export licenses, bilateral tax advisory, and cross-border commercial partnerships.
+- **National Central Bank Alignment:** Because continental treasuries purchase 100% sovereign government bonds and Treasury Bills pro-rata, central banks and finance ministries become enthusiastic institutional partners.
+- **Direct Switch Integration:** Governments work with Diaspora Nearby to open access to national payment rails—including **TIPS (Tanzania Instant Payment System), FedNow in the United States, and mobile money operators like M-Pesa**—ensuring seamless settlement between sovereign fiat and the $DIASPORA token economy.

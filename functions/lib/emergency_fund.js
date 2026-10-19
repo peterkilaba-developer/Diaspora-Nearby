@@ -68,12 +68,16 @@ async function getDiasporaPriceUsd() {
   const basePrice = 0.001;
   try {
     const treasury = (await db.collection("system_stats").doc("treasury").get()).data() || {};
+    const supplyDoc = (await db.collection("system_stats").doc("dsp_supply").get()).data() || {};
     const usersAgg = await db.collection("users").count().get();
     const totalUsers = usersAgg.data().count || 0;
-    const totalMinted = Number(treasury.totalMinted) || 0;
-    const totalBurned = Number(treasury.totalBurnedUtility) || 0;
+    const totalMinted = Number(supplyDoc.totalMinted || treasury.totalMinted) || 0;
+    const totalBurned =
+      (Number(treasury.totalBurnedUtility) || 0) +
+      (Number(treasury.burnedPoints) || 0) +
+      (Number(treasury.totalBurnedTde) || 0);
     const currentEpoch = Number(treasury.currentEpoch) || 1;
-    const fiatGdpUsd = Number(treasury.fiatGdpUsd) || 0;
+    const fiatGdpUsd = Number(treasury.totalFiatGdpUsd || treasury.fiatGdpUsd) || 0;
 
     const networkMult = totalUsers > 0 ? Math.log(Math.max(totalUsers, 1)) / (Math.LN10 * 10) : 0;
     const rawDef = totalMinted > 0 ? totalBurned / totalMinted : 0;

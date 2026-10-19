@@ -105,8 +105,18 @@ async function deliverMessageIndex(chatId, messageId, message, participants) {
     audio: "Voice message",
     audio_file: "Audio",
     document: "Document",
+    location: "Location",
+    dsp_transfer: "Sent $DIASPORA",
+    "money-transfer": "Remittance",
   };
-  const preview = String(message.content || typeLabels[message.type] || "Message").slice(0, 2000);
+  let rawContent = String(message.content || typeLabels[message.type] || "Message");
+  if (message.type === "system" &&
+      message.senderName &&
+      String(message.senderName).toLowerCase() !== "system" &&
+      !rawContent.toLowerCase().startsWith(String(message.senderName).toLowerCase())) {
+    rawContent = `${String(message.senderName).trim()} ${rawContent}`;
+  }
+  const preview = rawContent.slice(0, 2000);
   await runBounded(participants, async (recipientId) => {
     if (!validUid(recipientId)) return;
     const ref = db.collection("users").doc(recipientId)
@@ -153,6 +163,11 @@ exports.onChatWritten = functions.firestore
       ["name", "type", "subtype", "photoUrl"].some((field) =>
         JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
     const indexTargets = projectionChanged ? [...current] : added;
+    const updatedAtMs = (after && typeof after.updatedAt === "number")
+      ? after.updatedAt
+      : (after && after.updatedAt && typeof after.updatedAt.toMillis === "function"
+          ? after.updatedAt.toMillis()
+          : Date.now());
 
     await runBounded(indexTargets, async (uid) => {
       if (!validUid(uid)) return;
@@ -162,7 +177,8 @@ exports.onChatWritten = functions.firestore
         type: after.type || null,
         subtype: after.subtype || null,
         photoUrl: after.photoUrl || null,
-        updatedAt: after.updatedAt || Date.now(),
+        ...(after && after.lastMessage ? { lastMessage: after.lastMessage } : {}),
+        updatedAt: updatedAtMs,
         isDeleted: false,
       }, { merge: true });
     });
@@ -180,9 +196,9 @@ exports.onChatWritten = functions.firestore
       description: value.description || null,
       communityId: value.communityId || null,
       category: value.category || null,
-      listingId: value.metadata && value.metadata.listingId || null,
-      isChamber: value.metadata && value.metadata.isChamber === true,
-      isDdiDiscussion: value.metadata && value.metadata.isDdiDiscussion === true,
+      listingId: (value.metadata && value.metadata.listingId) || null,
+      isChamber: Boolean(value.metadata && value.metadata.isChamber === true),
+      isDdiDiscussion: Boolean(value.metadata && value.metadata.isDdiDiscussion === true),
       memberCount: Array.isArray(value.participants) ? value.participants.length : 0,
     } : null;
     const discoveryChanged = JSON.stringify(discoveryProjection(before)) !==
@@ -195,9 +211,9 @@ exports.onChatWritten = functions.firestore
         description: String(after.description || "").slice(0, 2000),
         communityId: after.communityId || null,
         category: after.category || null,
-        listingId: after.metadata && after.metadata.listingId || null,
-        isChamber: after.metadata && after.metadata.isChamber === true,
-        isDdiDiscussion: after.metadata && after.metadata.isDdiDiscussion === true,
+        listingId: (after.metadata && after.metadata.listingId) || null,
+        isChamber: Boolean(after.metadata && after.metadata.isChamber === true),
+        isDdiDiscussion: Boolean(after.metadata && after.metadata.isDdiDiscussion === true),
         memberCount: current.size,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -797,8 +813,9 @@ exports.joinCommunity = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError("not-found", "Community or profile not found.");
     }
     const communityData = community.data();
-    const canonicalMemberships = Array.isArray(user.data().communityMemberships) ?
-      user.data().communityMemberships : [];
+    const userData = user.data() || {};
+    const canonicalMemberships = Array.isArray(userData.communityMemberships) ?
+      userData.communityMemberships : [];
     if (!canonicalMemberships.includes(communityId)) {
       throw new functions.https.HttpsError(
           "permission-denied",
@@ -813,7 +830,8 @@ exports.joinCommunity = functions.https.onCall(async (data, context) => {
     const chat = await transaction.get(chatRef);
     const members = Array.isArray(communityData.members) ?
       [...new Set(communityData.members.filter(validUid))] : [];
-    if (!members.includes(uid)) members.push(uid);
+    const wasMember = members.includes(uid);
+    if (!wasMember) members.push(uid);
     if (members.length > MAX_CHAT_PARTICIPANTS) {
       throw new functions.https.HttpsError("resource-exhausted", "This community is full.");
     }
@@ -830,15 +848,44 @@ exports.joinCommunity = functions.https.onCall(async (data, context) => {
       const chatData = chat.data();
       const participants = Array.isArray(chatData.participants) ?
         [...new Set(chatData.participants.filter(validUid))] : [];
-      if (!participants.includes(uid)) participants.push(uid);
+      const wasParticipant = participants.includes(uid);
+      if (!wasParticipant) participants.push(uid);
       if (participants.length > MAX_CHAT_PARTICIPANTS) {
         throw new functions.https.HttpsError("resource-exhausted", "This community is full.");
       }
+      const nowMs = Date.now();
+      const fullName = [userData.firstName, userData.lastName]
+        .filter((s) => typeof s === "string" && s.trim().length > 0)
+        .join(" ")
+        .trim() || "Member";
+      const msgRef = chatRef.collection("messages").doc();
+      const lastMessageData = {
+        id: msgRef.id,
+        content: `${fullName} joined the community`,
+        timestamp: nowMs,
+        senderId: uid,
+        senderName: fullName,
+        type: "system",
+        status: "read",
+      };
       transaction.update(chatRef, {
         participants,
         memberCount: participants.length,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: nowMs,
+        ...(!wasParticipant ? { lastMessage: lastMessageData } : {}),
       });
+      if (!wasParticipant) {
+        transaction.set(msgRef, {
+          id: msgRef.id,
+          chatId,
+          senderId: uid,
+          senderName: fullName,
+          content: "joined the community",
+          type: "system",
+          timestamp: nowMs,
+          status: "read",
+        });
+      }
     }
   });
   return { success: true };
@@ -1321,6 +1368,40 @@ exports.onDirectMessageCreated = functions.firestore
       [...new Set(participants)],
     );
 
+    // Ensure canonical chats/{chatId} also has lastMessage & updatedAt so any
+    // client fetching chats/{chatId} immediately sees the latest message.
+    const existingLastTs = (chatData.lastMessage && typeof chatData.lastMessage.timestamp === "number")
+      ? chatData.lastMessage.timestamp
+      : 0;
+    const msgTs = typeof message.timestamp === "number" ? message.timestamp : Date.now();
+    if (!chatData.lastMessage || msgTs >= existingLastTs) {
+      const typeLabels = {
+        image: "Photo",
+        video: "Video",
+        audio: "Voice message",
+        audio_file: "Audio",
+        document: "Document",
+        location: "Location",
+        dsp_transfer: "Sent $DIASPORA",
+        "money-transfer": "Remittance",
+      };
+      const preview = String(message.content || typeLabels[message.type] || "Message").slice(0, 2000);
+      await db.collection("chats").doc(chatId).set({
+        lastMessage: {
+          id: context.params.messageId,
+          content: preview,
+          timestamp: msgTs,
+          senderId: message.senderId,
+          senderName: String(message.senderName || "").slice(0, 200),
+          type: message.type || "text",
+          status: message.status || "sent",
+        },
+        updatedAt: msgTs,
+      }, { merge: true }).catch((err) => {
+        console.warn(`[Chat] Could not sync lastMessage onto chats/${chatId}: ${err.message}`);
+      });
+    }
+
     // STRICT SENDER FILTERING & DEDUPLICATION
     let recipients = participants.filter(uid => String(uid) !== String(senderId));
     recipients = [...new Set(recipients)]; // Deduplicate
@@ -1391,6 +1472,8 @@ exports.onDirectMessageCreated = functions.firestore
       if (message.type === 'audio_file') body = "🎵 sent an audio file";
       if (message.type === 'location') body = "📍 sent a location";
       if (message.type === 'document') body = "📄 sent a document";
+      if (message.type === 'dsp_transfer') body = message.content ? `🪙 ${message.content}` : "🪙 sent $DIASPORA";
+      if (message.type === 'money-transfer') body = message.content ? `💸 ${message.content}` : "💸 sent a remittance";
 
       // Ensure we don't crash if body is empty
       if (!body) body = "Sent a message";

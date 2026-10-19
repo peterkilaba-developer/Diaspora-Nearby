@@ -5,6 +5,7 @@ import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol"
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./DiasporaToken.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /**
  * @title DiasporaTGEControllerV2
@@ -59,6 +60,17 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
     mapping(bytes32 => bytes32) public batchRoots;
     // ── End V2 storage ──────────────────────────────────────────────
 
+    // ── V3 storage (append-only) ────────────────────────────────────
+    /// @notice Tracks whether a user has claimed their TDE tokens for (recipient, epoch, tgeEvent).
+    mapping(bytes32 => bool) public tdeClaimed;
+
+    /// @notice Maximum $DIASPORA for Genesis PoH distribution.
+    uint256 public maxGenesisDistribution;
+
+    /// @notice Tracks Genesis PoH distribution received per user.
+    mapping(address => uint256) public genesisDistributionReceived;
+    // ── End V3 storage ──────────────────────────────────────────────
+
     event EpochSupplyMinted(uint256 indexed epoch, uint256 amount, uint256 controllerBalance);
     event TGEExecuted(
         uint256 indexed epoch,
@@ -79,6 +91,16 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
         bytes32 merkleRoot
     );
     event MaxWelcomeBonusUpdated(uint256 oldMax, uint256 newMax);
+    event MaxGenesisDistributionUpdated(uint256 oldMax, uint256 newMax);
+    event TokensClaimed(
+        address indexed recipient,
+        uint256 indexed epoch,
+        uint256 indexed tgeEvent,
+        uint256 liquid,
+        uint256 burned,
+        uint8 efficiency
+    );
+    event TdeRootPublished(uint256 indexed epoch, uint256 indexed tgeEvent, bytes32 merkleRoot, uint256 totalAmount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -317,6 +339,142 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
 
     function _batchKey(uint256 epoch, uint256 tgeEvent) internal pure returns (bytes32) {
         return keccak256(abi.encode("TGE", epoch, tgeEvent));
+    }
+
+    /**
+     * @notice Publish Merkle root for a TDE event, locking supply for anytime pull claims.
+     * @param epoch The epoch number.
+     * @param tgeEvent The TDE event index (0-9).
+     * @param merkleRoot The root of eligible claims.
+     * @param totalBatchAmount Total earned DSP across all eligible recipients in this TDE.
+     */
+    function publishTdeRoot(
+        uint256 epoch,
+        uint256 tgeEvent,
+        bytes32 merkleRoot,
+        uint256 totalBatchAmount
+    ) external onlyRole(TGE_ORACLE_ROLE) {
+        require(merkleRoot != bytes32(0), "TGE: missing merkle root");
+        require(totalBatchAmount > 0, "TGE: zero batch amount");
+        require(token.balanceOf(address(this)) >= totalBatchAmount, "TGE: insufficient locked supply");
+
+        batchRoots[_batchKey(epoch, tgeEvent)] = merkleRoot;
+        emit TdeRootPublished(epoch, tgeEvent, merkleRoot, totalBatchAmount);
+    }
+
+    /**
+     * @notice Pull claim for individual users at any time without expiration.
+     * @dev Only tokens lost from the efficiency gate are burned to BURN_ADDRESS.
+     *      Users can claim their earned tokens anytime.
+     *      Score below 91 does not freeze claims - liquid tokens equal earnedAmount * efficiency / 100.
+     * @param recipient The smart wallet address to receive the liquid tokens.
+     * @param epoch The epoch of the TDE.
+     * @param tgeEvent The TDE event index (0-9).
+     * @param earnedAmount Total DSP earned by the user for this TDE.
+     * @param efficiency User's PCT efficiency score (0-100).
+     * @param proof Merkle inclusion proof.
+     */
+    function claimTdeTokens(
+        address recipient,
+        uint256 epoch,
+        uint256 tgeEvent,
+        uint256 earnedAmount,
+        uint8 efficiency,
+        bytes32[] calldata proof
+    ) external {
+        require(recipient != address(0), "TGE: zero recipient");
+        require(earnedAmount > 0, "TGE: zero earned amount");
+        require(efficiency <= 100, "TGE: efficiency > 100");
+
+        bytes32 claimKey = keccak256(abi.encode(recipient, epoch, tgeEvent));
+        require(!tdeClaimed[claimKey], "TGE: already claimed");
+
+        bytes32 root = batchRoots[_batchKey(epoch, tgeEvent)];
+        require(root != bytes32(0), "TGE: root not published");
+
+        bytes32 leaf = keccak256(abi.encode(recipient, epoch, tgeEvent, earnedAmount, efficiency));
+        require(MerkleProof.verify(proof, root, leaf), "TGE: invalid merkle proof");
+
+        tdeClaimed[claimKey] = true;
+
+        uint256 liquid = (earnedAmount * efficiency) / 100;
+        uint256 burned = earnedAmount - liquid;
+
+        require(token.balanceOf(address(this)) >= (liquid + burned), "TGE: insufficient supply");
+
+        if (liquid > 0) {
+            token.transfer(recipient, liquid);
+        }
+        if (burned > 0) {
+            token.transfer(BURN_ADDRESS, burned);
+        }
+
+        totalDistributed += liquid;
+        totalBurned += burned;
+        epochDistributed += (liquid + burned);
+
+        emit TokensClaimed(recipient, epoch, tgeEvent, liquid, burned, efficiency);
+    }
+
+    /**
+     * @notice Distribute Genesis 7,000 $DIASPORA tokens upon completing 6 base PoH milestones.
+     */
+    function distributeGenesisTokens(
+        address userRecipient,
+        uint256 userAmount,
+        address[] calldata treasuryRecipients,
+        uint256[] calldata treasuryAmounts,
+        bytes32 merkleRoot
+    ) external onlyRole(TGE_ORACLE_ROLE) {
+        require(treasuryRecipients.length == treasuryAmounts.length, "TGE: array length mismatch");
+        require(userRecipient != address(0), "TGE: zero user recipient");
+        require(userAmount > 0, "TGE: zero user amount");
+        require(merkleRoot != bytes32(0), "TGE: missing merkle root");
+
+        uint256 cap = maxGenesisDistribution > 0 ? maxGenesisDistribution : maxWelcomeBonusPerRecipient;
+        if (cap == 0) cap = 7000 * 10**18;
+        require(userAmount <= cap, "TGE: user amount exceeds genesis cap");
+        require(
+            genesisDistributionReceived[userRecipient] + userAmount <= cap,
+            "TGE: user already received genesis distribution"
+        );
+        genesisDistributionReceived[userRecipient] += userAmount;
+
+        uint256 batchTotal = userAmount;
+        for (uint256 i = 0; i < treasuryAmounts.length; i++) {
+            require(treasuryRecipients[i] != address(0), "TGE: zero treasury recipient");
+            batchTotal += treasuryAmounts[i];
+        }
+
+        require(token.balanceOf(address(this)) >= batchTotal, "TGE: insufficient epoch supply");
+
+        token.transfer(userRecipient, userAmount);
+
+        uint256 burnedInBatch;
+        for (uint256 i = 0; i < treasuryRecipients.length; i++) {
+            if (treasuryAmounts[i] == 0) continue;
+            if (treasuryRecipients[i] == BURN_ADDRESS) {
+                token.transfer(BURN_ADDRESS, treasuryAmounts[i]);
+                burnedInBatch += treasuryAmounts[i];
+            } else {
+                token.transfer(treasuryRecipients[i], treasuryAmounts[i]);
+            }
+        }
+
+        totalDistributed += batchTotal - burnedInBatch;
+        totalBurned += burnedInBatch;
+        totalWelcomeBonuses += batchTotal;
+        epochDistributed += batchTotal;
+
+        bytes32 gKey = keccak256(abi.encode("GENESIS", currentEpoch, block.number, userRecipient));
+        batchRoots[gKey] = merkleRoot;
+        emit WelcomeBonusDistributed(userRecipient, userAmount, treasuryRecipients, treasuryAmounts, batchTotal, currentEpoch, merkleRoot);
+    }
+
+    function setMaxGenesisDistribution(uint256 newMax) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newMax > 0, "TGE: zero max");
+        emit MaxGenesisDistributionUpdated(maxGenesisDistribution, newMax);
+        maxGenesisDistribution = newMax;
     }
 
     function _authorizeUpgrade(address newImplementation) internal onlyRole(UPGRADER_ROLE) override {}

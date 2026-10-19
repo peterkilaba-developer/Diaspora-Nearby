@@ -51,8 +51,8 @@ three fields:
 
 Examples currently in use:
 
-- `users/<uid>.tokenWelcomeBonusPendingMilestones` (welcome bonus pending 3 onboarding milestones: location enabled, profile completed, 10 QR handshakes)
-- `users/<uid>.tokenWelcomeBonusPending` + `tokenWelcomeBonusError` (welcome bonus didn't land on-chain due to wallet/RPC error)
+- `users/<uid>.tokenGenesisDistributionPendingMilestones` (Genesis distribution pending 6 base PoH milestones)
+- `users/<uid>.tokenGenesisDistributionPending` + `tokenGenesisDistributionError` (Genesis 7,000 $DIASPORA distribution didn't land on-chain due to wallet/RPC error)
 - `users/<uid>.walletDeploymentPending` + `walletDeploymentError` (smart wallet didn't deploy)
 - `communities/<cid>.walletDeploymentPending` + `walletDeploymentError`
 - `tge_events/<id>.status === "tx_complete_dsp_pending"` (TGE succeeded on-chain but DSP wasn't deducted)
@@ -64,12 +64,12 @@ don't clobber other state.
 
 For each `<thing>Pending` flag, there's an admin-only callable that scans
 for it and retries. They're idempotent — safe to run repeatedly, double-pay
-prevented by on-chain dedupe (V2 contract's `welcomeBonusReceived[user]`)
+prevented by on-chain dedupe (contract's `genesisDistributionReceived[user]`)
 or by the factory's `getWallet(salt)` check.
 
 | Pending flag | Healing function |
 |---|---|
-| `users/<uid>.tokenWelcomeBonusPending` | `retryPendingWelcomeBonuses` |
+| `users/<uid>.tokenGenesisDistributionPending` | `retryPendingGenesisDistributions` |
 | `users/<uid>.walletDeploymentPending` | `retryPendingWalletDeployments({ scope: 'users' })` |
 | `communities/<cid>.walletDeploymentPending` | `retryPendingWalletDeployments({ scope: 'communities' })` |
 | `tge_events/<id>.status === "tx_complete_dsp_pending"` | `retryPendingTGEDeductions` |
@@ -78,7 +78,7 @@ All require `admin: true` custom claim on the caller. Standard invocation
 from a privileged client:
 
 ```javascript
-const fn = firebase.functions().httpsCallable('retryPendingWelcomeBonuses');
+const fn = firebase.functions().httpsCallable('retryPendingGenesisDistributions');
 const dryRun = await fn({ dryRun: true, limit: 50 });
 console.log(dryRun.data); // see what would be retried
 const result = await fn({ limit: 50 });
@@ -93,7 +93,7 @@ count is small enough to inspect each pending case by hand.
 - **Read-only RPC failures** (e.g., Basescan API down). Those return errors
   to the caller; the client retries.
 - **On-chain transaction reverts** from contract logic (e.g., user already
-  received welcome bonus per the V2 dedupe). Those bubble up as exceptions
+  received genesis distribution per on-chain dedupe). Those bubble up as exceptions
   and land in the same pending state — the healing function then sees them
   and skips with `status: "already_sent"`.
 - **DSP-points-only operations** (`awardPoints`, `deductPoints`, etc.). Those

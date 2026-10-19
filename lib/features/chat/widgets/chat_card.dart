@@ -214,6 +214,17 @@ class ChatCard extends ConsumerWidget {
       icon = LucideIcons.plane;
       text = lastMessage.content;
       customIconColor = AppTheme.accent;
+    } else if (lastMessage.type == 'system') {
+      isMedia = false;
+      final senderName = lastMessage.senderName.trim();
+      final content = lastMessage.content.trim();
+      if (senderName.isNotEmpty &&
+          senderName.toLowerCase() != 'system' &&
+          !content.toLowerCase().startsWith(senderName.toLowerCase())) {
+        text = '$senderName $content';
+      } else {
+        text = content;
+      }
     } else {
       switch (lastMessage.type) {
         case 'image':

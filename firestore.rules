@@ -132,14 +132,12 @@ service cloud.firestore {
           'fcmTopicsUpdatedAt', 'notificationsEnabled', 'blockedUsers'
         ]) &&
         !request.resource.data.get('homeLocation', {}).keys().hasAny([
-          'geometry', 'place_id'
+          'place_id'
         ]) &&
         !request.resource.data.get('hostLocation', {}).keys().hasAny([
-          'geometry', 'place_id'
+          'place_id'
         ]) &&
-        !request.resource.data.get('currentLocation', {}).keys().hasAny([
-          'geometry', 'place_id'
-        ]) &&
+        request.resource.data.get('currentLocation', {}).get('place_id', '') == '' &&
         request.resource.data.get('cityVisibilityForfeited', false) == false &&
         request.resource.data.get('businessProfile', {})
           .get('isBusinessVerified', false) == false;
@@ -156,14 +154,12 @@ service cloud.firestore {
           'fcmTopicsUpdatedAt', 'notificationsEnabled', 'blockedUsers'
         ]) &&
         !request.resource.data.get('homeLocation', {}).keys().hasAny([
-          'geometry', 'place_id'
+          'place_id'
         ]) &&
         !request.resource.data.get('hostLocation', {}).keys().hasAny([
-          'geometry', 'place_id'
+          'place_id'
         ]) &&
-        !request.resource.data.get('currentLocation', {}).keys().hasAny([
-          'geometry', 'place_id'
-        ]) &&
+        request.resource.data.get('currentLocation', {}).get('place_id', '') == '' &&
         (
           resource.data.get('cityVisibilityForfeited', false) == false ||
           request.resource.data.get('cityVisibilityForfeited', false) == true
@@ -241,8 +237,13 @@ service cloud.firestore {
         (
           isChatParticipant(chatId) &&
            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'lastMessage', 'updatedAt', 'lastActivityAt'
+             'lastMessage', 'updatedAt', 'lastActivityAt', 'type'
            ]) &&
+           (
+             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['type']) ||
+             request.resource.data.get('type', '') == resource.data.get('type', '') ||
+             request.resource.data.get('type', '') in ['direct', 'community', 'event', 'organization', 'group']
+           ) &&
            validLastMessageChange(resource.data, request.resource.data)
         )
       );
@@ -261,11 +262,15 @@ service cloud.firestore {
           !hasDirectChatBlock(chatId) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.keys().hasOnly([
-            'senderId', 'senderName', 'senderImage', 'senderHostCountryCode',
-            'senderHomeCountryCode', 'content', 'text', 'type', 'timestamp',
-            'status', 'mentions', 'richContent', 'metadata', 'replyTo',
-            'adminId', 'adminImage', 'imageUrl', 'documentUrl',
-            'documentName', 'audioDuration', 'storagePath'
+            'id', 'chatId', 'senderId', 'senderName', 'senderImage',
+            'senderHostCountryCode', 'senderHomeCountryCode', 'content', 'text',
+            'type', 'timestamp', 'status', 'mentions', 'richContent',
+            'metadata', 'replyTo', 'adminId', 'adminImage', 'imageUrl',
+            'documentUrl', 'documentName', 'documentSize', 'audioDuration',
+            'storagePath', 'location', 'forwarded', 'originalSenderId',
+            'originalSenderName', 'originalSenderImage',
+            'originalSenderHostCountryCode', 'originalSenderHomeCountryCode',
+            'originalTimestamp'
           ]) &&
           request.resource.data.get('content', '').size() <= 20000 &&
           (!isChamberChat(chatId) || isChamberMember(chatId));

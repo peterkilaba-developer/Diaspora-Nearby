@@ -107,22 +107,47 @@ class ProfileRepository {
       state,
       country,
     ].whereType<String>().where((part) => part.trim().isNotEmpty).join(', ');
-    return {
+    final result = <String, dynamic>{
       'formatted_address': summary,
       'city': city,
       'state': state,
       'country': country,
       'country_code': map['country_code'] ?? map['countryCode'],
     };
+    final geo = map['geometry'];
+    if (geo is Map && geo['location'] is Map) {
+      final loc = geo['location'] as Map;
+      final lat = (loc['lat'] as num?)?.toDouble();
+      final lng = (loc['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null && (lat != 0 || lng != 0)) {
+        result['geometry'] = {
+          'location': {
+            'lat': (lat * 100).round() / 100,
+            'lng': (lng * 100).round() / 100,
+          },
+        };
+      }
+    }
+    return result;
   }
 
   ({Map<String, dynamic> publicData, Map<String, dynamic> privateData})
   _splitSensitiveData(Map<String, dynamic> source) {
     final publicData = Map<String, dynamic>.from(source);
     final privateData = <String, dynamic>{};
+    const preserveIfNullKeys = {
+      'fcmToken',
+      'fcmTokenUpdatedAt',
+      'fcmTopics',
+      'fcmTopicsUpdatedAt',
+      'notificationsEnabled',
+    };
     for (final key in _privateFields) {
       if (publicData.containsKey(key)) {
-        privateData[key] = publicData.remove(key);
+        final val = publicData.remove(key);
+        if (val != null || !preserveIfNullKeys.contains(key)) {
+          privateData[key] = val;
+        }
       }
     }
     for (final key in _serverFields) {
@@ -150,22 +175,35 @@ class ProfileRepository {
     }
     final currentSummary = _publicLocation(privateData['currentLocation']);
     if (currentSummary != null &&
-        publicData['showCurrentLocationName'] == true) {
+        publicData['showCurrentLocationName'] != false) {
       publicData['currentCity'] = currentSummary['city'];
       publicData['currentState'] = currentSummary['state'];
       publicData['currentCountryCode'] = currentSummary['country_code'];
+      final rawCur = privateData['currentLocation'];
+      final tsMs = (rawCur is Map && rawCur['timestamp'] is num)
+          ? (rawCur['timestamp'] as num).toInt()
+          : DateTime.now().millisecondsSinceEpoch;
+      publicData['currentLocation'] = {
+        ...currentSummary,
+        'place_id': '',
+        'countryCode': currentSummary['country_code'],
+        'timestamp': tsMs,
+        'lastUpdated':
+            (rawCur is Map ? rawCur['lastUpdated'] : null) ??
+            DateTime.now().toIso8601String(),
+      };
     } else if (publicData['showCurrentLocationName'] == false) {
       publicData['currentCity'] = cf.FieldValue.delete();
       publicData['currentState'] = cf.FieldValue.delete();
       publicData['currentCountryCode'] = cf.FieldValue.delete();
+      publicData['currentLocation'] = cf.FieldValue.delete();
     }
     return (publicData: publicData, privateData: privateData);
   }
 
   /// Cleans legacy keys on an existing public user document so merged/partial
-  /// writes do not retain rule-rejected fields (`place_id`, `geometry`,
-  /// `currentLocation`, or explicit-null `businessProfile` /
-  /// `cityVisibilityForfeited`).
+  /// writes do not retain rule-rejected fields (`place_id`,
+  /// or explicit-null `businessProfile` / `cityVisibilityForfeited`).
   void _cleanLegacyPublicFields(
     Map<String, dynamic> publicData,
     Map<String, dynamic>? existingPublicDoc,
@@ -181,18 +219,12 @@ class ProfileRepository {
         !publicData.containsKey('cityVisibilityForfeited')) {
       publicData['cityVisibilityForfeited'] = cf.FieldValue.delete();
     }
-    if (existingPublicDoc.containsKey('currentLocation')) {
-      publicData['currentLocation'] = cf.FieldValue.delete();
-    }
     for (final key in const ['homeLocation', 'hostLocation']) {
       final summary = publicData[key];
       final existingLoc = existingPublicDoc[key];
       if (summary is Map<String, dynamic> && existingLoc is Map) {
         if (existingLoc.containsKey('place_id')) {
           summary['place_id'] = cf.FieldValue.delete();
-        }
-        if (existingLoc.containsKey('geometry')) {
-          summary['geometry'] = cf.FieldValue.delete();
         }
       }
     }

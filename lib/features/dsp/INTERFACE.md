@@ -123,8 +123,6 @@ $DIASPORA is awarded for these activities:
 
 | Activity | $DIASPORA | Description |
 |----------|-----------|-------------|
-| `signup` | 1,000 | New user registration |
-| `referral_reward` | 1,000 | Referral (both parties) |
 | `relationship_accepted` | 1,000 | Relationship acceptance |
 | `identity_qr_exchange` | 1,000 | In-person QR verification |
 | `travel_booking` | 1,000 | Travel booking (flight/stay/car) |
@@ -140,7 +138,7 @@ $DIASPORA is awarded for these activities:
 
 ## Value Sinks (Penalties Only)
 
-All economic activity fees have been removed. $DIASPORA is only deducted through **community-driven penalties**:
+The ecosystem is frictionless. $DIASPORA is only deducted through **community-driven penalties**:
 
 | Penalty | $DIASPORA | Description |
 |---------|-----------|-------------|

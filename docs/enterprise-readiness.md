@@ -54,7 +54,7 @@ Implemented controls:
 - Public landing intake is server-validated and rate-limited; browser fallbacks
   cannot write protected collections or claim false success. Places and radio
   proxies are route-bounded, quota-controlled, size-limited, and timed out.
-- Referral redemption, governance voting, and chat-solution verification are
+- Governance voting, milestone completion, and chat-solution verification are
   authenticated idempotent server workflows. Generic client-selected rewards
   and penalties remain disabled until each product event has server-verifiable
   proof and an approved supply-accounting policy.

@@ -16,8 +16,8 @@
 
 ### 3. DSP Economy & Trust System (PSA/PCT)
 *   **Status:** Refined Model Implementation
-*   **Features:** Points earning (messaging, referrals, shares, streaks), 6-Tier Trust Score (0-100) with 5 normalized factors (20 pts each).
-*   **Refinement:** Constant 1.0x rewards, Genesis Gate (10,000 DSP), TGE Efficiency tiers (10-step decile scale: 10% per 10 points).
+*   **Features:** Points earning (messaging, in-person QR handshakes, shares, streaks), 6-Tier Trust Score (0-100) with 5 normalized factors (20 pts each).
+*   **Refinement:** Constant 1.0x rewards, Genesis Gate (6 Base PoH Milestones unlocking 7,000 $DIASPORA on Base), TGE Efficiency tiers (10-step decile scale: 10% per 10 points).
 
 ### 4. Community Governance & Treasuries
 *   **Status:** Functional Framework

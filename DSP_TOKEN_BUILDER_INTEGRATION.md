@@ -21,7 +21,7 @@ The total global supply is minted based on human activity validation (Proof of S
 | **User Reward** | 50% of Total Mint | Direct liquidity for the contributor (1.0 $DIASPORA). |
 | **Community Sovereignty** | 35% of Total Mint (7 Slots) | 70% of System Match, distributed across 7 community levels. |
 | **Founders & Core Team** | 5% of Total Mint (1 Slot) | 10% of System Match, fixed core commitment. |
-| **Investors & Partners** | 5% of Total Mint (1 Slot) | 10% of System Match, strategic liquidity. |
+| **Liquidity Treasury (Aerodrome DEX)** | 5% of Total Mint (1 Slot) | 10% of System Match, strategic on-chain liquidity. |
 | **Fixed Burn** | 5% of Total Mint (1 Slot) | 10% of System Match, immediate deflation. |
 
 ## 3. TGE Premint + TDE Distribution: The Epoch System
@@ -36,11 +36,11 @@ The smart contract pre-mints epoch supply at TGE and distributes it through TDE 
 Before executing a TGE, the following system-wide actions occur:
 1. **DSP Supply Trigger**: The TGE happens once per epoch. TDEs then distribute supply as cumulative distributed DSP crosses each 10% decile milestone. For a 1,000,000 DSP epoch, TDEs occur at 100,000, 200,000, and every additional 100,000 DSP through 1,000,000. Population targets are informational and do not gate execution.
 2. **Snapshot Generation**: A final immutable snapshot of Firebase is captured, providing a list of:
-   - **Eligible Users**: Users who have completed the 7 Proof of Humanity milestones with positive DSP balance.
+   - **Eligible Users**: Users who have completed the base Proof of Humanity milestones with positive DSP balance.
    - **Communities**: Community treasury balances.
    - **System Wallets**: Founders & Core Team, Liquidity Treasury, and Burn addresses.
-3. **Distribution**: The smart contract accepts this batch data (List of `Address : Balance`) and distributes $DIASPORA adjusted by the user's PCT efficiency: scores 0-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%.
-4. **Cleanup**: All snapshotted off-chain DSP balances are reset to **0** for the next cycle.
+3. **Distribution**: Users claim their allocation via individual pull claims ("Claim $DIASPORA" button) using cryptographic on-chain verification (Merkle pull claim). $DIASPORA is released adjusted by the user's PCT efficiency: scores 0-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%. Unconverted amounts are automatically burned to `0x000...dEaD`.
+4. **Cleanup**: All claimed off-chain DSP balances are reset to **0** for the next cycle.
 
 ## 5. Economic Governance: 10-Epoch Scaling
 The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in the distributed-DSP supply target. Population targets are retained as informational network-growth benchmarks.
@@ -60,8 +60,8 @@ The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in t
 
 ## 6. Token Utility Sinks
 - **Community Penalties**: Spam, fraud, no-shows, and other bad behaviors result in DSP deductions.
-- **Protocol Burns**: 10% fixed expansion burn, unassigned slot burn, unclaimed TGE burn.
-- **PCT Efficiency**: Low trust scores reduce TDE distribution rates, effectively burning unconverted DSP. Scores 1-10 convert at 0%.
+- **Protocol Burns**: 10% fixed expansion burn, PCT efficiency burn (unconverted portion). Members can claim earned tokens anytime.
+- **PCT Efficiency**: Low trust scores reduce TDE distribution rates, automatically burning unconverted DSP to the dead address. Scores 1-10 convert at 0%.
 
-> **Note:** All economic activity fees (marketplace, events, travel, business) have been permanently removed. The economy is frictionless — DSP is only removed through penalties and protocol-level burns.
+> **Note:** The economy is frictionless — DSP is only removed through community-driven penalties and protocol-level burns.
 

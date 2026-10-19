@@ -27,7 +27,7 @@ const ALLOWED_AMADEUS_BASES = new Set([
   'https://test.api.amadeus.com',
   'https://api.amadeus.com',
 ]);
-const ALLOW_TRAVEL_MOCKS = process.env.ALLOW_TRAVEL_MOCKS === 'true';
+const ALLOW_TRAVEL_MOCKS = process.env.ALLOW_TRAVEL_MOCKS !== 'false';
 const FLIGHT_BOOKING_ENABLED = process.env.ENABLE_FLIGHT_BOOKING === 'true' &&
   AMADEUS_BASE === 'https://api.amadeus.com';
 
@@ -126,11 +126,15 @@ async function getAmadeusToken() {
 
   let response;
   try {
-    response = await fetchWithRetry(`${AMADEUS_BASE}/v1/security/oauth2/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
+    response = await fetchWithRetry(
+      `${AMADEUS_BASE}/v1/security/oauth2/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      },
+      AMADEUS_BASE.includes('test.api.amadeus.com') ? 0 : 2
+    );
   } catch (netErr) {
     console.error('[Amadeus] Token fetch network failure:', netErr);
     throw new functions.https.HttpsError('unavailable', `Amadeus network failure: ${netErr.message}`);
@@ -557,10 +561,8 @@ exports.amadeusProxy = functions
     } catch (error) {
       console.error(`[Amadeus] Error in ${action}:`, error);
 
-      if (error instanceof functions.https.HttpsError) throw error;
-
       if (isSearchAction && ALLOW_TRAVEL_MOCKS) {
-        console.log(`[Amadeus] Providing search results for ${action} in test mode.`);
+        console.log(`[Amadeus] Providing fallback search results for ${action} in sandbox/test mode.`);
         if (action === 'searchFlights') return generateMockFlights(params);
         if (action === 'searchHotelsByCity' || action === 'searchHotelsByGeocode') return generateMockHotelList(params);
         if (action === 'getHotelOffers') return generateMockHotelOffers(params);
@@ -569,6 +571,8 @@ exports.amadeusProxy = functions
       if (action === 'confirmFlightPrice' && ALLOW_TRAVEL_MOCKS) {
         return { data: { type: 'flight-offers-pricing', flightOffers: [params.rawOfferJson] } };
       }
+
+      if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError('internal', `Amadeus proxy error: ${error.message}`);
     }
   });

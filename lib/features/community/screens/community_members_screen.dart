@@ -375,34 +375,39 @@ class _CommunityMembersScreenState
           currentUserProfile?.currentLocation?.geometry.location.lng ??
           currentUserProfile?.hostLocation.geometry?.location.lng;
 
-      List<ProfileData> members = snapshot.docs.map((doc) {
-        final data = doc.data();
-        final profile = ProfileData.fromJson(data);
-        profile.uid = doc.id;
+      final List<ProfileData> members = [];
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          final profile = ProfileData.fromJson(data);
+          profile.uid = doc.id;
 
-        // Calculate distance
-        double? dist;
-        if (currentLat != null && currentLng != null) {
-          // Priority: 1. member.currentLocation, 2. member.hostLocation
-          final targetLat =
-              profile.currentLocation?.geometry.location.lat ??
-              profile.hostLocation.geometry?.location.lat;
-          final targetLng =
-              profile.currentLocation?.geometry.location.lng ??
-              profile.hostLocation.geometry?.location.lng;
+          // Calculate distance
+          double? dist;
+          if (currentLat != null && currentLng != null) {
+            // Priority: 1. member.currentLocation, 2. member.hostLocation
+            final targetLat =
+                profile.currentLocation?.geometry.location.lat ??
+                profile.hostLocation.geometry?.location.lat;
+            final targetLng =
+                profile.currentLocation?.geometry.location.lng ??
+                profile.hostLocation.geometry?.location.lng;
 
-          if (targetLat != null && targetLng != null) {
-            dist = calculateDistance(
-              currentLat,
-              currentLng,
-              targetLat,
-              targetLng,
-            );
+            if (targetLat != null && targetLng != null) {
+              dist = calculateDistance(
+                currentLat,
+                currentLng,
+                targetLat,
+                targetLng,
+              );
+            }
           }
-        }
 
-        return profile.copyWith(distance: dist);
-      }).toList();
+          members.add(profile.copyWith(distance: dist));
+        } catch (docErr) {
+          debugPrint('Error parsing member ${doc.id}: $docErr');
+        }
+      }
 
       // Sort by distance (closest first)
       members.sort((a, b) {

@@ -12,6 +12,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <!-- Prevent Theme Flash -->
+    <script>
+        (function() {
+            try {
+                var mode = localStorage.getItem('dn_theme_mode') || 'system';
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme-mode', mode);
+                document.documentElement.style.colorScheme = theme;
+            } catch (e) {}
+        })();
+    </script>
     <!-- Microsoft Clarity Analytics -->
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
@@ -80,18 +93,29 @@
                 <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
                 Diaspora Nearby
             </a>
-            <ul class="nav-links">
+            <div class="nav-actions">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme mode" title="Theme: System (Auto)">
+                    <i data-lucide="sun" class="theme-icon-light"></i>
+                    <i data-lucide="moon" class="theme-icon-dark"></i>
+                    <i data-lucide="laptop" class="theme-icon-system"></i>
+                </button>
+                <a href="/#get-app" class="nav-cta">Get App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a>
+                <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                    <i data-lucide="menu"></i>
+                </button>
+            </div>
+            <ul class="nav-links" id="nav-links">
                 <li><a href="/">Home</a></li>
                 <li><a href="/whitepaper" style="color:var(--orange);">Whitepaper</a></li>
                 <li><a href="/liquidity_treasury" style="color:var(--orange);">Liquidity Treasury</a></li>
-                <li><a href="/#get-app" class="nav-cta">Get App →</a></li>
+                <li style="margin-top: 6px;"><a href="/#get-app" class="nav-cta" style="justify-content:center;">Get App <i data-lucide="arrow-right" style="width:16px;height:16px"></i></a></li>
             </ul>
         </div>
     </nav>
 
     <div class="legal-content">
         <h1>Privacy Policy</h1>
-        <p class="date">Last Updated: January 2, 2026</p>
+        <p class="date">Last Updated: October 15, 2026 &nbsp;|&nbsp; App: <strong>Diaspora Nearby</strong> (<code>com.diasporanearby.diasporanearby</code>) &nbsp;|&nbsp; Developer: <strong>Peter Swai</strong></p>
 
         <h2>1. Introduction</h2>
         <p>Welcome to <strong>Diaspora Nearby</strong> ("we," "our," or "us"). We are committed to protecting your
@@ -175,14 +199,22 @@
                 can request account deletion within the App settings or by contacting us.</li>
         </ul>
 
-        <h2>7. Children's Privacy</h2>
-        <p>The App is not intended for children under the age of 13. We do not knowingly collect personal information
-            from children under 13.</p>
-
-        <h2>8. Contact Us</h2>
-        <p>If you have questions or comments about this Privacy Policy, please contact us at:</p>
+        <h2>7. Children's Privacy &amp; Child Safety Standards (CSAE / CSAM Policy)</h2>
+        <p><strong>Diaspora Nearby</strong> (developed and published by <strong>Peter Swai</strong>) is not intended for children under the age of 13 (and requires users to be at least 18 years old for peer hosting, marketplace, and financial features). We do not knowingly collect personal information from children under 13.</p>
+        <p>Furthermore, <strong>Diaspora Nearby</strong> maintains a strict, <strong>zero-tolerance policy against Child Sexual Abuse and Exploitation (CSAE)</strong> and <strong>Child Sexual Abuse Material (CSAM)</strong>:</p>
         <ul>
-            <li><strong>Email:</strong> <a href="mailto:support@diasporanearby.com">support@diasporanearby.com</a></li>
+            <li>We explicitly prohibit any creation, sharing, solicitation, or promotion of CSAM or CSAE on Diaspora Nearby.</li>
+            <li>Users can report any child safety concern or policy violation directly in-app via the <strong>Report / Block User</strong> feature on profiles, messages, community chats, and listings, or via <strong>Settings &rarr; Help &amp; Support</strong>.</li>
+            <li>We immediately remove any offending content, permanently terminate offending accounts, and report all apparent or suspected CSAM/CSAE to the <strong>National Center for Missing &amp; Exploited Children (NCMEC)</strong> and relevant regional and national law enforcement authorities in compliance with all applicable child safety laws.</li>
+            <li>Read our full <a href="/child-safety">Child Safety Standards Policy</a> and <a href="/terms-of-service#child-safety">Terms of Service</a>.</li>
+        </ul>
+
+        <h2>8. Contact Us &amp; Child Safety Point of Contact</h2>
+        <p>If you have questions or comments about this Privacy Policy or wish to report a child safety / CSAE concern, please contact us at:</p>
+        <ul>
+            <li><strong>App &amp; Developer:</strong> Diaspora Nearby (<code>com.diasporanearby.diasporanearby</code>) — Peter Swai</li>
+            <li><strong>General &amp; Child Safety Email:</strong> <a href="mailto:support@diasporanearby.com">support@diasporanearby.com</a></li>
+            <li><strong>Child Safety Standards:</strong> <a href="https://diasporanearby.com/child-safety">https://diasporanearby.com/child-safety</a></li>
             <li><strong>Website:</strong> <a href="https://diasporanearby.com">diasporanearby.com</a></li>
         </ul>
     </div>
@@ -194,6 +226,8 @@
             </div>
         </div>
     </footer>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="script.js?v=20261012d"></script>
 </body>
 
 </html>

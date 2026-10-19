@@ -111,6 +111,39 @@ function computePhoneHash(phoneNumber) {
   return `0x${crypto.createHmac("sha256", pepper).update(normalized).digest("hex")}`;
 }
 
+async function deployWalletWithRetry(infra, salt, label, maxAttempts = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const existing = await infra.factory.getWallet(salt);
+      if (existing !== ethers.ZeroAddress) {
+        return { address: existing, alreadyExisted: true };
+      }
+      const nonce = await infra.provider.getTransactionCount(infra.signer.address, "pending");
+      const tx = await infra.factory.createWallet(salt, { nonce });
+      const receipt = await tx.wait();
+      return { address: null, txHash: receipt.hash };
+    } catch (error) {
+      lastError = error;
+      const msg = String(error.message || "").toLowerCase();
+      const isNonceContention =
+        error.code === "NONCE_EXPIRED" ||
+        error.code === "REPLACEMENT_UNDERPRICED" ||
+        msg.includes("replacement") ||
+        msg.includes("nonce") ||
+        msg.includes("already known");
+      if (isNonceContention && attempt < maxAttempts) {
+        const delayMs = attempt * 1500 + Math.floor(Math.random() * 1000);
+        console.warn(`[SmartWallet] Nonce contention for ${label} (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Create a smart wallet for a given phone number.
  * Returns { address, phoneHash, isSmartWallet: true }.
@@ -133,14 +166,13 @@ async function createSmartWalletForPhone(phoneNumber) {
   console.log(`[SmartWallet] Predicted address for phone: ${predictedAddress}`);
 
   try {
-    const tx = await infra.factory.createWallet(phoneHash);
-    const receipt = await tx.wait();
-    console.log(`[SmartWallet] Created smart wallet: ${predictedAddress} (tx: ${receipt.hash})`);
+    const out = await deployWalletWithRetry(infra, phoneHash, `phone:${predictedAddress}`);
+    console.log(`[SmartWallet] Created smart wallet: ${predictedAddress} (tx: ${out.txHash || "existing"})`);
     return {
       address: predictedAddress,
       isSmartWallet: true,
       phoneHash,
-      txHash: receipt.hash,
+      txHash: out.txHash,
       deploymentPending: false,
     };
   } catch (error) {
@@ -180,8 +212,7 @@ async function createSmartWalletForCommunity(communityId) {
   const predictedAddress = await infra.factory.computeAddress(salt);
 
   try {
-    const tx = await infra.factory.createWallet(salt);
-    await tx.wait();
+    await deployWalletWithRetry(infra, salt, `community:${communityId}`);
     console.log(`[SmartWallet] Created community wallet: ${predictedAddress}`);
     return { address: predictedAddress, isSmartWallet: true, deploymentPending: false };
   } catch (error) {
@@ -238,11 +269,24 @@ exports.onCommunityWrite = functions
         ? "global_community"
         : (communityId.includes("_") ? communityId.substring(communityId.indexOf("_") + 1) : communityId);
 
-      await db.collection("governance").doc(govId).set({
+      const govRef = db.collection("governance").doc(govId);
+      const existingGov = await govRef.get();
+      const existingGovData = existingGov.exists ? existingGov.data() : {};
+      const initialPct = existingGovData.averagePoCT !== undefined
+        ? existingGovData.averagePoCT
+        : (existingGovData.averagePct !== undefined
+            ? existingGovData.averagePct
+            : (newData.averagePoCT !== undefined ? newData.averagePoCT : 0));
+
+      await govRef.set({
+        id: govId,
+        name: existingGovData.name || newData.name || govId,
         walletAddress: walletResult.address,
         walletType: "smart",
         communityId: communityId,
         type: "community",
+        averagePoCT: initialPct,
+        averagePct: initialPct,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
@@ -260,7 +304,7 @@ exports.onCommunityWrite = functions
     }
   });
 
-// ── 2. Auto-create Smart Wallet for Users (Phone-based) ──
+// ── 2. Auto-create Smart Wallet & Sync City-Level Location for Users ──
 exports.onUserWrite = functions
   .runWith({ secrets: ["BACKEND_SIGNER_PRIVATE_KEY", "WALLET_ID_PEPPER"] })
   .firestore
@@ -268,10 +312,90 @@ exports.onUserWrite = functions
   .onWrite(async (change, context) => {
     if (!change.after.exists) return null;
 
-    const newData = change.after.data();
+    const newData = change.after.data() || {};
     const userId = context.params.userId;
 
-    // Skip if wallet already assigned
+    // 2a. Backfill city-level (rounded ~1km) coordinates onto public user doc
+    // if missing, so existing clients (CommunityMembersScreen, UserCardView)
+    // can compute distance & proximity and display city/country flag without
+    // exposing exact street-level GPS from user_private.
+    const hasPublicCoords =
+      (newData.currentLocation && newData.currentLocation.geometry && newData.currentLocation.geometry.location) ||
+      (newData.hostLocation && newData.hostLocation.geometry && newData.hostLocation.geometry.location);
+
+    if (!hasPublicCoords) {
+      try {
+        const privSnap = await db.collection("user_private").doc(userId).get();
+        if (privSnap.exists) {
+          const priv = privSnap.data() || {};
+          const locationUpdate = {};
+          const roundCoord = (n) => Math.round(Number(n) * 100) / 100;
+
+          if (priv.hostLocation && priv.hostLocation.geometry && priv.hostLocation.geometry.location) {
+            const lat = Number(priv.hostLocation.geometry.location.lat);
+            const lng = Number(priv.hostLocation.geometry.location.lng);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+              locationUpdate.hostLocation = {
+                ...(newData.hostLocation || {}),
+                geometry: {
+                  location: { lat: roundCoord(lat), lng: roundCoord(lng) },
+                },
+              };
+            }
+          }
+
+          if (priv.homeLocation && priv.homeLocation.geometry && priv.homeLocation.geometry.location) {
+            const lat = Number(priv.homeLocation.geometry.location.lat);
+            const lng = Number(priv.homeLocation.geometry.location.lng);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+              locationUpdate.homeLocation = {
+                ...(newData.homeLocation || {}),
+                geometry: {
+                  location: { lat: roundCoord(lat), lng: roundCoord(lng) },
+                },
+              };
+            }
+          }
+
+          const rawCur = priv.currentLocation || priv.hostLocation;
+          if (rawCur && rawCur.geometry && rawCur.geometry.location) {
+            const lat = Number(rawCur.geometry.location.lat);
+            const lng = Number(rawCur.geometry.location.lng);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+              const city = newData.currentCity || rawCur.city || (newData.hostLocation && newData.hostLocation.city) || null;
+              const state = newData.currentState || rawCur.state || (newData.hostLocation && newData.hostLocation.state) || null;
+              const country = rawCur.country || newData.hostCountry || (newData.hostLocation && newData.hostLocation.country) || null;
+              const countryCode = newData.currentCountryCode || rawCur.country_code || rawCur.countryCode || newData.hostCountryCode || null;
+              const summaryParts = [city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
+              const tsMs = typeof rawCur.timestamp === "number" ? rawCur.timestamp : Date.now();
+              locationUpdate.currentLocation = {
+                formatted_address: summaryParts.join(", "),
+                place_id: "",
+                city,
+                state,
+                country,
+                country_code: countryCode,
+                countryCode,
+                timestamp: tsMs,
+                geometry: {
+                  location: { lat: roundCoord(lat), lng: roundCoord(lng) },
+                },
+                lastUpdated: rawCur.lastUpdated || new Date(tsMs).toISOString(),
+              };
+            }
+          }
+
+          if (Object.keys(locationUpdate).length > 0) {
+            await change.after.ref.set(locationUpdate, { merge: true });
+            console.log(`[onUserWrite] Synced city-level coordinates to public profile for ${userId}`);
+          }
+        }
+      } catch (locErr) {
+        console.warn(`[onUserWrite] Could not sync city-level coordinates for ${userId}: ${locErr.message}`);
+      }
+    }
+
+    // Skip wallet creation if wallet already assigned
     if (newData.walletAddress) return null;
 
     // Get the user's phone number from Firebase Auth

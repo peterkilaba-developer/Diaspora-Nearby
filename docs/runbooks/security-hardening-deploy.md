@@ -63,8 +63,7 @@ after the migration.
    chat and media, secure QR handshakes, hosted event and mutual-consent hosting
    check-ins, two-party hosting checkout, idempotent reports/listing counters,
    transfers, checkout lock/webhook replay, account deletion, and backup
-   restore. Exercise referral creation/redemption twice (the second call must
-   be idempotent), governance duplicate-vote rejection, verified-solution
+   restore. Exercise governance duplicate-vote rejection, verified-solution
    duplicate rejection, landing-form failure behavior, and authenticated
    Places quotas. Confirm paid events, flight ordering, marketplace-contact GDP,
    unverifiable geofence rewards, and client-authored trust rewards remain

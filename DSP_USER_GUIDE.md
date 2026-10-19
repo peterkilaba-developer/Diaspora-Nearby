@@ -9,20 +9,16 @@ Our platform empowers you across **Nested Hierarchical Communities** (Global →
 
 ### Ways to Earn
 
-**🚀 Proof of Humanity (PoH) Genesis Milestones (70,000 DSP Total & 70 PCT Base)**
-Each of the 7 milestones is awarded **individually and immediately** as you complete its requirements (earning **10,000 DSP and 10 PCT** per milestone):
+**🚀 Proof of Humanity (PoH) Genesis Milestones**
+The first 6 base milestones establish your verified identity, unlocking the **7,000 on-chain $DIASPORA Genesis Distribution** directly on Ethereum Base Blockchain by Coinbase:
 *   **Profile Completion**: Earn **10,000 DSP and 10 PCT** for completing all 10 profile fields.
-*   **Location Transparency**: Earn **10,000 DSP and 10 PCT** for keeping live location visible.
+*   **Location Transparency**: Earn **10,000 DSP and 10 PCT** for keeping live location visible (deliberately toggling off in app settings forfeits 10 PCT and burns the awarded 10,000 DSP; OS battery saver or signal loss does not penalize).
 *   **10 QR Identity Exchanges**: Earn **10,000 DSP and 10 PCT** for 10 in-person QR exchanges (plus 1,000 DSP per scan beyond 10).
 *   **10 Family Connections**: Earn **10,000 DSP and 10 PCT** for 10 verified family connections (with bilateral chat history).
 *   **10 Friend Connections**: Earn **10,000 DSP and 10 PCT** for 10 verified friend connections (with bilateral chat history).
 *   **10 Peer Verifications**: Earn **10,000 DSP and 10 PCT** for 10 peer profile claim verifications.
-*   **Ubuntu Emergency Fund**: Earn **10,000 DSP and 10 PCT** for contributing to the mutual emergency assistance pool.
-*   🌟 **Genesis On-Chain Token Conversion**: Completing all 7 milestones automatically converts **7,000 DSP** into **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (with 1:1 matching expansion across the 7 community treasuries, founders, liquidity, and burn).
-
-**👥 Community Growth & Referrals**
-*   **Refer Family & Friends**: Earn **10,000 DSP** (both parties) for every family member or friend who joins using your invite.
-*   **Facebook & WhatsApp Group Admins**: Group leaders who share their referral code with their existing Facebook/WhatsApp groups earn **1,000 DSP per member signup** (credited to both admin & member), unlock **1,000 DSP (10-day)** and **10,000 DSP (100-day)** streak bonuses, and fulfill the 100+ member group admin requirement for Community Leadership election!
+*   **Ubuntu Emergency Fund (Deferred Post-Genesis)**: Earn **10,000 DSP and 10 PCT** for contributing to the mutual catastrophe assistance pool. Deferred post-genesis to ensure no upfront token barriers; required prior to requesting fund support.
+*   🌟 **Genesis On-Chain Token Conversion**: Completing the 6 base milestones unlocks **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (claimable via your Smart Wallet).
 
 **💬 Daily Engagement**
 *   **Send Messages**: Earn **10 DSP** for every message you send to family or friends.

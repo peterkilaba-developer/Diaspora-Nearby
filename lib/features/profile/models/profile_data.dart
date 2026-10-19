@@ -256,6 +256,54 @@ class ProfileData {
       'formatted_address': '',
       'place_id': '',
     };
+    // [FIX] Synthesize currentLocation from top-level currentCity/currentState/currentCountryCode
+    // if currentLocation is missing on a public profile document.
+    if (json['currentLocation'] == null &&
+        (json['currentCity'] != null || json['currentCountryCode'] != null)) {
+      final hostLoc = json['hostLocation'] is Map
+          ? Map<String, dynamic>.from(json['hostLocation'] as Map)
+          : <String, dynamic>{};
+      final city = json['currentCity'] as String? ?? hostLoc['city'] as String?;
+      final state =
+          json['currentState'] as String? ?? hostLoc['state'] as String?;
+      final country =
+          json['hostCountry'] as String? ?? hostLoc['country'] as String?;
+      final countryCode =
+          json['currentCountryCode'] as String? ??
+          json['hostCountryCode'] as String? ??
+          hostLoc['country_code'] as String?;
+      final summary = [city, state, country]
+          .whereType<String>()
+          .where((p) => p.trim().isNotEmpty)
+          .join(', ');
+      json['currentLocation'] = <String, dynamic>{
+        'formatted_address': summary,
+        'place_id': '',
+        'city': city,
+        'state': state,
+        'country': country,
+        'country_code': countryCode,
+        'countryCode': countryCode,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'geometry':
+            hostLoc['geometry'] ??
+            <String, dynamic>{
+              'location': <String, dynamic>{'lat': 0.0, 'lng': 0.0},
+            },
+      };
+    } else if (json['currentLocation'] is Map) {
+      final cur = Map<String, dynamic>.from(json['currentLocation'] as Map);
+      cur['formatted_address'] ??= '';
+      cur['place_id'] ??= '';
+      cur['countryCode'] ??= cur['country_code'];
+      if (cur['timestamp'] is! num) {
+        cur['timestamp'] = DateTime.now().millisecondsSinceEpoch;
+      }
+      cur['geometry'] ??= <String, dynamic>{
+        'location': <String, dynamic>{'lat': 0.0, 'lng': 0.0},
+      };
+      json['currentLocation'] = cur;
+    }
 
     return _$ProfileDataFromJson(json);
   }

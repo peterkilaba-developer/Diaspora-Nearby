@@ -1147,6 +1147,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             participantIds: widget.pendingUserId != null
                 ? [widget.pendingUserId!]
                 : [],
+            recipientUserId: widget.pendingUserId,
             controller: _messageController, // [NEW] Inject controller
             onSendMessage: (text, {type, metadata}) =>
                 _sendMessage(text, metadata: metadata),
@@ -1848,7 +1849,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           .toList() ??
                       [],
                   // [NEW] Pass recipient ID for transfers (only valid for Direct chats)
-                  recipientUserId: (chat?.type == 'direct')
+                  recipientUserId: (chat?.isDirect == true)
                       ? chat?.participants
                             .where((id) => id != currentUserId)
                             .firstOrNull

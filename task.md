@@ -6,7 +6,7 @@
     - [x] Audit `communities` collection vs `Community`
     - [x] Audit `events` collection vs `Event`
     - [x] Audit `points_transactions` vs `PointsTransaction`
-    - [x] Audit `referral_codes`
+    - [x] Audit community models and profiles
 - [x] Refine Profile Completion Screen
     - [x] Make `ProfileQRCodeDialog` full-screen with `Scaffold` and `AppBar`
     - [x] Apply theme padding (`AppTheme.pageHorizontalPadding`)
@@ -30,16 +30,15 @@
     - [x] Refine Bereavement Fund (Rebranding, Verified Proxies, Strict Joining).
 - [x] **DSP UI/UX Refinement**
     - [x] Update `DiasporaCryptoScreen` with latest landing page copy.
-    - [x] Update `PointsSystemScreen` with referral card and TGE progress.
+    - [x] Update `PointsSystemScreen` with PoH progress and TGE progress.
     - [x] Integrate `ExplorationProgressCard`.
     - [x] Add "View Detailed Earning Guide" modal.
-    - [x] Update `ShareInviteScreen` rewards and add TGE progress bar.
-    - [x] Implement auto-generation of referral codes on landing.
+    - [x] Update `ShareInviteScreen` and add TGE progress bar.
 - [x] **Community Tribute & TGE Preparation**
     - [x] Update `Community` model with `points` and `walletAddress`.
-    - [x] Implement 1% Tribute Logic in `PointsService`.
+    - [x] Implement 1:1 Community Match in `PointsService`.
     - [x] Enhance `PointsRepository` with community transaction support.
-    - [x] Define Token Allocation Table (Founders, Team, Treasury).
+    - [x] Define Token Allocation Table (Founders, Liquidity, Treasuries).
     - [x] Complete `DSP_TGE_FEASIBILITY.md` study.
 - [x] **Investigate and resolve database reset errors**
     - [x] Identify root cause of `[firebase_functions/unavailable]` error.
@@ -63,6 +62,12 @@
 - [x] Profile Completeness Getter implementation.
 - [x] Relationship-based verification blocking.
 - [x] Verification/Vouching daily limits enforcement.
+- [x] **TDE Distribution, Token Claims & Deprecation Purge**
+    - [x] Standing below 91+ PCT revokes high-trust privileges (hosting, stay, leadership, DDI loan eligibility) without freezing TDE distribution (distributed according to PCT efficiency decile).
+    - [x] Pull-based individual TDE token claims anytime on Base L2 via Merkle proof verification; only tokens lost to efficiency gate are burned to canonical dead address `0x000...dEaD`.
+    - [x] 6 Base PoH Milestones for Genesis 7,000 $DIASPORA distribution; Milestone 7 (Ubuntu Emergency Fund) deferred post-genesis.
+    - [x] Complete eradication of deprecated referral mechanisms, welcome bonuses, 24-hr epoch limits, unassigned slot burns, and activity fees across contracts, functions, and Flutter app.
+    - [x] Verified with 85/85 passing Mocha smart contract tests and 0 Flutter analyzer errors.
 
 ## Phase 8: Refactor for DRY
 - [x] Create implementation plan for unified `UserProfileForm`.

@@ -80,14 +80,11 @@ release must pass independent security and load testing.
     fall back to direct database writes or show success after failed storage.
     Radio and Places proxies use fixed allowlisted routes, authenticated
     per-user quotas where applicable, parameter encoding, timeouts, and
-    response-size limits; Places requires both Auth and App Check.
-15. **Referral and voting integrity:** referral codes are derived from the
-    authenticated profile and redemption is one idempotent server transaction
-    that prevents self-referral and keeps the promotional supply ledger in
-    sync. Governance votes derive the voter from Auth, verify community
-    membership and candidate registration, are immutable, and use aggregate
-    counts. Chat-solution verification is tied to an existing participant and
-    message; client-selected group and verification rewards were removed.
+15. **Voting and milestone integrity:** Governance votes derive the voter from
+    Auth, verify community membership and candidate registration, are
+    immutable, and use aggregate counts. Chat-solution verification is tied to
+    an existing participant and message; client-selected rewards and deprecated
+    promotional mechanics were removed.
 16. **Relationships, blocks, and direct messages:** relationship requests and
     reciprocal relationship projections are now canonical, authenticated
     server transactions with reciprocal-type and unique-family-slot checks.

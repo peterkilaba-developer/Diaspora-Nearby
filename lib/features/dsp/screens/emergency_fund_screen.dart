@@ -712,22 +712,14 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
               ),
               const SizedBox(height: 6),
 
-              // Member ID (referral code)
-              FutureBuilder<String?>(
-                future: ref
-                    .read(pointsServiceProvider)
-                    .getReferralCode(widget.userId),
-                builder: (context, snap) {
-                  final code = snap.data ?? membership.supportNumber;
-                  return Text(
-                    'Member ID: $code',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  );
-                },
+              // Member ID
+              Text(
+                'Member ID: ${membership.supportNumber}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
 
               const SizedBox(height: 20),

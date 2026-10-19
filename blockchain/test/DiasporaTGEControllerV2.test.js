@@ -1,3 +1,4 @@
+import { MerkleTree } from "merkletreejs";
 import { expect } from "chai";
 import hre from "hardhat";
 import { upgrades as createUpgrades } from "@openzeppelin/hardhat-upgrades";
@@ -293,6 +294,117 @@ describe("DiasporaTGEControllerV2", function () {
           [user1.address], [1n * ONE], [101], ROOT_A
         )
       ).to.be.revertedWith("TGE: efficiency > 100");
+    });
+  });
+  describe("Individual Pull-Claim & Genesis Distribution (V3)", function () {
+    function makeLeaf(recipient, epoch, tgeEvent, earnedAmount, efficiency) {
+      return ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(
+          ["address", "uint256", "uint256", "uint256", "uint8"],
+          [recipient, epoch, tgeEvent, earnedAmount, efficiency]
+        )
+      );
+    }
+
+    it("allows oracle to publish TDE root and users to pull-claim anytime", async function () {
+      const epoch = 1;
+      const tgeEvent = 0;
+      const earnedUser1 = 1000n * ONE;
+      const efficiencyUser1 = 100; // 100% liquid
+      const earnedUser2 = 2000n * ONE;
+      const efficiencyUser2 = 50;  // 50% liquid, 50% burn (score below 91)
+
+      const leaf1 = makeLeaf(user1.address, epoch, tgeEvent, earnedUser1, efficiencyUser1);
+      const leaf2 = makeLeaf(user2.address, epoch, tgeEvent, earnedUser2, efficiencyUser2);
+
+      const tree = new MerkleTree([leaf1, leaf2], ethers.keccak256, { sortPairs: true });
+      const root = tree.getHexRoot();
+      const proof1 = tree.getHexProof(leaf1);
+      const proof2 = tree.getHexProof(leaf2);
+
+      // Oracle publishes root
+      await tge.connect(oracle).publishTdeRoot(epoch, tgeEvent, root, earnedUser1 + earnedUser2);
+
+      // User 1 claims anytime (100% efficiency)
+      const u1BalBefore = await token.balanceOf(user1.address);
+      await tge.connect(user1).claimTdeTokens(user1.address, epoch, tgeEvent, earnedUser1, efficiencyUser1, proof1);
+      const u1BalAfter = await token.balanceOf(user1.address);
+      expect(u1BalAfter - u1BalBefore).to.equal(earnedUser1);
+
+      // User 2 claims (50% efficiency: score below 91 does not freeze claim, 50% liquid and 50% burned)
+      const u2BalBefore = await token.balanceOf(user2.address);
+      const deadBalBefore = await token.balanceOf(BURN);
+      await tge.connect(user2).claimTdeTokens(user2.address, epoch, tgeEvent, earnedUser2, efficiencyUser2, proof2);
+      const u2BalAfter = await token.balanceOf(user2.address);
+      const deadBalAfter = await token.balanceOf(BURN);
+
+      expect(u2BalAfter - u2BalBefore).to.equal(1000n * ONE); // 50% of 2000
+      expect(deadBalAfter - deadBalBefore).to.equal(1000n * ONE); // 50% burned to 0x...dEaD
+    });
+
+    it("prevents double-claiming TDE tokens", async function () {
+      const epoch = 1;
+      const tgeEvent = 0;
+      const earned = 500n * ONE;
+      const efficiency = 80;
+
+      const leaf = makeLeaf(user1.address, epoch, tgeEvent, earned, efficiency);
+      const tree = new MerkleTree([leaf], ethers.keccak256, { sortPairs: true });
+      const root = tree.getHexRoot();
+      const proof = tree.getHexProof(leaf);
+
+      await tge.connect(oracle).publishTdeRoot(epoch, tgeEvent, root, earned);
+      await tge.claimTdeTokens(user1.address, epoch, tgeEvent, earned, efficiency, proof);
+
+      await expect(
+        tge.claimTdeTokens(user1.address, epoch, tgeEvent, earned, efficiency, proof)
+      ).to.be.revertedWith("TGE: already claimed");
+    });
+
+    it("rejects invalid Merkle proof on TDE claim", async function () {
+      const epoch = 1;
+      const tgeEvent = 0;
+      const earned = 500n * ONE;
+      const efficiency = 80;
+
+      const leaf = makeLeaf(user1.address, epoch, tgeEvent, earned, efficiency);
+      const tree = new MerkleTree([leaf], ethers.keccak256, { sortPairs: true });
+      const root = tree.getHexRoot();
+
+      await tge.connect(oracle).publishTdeRoot(epoch, tgeEvent, root, earned);
+
+      const fakeProof = [ROOT_A];
+      await expect(
+        tge.claimTdeTokens(user1.address, epoch, tgeEvent, earned, efficiency, fakeProof)
+      ).to.be.revertedWith("TGE: invalid merkle proof");
+    });
+
+    it("distributes Genesis 7,000 $DIASPORA tokens on 6-milestone completion", async function () {
+      const genesisAmount = 7000n * ONE;
+      await tge.connect(admin).setMaxGenesisDistribution(genesisAmount);
+
+      const userBalBefore = await token.balanceOf(user1.address);
+      await tge.connect(oracle).distributeGenesisTokens(
+        user1.address,
+        genesisAmount,
+        [founders.address, BURN],
+        [700n * ONE, 700n * ONE],
+        ROOT_A
+      );
+
+      const userBalAfter = await token.balanceOf(user1.address);
+      expect(userBalAfter - userBalBefore).to.equal(genesisAmount);
+
+      // Dedupe check
+      await expect(
+        tge.connect(oracle).distributeGenesisTokens(
+          user1.address,
+          genesisAmount,
+          [],
+          [],
+          ROOT_A
+        )
+      ).to.be.revertedWith("TGE: user already received genesis distribution");
     });
   });
 });

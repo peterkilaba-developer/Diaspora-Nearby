@@ -305,11 +305,12 @@ async function performTGE(triggerSource) {
 
     snapshotDetails.push({
       unitId: doc.id,
-      unitName: d.name,
+      unitName: d.name || doc.id,
       wallet: walletAddress,
       dsp: Math.floor(treasuryDsp),
       efficiency: treasuryEfficiency,
-      averagePct: avgPct, averagePoCT: avgPct,
+      averagePct: avgTrustScore,
+      averagePoCT: avgTrustScore,
     });
   }
 
@@ -474,6 +475,15 @@ async function performTGE(triggerSource) {
   console.log(`[TGE Oracle] Epoch ${epochBefore}→${epochAfter}, Event ${eventBefore}→${eventAfter}`);
 
   // ── Step 4: Record TGE event in Firestore (deterministic doc ID by epoch/event) ──
+  let tdePenaltyBurn = 0;
+  for (const snap of snapshotDetails) {
+    if (!snap.systemSlot) {
+      const eff = Number(snap.efficiency || 0);
+      const burned = Math.floor(snap.dsp * ((100 - eff) / 100));
+      if (burned > 0) tdePenaltyBurn += burned;
+    }
+  }
+
   const tgeEventDocId = `epoch${epochBefore}_event${eventBefore}`;
   const tgeRecord = {
     epoch: epochBefore,
@@ -481,6 +491,7 @@ async function performTGE(triggerSource) {
     txHash: receipt.hash,
     merkleRoot,
     totalDsp,
+    tdePenaltyBurn,
     totalRecipients: recipients.length,
     usersIncluded,
     treasuriesIncluded,
@@ -492,8 +503,24 @@ async function performTGE(triggerSource) {
   };
   await db.collection("tge_events").doc(tgeEventDocId).set(tgeRecord);
 
-  // ── Step 5: Deduct DSP from snapshotted participants ───────────────
+  // ── Step 5: Deduct DSP from snapshotted participants & record TDE penalty burn ──
   const operations = [];
+  if (tdePenaltyBurn > 0) {
+    operations.push({
+      ref: db.collection("system_stats").doc("treasury"),
+      patch: {
+        totalBurnedTde: admin.firestore.FieldValue.increment(tdePenaltyBurn),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+    operations.push({
+      ref: db.collection("governance").doc("burn"),
+      patch: {
+        burnedAtTde: admin.firestore.FieldValue.increment(tdePenaltyBurn),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+  }
   for (const snap of snapshotDetails) {
     if (snap.userId) {
       const userRef = db.collection("user_points").doc(snap.userId);
@@ -539,7 +566,7 @@ async function performTGE(triggerSource) {
       await chunkBatch.commit();
     }
     await db.collection("tge_events").doc(tgeEventDocId).update({ status: "complete" });
-    console.log(`[TGE Oracle] Successfully reset DSP points for ${snapshotDetails.length} participants.`);
+    console.log(`[TGE Oracle] Successfully reset DSP points for ${snapshotDetails.length} participants (tdePenaltyBurn=${tdePenaltyBurn}).`);
   } catch (resetErr) {
     dspDeductionStatus = "tx_complete_dsp_pending";
     dspDeductionError = (resetErr.message || "unknown").slice(0, 500);
@@ -997,7 +1024,9 @@ exports.awardPoints = functions
               }, { merge: true });
 
               // Governance doc (maps community -> governance unit)
-              const govId = commId;
+              const govId = commId === "global_community"
+                ? "global_community"
+                : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
               batch.set(db.collection("governance").doc(govId), {
                 id: govId,
                 communityId: commId,
@@ -1239,7 +1268,9 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
           updatedAt: now,
         }, { merge: true });
 
-        const govId = commId;
+        const govId = commId === "global_community"
+          ? "global_community"
+          : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
         batch.set(db.collection("governance").doc(govId), {
           id: govId,
           communityId: commId,
@@ -1255,10 +1286,13 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
 }
 
 /**
- * initializeUserPoints — Sets up a new user's points document.
- * Called once during signup.
- * NOTE: The 10,000 DSP welcome bonus was deprecated in favor of Proof of Humanity (PoH)
- * milestones to prevent Sybil attacks before verification.
+ * initializeUserPoints — Sets up a new user's points document with a 10,000 DSP
+ * welcome bonus and distributes the 1:1 Ubuntu Protocol matching supply to
+ * community and system treasuries.
+ * Called once during signup after communities are provisioned.
+ * Bots/unverified accounts with 0–10 PCT have 0% conversion efficiency at TGE
+ * (100% of their DSP is burned), protecting token value while giving real
+ * new members immediate personal & community DSP visibility.
  */
 exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -1266,14 +1300,15 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
   }
 
   const userId = context.auth.uid;
+  const WELCOME_BONUS = 10000;
 
   try {
     const userPointsRef = db.collection("user_points").doc(userId);
     const doc = await userPointsRef.get();
     const docData = doc.exists ? doc.data() : null;
 
-    // Already fully initialized
-    if (doc.exists && docData && docData.signupDate && docData.userId) {
+    // Already fully initialized with welcome bonus
+    if (doc.exists && docData && docData.signupDate && docData.userId && docData.lifetimeEarnings?.welcome_bonus) {
       return { success: true, alreadyInitialized: true };
     }
 
@@ -1285,11 +1320,11 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     if (!doc.exists) {
-      // Fresh user — initialize points doc with 0 DSP (earned via Proof of Humanity)
+      // Fresh user — full initialization with 10,000 DSP welcome bonus
       batch.set(userPointsRef, {
         userId,
-        totalPoints: 0,
-        availablePoints: 0,
+        totalPoints: WELCOME_BONUS,
+        availablePoints: WELCOME_BONUS,
         currentStreak: 0,
         dailyMessageCount: 0,
         dailyShareCount: 0,
@@ -1302,11 +1337,15 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         qrConnectionCount: 0,
         trustScore: 0,
         tgeHistory: [],
-        lifetimeEarnings: {},
+        lifetimeEarnings: { welcome_bonus: WELCOME_BONUS },
         ...(countryCode ? { homeCountryCode: countryCode } : {}),
       });
     } else {
-      // Partial doc — backfill missing base fields
+      // Partial doc — backfill missing fields + award welcome bonus if missing
+      const existingLifetime = docData.lifetimeEarnings || {};
+      const welcomeBonusMissing = !existingLifetime.welcome_bonus;
+      const bonusToAdd = welcomeBonusMissing ? WELCOME_BONUS : 0;
+
       const updates = {
         userId,
         signupDate: docData.signupDate || now,
@@ -1325,15 +1364,239 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
 
       if (countryCode) updates.homeCountryCode = countryCode;
 
+      if (bonusToAdd > 0) {
+        updates.totalPoints = (docData.totalPoints || 0) + bonusToAdd;
+        updates.availablePoints = (docData.availablePoints || 0) + bonusToAdd;
+        updates.lifetimeEarnings = {
+          ...existingLifetime,
+          welcome_bonus: bonusToAdd,
+        };
+      }
+
       batch.set(userPointsRef, updates, { merge: true });
+    }
+
+    // Record welcome bonus transaction & 1:1 Ubuntu matching supply if not yet awarded
+    const existingLifetime = docData ? (docData.lifetimeEarnings || {}) : {};
+    const shouldAwardBonus = !doc.exists || !existingLifetime.welcome_bonus;
+
+    if (shouldAwardBonus) {
+      const txRef = db.collection("points_transactions").doc();
+      batch.set(txRef, {
+        userId,
+        type: "earn",
+        action: "welcome_bonus",
+        points: WELCOME_BONUS,
+        timestamp: now,
+        metadata: { description: "Welcome to Diaspora!" },
+      });
+
+      await distributeUbuntuMatchingSupply(batch, userId, WELCOME_BONUS, now, "welcome_bonus_match");
     }
 
     await batch.commit();
 
-    return { success: true, welcomeBonusAwarded: false };
+    return { success: true, welcomeBonusAwarded: shouldAwardBonus };
   } catch (error) {
     console.error(`[initializeUserPoints] Error:`, error.message);
     throw new functions.https.HttpsError("internal", `Failed to initialize: ${error.message}`);
+  }
+});
+
+/**
+ * getOrCreateReferralCode — Returns the authenticated user's referral code,
+ * generating and storing a unique one in `referral_codes/{code}` if none exists.
+ */
+exports.getOrCreateReferralCode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
+  }
+
+  const userId = context.auth.uid;
+
+  try {
+    const existingSnap = await db
+      .collection("referral_codes")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
+
+    if (!existingSnap.empty) {
+      const existingData = existingSnap.docs[0].data();
+      const existingCode = existingData.code || existingSnap.docs[0].id;
+      await db.collection("users").doc(userId).set({ referralCode: existingCode }, { merge: true });
+      return { success: true, code: existingCode };
+    }
+
+    const userDoc = await db.collection("users").doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+
+    const rawFirstName = String(data?.firstName || userData.firstName || "MEMBER")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+    const prefixName = (rawFirstName || "MEMBER").slice(0, 12);
+
+    const rawCountry = String(data?.countryCode || userData.homeCountryCode || userData.hostCountryCode || "GL")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "");
+    const countryCode = (rawCountry || "GL").slice(0, 2);
+
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
+    let isUnique = false;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let rand = "";
+      for (let i = 0; i < 4; i++) {
+        rand += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      code = `${prefixName}-${countryCode}-${rand}`;
+      const codeDoc = await db.collection("referral_codes").doc(code).get();
+      if (!codeDoc.exists) {
+        isUnique = true;
+        break;
+      }
+    }
+
+    if (!isUnique) {
+      throw new functions.https.HttpsError("internal", "Could not generate a unique referral code.");
+    }
+
+    await db.collection("referral_codes").doc(code).set({
+      code,
+      userId,
+      firstName: userData.firstName || data?.firstName || "",
+      countryCode,
+      usedCount: 0,
+      createdAt: new Date().toISOString(),
+    });
+    await db.collection("users").doc(userId).set({ referralCode: code }, { merge: true });
+
+    return { success: true, code };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error(`[getOrCreateReferralCode] Error:`, error.message);
+    throw new functions.https.HttpsError("internal", `Failed to get/create referral code: ${error.message}`);
+  }
+});
+
+/**
+ * redeemReferralCode — Validates a referral code for a newly signed-up user and
+ * awards 1,000 DSP (plus 1:1 Ubuntu matching supply) to the referrer who invited them.
+ */
+exports.redeemReferralCode = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be authenticated.");
+  }
+
+  const refereeId = context.auth.uid;
+  const rawCode = String(data?.code || "").trim().toUpperCase();
+  if (!rawCode) {
+    throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
+  }
+
+  const REFERRAL_BONUS = 1000;
+
+  try {
+    // 1. Resolve referrer from referral_codes/{code} or direct userId fallback
+    let codeDoc = await db.collection("referral_codes").doc(rawCode).get();
+    let referrerId = null;
+    let resolvedCode = rawCode;
+
+    if (codeDoc.exists) {
+      referrerId = codeDoc.data().userId;
+    } else {
+      // Fallback: check if rawCode is a direct UID (e.g., from older share links)
+      const userByUid = await db.collection("users").doc(rawCode).get();
+      if (userByUid.exists) {
+        referrerId = userByUid.id;
+      }
+    }
+
+    if (!referrerId) {
+      throw new functions.https.HttpsError("not-found", "Invalid referral code.");
+    }
+
+    if (referrerId === refereeId) {
+      throw new functions.https.HttpsError("failed-precondition", "Cannot use your own referral code.");
+    }
+
+    // 2. Prevent duplicate redemption by the same user
+    const refereeDocRef = db.collection("users").doc(refereeId);
+    const refereeDoc = await refereeDocRef.get();
+    if (refereeDoc.exists && refereeDoc.data().referredBy) {
+      return {
+        success: true,
+        alreadyRedeemed: true,
+        referrerId: refereeDoc.data().referredBy,
+      };
+    }
+
+    const batch = db.batch();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    // Mark referee as referred
+    batch.set(refereeDocRef, {
+      referredBy: referrerId,
+      referredWithCode: resolvedCode,
+      referredAt: now,
+    }, { merge: true });
+
+    // Increment referral code usage counter if codeDoc exists
+    if (codeDoc.exists) {
+      batch.update(codeDoc.ref, {
+        usedCount: admin.firestore.FieldValue.increment(1),
+        lastUsedAt: now,
+      });
+    }
+
+    // 3. Award 1,000 DSP to the referrer + 1:1 Ubuntu matching supply
+    const referrerPointsRef = db.collection("user_points").doc(referrerId);
+    batch.set(referrerPointsRef, {
+      totalPoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+      availablePoints: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+      lastUpdated: now,
+      lifetimeEarnings: {
+        referral_reward_referrer: admin.firestore.FieldValue.increment(REFERRAL_BONUS),
+      },
+    }, { merge: true });
+
+    const txRef = db.collection("points_transactions").doc();
+    batch.set(txRef, {
+      userId: referrerId,
+      type: "earn",
+      action: "referral_reward_referrer",
+      points: REFERRAL_BONUS,
+      timestamp: now,
+      metadata: {
+        referredUserId: refereeId,
+        code: resolvedCode,
+        description: "Referral Bonus — Invited a new member",
+      },
+    });
+
+    await distributeUbuntuMatchingSupply(
+      batch,
+      referrerId,
+      REFERRAL_BONUS,
+      now,
+      "referral_reward_referrer_match"
+    );
+
+    await batch.commit();
+
+    return {
+      success: true,
+      referrerId,
+      code: resolvedCode,
+      pointsAwarded: REFERRAL_BONUS,
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error(`[redeemReferralCode] Error:`, error.message);
+    throw new functions.https.HttpsError("internal", `Failed to redeem referral code: ${error.message}`);
   }
 });
 
@@ -1481,7 +1744,9 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
             awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          const govId = commId;
+          const govId = commId === "global_community"
+            ? "global_community"
+            : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
           transaction.set(db.collection("governance").doc(govId), {
             id: govId, communityId: commId, type: "community",
             treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
@@ -1633,7 +1898,9 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
             awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          const govId = commId;
+          const govId = commId === "global_community"
+            ? "global_community"
+            : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
           transaction.set(db.collection("governance").doc(govId), {
             id: govId, communityId: commId, type: "community",
             treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
@@ -1791,7 +2058,9 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
             awardedBalance: admin.firestore.FieldValue.increment(slotUnit),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
-          const govId = commId;
+          const govId = commId === "global_community"
+            ? "global_community"
+            : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
           transaction.set(db.collection("governance").doc(govId), {
             id: govId, communityId: commId, type: "community",
             treasuryBalance: admin.firestore.FieldValue.increment(slotUnit),
@@ -2041,10 +2310,13 @@ exports.syncTreasuryBalances = functions
         await commitIfNeeded();
 
         // Governance doc
-        const govId = commId;
+        const govId = commId === "global_community"
+          ? "global_community"
+          : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
         batch.set(db.collection("governance").doc(govId), {
           treasuryBalance: communityPointsMap[commId] || 0,
-          averagePoCT: avgPoCT,
+          averagePct: avgPct,
+          averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         opCount++;
@@ -2057,7 +2329,8 @@ exports.syncTreasuryBalances = functions
           cumulativeEarnings: communityBasisMap[commId],
           memberPoints: communityMemberPointsMap[commId],
           awardedBalance: communityPointsMap[commId] || 0,
-          averagePoCT: avgPoCT,
+          averagePct: avgPct,
+          averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         opCount++;

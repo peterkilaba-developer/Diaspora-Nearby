@@ -21,9 +21,11 @@ final dspValuationProvider = Provider<DspValuation>((ref) {
   final totalUsers = ref.watch(globalMemberCountProvider).value ?? 0;
   final fiatGdpUsd = ref.watch(fiatGdpProvider).value ?? 0.0;
 
-  // Burn data lives in system_stats/treasury as totalBurnedUtility
+  // Burn data combines in-app utility burns + 10% protocol burn pool + TDE PCT penalty burns
   final int totalBurned =
-      (treasuryData['totalBurnedUtility'] as num?)?.toInt() ?? 0;
+      ((treasuryData['totalBurnedUtility'] as num?)?.toInt() ?? 0) +
+      ((treasuryData['burnedPoints'] as num?)?.toInt() ?? 0) +
+      ((treasuryData['totalBurnedTde'] as num?)?.toInt() ?? 0);
 
   // Current epoch — hardcoded to 1 for now.
   // When epoch progression is automated, this will come from a Firestore field.

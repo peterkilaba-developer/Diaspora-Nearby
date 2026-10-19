@@ -124,6 +124,22 @@ exports.transferDiaspora = functions
           const provider = new ethers.JsonRpcProvider(rpcUrl);
           const signer = new ethers.Wallet(BACKEND_SIGNER_KEY, provider);
 
+          const senderCode = await provider.getCode(senderWalletAddress);
+          if (!senderCode || senderCode === '0x') {
+            if (!senderData.walletPhoneHash) {
+              throw new Error('Sender smart wallet is not deployed on-chain and missing walletPhoneHash.');
+            }
+            console.log(`[SmartWallet Transfer] Deploying pending smart wallet for sender ${fromUserId} (${senderWalletAddress})...`);
+            const factory = new ethers.Contract(
+              WALLET_FACTORY_ADDRESS,
+              ["function createWallet(bytes32 phoneHash) returns (address)"],
+              signer
+            );
+            const deployTx = await factory.createWallet(senderData.walletPhoneHash);
+            await deployTx.wait();
+            await senderUserRef.set({ walletDeploymentPending: false }, { merge: true });
+          }
+
           const SMART_WALLET_ABI = [
             "function transferToken(address token, address to, uint256 amount) returns (bool)",
           ];

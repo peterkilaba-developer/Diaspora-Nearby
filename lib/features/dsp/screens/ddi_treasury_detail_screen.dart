@@ -384,18 +384,18 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
           'This wallet serves as an un-spendable deflationary sink (0x...dEaD). Tokens sent here or generated via protocol burn mechanisms are permanently removed from circulating supply to support token scarcity.';
     } else if (unitId == 'global_community') {
       cardTitle = 'Global Reserve';
-      cardSubtitle = 'Zero-Fee Remittances & Protocol Operations';
+      cardSubtitle = 'Zero-Fee Activities & Community Operations';
       iconData = LucideIcons.globe;
       boxTitle = 'Global Reserve Operations';
       boxText =
-          'The Global Reserve funds zero-fee token transfers and fiat remittance subsidies, chamber leadership operations, global charitable contributions, and overall protocol upkeep through the 10% Ubuntu community match.';
+          'The Global Reserve enables all free activities across the platform. It absorbs network transfer costs, subsidizes remittance fees paid to legacy money transfer companies (so users send value for free while legacy rails still get paid), funds community operations, supports Chambers of Commerce, and pays salaries for elected Community Council officers.';
     } else if (unitId?.contains('continent') == true) {
       cardTitle = 'Continental Treasury';
-      cardSubtitle = '50/50 Sovereign Split & Platform Revenue';
+      cardSubtitle = '100% Sovereign Bond Allocation & Platform Revenue';
       iconData = LucideIcons.landmark;
-      boxTitle = 'Sovereign Bond Engine & Liquid Backstop';
+      boxTitle = 'Sovereign Bond Engine & Institutional Alignment';
       boxText =
-          'Continental Treasuries operate on a 50/50 Sovereign Split: 50% is managed by the protocol to purchase sovereign government bonds (allocated pro-rata by member contributions, with 100% of yields funding Diaspora Nearby platform operations so users are never charged fees). The other 50% is retained in liquid \$DIASPORA as a regional backstop for Country and Town member loans.';
+          'Continental Treasuries operate on a 100% Sovereign Bond Allocation: 100% of continental funds purchase sovereign government bonds and Treasury Bills (allocated pro-rata by member contributions, e.g., Tanzania’s contribution buys Bank of Tanzania bonds; host continent funds buy US Treasuries). 100% of coupon yields fund Diaspora Nearby platform operations (engineering, infrastructure, security), while transforming central banks into national integration partners.';
     } else {
       cardTitle = 'Reserve Treasury';
       cardSubtitle = 'Liquidity & Upward Loan Cascading Backstop';

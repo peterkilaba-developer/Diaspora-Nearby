@@ -94,7 +94,7 @@ USER ACTION                    WHAT HAPPENS
 Book a £400 flight    →    +1,000 DSP awarded (trackTravelBooking in PointsService)
                            +$508 USD recorded to Fiat GDP (£400 ÷ 0.79)
 
-Buy KES 5,000 product →    -100 DSP qualifying fee deducted (trackMarketplaceBuyFee)
+Buy KES 5,000 product →    Free transaction (0 DSP fee, frictionless economy)
                            +$32 USD recorded to Fiat GDP (KES 5,000 ÷ 155)
 
 Send a message        →    +10 DSP (social activity, no fiat value tracked)
@@ -223,8 +223,6 @@ These activities build the network. No fiat tracking — pure DSP reward.
 
 | Activity | DSP Reward | Source Method |
 |:---------|:-----------|:-------------|
-| 📱 **Signup** | +1,000 | trackSignup |
-| 🔗 **Referral** | +1,000 | trackReferralReward |
 | 🤝 **Relationship** | +1,000 | trackRelationshipAccepted |
 | 💬 **Message Sent** | +10 | trackMessageSent |
 | 📰 **Community Post** | +100 | trackCommunityPost |
@@ -242,7 +240,7 @@ Every DSP reward follows a strict **powers-of-10** pattern. This maps to economi
 ```
 10      = Micro-action      (1 message, 1 feature explored, 1 wishlist save)
 100     = Daily-action       (1 check-in, 1 share, 1 review)
-1,000   = Significant-action (1 booking, 1 connection, 1 referral)
+1,000   = Significant-action (1 booking, 1 connection, 1 local event)
 10,000  = Major-milestone    (profile genesis)
 ```
 
@@ -420,14 +418,14 @@ Public Price = Adjusted Price × 3.5 (Network Effect Multiplier)
 │    EARN (Supply Expansion)          SPEND (Value Sinks)          │
 │    ──────────────────────           ───────────────────          │
 │                                                                  │
-│  [ Social Activity ]──→ +DSP       [ Marketplace Fees ] → -DSP  │
-│       (no fiat GDP)                   (+fiat GDP recorded)      │
+│  [ Social Activity ]──→ +DSP       [ Code Penalties ] → -DSP     │
+│       (no fiat GDP)                   (spam/fraud/no-shows)      │
 │                                                                  │
-│  [ Travel Booking ]──→ +DSP        [ Event Fees ] → -DSP        │
-│       (+fiat GDP recorded)            (+fiat GDP recorded)      │
+│  [ Travel Booking ]──→ +DSP        [ Protocol Burns ] → -DSP     │
+│       (+fiat GDP recorded)            (10% matching supply burn) │
 │                                                                  │
-│  [ Remittance ]──→ -1% fee         [ Business Fees ] → -DSP    │
-│       (+fiat GDP recorded)            (+fiat GDP recorded)      │
+│  [ Frictionless Transact ]──→ $0   [ PCT Inefficiency ] → Burn   │
+│       (+fiat GDP recorded)            (sub-91 trust tokens dead) │
 │                                                                  │
 │              ┌───────────────────────────────────┐               │
 │              │  FLOOR PRICE = Fiat GDP / Supply  │               │
@@ -444,17 +442,14 @@ Public Price = Adjusted Price × 3.5 (Network Effect Multiplier)
 
 ## 🏛️ CONTINENTAL TREASURIES & SOVEREIGN REVENUE MODEL
 
-### The 50/50 Continental Dual Mandate
-Continental Treasuries (Home Continent and Host Continent) convert their off-chain DSP tribute into on-chain $DIASPORA tokens on Base at TGE/TDE scaled by the **Average Proof of Community Trust (APCT / CPCT)** of active members. The protocol manages the resulting $DIASPORA under a **50/50 Sovereign Split**:
+### The 100% Sovereign Bond & Treasury Bill Allocation
+Continental Treasuries (Home Continent and Host Continent) convert their off-chain DSP tribute into on-chain $DIASPORA tokens on Base at TGE/TDE scaled by the **Average Proof of Community Trust (APCT / CPCT)** of active members. The protocol manages the resulting $DIASPORA under a **100% Sovereign Bond Allocation**:
 
-1. **50% Sovereign Bond Allocation (Platform Revenue Engine)**:
-   - Managed directly by the protocol to purchase **government bonds and Treasury Bills** in host and home nations.
-   - **Pro-Rata Sovereign Allocation:** Earmarked pro-rata based on each country's contribution to that continental treasury (e.g., Tanzania's contribution into the African Home Treasury is allocated to buy Bank of Tanzania sovereign bonds/bills; host continent funds buy sovereign bonds in host nations like US/UK).
-   - **Regulatory Alignment:** Central banks and ministries of finance view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding, facilitating integration into national economic, banking, and payment systems (e.g., TIPS in Tanzania, FedNow).
-   - **100% Platform Revenue:** All yield, interest, and coupon payments belong **exclusively to Diaspora Nearby (the platform)** to fund infrastructure, engineering, operations, and security. Because the platform charges zero fees to users (a 100% frictionless economy), this sovereign bond mechanism serves as the protocol's self-funding revenue engine.
-2. **50% Liquid $DIASPORA Backstop**:
-   - Retained in liquid on-chain $DIASPORA tokens on Base.
-   - Acts as the regional liquidity backstop for Town and Country member DDI loans under the Upward Cascading Liquidity Protocol.
+1. **100% Sovereign Bond & T-Bill Allocation (Platform Revenue Engine)**:
+   - Managed directly by the protocol to purchase **sovereign government bonds and Treasury Bills** in host and home nations.
+   - **Pro-Rata Sovereign Allocation:** Earmarked pro-rata based on each country's contribution to that continental treasury (e.g., Tanzania's contribution into the African Home Treasury is allocated to buy Bank of Tanzania sovereign bonds/bills; host continent funds buy sovereign bonds in host nations like US Treasuries or UK Gilts).
+   - **Institutional Central Bank Partnership:** Central banks and ministries of finance view these treasuries as an almost guaranteed, reliable, low-interest source of sovereign funding, facilitating eager integration into national economic, banking, and payment systems (e.g., TIPS in Tanzania, FedNow in the US).
+   - **100% Platform Revenue Engine:** All yield, interest, and coupon payments belong **exclusively to Diaspora Nearby (the operating entity)** to fund infrastructure, engineering, mobile development, smart contract audits, and corporate security. It serves strictly as the platform's self-funding revenue engine. (All free activities for users and zero-fee transfers are enabled and subsidized by the Global Reserve).
 
 ### Member-Owned DDI Loans
 - **Loans to Members:** All Town and Country DDI funds are **loans to members** (individual or pooled members).
@@ -471,14 +466,14 @@ Continental Treasuries (Home Continent and Host Continent) convert their off-cha
 |:----------|:---------|:-------|
 | CurrencyHelper (200+ country → USD static rates) | `marketplace/utils/currency_helper.dart` | ✅ Complete |
 | ValuationService (price formula: GDP/Supply/Velocity) | `dsp/services/valuation_service.dart` | ✅ Complete |
-| PointsService (earn/spend/transfer with 1% fee) | `dsp/services/points_service.dart` | ✅ Complete |
+| PointsService (earn/spend/frictionless transfer) | `dsp/services/points_service.dart` | ✅ Complete |
 | EpochService (10 epochs, one TGE plus ten TDEs per epoch) | `dsp/services/epoch_service.dart` | ✅ Complete |
 | TreasuryService (1:1 allocation, 10-slot model) | `dsp/services/treasury_service.dart` | ✅ Complete |
 | Marketplace `priceAmount` in local currency | `marketplace/models/listing_data.dart` | ✅ Complete |
 | Travel `pricePerUnit` in USD | `travel/models/peer_listing.dart` | ✅ Complete |
 | Amadeus `totalPrice` for flights/hotels | `travel/services/amadeus_service.dart` | ✅ Complete |
 | Event `ticketPrice` field | `events/models/event_data.dart` | ✅ Complete |
-| P2P transfer with 1% fee | `dsp/services/points_service.dart` | ✅ Complete |
+| P2P transfer (frictionless, 0 fee) | `dsp/services/points_service.dart` | ✅ Complete |
 | DSP-to-local currency display | `CurrencyHelper.formatLocalEquivalent()` | ✅ Complete |
 | Pre-TGE base rate placeholder | `_baseDspToUsd = 0.001` | ✅ Placeholder |
 

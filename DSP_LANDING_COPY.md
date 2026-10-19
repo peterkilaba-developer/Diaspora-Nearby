@@ -47,10 +47,10 @@ The Diaspora system tracks every DSP point distributed globally. When an epoch r
 You don't need a mining rig. You just need to be an active human.
 
 1.  **Proof of Activity (P.O.A)**: Earn daily for opening the app, messaging in communities, booking travel, and sharing diaspora news. High activity users earn **500–1,500 $DIASPORA per day**.
-2.  **Proof of Community Trust (PCT)**: Your trust is your multiplier. Complete all **7 Genesis Milestones** and reach **91+ PCT** to unlock Peer Hosting, Peer Stay, Leadership Candidacy, and Community Voting rights.
+2.  **Proof of Community Trust (PCT)**: Your trust is your multiplier. Complete the **6 Base Genesis Milestones** (plus deferred Milestone 7) and reach **91+ PCT** to unlock Peer Hosting, Peer Stay, Leadership Candidacy, and Community Voting rights.
 3.  **Grassroots Home Social Gatherings**: Community pillars who open their homes to host fellow members (>1hr visits) generate high-trust physical signals. Automatically verified via GPS or Google Plus Codes — awarding **1,000 DSP** to both host and visitor while boosting the host's PCT score (+1 PCT for mutual 5-star reviews).
-4.  **Facebook & WhatsApp Group Admins**: Are you an admin or leader of an existing diaspora Facebook group, WhatsApp chat, or community association? Stop building engagement for Web2 platforms for $0 equity. Share your invitation code with your members—**both you and each joining member earn 1,000 DSP instantly**, plus massive referral streak bonuses (+10,000 DSP). Administering a 100+ member group chat unlocks the key prerequisite for running for elected Community Leadership!
-5.  **Token Distribution Events (TDE)**: Convert your active DSP into liquid on-chain $DIASPORA at each scheduled 10% milestone based on your PCT efficiency score.
+4.  **Facebook & WhatsApp Group Admins**: Are you an admin or leader of an existing diaspora Facebook group, WhatsApp chat, or community association? Stop building engagement for Web2 platforms for $0 equity. Transition your community to sovereign ownership where every member co-owns the economy and administering an active group unlocks the key prerequisite for running for elected, salaried Community Leadership!
+5.  **Token Distribution Events (TDE)**: Convert your active DSP into liquid on-chain $DIASPORA at each scheduled 10% milestone by clicking "Claim $DIASPORA" based on your PCT efficiency score.
 
 ---
 

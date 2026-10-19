@@ -56,89 +56,120 @@ function isQuietHour(lng, nowMs = Date.now()) {
     return h >= QUIET_HOUR_START || h < QUIET_HOUR_END;
 }
 
+function extractCoordinates(privateData, publicData) {
+    const candidates = [
+        privateData && privateData.currentLocation,
+        publicData && publicData.currentLocation,
+        privateData && privateData.hostLocation,
+        publicData && publicData.hostLocation,
+        privateData && privateData.homeLocation,
+        publicData && publicData.homeLocation,
+    ];
+    for (const loc of candidates) {
+        if (loc && loc.geometry && loc.geometry.location) {
+            const lat = Number(loc.geometry.location.lat);
+            const lng = Number(loc.geometry.location.lng);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+                return { lat, lng, loc };
+            }
+        }
+    }
+    return null;
+}
+
 exports.findNearbyUsers = functions.https.onCall(async (data, context) => {
     requireAppCheck(context);
     const uid = requireAuth(context);
     await consumeRateLimit("nearby-search", uid, 120, 60 * 60 * 1000);
-    const radiusKm = Math.min(Math.max(Number(data && data.radiusKm) || 50, 1), 100);
     const limit = Math.min(Math.max(Number(data && data.limit) || 50, 1), 100);
+    const isGlobal = Boolean(data && data.global === true);
+
     const [privateSnapshot, callerProfile] = await Promise.all([
         db.collection("user_private").doc(uid).get(),
         db.collection("users").doc(uid).get(),
     ]);
+    const callerPriv = privateSnapshot.exists ? privateSnapshot.data() : {};
+    const callerPub = callerProfile.exists ? callerProfile.data() : {};
+    const callerCoords = extractCoordinates(callerPriv, callerPub);
+
     const excluded = new Set([
         uid,
-        ...(privateSnapshot.exists ? privateSnapshot.data().blockedUsers || [] : []),
+        ...(callerPriv.blockedUsers || []),
+        ...(callerPub.blockedUsers || []),
         ...(Array.isArray(data && data.excludeUserIds) ?
             data.excludeUserIds.slice(0, 100).filter(validUid) : []),
     ]);
-    if (data && data.global === true) {
-        const globalSnapshot = await db.collection("users")
-            .orderBy("firstName").limit(limit * 3).get();
-        const users = globalSnapshot.docs
-            .filter((profile) => !excluded.has(profile.id))
-            .slice(0, limit)
-            .map((profile) => publicProfile(profile));
-        return { users };
+
+    const homeCountryCode = callerPub.homeCountryCode || null;
+    let queryRef = db.collection("users");
+    if (!isGlobal && homeCountryCode) {
+        queryRef = queryRef.where("homeCountryCode", "==", homeCountryCode);
     }
-    const location = privateSnapshot.exists ? privateSnapshot.data().currentLocation : null;
-    if (!location || !location.geometry || !location.geometry.location) {
-        throw new functions.https.HttpsError(
-            "failed-precondition",
-            "Location is required for nearby discovery.",
-        );
+
+    const snapshot = await queryRef.limit(limit * 4).get();
+    const candidateDocs = snapshot.docs.filter((doc) => !excluded.has(doc.id));
+    if (candidateDocs.length === 0) return { users: [] };
+
+    const privateSnaps = await db.getAll(
+        ...candidateDocs.map((doc) => db.collection("user_private").doc(doc.id)),
+    );
+    const privateById = new Map(
+        privateSnaps.filter((s) => s.exists).map((s) => [s.id, s.data()]),
+    );
+
+    const results = [];
+    for (const doc of candidateDocs) {
+        const pub = doc.data() || {};
+        const priv = privateById.get(doc.id) || {};
+        if (pub.isBanned === true) continue;
+        const blockedByOther = [
+            ...(priv.blockedUsers || []),
+            ...(pub.blockedUsers || []),
+        ];
+        if (blockedByOther.includes(uid)) continue;
+
+        const targetCoords = extractCoordinates(priv, pub);
+        let distanceKm;
+        if (callerCoords && targetCoords) {
+            const distanceMiles = calculateDistanceInMiles(
+                callerCoords.lat,
+                callerCoords.lng,
+                targetCoords.lat,
+                targetCoords.lng,
+            );
+            distanceKm = distanceMiles * 1.609344;
+        }
+
+        results.push({
+            doc,
+            priv,
+            targetCoords,
+            distanceKm,
+        });
     }
-    const latitude = Number(location.geometry.location.lat);
-    const longitude = Number(location.geometry.location.lng);
-    const bounds = geohashQueryBounds([latitude, longitude], radiusKm * 1000);
-    const snapshots = await Promise.all(bounds.map((bound) =>
-        db.collection("user_private")
-            .orderBy("geo.geohash")
-            .startAt(bound[0])
-            .endAt(bound[1])
-            .limit(150)
-            .get()));
-    const candidateDocs = new Map();
-    for (const snapshot of snapshots) {
-        for (const document of snapshot.docs) candidateDocs.set(document.id, document);
-    }
-    const ranked = [];
-    for (const document of candidateDocs.values()) {
-        if (excluded.has(document.id)) continue;
-        const candidateLocation = document.data().currentLocation;
-        if (!candidateLocation || !candidateLocation.geometry) continue;
-        const point = candidateLocation.geometry.location;
-        const distanceMiles = calculateDistanceInMiles(
-            latitude, longitude, Number(point.lat), Number(point.lng),
-        );
-        const distanceKm = distanceMiles * 1.609344;
-        if (distanceKm <= radiusKm) ranked.push({ id: document.id, distanceKm });
-    }
-    ranked.sort((left, right) => left.distanceKm - right.distanceKm);
-    const selected = ranked.slice(0, limit);
-    if (selected.length === 0) return { users: [] };
-    const profiles = await db.getAll(...selected.map((item) =>
-        db.collection("users").doc(item.id)));
-    const distances = new Map(selected.map((item) => [item.id, item.distanceKm]));
-    const homeCountryCode = callerProfile.exists ?
-        callerProfile.data().homeCountryCode : null;
-    const users = [];
-    for (const profile of profiles) {
-        if (!profile.exists || (homeCountryCode &&
-            profile.data().homeCountryCode !== homeCountryCode)) continue;
-        const otherPrivate = candidateDocs.get(profile.id);
-        if (otherPrivate && (otherPrivate.data().blockedUsers || []).includes(uid)) continue;
-        users.push(publicProfile(profile, distances.get(profile.id)));
-    }
-    return { users: users.slice(0, limit) };
+
+    results.sort((a, b) => {
+        const dA = Number.isFinite(a.distanceKm) ? a.distanceKm : Number.POSITIVE_INFINITY;
+        const dB = Number.isFinite(b.distanceKm) ? b.distanceKm : Number.POSITIVE_INFINITY;
+        if (dA !== dB) return dA - dB;
+        const nameA = String(a.doc.data().firstName || "").toLowerCase();
+        const nameB = String(b.doc.data().firstName || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    const users = results
+        .slice(0, limit)
+        .map((item) => publicProfile(item.doc, item.distanceKm, item.priv, item.targetCoords));
+
+    return { users };
 });
 
 function validUid(value) {
     return typeof value === "string" && value.length > 0 && value.length <= 128;
 }
 
-function publicProfile(document, distance) {
-    const data = document.data();
+function publicProfile(document, distance, privateData = {}, targetCoords = null) {
+    const data = document.data() || {};
     const allowed = [
         "firstName", "lastName", "profilePhoto", "bio", "interests",
         "occupation", "education", "languages", "socialLinks",
@@ -153,6 +184,49 @@ function publicProfile(document, distance) {
         if (data[field] !== undefined) result[field] = data[field];
     }
     if (Number.isFinite(distance)) result.distance = distance;
+
+    // Synthesize a safe city-level currentLocation for ProfileData.fromJson
+    // so UserCardView displays the bottom flag, city, and proximity/distance.
+    const rawCur = (privateData && privateData.currentLocation) || data.currentLocation;
+    const hostLoc = data.hostLocation || (privateData && privateData.hostLocation) || {};
+    const city = data.currentCity || (rawCur && rawCur.city) || hostLoc.city || null;
+    const state = data.currentState || (rawCur && rawCur.state) || hostLoc.state || null;
+    const country = (rawCur && rawCur.country) || data.hostCountry || hostLoc.country || null;
+    const countryCode = data.currentCountryCode ||
+        (rawCur && (rawCur.country_code || rawCur.countryCode)) ||
+        data.hostCountryCode ||
+        hostLoc.country_code ||
+        hostLoc.countryCode ||
+        null;
+
+    const coords = targetCoords || extractCoordinates(privateData, data);
+    // Round coordinates to ~1km city grid (2 decimal places) to protect exact street GPS
+    const safeLat = coords ? Math.round(coords.lat * 100) / 100 : 0;
+    const safeLng = coords ? Math.round(coords.lng * 100) / 100 : 0;
+
+    if (city || countryCode || coords) {
+        const summaryParts = [city, state, country].filter((p) => typeof p === "string" && p.trim().length > 0);
+        const rawTs = rawCur && rawCur.timestamp;
+        const tsMs = typeof rawTs === "number" ? rawTs : Date.now();
+        result.currentLocation = {
+            formatted_address: summaryParts.join(", "),
+            place_id: "",
+            city: city,
+            state: state,
+            country: country,
+            country_code: countryCode,
+            countryCode: countryCode,
+            timestamp: tsMs,
+            geometry: {
+                location: {
+                    lat: safeLat,
+                    lng: safeLng,
+                },
+            },
+            lastUpdated: (rawCur && rawCur.lastUpdated) || new Date(tsMs).toISOString(),
+        };
+    }
+
     return result;
 }
 
@@ -165,21 +239,30 @@ exports.searchUsers = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("invalid-argument", "Enter at least two characters.");
     }
     const prefix = raw[0].toUpperCase() + raw.slice(1);
-    const [firstNames, lastNames, callerPrivate] = await Promise.all([
+    const [firstNames, lastNames, callerPrivate, callerPublic] = await Promise.all([
         db.collection("users").where("firstName", ">=", prefix)
             .where("firstName", "<", `${prefix}\uf8ff`).limit(25).get(),
         db.collection("users").where("lastName", ">=", prefix)
             .where("lastName", "<", `${prefix}\uf8ff`).limit(25).get(),
         db.collection("user_private").doc(uid).get(),
+        db.collection("users").doc(uid).get(),
     ]);
-    const blocked = new Set(callerPrivate.exists ?
-        callerPrivate.data().blockedUsers || [] : []);
+    const callerPrivData = callerPrivate.exists ? callerPrivate.data() : {};
+    const callerPubData = callerPublic.exists ? callerPublic.data() : {};
+    const callerCoords = extractCoordinates(callerPrivData, callerPubData);
+    const blocked = new Set([
+        ...(callerPrivData.blockedUsers || []),
+        ...(callerPubData.blockedUsers || []),
+    ]);
     const matches = new Map();
     for (const profile of [...firstNames.docs, ...lastNames.docs]) {
         if (profile.id !== uid && !blocked.has(profile.id)) matches.set(profile.id, profile);
     }
     const privateMatches = matches.size === 0 ? [] : await db.getAll(
         ...[...matches.keys()].map((id) => db.collection("user_private").doc(id)),
+    );
+    const privateById = new Map(
+        privateMatches.filter((p) => p.exists).map((p) => [p.id, p.data()]),
     );
     const blockedCaller = new Set(privateMatches
         .filter((profile) => profile.exists &&
@@ -189,7 +272,18 @@ exports.searchUsers = functions.https.onCall(async (data, context) => {
         users: [...matches.values()]
             .filter((profile) => !blockedCaller.has(profile.id))
             .slice(0, 25)
-            .map((profile) => publicProfile(profile)),
+            .map((profile) => {
+                const priv = privateById.get(profile.id) || {};
+                const targetCoords = extractCoordinates(priv, profile.data());
+                let distanceKm;
+                if (callerCoords && targetCoords) {
+                    distanceKm = calculateDistanceInMiles(
+                        callerCoords.lat, callerCoords.lng,
+                        targetCoords.lat, targetCoords.lng,
+                    ) * 1.609344;
+                }
+                return publicProfile(profile, distanceKm, priv, targetCoords);
+            }),
     };
 });
 

@@ -140,10 +140,19 @@ function writeDirectChat(transaction, chatRef, users, createdBy, exists) {
   }
   transaction.set(chatRef, chat, {merge: true});
   for (const userId of users) {
+    const userChatPatch = {
+      chatId: chatRef.id,
+      type: "direct",
+      isDeleted: false,
+    };
+    if (!exists) {
+      userChatPatch.updatedAt = Date.now();
+      userChatPatch.addedAt = now;
+    }
     transaction.set(
         db.collection("users").doc(userId)
             .collection("userChats").doc(chatRef.id),
-        {chatId: chatRef.id, updatedAt: now, addedAt: now, isDeleted: false},
+        userChatPatch,
         {merge: true},
     );
   }
