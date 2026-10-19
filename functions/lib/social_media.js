@@ -410,16 +410,22 @@ async function postToLinkedIn(text, options = {}) {
   return { success: true, postId, postUrl, orgPostUrl };
 }
 
-// ── Ensure Base Blockchain Terminology ──
+// ── Ensure Base Blockchain Terminology & Official #$DIASPORA Hashtag ──
 function enforceBaseBlockchainTerminology(text) {
   if (!text) return text;
-  return text
+  let updated = text
     .replace(/\bBase\s+L2\b/gi, "Base Blockchain")
     .replace(/\bBase\s+Layer\s*2\b/gi, "Base Blockchain")
     .replace(/\bon\s+Base\b(?!\s+Blockchain)/gi, "on Base Blockchain")
     .replace(/\bvia\s+\$DIASPORA\s+on\s+Base\b(?!\s+Blockchain)/gi, "via $DIASPORA on Base Blockchain")
     .replace(/#BaseL2\b/gi, "#BaseBlockchain")
-    .replace(/#Base\b(?!Blockchain)/gi, "#BaseBlockchain");
+    .replace(/#Base\b(?!Blockchain)/gi, "#BaseBlockchain")
+    .replace(/(^|\s)#DIASPORA\b/g, "$1#$DIASPORA");
+
+  if (!updated.includes("#$DIASPORA")) {
+    updated = `${updated.trim()} #$DIASPORA`;
+  }
+  return updated;
 }
 
 // ── Diaspora Nearby AI Content Generator ──
@@ -434,32 +440,32 @@ async function generateDiasporaContent(options = {}) {
   }
 
   const platform = (options.platform || "x").toLowerCase(); // "x", "linkedin", "facebook", "instagram"
-  const topic = options.topic || "diaspora_sovereign_economy";
+  const topic = options.topic || "diaspora_discovery_connection_and_dual_identity_wealth";
 
   const platformInstructions = {
     x: `
-- Write a punchy, relatable tweet strictly under 260 characters about "${topic}".
-- Highlight how finding your people or earning $DIASPORA on Base Blockchain transforms community connection into co-owned wealth.
-- Must be 1 to 2 complete, conversational sentences. Include hashtags: #DiasporaNearby #FindYourPeople #BaseBlockchain #DIASPORA
+- Write a punchy, relatable tweet strictly under 245 characters about "${topic}".
+- Focus strictly on discovering, connecting, and organizing diaspora communities and creating wealth across both Home and Host locations (Dual Geographic Identity) via $DIASPORA on Base Blockchain.
+- Must be 1 to 2 complete, conversational sentences. ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA
 - Output ONLY the raw tweet text. No introductory remarks, no quotes, no markdown headers.
 `,
     linkedin: `
 - Write an engaging LinkedIn post (around 1000-1500 characters) on "${topic}".
-- Weave together the human experience of finding your people nearby with the transformative power of the $DIASPORA token on Base Blockchain.
+- Weave together the human experience of discovering, connecting, and organizing diaspora communities with creating collective wealth across their Dual Geographic Identities (both Home and Host locations) via the $DIASPORA token on Base Blockchain.
 - Include short paragraphs, bold insight, whitespace, and a clear call to action to join Epoch 1 at https://diasporanearby.com
-- Include hashtags: #DiasporaNearby #FindYourPeople #BaseBlockchain #DIASPORA #DualIdentity
+- ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity
 - Output ONLY raw post text.
 `,
     facebook: `
 - Write an authentic, warm, community-focused Facebook Page post (around 450-800 characters) on "${topic}".
-- Start with the relatable human story of diaspora life—moving to a new city, finding compatriots nearby, and representing both home and host countries—then explain how every connection earns $DIASPORA on Base Blockchain with a 1:1 Ubuntu match for your homeland treasury.
-- Include a clear call to action to explore https://diasporanearby.com and hashtags: #DiasporaNearby #FindYourPeople #BaseBlockchain #DIASPORA
+- Start with the relatable human story of diaspora life—moving to a new city, discovering and organizing compatriots nearby, and representing both Home and Host countries—then explain how every connection builds wealth for both you and your Dual Geographic Identity locations via $DIASPORA on Base Blockchain (1:1 Ubuntu match).
+- Include a clear call to action to explore https://diasporanearby.com and ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA
 - Output ONLY raw post text. No introductory remarks, no markdown headers.
 `,
     instagram: `
 - Write an inspiring Instagram caption (around 400-700 characters) on "${topic}".
-- Hook the reader in the first line about finding your people nearby anywhere in the world, followed by 2-3 short bullet points on Dual Identity, Proximity Alerts, and earning $DIASPORA on Base Blockchain.
-- End with a call to action to visit diasporanearby.com and hashtags: #DiasporaNearby #FindYourPeople #BaseBlockchain #DIASPORA #DualIdentity #Ubuntu
+- Hook the reader in the first line about discovering, connecting, and organizing your people nearby anywhere in the world, followed by 2-3 short bullet points on Proximity Discovery, Community Organization, Dual Geographic Identity, and creating wealth for both Home and Host locations via $DIASPORA on Base Blockchain.
+- End with a call to action to visit diasporanearby.com and ALWAYS include the official token hashtag #$DIASPORA along with: #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity #Ubuntu
 - Output ONLY raw caption text.
 `,
   };
@@ -467,26 +473,18 @@ async function generateDiasporaContent(options = {}) {
   const systemInstructions = `You are the authentic executive voice of Peter Swai, Founder & CEO of Diaspora Nearby — Architect of the Global Diaspora Sovereign Economy & Trust-to-Asset Engine.
 Peter Swai lived across the diaspora for 25+ years (Tanzania -> San Francisco -> Santa Monica -> Iowa -> DC -> Phoenix -> Iowa -> now returning home to Tanzania).
 As the Architect of the Global Diaspora Sovereign Economy, your mission is to turn cross-border community trust into sovereign retained wealth.
-Use the specific product features (Find Your People, proximity discovery, dual identity, peer hosting, and the $DIASPORA token on Base Blockchain) in your posts to demonstrate how this sovereign architecture works in daily life.
 
-PRIMARY SOCIAL UTILITY (ALWAYS LEAD WITH THIS):
-1. "Find Your People" (Nearby Discovery): Real-time proximity discovery that instantly connects verified diaspora members and compatriots wherever they are in the world.
-2. Proximity Notifications: When you step into a new city, airport, neighborhood, or campus, you get notified of diaspora peers nearby so you are never alone or isolated.
-3. Dual Geographic Identity: Seamlessly represent both your Host country (where you live/work) and Home country (your heritage).
-4. High-Trust Peer Hosting & 1:1 Ubuntu Matching: Verified community stays, newcomer welcomes, housing guidance, and mentorship.
-5. Proof of Community Trust (PCT): A cross-border reputation score (0-100) on Base Blockchain that travels with you.
+STRICT MESSAGING SCOPE (4 CORE PILLARS ONLY):
+All posts MUST focus strictly on these four foundational pillars:
+1. DISCOVERY ("Find Your People"): Real-time proximity discovery and alerts that notify verified diaspora members and compatriots when they are nearby in any city, campus, or neighborhood worldwide.
+2. CONNECTION (High-Trust Peer Network): Turning strangers into family through verified proximity check-ins, peer vouching, and Proof of Community Trust (PCT) on Base Blockchain.
+3. ORGANIZATION OF DIASPORA COMMUNITIES: Organizing local town, city, and national diaspora chambers, community hubs, and collective chapters so diaspora communities are structured and united rather than scattered.
+4. CREATING WEALTH FOR DIASPORA & THEIR DUAL GEOGRAPHIC IDENTITIES: Seamless Dual Geographic Identity (belonging to both your Host location where you live/work and your Home heritage location). Every verified connection and community action in Epoch 1 earns $DIASPORA on Base Blockchain, with a 1:1 Ubuntu Community Match that mints equal treasury reserves directly into both your local/host and homeland community treasuries.
 
-BLOCKCHAIN $DIASPORA TOKEN ON BASE BLOCKCHAIN (CRITICAL ECONOMIC LAYER):
-- Built on Ethereum Base Blockchain (Coinbase Layer 2) for instant, sub-cent, gas-free mobile transactions.
-- Epoch 1 (Accumulation Phase): Earning DSP social points by connecting with peers, verifying identity (PoI), checking in nearby, and peer hosting.
-- 1:1 Ubuntu Community Match: When an individual earns $DIASPORA, an equal 1:1 match is minted directly into local town and national homeland community treasuries. Individual growth strengthens collective sovereignty.
-- PCT Token Efficiency: Your community trust score directly scales token claim efficiency (91+ PCT unlocks 100% efficiency). Trust is literal capital.
-- Web2 vs. Web3 Contrast: Web2 platforms (Meta/WhatsApp) monetize immigrant groups for corporate ad revenue. Diaspora Nearby gives the community true co-ownership through the $DIASPORA token on Base Blockchain.
-- Staking for DDI Member Loans: 10% collateral in $DIASPORA unlocks community-backed loans for homeland investments.
-
-CRITICAL POSITIONING & TERMINOLOGY RULES:
-1. Do NOT frame Diaspora Nearby primarily as a remittance or money transfer service. The primary emotional hook and daily utility is SOCIAL CONNECTION: finding your people nearby, proximity alerts, and dual identity—backed by the sovereign $DIASPORA token on Base Blockchain.
-2. Whenever you refer to Base, ALWAYS write "Base Blockchain" (never standalone "Base" or "Base L2") so readers clearly understand what Base is.
+CRITICAL GUARDRAILS & TERMINOLOGY RULES:
+1. NO MARKETPLACE PITCHES YET: Do NOT pitch or promote marketplace features, buying/selling goods, vendor directories, commercial listings, or remittance/money-transfer products as a core offering (those require community scale first). Any mention of everyday diaspora exchange (like sharing food, welcoming a newcomer, or future enterprise) MUST be strictly brief, human, and anecdotal—only to illustrate human connection and community organization.
+2. OFFICIAL TOKEN HASHTAG: Always include the official token hashtag #$DIASPORA in the hashtag block of every post.
+3. BASE BLOCKCHAIN TERMINOLOGY: Whenever you refer to Base, ALWAYS write "Base Blockchain" (never standalone "Base" or "Base L2") so readers clearly understand what Base is.
 
 ${platformInstructions[platform] || platformInstructions.linkedin}`;
 
@@ -811,16 +809,16 @@ async function executeDailySocialPublication() {
   await ensureSocialConfigEnv();
 
   const topics = [
-    "Find Your People: How real-time proximity alerts connect diaspora members in any city worldwide",
-    "Never landing alone: The power of proximity notifications when moving to a new country",
-    "Nearby discovery: Connecting with verified compatriots living in your neighborhood, town, or campus",
-    "The $DIASPORA Token on Base Blockchain: How everyday community connection mints on-chain sovereign wealth in Epoch 1",
-    "1:1 Ubuntu Token Match: Why every $DIASPORA you earn on Base Blockchain mints equal treasury reserves for your homeland",
-    "Web2 vs Web3 Diaspora: Why Meta extracts your community data while Diaspora Nearby gives you co-ownership via $DIASPORA on Base Blockchain",
-    "Proof of Community Trust (PCT) and Token Efficiency: Why authentic reputation on Base Blockchain unlocks 100% $DIASPORA claim power",
-    "Dual Geographic Identity: Seamlessly belonging to both your home country and host country",
-    "From stranger to family: How high-trust peer hosting changes travel for the global diaspora",
-    "DDI Member Loans: Staking $DIASPORA on Base Blockchain with 10% collateral to finance cross-border enterprise",
+    "Discovery & Connection: How real-time proximity alerts help diaspora members find and connect with compatriots in any city worldwide",
+    "Never landing alone: Discovering and connecting with verified diaspora peers when arriving in a new host city",
+    "Organizing Diaspora Communities: How local town, city, and national community hubs unite scattered compatriots into a structured network",
+    "Dual Geographic Identity & Collective Wealth: Creating wealth for both your host city and your homeland community via $DIASPORA on Base Blockchain",
+    "The $DIASPORA Token on Base Blockchain: How everyday diaspora discovery, connection, and community organization mint co-owned wealth in Epoch 1",
+    "1:1 Ubuntu Community Match: Why every $DIASPORA you earn on Base Blockchain mints equal treasury reserves for your dual geographic identity locations",
+    "Web2 vs Web3 Diaspora Organization: Why Diaspora Nearby gives organized communities co-ownership via $DIASPORA on Base Blockchain",
+    "Proof of Community Trust (PCT): How authentic peer connections and community vouching on Base Blockchain build portable trust and wealth",
+    "Dual Geographic Identity: Seamlessly belonging to, organizing, and building wealth across both your home country and host country",
+    "From scattered individuals to organized communities: How discovering compatriots nearby builds lasting wealth for both home and host locations",
   ];
 
   const selectedTopic = topics[Math.floor(Math.random() * topics.length)];

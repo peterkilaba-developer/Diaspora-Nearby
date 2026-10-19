@@ -92,21 +92,21 @@ async function uploadVideo({
 
   let finalDescription = description.trim();
   if (isShort && !finalDescription.toLowerCase().includes("#shorts")) {
-    finalDescription = `${finalDescription}\n\n#Shorts #DiasporaNearby #DualIdentity`;
+    finalDescription = `${finalDescription}\n\n#Shorts #DiasporaNearby #$DIASPORA #DualIdentity`;
   }
 
   const standardTags = [
     "Diaspora Nearby",
     "Diaspora",
+    "$DIASPORA",
     "Dual Identity",
     "Sovereign Economy",
-    "Remittances",
     "African Diaspora",
     "Global Diaspora",
     "Base Blockchain",
     "Web3",
     "Ubuntu",
-    "Peer Hosting",
+    "Community Organization",
     ...tags,
   ];
 
@@ -170,26 +170,19 @@ async function generateYouTubeShortContent({ topic = null } = {}) {
 You are the Executive Producer and YouTube Strategist for Diaspora Nearby (https://diasporanearby.com, channel: @DiasporaNearby).
 Founder: Peter Swai (25-year diaspora veteran from Tanzania).
 
-PRIMARY SOCIAL UTILITY (ALWAYS LEAD WITH THIS):
-1. "Find Your People" (Nearby Discovery): Real-time proximity discovery that connects verified diaspora members and compatriots wherever they are in the world.
-2. Proximity Notifications: Alerts when compatriots and diaspora peers are nearby (neighborhood, campus, airport, new city)—ending diaspora isolation.
-3. Dual Geographic Identity: Seamlessly belonging to both host and home nations.
-4. High-Trust Peer Hosting & 1:1 Ubuntu Matching: Welcoming newcomers, housing guidance, and peer stays.
-5. Portable Proof of Community Trust (PCT): A cross-border reputation score (0-100) on Base Blockchain.
+STRICT MESSAGING SCOPE (4 CORE PILLARS ONLY):
+1. DISCOVERY ("Find Your People"): Real-time proximity discovery & notifications alerting verified diaspora members and compatriots when they are nearby in any city, campus, or neighborhood worldwide.
+2. CONNECTION (High-Trust Peer Network): Connecting diaspora members, turning strangers into family through verified proximity check-ins, peer vouching, and Proof of Community Trust (PCT) on Base Blockchain.
+3. ORGANIZATION OF DIASPORA COMMUNITIES: Organizing local town, city, and national diaspora chambers, community hubs, and collective chapters so diaspora communities are structured and united.
+4. CREATING WEALTH FOR DIASPORA & THEIR DUAL GEOGRAPHIC IDENTITIES: Seamless Dual Geographic Identity (belonging to both Host and Home locations). Every verified connection and community action in Epoch 1 earns $DIASPORA on Base Blockchain, with a 1:1 Ubuntu Community Match that mints equal treasury reserves for both local/host and homeland community treasuries.
 
-BLOCKCHAIN $DIASPORA TOKEN ON BASE BLOCKCHAIN:
-- Built on Ethereum Base Blockchain for instant, gas-free mobile transactions.
-- Epoch 1 (Accumulation Phase): Every social connection, proximity check-in, identity verification, and peer hosting earns DSP social points that convert into $DIASPORA tokens on Base Blockchain.
-- 1:1 Ubuntu Community Matching: For every $DIASPORA an individual earns, an equal match is minted into the town and national homeland community treasuries.
-- PCT Claim Efficiency: Authentic community trust (91+ PCT) unlocks 100% token claim efficiency.
-- Web3 Co-Ownership: While Web2 giants sell immigrant data for ads, Diaspora Nearby returns sovereign equity to the community through the $DIASPORA token on Base Blockchain.
-
-CRITICAL POSITIONING & TERMINOLOGY MANDATE:
-1. Always start with the PRIMARY SOCIAL UTILITY: finding your people, nearby discovery, and proximity notifications. Then layer the power of the $DIASPORA token on Base Blockchain as the co-owned sovereign engine. Do NOT make remittances the headline.
-2. Whenever you refer to Base, ALWAYS write "Base Blockchain" (never standalone "Base" or "Base L2") so viewers and readers immediately know what Base means.
+CRITICAL GUARDRAILS & TERMINOLOGY MANDATE:
+1. NO MARKETPLACE PITCHES YET: Do NOT pitch or promote marketplace features, buying/selling goods, vendor directories, or remittance products as a core offering (those require community scale first). Any mention of everyday diaspora exchange may only be brief and anecdotal to illustrate human connection and community organization.
+2. OFFICIAL TOKEN HASHTAG: Always include the official token hashtag #$DIASPORA in the video description.
+3. BASE BLOCKCHAIN TERMINOLOGY: Whenever you refer to Base, ALWAYS write "Base Blockchain" (never standalone "Base" or "Base L2") so viewers and readers immediately know what Base means.
 
 Generate a viral, high-retention 45-60 second YouTube Short script and upload package${
-    topic ? ` focused on "${topic}"` : " on finding your people nearby and minting sovereign $DIASPORA token wealth on Base Blockchain"
+    topic ? ` focused on "${topic}"` : " on discovering, connecting, and organizing diaspora communities and creating wealth across their dual geographic identities on Base Blockchain"
   }.
 
 Format output strictly as JSON with this schema:
@@ -202,8 +195,8 @@ Format output strictly as JSON with this schema:
     "<Beat 2 visual direction>",
     "<Beat 3 visual direction>"
   ],
-  "description": "<SEO-optimized YouTube description (under 1000 chars) mentioning Base Blockchain and including call-to-action to visit diasporanearby.com and download the app>",
-  "tags": ["DiasporaNearby", "Shorts", "DualIdentity", "Remittances", "AfricanDiaspora", "BaseBlockchain", "PeterSwai", "Ubuntu"],
+  "description": "<SEO-optimized YouTube description (under 1000 chars) mentioning Base Blockchain, #$DIASPORA, and including call-to-action to visit diasporanearby.com and download the app>",
+  "tags": ["DiasporaNearby", "Shorts", "DualIdentity", "$DIASPORA", "AfricanDiaspora", "BaseBlockchain", "PeterSwai", "Ubuntu"],
   "callToAction": "<Final spoken and on-screen CTA>"
 }
 `;

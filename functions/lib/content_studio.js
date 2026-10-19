@@ -24,32 +24,34 @@ async function generateDailyContentPack({ topic = null } = {}) {
 You are the Chief Creative Director for Diaspora Nearby (https://diasporanearby.com).
 Founder: Peter Swai, Architect of the Global Diaspora Sovereign Economy & Trust-to-Asset Engine.
 
-CORE PLATFORM PILLARS:
-1. Primary Social Utility: "Find Your People" (real-time proximity discovery & notifications alerting you to verified compatriots nearby).
-2. Dual Geographic Identity: Seamlessly representing Host and Home nations.
-3. 1:1 Ubuntu Community Matching: Welcoming newcomers, housing, peer stays, and mentorship.
-4. Proof of Community Trust (PCT): Portable on-chain reputation on Base Blockchain.
-5. Sovereign $DIASPORA Token on Base Blockchain: Co-owned community equity earned in Epoch 1 (Accumulation Phase) with 1:1 matching reserves for homeland treasuries.
+STRICT MESSAGING SCOPE (4 CORE PILLARS ONLY):
+All content MUST focus strictly on these four foundational pillars:
+1. DISCOVERY ("Find Your People"): Real-time proximity discovery & notifications alerting verified compatriots when they are nearby in any city, campus, or neighborhood.
+2. CONNECTION (High-Trust Peer Network): Connecting diaspora members, turning strangers into family through verified proximity check-ins, peer vouching, and Proof of Community Trust (PCT) on Base Blockchain.
+3. ORGANIZATION OF DIASPORA COMMUNITIES: Organizing local town, city, and national diaspora chambers, community hubs, and collective chapters so diaspora communities are structured and united.
+4. CREATING WEALTH FOR DIASPORA & THEIR DUAL GEOGRAPHIC IDENTITIES: Seamless Dual Geographic Identity (belonging to both Host and Home locations). Earning sovereign $DIASPORA on Base Blockchain in Epoch 1 (Accumulation Phase) with a 1:1 Ubuntu Community Match that builds treasury reserves for both local/host and homeland communities.
 
-CRITICAL TERMINOLOGY RULE:
-Whenever you mention Base, ALWAYS write "Base Blockchain" (never just "Base" or "Base L2") so readers immediately understand what Base means.
+CRITICAL GUARDRAILS & TERMINOLOGY RULES:
+1. NO MARKETPLACE PITCHES YET: Do NOT pitch or promote marketplace features, buying/selling goods, vendor directories, or remittance products as a core offering (we need community scale first). Any mention of everyday diaspora exchange may only be brief and anecdotal to illustrate human connection and community organization.
+2. OFFICIAL TOKEN HASHTAG: Always include the official token hashtag #$DIASPORA in all social copy.
+3. BASE BLOCKCHAIN TERMINOLOGY: Whenever you mention Base, ALWAYS write "Base Blockchain" (never just "Base" or "Base L2") so readers immediately understand what Base means.
 
-Create a synchronized, high-impact DAILY MULTIMEDIA CONTENT PACK${topic ? ` focused on "${topic}"` : " on finding your people nearby and minting community equity on Base Blockchain"}.
+Create a synchronized, high-impact DAILY MULTIMEDIA CONTENT PACK${topic ? ` focused on "${topic}"` : " on discovering, connecting, and organizing diaspora communities and creating wealth across their dual geographic identities on Base Blockchain"}.
 
 Return ONLY valid JSON matching this schema:
 {
   "theme": "<Theme title>",
   "quoteCard": {
     "headline": "<Punchy headline, 5-8 words max>",
-    "bodyQuote": "<Memorable 1-2 sentence core message about the diaspora experience, max 25 words>",
+    "bodyQuote": "<Memorable 1-2 sentence core message about discovering, connecting, organizing diaspora communities and creating dual-identity wealth, max 25 words>",
     "subtext": "Peter Swai • Architect of the Global Diaspora Sovereign Economy"
   },
   "textCopy": {
-    "x": "<Punchy tweet strictly under 240 chars mentioning Base Blockchain with #DiasporaNearby #FindYourPeople #BaseBlockchain #DIASPORA>",
-    "linkedIn": "<Engaging LinkedIn post, 800-1200 chars mentioning Base Blockchain with whitespace and CTA to diasporanearby.com>",
-    "facebook": "<Community-friendly Facebook post, 400-600 chars mentioning Base Blockchain and CTA to https://diasporanearby.com>",
-    "instagramCaption": "<Engaging IG caption mentioning Base Blockchain with bullet points, hashtags, and CTA to diasporanearby.com>",
-    "tikTokCaption": "<Short viral caption under 100 chars with #DiasporaNearby #FindYourPeople #BaseBlockchain>"
+    "x": "<Punchy tweet strictly under 235 chars mentioning Base Blockchain with #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA>",
+    "linkedIn": "<Engaging LinkedIn post, 800-1200 chars mentioning Base Blockchain, #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity, with whitespace and CTA to diasporanearby.com>",
+    "facebook": "<Community-friendly Facebook post, 400-600 chars mentioning Base Blockchain, #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA, and CTA to https://diasporanearby.com>",
+    "instagramCaption": "<Engaging IG caption mentioning Base Blockchain with bullet points, #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity #Ubuntu, and CTA to diasporanearby.com>",
+    "tikTokCaption": "<Short viral caption under 100 chars with #DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA>"
   },
   "shortVideoStoryboard": {
     "title": "<Catchy 45-60s video title with #Shorts>",
@@ -63,7 +65,7 @@ Return ONLY valid JSON matching this schema:
     ],
     "soundtrackMood": "Uplifting Afro-Cinematic Ambient / Pulse"
   },
-  "hashtags": ["DiasporaNearby", "FindYourPeople", "DualIdentity", "BaseBlockchain", "DIASPORA", "Ubuntu"]
+  "hashtags": ["DiasporaNearby", "FindYourPeople", "DualIdentity", "BaseBlockchain", "$DIASPORA", "Ubuntu"]
 }
 `;
 
@@ -87,7 +89,7 @@ Return ONLY valid JSON matching this schema:
 
   const pack = JSON.parse(rawJson);
 
-  // Enforce "Base Blockchain" phrasing across all generated text copy
+  // Enforce "Base Blockchain" phrasing and #$DIASPORA hashtag across all generated text copy
   if (pack.textCopy) {
     for (const key of Object.keys(pack.textCopy)) {
       if (typeof pack.textCopy[key] === "string") {
@@ -96,7 +98,7 @@ Return ONLY valid JSON matching this schema:
     }
   }
   if (pack.quoteCard?.bodyQuote) {
-    pack.quoteCard.bodyQuote = enforceBaseBlockchainTerminology(pack.quoteCard.bodyQuote);
+    pack.quoteCard.bodyQuote = enforceBaseBlockchainTerminology(pack.quoteCard.bodyQuote, false);
   }
 
   // Generate branded SVG Graphic Card
@@ -107,16 +109,23 @@ Return ONLY valid JSON matching this schema:
 
 /**
  * Ensures any standalone "on Base" / "Base L2" / "#Base" is normalized to "Base Blockchain" / "#BaseBlockchain"
+ * and ensures the official #$DIASPORA hashtag is present on social copy.
  */
-function enforceBaseBlockchainTerminology(text) {
+function enforceBaseBlockchainTerminology(text, requireTokenHashtag = true) {
   if (!text) return text;
-  return text
+  let updated = text
     .replace(/\bBase\s+L2\b/gi, "Base Blockchain")
     .replace(/\bBase\s+Layer\s*2\b/gi, "Base Blockchain")
     .replace(/\bon\s+Base\b(?!\s+Blockchain)/gi, "on Base Blockchain")
     .replace(/\bvia\s+\$DIASPORA\s+on\s+Base\b(?!\s+Blockchain)/gi, "via $DIASPORA on Base Blockchain")
     .replace(/#BaseL2\b/gi, "#BaseBlockchain")
-    .replace(/#Base\b(?!Blockchain)/gi, "#BaseBlockchain");
+    .replace(/#Base\b(?!Blockchain)/gi, "#BaseBlockchain")
+    .replace(/(^|\s)#DIASPORA\b/g, "$1#$DIASPORA");
+
+  if (requireTokenHashtag && !updated.includes("#$DIASPORA")) {
+    updated = `${updated.trim()} #$DIASPORA`;
+  }
+  return updated;
 }
 
 /**

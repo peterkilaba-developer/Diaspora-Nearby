@@ -46,7 +46,7 @@ const VISUAL_CARD_POOL = [
   },
   {
     url: "https://diasporanearby.com/images/social-cards/card-8-sovereign-ecosystem.png",
-    keywords: ["ddi", "loan", "collateral", "staking", "enterprise"],
+    keywords: ["wealth", "ecosystem", "prosper", "sovereign", "locations"],
   },
 ];
 
