@@ -1129,6 +1129,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
+          if (widget.pendingUserId != null)
+            ref
+                .watch(userProfileByIdProvider(widget.pendingUserId!))
+                .when(
+                  data: (profile) {
+                    if (profile?.phone != null && profile!.phone.isNotEmpty) {
+                      return IconButton(
+                        icon: const Icon(
+                          LucideIcons.phone,
+                          color: Colors.green,
+                        ),
+                        tooltip: 'Call on WhatsApp',
+                        onPressed: () async {
+                          final success = await WhatsAppUtils.launchWhatsApp(
+                            profile.phone,
+                          );
+                          if (!success && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not launch WhatsApp'),
+                              ),
+                            );
+                          }
+                        },
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                ),
           IconButton(
             icon: const Icon(LucideIcons.moreVertical),
             onPressed: () {
@@ -1324,18 +1355,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       size: 36,
                     );
                   }
-                } else if (chat?.isEvent == true && chat?.eventId != null) {
-                  // Fetch Event Details
-                  final eventAsync = ref.watch(
-                    eventDetailsProvider(chat!.eventId!),
-                  );
-                  event = eventAsync.value;
+                } else if (chat?.isEvent == true) {
+                  final effectiveEventId =
+                      chat?.eventId ??
+                      ((chat?.id ?? '').startsWith('event_')
+                          ? chat!.id.substring('event_'.length)
+                          : null);
+                  if (effectiveEventId != null) {
+                    // Fetch Event Details
+                    final eventAsync = ref.watch(
+                      eventDetailsProvider(effectiveEventId),
+                    );
+                    event = eventAsync.value;
 
-                  if (event != null) {
-                    // Calculate Status using Shared Logic
-                    final statusInfo = event.getStatusBadgeInfo();
-                    if (statusInfo['text'] != null) {
-                      eventStatus = statusInfo['text'];
+                    if (event != null) {
+                      // Calculate Status using Shared Logic
+                      final statusInfo = event.getStatusBadgeInfo();
+                      if (statusInfo['text'] != null) {
+                        eventStatus = statusInfo['text'];
+                      }
                     }
                   }
                 }
@@ -1421,6 +1459,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       : chat?.photoUrl,
                   // Prioritize pre-rendered widget from utils
                   customAvatarWidget: headerAvatar,
+                  titlePrefixIcon: (chat?.isEvent == true)
+                      ? const Icon(
+                          LucideIcons.calendar,
+                          size: 16,
+                          color: Colors.orange,
+                        )
+                      : (chat?.isOrganization == true)
+                      ? const Icon(
+                          LucideIcons.building2,
+                          size: 16,
+                          color: Colors.blue,
+                        )
+                      : (chat?.isGroup == true)
+                      ? Icon(
+                          isFamilyGroup
+                              ? LucideIcons.heartHandshake
+                              : LucideIcons.users,
+                          size: 16,
+                          color: isFamilyGroup
+                              ? Colors.blue.shade600
+                              : Colors.green,
+                        )
+                      : null,
                   // Legacy fallback
                   customImage:
                       null, // [FIXED] Type mismatch, handled by customAvatarWidget above
@@ -1477,9 +1538,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         '/communities/${community.id}/members',
                         extra: community,
                       );
-                    } else if (chat?.isEvent == true && chat?.eventId != null) {
-                      // [NEW] Go to Event Details
-                      context.push('/events/${chat!.eventId}?fromChat=true');
+                    } else if (chat?.isEvent == true) {
+                      final effectiveEventId =
+                          chat?.eventId ??
+                          ((chat?.id ?? '').startsWith('event_')
+                              ? chat!.id.substring('event_'.length)
+                              : null);
+                      if (effectiveEventId != null) {
+                        context.push(
+                          '/events/$effectiveEventId?fromChat=true',
+                          extra: event,
+                        );
+                      }
                     }
                   },
                 );
@@ -1531,22 +1601,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   chat?.participants.contains(currentUserId) ?? false;
 
               // Extended check for Events (Creator/Attendee)
-              if (chat?.isEvent == true &&
-                  chat?.eventId != null &&
-                  !isParticipant) {
-                // We need to resolve the event here.
-                // Since we are in the actions list, we can rely on the fact that if we are here, the chat is loaded.
-                // But we need the event data.
-                final eventAsync = ref.watch(
-                  eventDetailsProvider(chat!.eventId!),
-                );
-                final event = eventAsync.value;
-                if (event != null) {
-                  final isCreator = event.creatorId == currentUserId;
-                  final isAttendee =
-                      event.attendees?.contains(currentUserId) ?? false;
-                  if (isCreator || isAttendee) {
-                    isParticipant = true;
+              if (chat?.isEvent == true && !isParticipant) {
+                final effectiveEventId =
+                    chat?.eventId ??
+                    ((chat?.id ?? '').startsWith('event_')
+                        ? chat!.id.substring('event_'.length)
+                        : null);
+                if (effectiveEventId != null) {
+                  final eventAsync = ref.watch(
+                    eventDetailsProvider(effectiveEventId),
+                  );
+                  final event = eventAsync.value;
+                  if (event != null) {
+                    final isCreator = event.creatorId == currentUserId;
+                    final isAttendee =
+                        event.attendees?.contains(currentUserId) ?? false;
+                    if (isCreator || isAttendee) {
+                      isParticipant = true;
+                    }
                   }
                 }
               }
@@ -2009,6 +2081,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Fetch Governance Unit & Community for Community Chats
     GovernanceUnit? governanceUnit;
     Community? community;
+    Event? event;
+
+    if (chat.isEvent) {
+      final effectiveEventId =
+          chat.eventId ??
+          (chat.id.startsWith('event_')
+              ? chat.id.substring('event_'.length)
+              : null);
+      if (effectiveEventId != null) {
+        try {
+          event =
+              ref.read(eventDetailsProvider(effectiveEventId)).value ??
+              await ref.read(eventRepositoryProvider).getEvent(effectiveEventId);
+        } catch (e) {
+          debugPrint('Error fetching event for more menu: $e');
+        }
+      }
+    }
 
     if (isCommunity && chat.communityId != null) {
       try {
@@ -2070,6 +2160,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         pendingSentRequest: pendingSentRequest,
         pendingIncomingRequest: pendingIncomingRequest,
         community: community,
+        event: event,
         governanceUnit: governanceUnit,
         hasAnyProfileField: hasAnyProfileField,
         hasVerifiedTarget: hasVerifiedTarget,

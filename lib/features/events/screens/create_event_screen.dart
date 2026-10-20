@@ -29,12 +29,14 @@ import 'package:diaspora_nearby/features/chat/models/chat.dart';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
   final Event? eventToEdit;
+  final String? eventIdToEdit;
   final String? communityId; // [NEW] Optional community context
   final String? groupId; // [NEW] Support creating event for a group
 
   const CreateEventScreen({
     super.key,
     this.eventToEdit,
+    this.eventIdToEdit,
     this.communityId,
     this.groupId,
   });
@@ -44,15 +46,115 @@ class CreateEventScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
+  bool _isDeleting = false;
+
+  Future<void> _confirmAndDeleteEvent(Event event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Event?'),
+        content: Text(
+          'Are you sure you want to delete "${event.title}"? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      final user = ref.read(authRepositoryProvider).currentUser;
+      await ref.read(eventRepositoryProvider).deleteEvent(event.id);
+      ref.invalidate(eventDetailsProvider(event.id));
+      ref.invalidate(allRawEventsStreamProvider);
+      if (user != null) {
+        ref.invalidate(userEventsProvider(user.uid));
+        ref.invalidate(joinedEventsProvider(user.uid));
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Event deleted')),
+        );
+        context.go('/events');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete event: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.eventToEdit != null;
+    final isEditing =
+        widget.eventToEdit != null || widget.eventIdToEdit != null;
 
     if (isEditing) {
+      Event? resolvedEvent = widget.eventToEdit;
+      if (resolvedEvent == null && widget.eventIdToEdit != null) {
+        final asyncEvent = ref.watch(
+          eventDetailsProvider(widget.eventIdToEdit!),
+        );
+        if (asyncEvent.isLoading) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Manage Event')),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        resolvedEvent = asyncEvent.value;
+        if (resolvedEvent == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Manage Event')),
+            body: const Center(child: Text('Event not found')),
+          );
+        }
+      }
+
       return Scaffold(
-        appBar: AppBar(title: const Text('Edit Event')),
+        appBar: AppBar(
+          title: const Text('Manage Event'),
+          actions: [
+            if (resolvedEvent != null)
+              IconButton(
+                icon: const Icon(LucideIcons.users),
+                tooltip: 'Attendees',
+                onPressed: () => context.push(
+                  '/events/${resolvedEvent!.id}/attendees',
+                  extra: resolvedEvent,
+                ),
+              ),
+            if (resolvedEvent != null)
+              IconButton(
+                icon: _isDeleting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(LucideIcons.trash2, color: AppTheme.error),
+                tooltip: 'Delete Event',
+                onPressed: _isDeleting
+                    ? null
+                    : () => _confirmAndDeleteEvent(resolvedEvent!),
+              ),
+          ],
+        ),
         body: _CreateEventForm(
-          eventToEdit: widget.eventToEdit,
+          eventToEdit: resolvedEvent,
           communityId: widget.communityId, // [NEW]
           groupId: widget.groupId,
         ),
@@ -1503,6 +1605,7 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
         if (mounted) {
           // Invalidate providers so stale data is refreshed
           ref.invalidate(eventDetailsProvider(updatedEvent.id));
+          ref.invalidate(allRawEventsStreamProvider);
           ref.invalidate(userEventsProvider(user.uid));
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1537,12 +1640,14 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           maxAttendees: _maxAttendeesController.text.isNotEmpty
               ? int.tryParse(_maxAttendeesController.text)
               : null,
-          homeCountry: profile.homeCountry,
-          hostCountry: profile.hostLocation.country,
+          homeCountry: profile.homeCountry ?? profile.homeLocation.country,
+          hostCountry: profile.hostCountry ?? profile.hostLocation.country,
           hostCity: profile.hostLocation.city,
           hostState: profile.hostLocation.state,
-          homeCountryCode: profile.homeCountryCode,
-          hostCountryCode: profile.hostCountryCode,
+          homeCountryCode:
+              profile.homeCountryCode ?? profile.homeLocation.countryCode,
+          hostCountryCode:
+              profile.hostCountryCode ?? profile.hostLocation.countryCode,
           venueName: _venueName,
           venueAddress: _venueAddress,
           venueCity: _venueCity,
@@ -1555,11 +1660,15 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
           createdAt: DateTime.now().toIso8601String(),
           attendees: [user.uid],
           attendeeCount: 1,
+          chatId: 'event_$eventId',
           organizationId: _selectedOrgId,
           organizationName: orgName,
         );
 
         await repo.createEvent(event, _imageFile);
+        ref.invalidate(allRawEventsStreamProvider);
+        ref.invalidate(userEventsProvider(user.uid));
+        ref.invalidate(joinedEventsProvider(user.uid));
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

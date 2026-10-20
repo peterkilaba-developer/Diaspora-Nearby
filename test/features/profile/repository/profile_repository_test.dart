@@ -57,9 +57,8 @@ void main() {
       }
       expect(publicData.containsKey('businessProfile'), isFalse);
       expect(publicData.containsKey('cityVisibilityForfeited'), isFalse);
-      expect(publicData.containsKey('phone'), isFalse);
+      expect(publicData['phone'], profile.phone);
       expect(publicData.containsKey('isBanned'), isFalse);
-      expect(privateData['phone'], profile.phone);
 
       // Repeated completion must preserve server-owned state on existing users.
       await firestore.doc('users/signup-user').update({

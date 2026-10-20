@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
@@ -30,6 +31,26 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
   bool _showEmailError = false;
 
   static const _testerSignedUpKey = 'tester_signed_up';
+  static const _testFlightDeepLink =
+      'itms-beta://testflight.apple.com/join/vB3XzPKg';
+  static const _testFlightWebUrl =
+      'https://testflight.apple.com/join/vB3XzPKg';
+
+  Future<void> _openTestFlight() async {
+    try {
+      final uri = Uri.parse(_testFlightDeepLink);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {}
+    try {
+      await launchUrl(
+        Uri.parse(_testFlightWebUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+  }
 
   /// Auto-detected platform written to Firestore — no manual picker.
   static String get _detectedPlatform {
@@ -299,7 +320,27 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
         ),
         const SizedBox(height: 10),
 
-        if (_testerSignedUp) ...[
+        if (_isIOS) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(LucideIcons.externalLink, size: 14),
+              label: const Text(
+                'Open in TestFlight (No Code Needed)',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              onPressed: _openTestFlight,
+            ),
+          ),
+        ] else if (_testerSignedUp) ...[
           // ✅ Already signed up
           Container(
             width: double.infinity,

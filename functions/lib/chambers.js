@@ -135,6 +135,18 @@ async function ensureMembership({
       chatSnap.data().memberCount : participants.length;
     const updatedMemberCount = !isAlreadyParticipant ? currentMemberCount + 1 : currentMemberCount;
 
+    const existingLastMsg = chatSnap.exists ? chatSnap.data().lastMessage || null : null;
+    const existingChatUpdatedAt = chatSnap.exists ?
+      (typeof chatSnap.data().updatedAt === "number" ?
+        chatSnap.data().updatedAt :
+        (chatSnap.data().updatedAt && typeof chatSnap.data().updatedAt.toMillis === "function" ?
+          chatSnap.data().updatedAt.toMillis() :
+          ((existingLastMsg && typeof existingLastMsg.timestamp === "number") ?
+            existingLastMsg.timestamp : now))) :
+      now;
+    const effectiveChatUpdatedAt = (existingLastMsg && typeof existingLastMsg.timestamp === "number") ?
+      existingLastMsg.timestamp : existingChatUpdatedAt;
+
     const fields = officialFields(details, homeCountryCode, hostCountryCode);
     transaction.set(chatRef, {
       id: details.chatId,
@@ -143,8 +155,8 @@ async function ensureMembership({
       participants,
       memberCount: updatedMemberCount,
       createdAt: chatSnap.exists ? chatSnap.data().createdAt || now : now,
-      updatedAt: now,
-      lastMessage: chatSnap.exists ? chatSnap.data().lastMessage || null : null,
+      updatedAt: effectiveChatUpdatedAt,
+      lastMessage: existingLastMsg,
       createdBy: admin.firestore.FieldValue.delete(),
     }, {merge: true});
 
@@ -160,7 +172,8 @@ async function ensureMembership({
       transaction.set(userChatRef, {
         chatId: details.chatId,
         accessLevel: "member",
-        updatedAt: now,
+        ...(existingLastMsg ? {lastMessage: existingLastMsg} : {}),
+        updatedAt: effectiveChatUpdatedAt,
         addedAt: now,
         lastRead: now,
         pinned: false,
@@ -169,7 +182,8 @@ async function ensureMembership({
     } else {
       transaction.set(userChatRef, {
         accessLevel: "member",
-        updatedAt: now,
+        ...(existingLastMsg ? {lastMessage: existingLastMsg} : {}),
+        updatedAt: effectiveChatUpdatedAt,
         isDeleted: false,
       }, {merge: true});
     }

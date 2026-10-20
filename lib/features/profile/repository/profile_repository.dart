@@ -58,7 +58,6 @@ class ProfileRepository {
   static final Map<String, _CachedProfile> _profileCache = {};
   static const _cacheTtl = Duration(minutes: 5);
   static const _privateFields = <String>{
-    'phone',
     'dateOfBirth',
     'currentLocation',
     'geo',

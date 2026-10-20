@@ -78,7 +78,7 @@
                     var isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
 
                     if (isIOS) {
-                        window.location.replace('https://testflight.apple.com/join/vB3XzPKg');
+                        window.location.href = 'itms-beta://testflight.apple.com/join/vB3XzPKg';
                     } else if (isAndroid) {
                         var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
                         if (code) {

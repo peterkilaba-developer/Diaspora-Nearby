@@ -378,6 +378,28 @@ class _OrganizationDetailScreenState
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
+            actions: [
+              if (isAdmin && _orgData!['kind'] != 'corridor_chamber')
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    backgroundColor: Colors.black.withValues(alpha: 0.4),
+                    child: IconButton(
+                      icon: const Icon(
+                        LucideIcons.settings,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      tooltip: 'Manage Organization',
+                      onPressed: () {
+                        context.push(
+                          '/organization/manage?orgId=${widget.orgId}',
+                        );
+                      },
+                    ),
+                  ),
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
@@ -455,10 +477,26 @@ class _OrganizationDetailScreenState
                   Row(
                     children: [
                       // Chambers use the explicit Join / Follow lifecycle
-                      // (opt-in). Regular orgs keep the original Follow toggle.
+                      // (opt-in). Regular orgs show Manage for admins, or Follow toggle for others.
                       Expanded(
                         child: _orgData!['kind'] == 'corridor_chamber'
                             ? _buildChamberJoinFollowButton()
+                            : isAdmin
+                            ? OutlinedButton.icon(
+                                onPressed: () {
+                                  context.push(
+                                    '/organization/manage?orgId=${widget.orgId}',
+                                  );
+                                },
+                                icon: const Icon(LucideIcons.settings),
+                                label: const Text('Manage'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 54),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              )
                             : OutlinedButton.icon(
                                 onPressed: _isFollowLoading
                                     ? null

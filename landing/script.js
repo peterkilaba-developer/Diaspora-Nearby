@@ -11,6 +11,8 @@ const PLAY_STORE_TEST_URL = PLAY_STORE_URL;
 const PLAY_STORE_LISTING_URL = PLAY_STORE_URL;
 // Apple TestFlight Invite URL
 const TESTFLIGHT_URL = 'https://testflight.apple.com/join/vB3XzPKg';
+const TESTFLIGHT_DEEPLINK_URL = 'itms-beta://testflight.apple.com/join/vB3XzPKg';
+const TESTFLIGHT_APP_STORE_URL = 'https://apps.apple.com/us/app/testflight/id899247664';
 // Google Group join page (kept for testing reference)
 const GOOGLE_GROUP_JOIN_URL = 'https://groups.google.com/g/diaspora-nearby-testers';
 
@@ -45,8 +47,8 @@ const detectedPlatform = detectPlatform();
         const platform = detectedPlatform;
 
         if (platform === 'ios') {
-            renderRedirectScreen('ios', TESTFLIGHT_URL);
-            window.location.replace(TESTFLIGHT_URL);
+            renderRedirectScreen('ios', TESTFLIGHT_DEEPLINK_URL);
+            window.location.href = TESTFLIGHT_DEEPLINK_URL;
             return;
         } else if (platform === 'android') {
             let androidUrl = PLAY_STORE_URL;
@@ -101,7 +103,7 @@ function renderRedirectScreen(platform, targetUrl) {
                 <p>Redirecting you to <strong>${storeName}</strong> to download the app.</p>
                 <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn">
                     <span>${btnLabel}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${isIOS ? `<div style="margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--surface-hover, rgba(128,128,128,0.08)); border: 1px solid var(--border); font-size: 12px; color: var(--fg-muted); text-align: left; line-height: 1.5; width: 100%;"><strong style="color: var(--fg); display: block; margin-bottom: 4px;">Don’t have TestFlight installed yet?</strong>1. <a href="${TESTFLIGHT_APP_STORE_URL}" target="_blank" rel="noopener" style="color: var(--sage); font-weight: 600; text-decoration: underline;">Install Apple TestFlight</a> from the App Store first.<br>2. Return to this page and tap <strong>Open in TestFlight</strong> above (no invite code needed).</div>` : ''}<a style="display:none">
                 </a>
                 <div style="margin-top: 18px;">
                     <button type="button" class="redirect-cancel-link" onclick="dismissRedirectOverlay(event)">
@@ -383,7 +385,8 @@ async function submitEarlyAccess(formPrefix) {
             hideFormAfterSignup(formPrefix);
             showTesterSteps(msgEl);
         } else if (detectedPlatform === 'ios') {
-            showMessage(msgEl, 'You\u2019re in! We\u2019ll send your TestFlight invite to ' + email + ' shortly.', 'success');
+            showMessage(msgEl, 'You\u2019re in! Opening TestFlight now (no invite code required)...', 'success');
+            window.location.href = TESTFLIGHT_DEEPLINK_URL;
             emailInput.value = '';
             hideFormAfterSignup(formPrefix);
         } else {

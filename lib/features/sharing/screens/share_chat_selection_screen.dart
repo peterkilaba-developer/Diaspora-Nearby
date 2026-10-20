@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/chat/screens/chats_list_screen.dart'; // For userChatsStreamProvider
 import 'package:diaspora_nearby/features/chat/widgets/chat_card.dart';
@@ -230,15 +231,17 @@ class _ShareChatSelectionScreenState
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, stack) => Center(child: Text('Error: $error')),
             data: (chats) {
-              final filteredChats = _searchQuery.isEmpty
-                  ? chats
-                  : chats
-                        .where(
-                          (chat) => chat.name.toLowerCase().contains(
-                            _searchQuery.toLowerCase(),
-                          ),
-                        )
-                        .toList();
+              final filteredChats =
+                  (_searchQuery.isEmpty
+                          ? List.of(chats)
+                          : chats
+                                .where(
+                                  (chat) => chat.name.toLowerCase().contains(
+                                    _searchQuery.toLowerCase(),
+                                  ),
+                                )
+                                .toList())
+                    ..sort(ChatRepository.compareChatsByLatest);
 
               if (filteredChats.isEmpty) {
                 return const Center(child: Text('No chats found'));

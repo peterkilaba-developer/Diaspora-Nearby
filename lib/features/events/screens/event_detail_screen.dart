@@ -119,6 +119,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       }
     }
 
+    final currentUserId =
+        ref.watch(authStateProvider).value?.uid ??
+        ref.read(authRepositoryProvider).currentUser?.uid;
+    final isCreator = currentUserId != null && currentUserId == event.creatorId;
+
     return Scaffold(
       body: SafeArea(
         top: false, // SliverAppBar handles top notch
@@ -175,6 +180,27 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 ),
               ),
               actions: [
+                if (isCreator)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black.withValues(alpha: 0.4),
+                      child: IconButton(
+                        icon: const Icon(
+                          LucideIcons.settings,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        tooltip: 'Manage Event',
+                        onPressed: () {
+                          context.push(
+                            '/events/edit/${event.id}',
+                            extra: event,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: CircleAvatar(
@@ -491,26 +517,43 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           top: 8,
                           bottom: 24,
                         ), // Added 16px extra bottom padding
-                        child: Row(
-                          children: [
-                            Icon(
-                              LucideIcons.users,
-                              size: 16,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => context.push(
+                            '/events/${event.id}/attendees',
+                            extra: event,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.users,
+                                  size: 16,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.6,
+                                  ),
                                 ),
-                                fontWeight: FontWeight.w500,
-                              ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${event.attendeeCount ?? event.attendees?.length ?? 0}${event.maxAttendees != null ? " / ${event.maxAttendees}" : ""} going \u2022 ${event.interested?.length ?? 0} interested',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.6),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 14,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
 
@@ -897,8 +940,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               padding: const EdgeInsets.only(right: 12.0),
               child: IconButton.filledTonal(
                 onPressed: () {
-                  // Check if chatId is present, if not use event.id as fallback for now or handle creation
-                  final chatId = event.chatId ?? event.id;
+                  // Check if chatId is present, if not use event_${event.id} as fallback
+                  final chatId = event.chatId ?? 'event_${event.id}';
                   context.push('/chats/$chatId');
                 },
                 icon: const Icon(LucideIcons.messageCircle),
@@ -906,91 +949,112 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               ),
             ),
 
-          // RSVP Button
-          Expanded(
-            flex: 2,
-            child: FilledButton.icon(
-              onPressed: (_isRsvpLoading || currentUserId == null)
-                  ? null
-                  : () async {
-                      setState(() => _isRsvpLoading = true);
-
-                      try {
-                        final repo = ref.read(eventRepositoryProvider);
-                        // Use the same fallback logic for profile/user
-                        final userAsync = ref.read(authStateProvider);
-                        final uid =
-                            userAsync.value?.uid ??
-                            ref.read(authRepositoryProvider).currentUser?.uid;
-
-                        if (uid == null) {
-                          debugPrint('DEBUG: User ID is null in onPressed');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please log in to RSVP.'),
-                            ),
-                          );
-                          setState(() => _isRsvpLoading = false);
-                          return;
-                        }
-
-                        if (isAttending) {
-                          await repo.leaveEvent(event.id, uid);
-                        } else {
-                          await repo.joinEvent(event.id, uid);
-                        }
-
-                        // Force refresh and WAIT for new data
-                        debugPrint('RSVP: Refreshing data...');
-                        final _ = await ref.refresh(
-                          eventDetailsProvider(event.id).future,
-                        );
-                        debugPrint('RSVP: Data refreshed.');
-
-                        if (mounted) setState(() => _isRsvpLoading = false);
-                      } catch (e) {
-                        debugPrint('RSVP Error: $e');
-                        if (mounted) setState(() => _isRsvpLoading = false);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                        }
-                      }
-                    },
-              style: FilledButton.styleFrom(
-                backgroundColor: isAttending
-                    ? theme.colorScheme.surfaceContainerHighest
-                    : (isFull
-                          ? theme.colorScheme.secondary
-                          : theme.colorScheme.primary),
-                foregroundColor: isAttending
-                    ? theme.colorScheme.onSurface
-                    : theme.colorScheme.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+          // Manage Button (for event creator) vs RSVP Button (for attendees)
+          if (currentUserId == event.creatorId)
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                onPressed: () {
+                  context.push('/events/edit/${event.id}', extra: event);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                icon: const Icon(LucideIcons.edit3, size: 18),
+                label: const Text(
+                  'Manage Event',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
-              icon: _isRsvpLoading
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: isAttending
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onPrimary,
+            )
+          else
+            // RSVP Button
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                onPressed: (_isRsvpLoading || currentUserId == null)
+                    ? null
+                    : () async {
+                        setState(() => _isRsvpLoading = true);
+
+                        try {
+                          final repo = ref.read(eventRepositoryProvider);
+                          // Use the same fallback logic for profile/user
+                          final userAsync = ref.read(authStateProvider);
+                          final uid =
+                              userAsync.value?.uid ??
+                              ref.read(authRepositoryProvider).currentUser?.uid;
+
+                          if (uid == null) {
+                            debugPrint('DEBUG: User ID is null in onPressed');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please log in to RSVP.'),
+                              ),
+                            );
+                            setState(() => _isRsvpLoading = false);
+                            return;
+                          }
+
+                          if (isAttending) {
+                            await repo.leaveEvent(event.id, uid);
+                          } else {
+                            await repo.joinEvent(event.id, uid);
+                          }
+
+                          // Force refresh and WAIT for new data
+                          debugPrint('RSVP: Refreshing data...');
+                          final _ = await ref.refresh(
+                            eventDetailsProvider(event.id).future,
+                          );
+                          debugPrint('RSVP: Data refreshed.');
+
+                          if (mounted) setState(() => _isRsvpLoading = false);
+                        } catch (e) {
+                          debugPrint('RSVP Error: $e');
+                          if (mounted) setState(() => _isRsvpLoading = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          }
+                        }
+                      },
+                style: FilledButton.styleFrom(
+                  backgroundColor: isAttending
+                      ? theme.colorScheme.surfaceContainerHighest
+                      : (isFull
+                            ? theme.colorScheme.secondary
+                            : theme.colorScheme.primary),
+                  foregroundColor: isAttending
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                icon: _isRsvpLoading
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: isAttending
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onPrimary,
+                        ),
+                      )
+                    : Icon(
+                        isAttending
+                            ? LucideIcons.check
+                            : (isFull ? LucideIcons.ban : LucideIcons.ticket),
                       ),
-                    )
-                  : Icon(
-                      isAttending
-                          ? LucideIcons.check
-                          : (isFull ? LucideIcons.ban : LucideIcons.ticket),
-                    ),
-              label: Text(
-                isAttending ? 'Going' : (isFull ? 'Sold Out' : 'Attend Event'),
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                label: Text(
+                  isAttending ? 'Going' : (isFull ? 'Sold Out' : 'Attend Event'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

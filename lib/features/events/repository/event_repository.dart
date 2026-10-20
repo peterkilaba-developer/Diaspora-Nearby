@@ -45,6 +45,10 @@ final joinedEventsProvider = StreamProvider.family<List<Event>, String>((
   return ref.watch(eventRepositoryProvider).getJoinedEvents(userId);
 });
 
+final allRawEventsStreamProvider = StreamProvider<List<Event>>((ref) {
+  return ref.watch(eventRepositoryProvider).watchAllRawEvents();
+});
+
 enum VerificationResult { success, invalidCode, alreadyCheckedIn, error }
 
 class EventRepository {
@@ -64,170 +68,152 @@ class EventRepository {
   // FETCHING & STREAMS
   // ============================================
 
+  Stream<List<Event>> watchAllRawEvents() {
+    return _firestore
+        .collection('events')
+        .limit(200)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          final events = snapshot.docs
+              .map((doc) {
+                try {
+                  final data = doc.data();
+                  return Event.fromJson({...data, 'id': doc.id});
+                } catch (e) {
+                  debugPrint('Error parsing event ${doc.id}: $e');
+                  return null;
+                }
+              })
+              .whereType<Event>()
+              .toList();
+
+          return await _enrichEvents(events);
+        });
+  }
+
+  List<Event> filterVisibleEvents(
+    List<Event> events, {
+    bool isGlobal = false,
+    String? homeCountryCode,
+    required String currentUserId,
+    required List<String> userCommunityMemberships,
+  }) {
+    final today = DateTime.now();
+    final todayStr =
+        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+    final filteredEvents = events.where((event) {
+      final permission = event.attendingPermission;
+      final creatorId = event.creatorId;
+
+      // 1. Creator or RSVP'd attendee always sees the event
+      if (creatorId == currentUserId) return true;
+      if (event.attendees?.contains(currentUserId) ?? false) return true;
+
+      // 1.5 Must be published for others
+      if (event.status != 'published') return false;
+
+      // Show events until midnight after they end (for non-creators)
+      final effectiveEndDate =
+          (event.endDate != null && event.endDate!.isNotEmpty)
+          ? event.endDate!
+          : event.startDate;
+      if (effectiveEndDate.isNotEmpty &&
+          effectiveEndDate.compareTo(todayStr) < 0) {
+        return false;
+      }
+
+      // 2. Country Filter (If not global view)
+      if (!isGlobal &&
+          homeCountryCode != null &&
+          homeCountryCode.isNotEmpty) {
+        final eventHomeCode = event.homeCountryCode?.toUpperCase();
+        final targetHomeCode = homeCountryCode.toUpperCase();
+        if (eventHomeCode != null &&
+            eventHomeCode.isNotEmpty &&
+            eventHomeCode != targetHomeCode) {
+          return false;
+        }
+      }
+
+      // 3. Global/Public
+      if (permission == null ||
+          permission == 'global' ||
+          permission == 'global_community' ||
+          permission == 'all') {
+        return true;
+      }
+
+      // 4. Private
+      if (permission == 'private') {
+        return event.invitedUserIds?.contains(currentUserId) ?? false;
+      }
+
+      // 5. Community Membership (also allow if event belongs to user's home country diaspora)
+      if (userCommunityMemberships.contains(permission)) {
+        return true;
+      }
+      if (homeCountryCode != null && homeCountryCode.isNotEmpty) {
+        final lowerCode = homeCountryCode.toLowerCase();
+        if (permission == 'home_country_$lowerCode' ||
+            permission.endsWith('_$lowerCode') ||
+            event.homeCountryCode?.toUpperCase() ==
+                homeCountryCode.toUpperCase()) {
+          return true;
+        }
+      }
+      return false;
+    }).toList();
+
+    // Sort by Start Date
+    filteredEvents.sort((a, b) => a.startDate.compareTo(b.startDate));
+    return filteredEvents;
+  }
+
   Stream<List<Event>> getEvents({
     bool isGlobal = false,
     String? homeCountryCode,
     required String currentUserId,
     required List<String> userCommunityMemberships,
   }) {
-    // 1. Trigger Sync (Fire and Forget)
-    _syncEvents(isGlobal: isGlobal, homeCountryCode: homeCountryCode);
-
-    // 2. Watch Local DB
-    // We watch ALL events and filter in memory because filtering logic (permissions) is complex
-    // and datasets are relatively small for events (< 1000 active usually).
-    // Optimization: Filter by date in Isar query.
-
-    // 2. Watch Local DB (Native)
-    // On Web, we fall back to Firestore logic above if kIsWeb check was passed
-    if (kIsWeb) {
-      // WEB: Direct Firestore watch with basic filtering
-      return _firestore
-          .collection('events')
-          .where('status', isEqualTo: 'published')
-          .limit(200)
-          .snapshots()
-          .map((snapshot) {
-            final events = snapshot.docs.map((doc) {
-              final data = doc.data();
-              return Event.fromJson({...data, 'id': doc.id});
-            }).toList();
-
-            final today = DateTime.now();
-            final todayStr =
-                "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-
-            return events.where((event) {
-              // Show events until midnight after they end
-              final effectiveEndDate =
-                  (event.endDate != null && event.endDate!.isNotEmpty)
-                  ? event.endDate!
-                  : event.startDate;
-              if (effectiveEndDate.compareTo(todayStr) < 0) return false;
-
-              // Visibility Logic (Reproduced from mobile logic)
-              final permission = event.attendingPermission;
-              final creatorId = event.creatorId;
-
-              if (creatorId == currentUserId) return true;
-              if (permission == null ||
-                  permission == 'global' ||
-                  permission == 'all') {
-                return true;
-              }
-              if (!isGlobal && homeCountryCode != null) {
-                if (event.homeCountryCode != homeCountryCode) return false;
-              }
-              if (permission == 'private') {
-                return event.invitedUserIds?.contains(currentUserId) ?? false;
-              }
-              return true;
-            }).toList();
-          });
-    }
-
-    return _localService.watchFutureEvents().asyncMap((events) async {
-      final filteredEvents = events.where((event) {
-        // Visibility Logic (Reproduced from original)
-        final permission = event.attendingPermission;
-        final creatorId = event.creatorId;
-
-        // 1. Creator always sees their event
-        if (creatorId == currentUserId) return true;
-
-        // 1.5 Must be published for others
-        if (event.status != 'published') return false;
-
-        // 2. Global/Public
-        if (permission == null ||
-            permission == 'global' ||
-            permission == 'all') {
-          return true;
-        }
-
-        // 2.1 Country Filter (If not global view)
-        if (!isGlobal && homeCountryCode != null) {
-          if (event.homeCountryCode != homeCountryCode) return false;
-        }
-
-        // 3. Private
-        if (permission == 'private') {
-          return event.invitedUserIds?.contains(currentUserId) ?? false;
-        }
-
-        // 4. Community Membership
-        return userCommunityMemberships.contains(permission);
-      }).toList();
-
-      // Sort by Start Date
-      filteredEvents.sort((a, b) => a.startDate.compareTo(b.startDate));
-
-      // Enrich with Distance (Client-side, uses Geolocator)
-      try {
-        final position = await Geolocator.getCurrentPosition();
-        return await _addDistancesToEvents(filteredEvents, position);
-      } catch (e) {
-        return filteredEvents;
-      }
-    });
-  }
-
-  Future<void> _syncEvents({
-    bool isGlobal = false,
-    String? homeCountryCode,
-  }) async {
-    try {
-      // Only sync active events
-      final today = DateTime.now();
-      final todayStr =
-          "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-
-      cf.Query query = _firestore
-          .collection('events')
-          .where('startDate', isGreaterThanOrEqualTo: todayStr);
-
-      if (!isGlobal && homeCountryCode != null) {
-        query = query.where('homeCountryCode', isEqualTo: homeCountryCode);
-      }
-
-      // [OPTIMIZATION] Limit to 50 events for scalability
-      query = query.limit(50);
-
-      final snapshot = await query.get();
-      final events = <Event>[];
-
-      for (var doc in snapshot.docs) {
-        try {
-          final data = doc.data() as Map<String, dynamic>;
-          data['id'] = doc.id;
-          events.add(Event.fromJson(data));
-        } catch (_) {}
-      }
-
-      // Enrich with Creator Profiles (Fetch from Firestore to store Name/Photo in Isar)
-      final enrichedEvents = await _enrichEvents(events);
-
-      await _localService.saveEvents(enrichedEvents);
-    } catch (e) {
-      debugPrint('Error syncing events: $e');
-    }
+    return watchAllRawEvents().map(
+      (events) => filterVisibleEvents(
+        events,
+        isGlobal: isGlobal,
+        homeCountryCode: homeCountryCode,
+        currentUserId: currentUserId,
+        userCommunityMemberships: userCommunityMemberships,
+      ),
+    );
   }
 
   // Enrich events with creator profiles
   Future<List<Event>> _enrichEvents(List<Event> events) async {
-    final creatorIds = events.map((e) => e.creatorId).toSet().toList();
+    final creatorIds = events
+        .map((e) => e.creatorId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
     if (creatorIds.isEmpty) return events;
 
-    // Fetch profiles
+    // Fetch profiles safely so a single failing profile lookup never breaks event loading
     final profiles = <String, Map<String, dynamic>>{};
 
-    final futures = creatorIds.map(
-      (id) => _firestore.collection('users').doc(id).get(),
-    );
+    final futures = creatorIds.map((id) async {
+      try {
+        return await _firestore
+            .collection('users')
+            .doc(id)
+            .get()
+            .timeout(const Duration(seconds: 4));
+      } catch (_) {
+        return null;
+      }
+    });
     final snapshots = await Future.wait(futures);
 
     for (var doc in snapshots) {
-      if (doc.exists) {
+      if (doc != null && doc.exists && doc.data() != null) {
         profiles[doc.id] = doc.data()!;
       }
     }
@@ -312,7 +298,7 @@ class EventRepository {
         'https://maps.googleapis.com/maps/api/geocode/json?address=${Uri.encodeComponent(address)}&key=$apiKey',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'OK' && (data['results'] as List).isNotEmpty) {
@@ -363,7 +349,11 @@ class EventRepository {
 
       // Calculate Distance (Optional for details, but good for cache)
       try {
-        final position = await Geolocator.getCurrentPosition();
+        final position =
+            await Geolocator.getLastKnownPosition() ??
+            await Geolocator.getCurrentPosition().timeout(
+              const Duration(seconds: 2),
+            );
         final withDistance = await _addDistancesToEvents([
           finalEvent,
         ], position);
@@ -407,6 +397,8 @@ class EventRepository {
       eventData['attendees'] = [event.creatorId];
       eventData['attendeeCount'] = 1;
       eventData['createdAt'] = DateTime.now().toIso8601String();
+      eventData['chatId'] = 'event_${event.id}';
+      event.chatId = 'event_${event.id}';
 
       // Create the canonical event first. Storage rules verify ownership by
       // reading this document, so uploading before this write is denied.
@@ -428,6 +420,7 @@ class EventRepository {
           }
           imageUrl = await storageRef.getDownloadURL();
           eventData['imageUrl'] = imageUrl;
+          event.imageUrl = imageUrl;
           await _firestore.collection('events').doc(event.id).update({
             'imageUrl': imageUrl,
           });
@@ -575,66 +568,51 @@ class EventRepository {
   }
 
   // Fetch events created by a specific user
-  // Fetch events created by a specific user
   Stream<List<Event>> getUserEvents(String userId) {
-    _syncUserEvents(userId);
+    return _firestore
+        .collection('events')
+        .where('creatorId', isEqualTo: userId)
+        .limit(200)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          final events = snapshot.docs
+              .map((doc) {
+                try {
+                  final data = doc.data();
+                  return Event.fromJson({...data, 'id': doc.id});
+                } catch (_) {
+                  return null;
+                }
+              })
+              .whereType<Event>()
+              .toList();
 
-    if (kIsWeb) return const Stream.empty(); // Web handling if needed
-    return _localService.watchUserEvents(userId);
+          return await _enrichEvents(events);
+        });
   }
 
   // Fetch events where the user is an attendee (Joined Events)
   Stream<List<Event>> getJoinedEvents(String userId) {
-    _syncJoinedEvents(userId);
+    return _firestore
+        .collection('events')
+        .where('attendees', arrayContains: userId)
+        .limit(200)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          final events = snapshot.docs
+              .map((doc) {
+                try {
+                  final data = doc.data();
+                  return Event.fromJson({...data, 'id': doc.id});
+                } catch (_) {
+                  return null;
+                }
+              })
+              .whereType<Event>()
+              .toList();
 
-    if (kIsWeb) return const Stream.empty(); // Web handling if needed
-    return _localService.watchJoinedEvents(userId);
-  }
-
-  Future<void> _syncUserEvents(String uid) async {
-    try {
-      final snapshot = await _firestore
-          .collection('events')
-          .where('creatorId', isEqualTo: uid)
-          .limit(200)
-          .get();
-
-      final events = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Event.fromJson({...data, 'id': doc.id});
-      }).toList();
-
-      await _localService.saveEvents(events);
-    } catch (e) {
-      debugPrint('EventRepository: Error syncing user events: $e');
-    }
-  }
-
-  Future<void> _syncJoinedEvents(String userId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('events')
-          .where('attendees', arrayContains: userId)
-          .limit(200)
-          .get();
-
-      final events = snapshot.docs
-          .map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            try {
-              return Event.fromJson(data);
-            } catch (_) {
-              return null;
-            }
-          })
-          .whereType<Event>()
-          .toList();
-
-      await _localService.saveEvents(events);
-    } catch (e) {
-      debugPrint('Error syncing joined events: $e');
-    }
+          return await _enrichEvents(events);
+        });
   }
 
   // Update Event

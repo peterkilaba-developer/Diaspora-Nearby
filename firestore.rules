@@ -123,7 +123,7 @@ service cloud.firestore {
           'walletAddress', 'smartWalletAddress', 'welcomeBonusAwarded',
           'advertReportCount', 'flaggedMessagesCount', 'isBanned',
           'bannedAt', 'bannedReason', 'firstQrConnection',
-          'phone', 'dateOfBirth', 'geo', 'workLocation', 'pastLocations',
+          'dateOfBirth', 'geo', 'workLocation', 'pastLocations',
           'fcmToken', 'fcmTokenUpdatedAt', 'fcmTopics',
           'fcmTopicsUpdatedAt', 'notificationsEnabled', 'blockedUsers'
         ]) &&
@@ -145,7 +145,7 @@ service cloud.firestore {
           'walletAddress', 'smartWalletAddress', 'welcomeBonusAwarded',
           'advertReportCount', 'flaggedMessagesCount', 'isBanned',
           'bannedAt', 'bannedReason', 'firstQrConnection',
-          'phone', 'dateOfBirth', 'geo', 'workLocation', 'pastLocations',
+          'dateOfBirth', 'geo', 'workLocation', 'pastLocations',
           'fcmToken', 'fcmTokenUpdatedAt', 'fcmTopics',
           'fcmTopicsUpdatedAt', 'notificationsEnabled', 'blockedUsers'
         ]) &&
@@ -326,6 +326,12 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'lastDeliveredMessageId', 'invitationOnly'
         ]) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt']) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'lastMessage', 'accessLevel', 'clearedAt', 'addedAt'
+          ])
+        ) &&
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accessLevel']) ||
           stringOrDefault(request.resource.data, 'accessLevel', '') in ['follower', 'member']

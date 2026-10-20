@@ -25,7 +25,8 @@ class AppUpdateService {
       'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
   static const String _androidFallbackApkUrl =
       'https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk';
-  static const String _iosTestFlightUrl = 'itms-beta://';
+  static const String _iosTestFlightUrl =
+      'itms-beta://testflight.apple.com/join/vB3XzPKg';
   static const String _iosAppStoreUrl =
       'https://apps.apple.com/app/id6821194997';
 
@@ -240,7 +241,12 @@ class AppUpdateService {
     String? fallbackUrl,
   }) async {
     try {
-      final uri = Uri.parse(primaryUrl);
+      final uri = Uri.parse(
+        defaultTargetPlatform == TargetPlatform.iOS &&
+                primaryUrl.startsWith('https://testflight.apple.com/join/')
+            ? primaryUrl.replaceFirst('https://', 'itms-beta://')
+            : primaryUrl,
+      );
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
         return;

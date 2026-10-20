@@ -108,7 +108,7 @@ exports.createPeerBooking = functions.https.onCall(async (data, context) => {
       guestName: String(guest.data().fullName ||
         `${guest.data().firstName || ""} ${guest.data().lastName || ""}`.trim() ||
         "Guest").slice(0, 200),
-      guestPhone: privateGuest.exists ? String(privateGuest.data().phone || "").slice(0, 64) : "",
+      guestPhone: String(guest.data().phone || (privateGuest.exists ? privateGuest.data().phone : "") || "").slice(0, 64),
       hostId,
       hostName: String(listingData.ownerName || "Host").slice(0, 200),
       startDate: admin.firestore.Timestamp.fromDate(start),

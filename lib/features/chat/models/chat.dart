@@ -261,7 +261,11 @@ class Chat {
       if (value is Timestamp) return value.millisecondsSinceEpoch;
       if (value is int) return value;
       if (value is num) return value.toInt();
-      if (value is String) return int.tryParse(value) ?? defaultValue;
+      if (value is String) {
+        return int.tryParse(value) ??
+            DateTime.tryParse(value)?.millisecondsSinceEpoch ??
+            defaultValue;
+      }
       return defaultValue;
     }
 
@@ -307,13 +311,15 @@ class Chat {
       if (value is Timestamp) return value.millisecondsSinceEpoch;
       if (value is int) return value;
       if (value is num) return value.toInt();
-      if (value is String) return int.tryParse(value) ?? defaultValue;
+      if (value is String) {
+        return int.tryParse(value) ??
+            DateTime.tryParse(value)?.millisecondsSinceEpoch ??
+            defaultValue;
+      }
       return defaultValue;
     }
 
     LastMessage? effectiveLastMessage = lastMessage;
-    int effectiveUpdatedAt = updatedAt;
-
     final rawUserLastMsg = userChatData['lastMessage'];
     if (rawUserLastMsg is Map) {
       final userLastMsg = LastMessage.fromFirestore(
@@ -326,12 +332,21 @@ class Chat {
     }
 
     final userUpdatedAt = parseTs(userChatData['updatedAt']);
-    if (userUpdatedAt > effectiveUpdatedAt) {
-      effectiveUpdatedAt = userUpdatedAt;
-    }
-    if (effectiveLastMessage != null &&
-        effectiveLastMessage.timestamp > effectiveUpdatedAt) {
+    final userAddedAt = parseTs(userChatData['addedAt']);
+    // Prioritize lastMessage.timestamp so chat order matches the visible
+    // timestamp on the card. Fall back to chat.updatedAt, userChat.updatedAt,
+    // userChat.addedAt, or chat.createdAt only when there is no lastMessage.
+    int effectiveUpdatedAt;
+    if (effectiveLastMessage != null && effectiveLastMessage.timestamp > 0) {
       effectiveUpdatedAt = effectiveLastMessage.timestamp;
+    } else if (updatedAt > 0) {
+      effectiveUpdatedAt = updatedAt;
+    } else if (userUpdatedAt > 0) {
+      effectiveUpdatedAt = userUpdatedAt;
+    } else if (userAddedAt > 0) {
+      effectiveUpdatedAt = userAddedAt;
+    } else {
+      effectiveUpdatedAt = createdAt;
     }
 
     return copyWith(

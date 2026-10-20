@@ -281,7 +281,7 @@ jobs:
               androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
               androidApkUrl: "https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk",
               iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
-              releaseNotes: "Profile signup permission fix, legacy profile compatibility, and automatic in-app updates.",
+              releaseNotes: "Chat timestamp ordering & pull-to-refresh fixes, event chat header calendar icon & manage event options, and Play Store Open Testing update.",
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true }).then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(0); });
           ' || true

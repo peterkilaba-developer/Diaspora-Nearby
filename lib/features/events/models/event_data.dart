@@ -125,7 +125,66 @@ class Event {
     this.dspFee,
   });
 
-  factory Event.fromJson(Map<String, dynamic> json) => _$EventFromJson(json);
+  factory Event.fromJson(Map<String, dynamic> json) {
+    final normalized = Map<String, dynamic>.from(json);
+
+    String? toIsoString(dynamic value) {
+      if (value == null) return null;
+      if (value is String) return value;
+      if (value is DateTime) return value.toIso8601String();
+      try {
+        final dt = (value as dynamic).toDate() as DateTime;
+        return dt.toIso8601String();
+      } catch (_) {
+        return value.toString();
+      }
+    }
+
+    String? toDateString(dynamic value) {
+      final iso = toIsoString(value);
+      if (iso == null) return null;
+      if (iso.length >= 10 && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(iso)) {
+        return iso.substring(0, 10);
+      }
+      try {
+        final dt = DateTime.parse(iso);
+        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      } catch (_) {
+        return iso;
+      }
+    }
+
+    List<String>? toStringList(dynamic value) {
+      if (value is List) {
+        return value
+            .where((e) => e != null)
+            .map((e) => e.toString())
+            .toList();
+      }
+      return null;
+    }
+
+    normalized['id'] = (normalized['id'] ?? '').toString();
+    normalized['title'] = (normalized['title'] ?? 'Untitled Event').toString();
+    normalized['description'] = (normalized['description'] ?? '').toString();
+    normalized['startDate'] = toDateString(normalized['startDate']) ?? '';
+    normalized['startTime'] = (normalized['startTime'] ?? '00:00').toString();
+    normalized['endDate'] = toDateString(normalized['endDate']);
+    normalized['endTime'] = normalized['endTime']?.toString();
+    normalized['location'] = (normalized['location'] ?? '').toString();
+    normalized['category'] = (normalized['category'] ?? 'Other').toString();
+    normalized['creatorId'] =
+        (normalized['creatorId'] ?? normalized['createdBy'] ?? '').toString();
+    normalized['createdAt'] = toIsoString(normalized['createdAt']);
+    normalized['status'] = (normalized['status'] ?? 'published').toString();
+    normalized['attendees'] = toStringList(normalized['attendees']);
+    normalized['confirmedAttendees'] =
+        toStringList(normalized['confirmedAttendees']);
+    normalized['interested'] = toStringList(normalized['interested']);
+    normalized['invitedUserIds'] = toStringList(normalized['invitedUserIds']);
+
+    return _$EventFromJson(normalized);
+  }
   Map<String, dynamic> toJson() => _$EventToJson(this);
 
   Event copyWith({

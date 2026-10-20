@@ -725,6 +725,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                                 .read(authRepositoryProvider)
                                 .currentUser!
                                 .uid,
+                            initialEdit: extra?['initialEdit'] == true,
                           );
                         },
                       ),
@@ -811,10 +812,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'edit/:eventId',
                     parentNavigatorKey: _rootNavigatorKey,
                     builder: (context, state) {
+                      final eventId = state.pathParameters['eventId'];
                       final eventExtra = state.extra as Event?;
-                      // If no extra, we might need to fetch by ID in screen or force pass it.
-                      // For now assuming extra is passed from manage screen.
-                      return CreateEventScreen(eventToEdit: eventExtra);
+                      return CreateEventScreen(
+                        eventToEdit: eventExtra,
+                        eventIdToEdit: eventId,
+                      );
                     },
                   ),
                   GoRoute(

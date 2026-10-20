@@ -17,6 +17,7 @@ class ChatHeaderTitle extends StatefulWidget {
   final String? imageUrl;
   final ChatProfileImage? customImage;
   final Widget? customAvatarWidget;
+  final Widget? titlePrefixIcon;
   final int? memberCount;
   final String? eventStatus;
   final VoidCallback? onTap;
@@ -28,6 +29,7 @@ class ChatHeaderTitle extends StatefulWidget {
     this.imageUrl,
     this.customImage,
     this.customAvatarWidget,
+    this.titlePrefixIcon,
     this.memberCount,
     this.eventStatus,
     this.onTap,
@@ -345,11 +347,23 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
       return GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
-        child: material.Text(
-          widget.fallbackTitle,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.titlePrefixIcon != null) ...[
+              widget.titlePrefixIcon!,
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: material.Text(
+                widget.fallbackTitle,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -372,14 +386,24 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                material.Text(
-                  fullName,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    height: 1.1,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    if (widget.titlePrefixIcon != null) ...[
+                      widget.titlePrefixIcon!,
+                      const SizedBox(width: 6),
+                    ],
+                    Flexible(
+                      child: material.Text(
+                        fullName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          height: 1.1,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 if ((_localTimeStr != null ||
                     (_locationName != null && _locationName!.isNotEmpty))) ...[

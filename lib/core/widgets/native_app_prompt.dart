@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Detects native-only feature attempts on web and shows an email capture
 /// dialog for TestFlight / Play Store beta invites.
@@ -136,7 +137,42 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
     super.dispose();
   }
 
+  static const _testFlightDeepLink =
+      'itms-beta://testflight.apple.com/join/vB3XzPKg';
+  static const _testFlightWebUrl =
+      'https://testflight.apple.com/join/vB3XzPKg';
+  static const _playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
+
+  Future<void> _openDirectStoreLink() async {
+    final primary = _detectedPlatform == 'ios'
+        ? _testFlightDeepLink
+        : _playStoreUrl;
+    final fallback = _detectedPlatform == 'ios' ? _testFlightWebUrl : null;
+    try {
+      final uri = Uri.parse(primary);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
+    } catch (_) {}
+    if (fallback != null) {
+      try {
+        await launchUrl(
+          Uri.parse(fallback),
+          mode: LaunchMode.externalApplication,
+        );
+        if (mounted) Navigator.of(context).pop();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _submit() async {
+    if (_detectedPlatform == 'ios' || _detectedPlatform == 'android') {
+      await _openDirectStoreLink();
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
@@ -311,9 +347,9 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                           const SizedBox(width: 6),
                           Text(
                             _detectedPlatform == 'ios'
-                                ? 'iOS TestFlight invite'
+                                ? 'Available on iOS TestFlight (no invite code needed)'
                                 : _detectedPlatform == 'android'
-                                ? 'Google Play beta invite'
+                                ? 'Available on Google Play'
                                 : 'Download links coming soon',
                             style: TextStyle(
                               fontSize: 12,
@@ -325,60 +361,63 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                       ),
                     ),
 
-                  // Email field
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Enter your email address';
-                      }
-                      if (!val.contains('@') || !val.contains('.')) {
-                        return 'Enter a valid email address';
-                      }
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'your@email.com',
-                      prefixIcon: Icon(
-                        LucideIcons.mail,
-                        size: 18,
-                        color: theme.hintColor,
-                      ),
-                      filled: true,
-                      fillColor: theme.colorScheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.3,
+                  // Email field (only shown on desktop where direct store links aren't native)
+                  if (_detectedPlatform != 'ios' &&
+                      _detectedPlatform != 'android') ...[
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Enter your email address';
+                        }
+                        if (!val.contains('@') || !val.contains('.')) {
+                          return 'Enter a valid email address';
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'your@email.com',
+                        prefixIcon: Icon(
+                          LucideIcons.mail,
+                          size: 18,
+                          color: theme.hintColor,
+                        ),
+                        filled: true,
+                        fillColor: theme.colorScheme.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
                         ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.3,
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
                         ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 2,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: theme.colorScheme.primary,
+                            width: 2,
+                          ),
                         ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
+                  ],
 
-                  // Submit button
+                  // Submit / Open Store button
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -392,14 +431,20 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Icon(LucideIcons.send, size: 16),
+                          : Icon(
+                              _detectedPlatform == 'ios' ||
+                                      _detectedPlatform == 'android'
+                                  ? LucideIcons.externalLink
+                                  : LucideIcons.send,
+                              size: 16,
+                            ),
                       label: Text(
                         _isSubmitting
                             ? 'Sending...'
                             : _detectedPlatform == 'ios'
-                            ? 'Send me the TestFlight Link'
+                            ? 'Open in TestFlight'
                             : _detectedPlatform == 'android'
-                            ? 'Send me the Play Store Link'
+                            ? 'Open in Google Play'
                             : 'Send me the Download Link',
                       ),
                       style: FilledButton.styleFrom(

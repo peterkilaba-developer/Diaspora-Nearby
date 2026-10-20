@@ -335,6 +335,11 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
         chatRef, chatId, uid, profile, nowMs,
     );
 
+    const existingLastMsg = chat.exists ? existingChat.lastMessage || null : lastMessageData;
+    const existingLastMsgTs = (existingLastMsg && typeof existingLastMsg.timestamp === "number") ?
+      existingLastMsg.timestamp : 0;
+    const effectiveChatUpdatedAt = isNewMember ? nowMs : existingLastMsgTs;
+
     transaction.set(chatRef, {
       id: chatId,
       communityId: identity.id,
@@ -346,8 +351,8 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       createdBy: existingChat.createdBy || "platform",
       isPublic: existing.isPrivate !== true,
       createdAt: chat.exists ? existingChat.createdAt || nowMs : nowMs,
-      updatedAt: nowMs,
-      lastMessage: isNewMember ? lastMessageData : (chat.exists ? existingChat.lastMessage || null : lastMessageData),
+      updatedAt: effectiveChatUpdatedAt,
+      lastMessage: isNewMember ? lastMessageData : existingLastMsg,
     }, {merge: true});
     if (isNewMember) {
       transaction.set(msgRef, messageData);
@@ -360,10 +365,10 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       chatId,
       name: identity.name,
       type: "community",
-      ...(isNewMember ? {lastMessage: lastMessageData} : {}),
+      ...(isNewMember ? {lastMessage: lastMessageData} : (existingLastMsg ? {lastMessage: existingLastMsg} : {})),
       lastRead: nowMs,
-      addedAt: nowMs,
-      updatedAt: nowMs,
+      ...(isNewMember ? {addedAt: nowMs} : {}),
+      updatedAt: effectiveChatUpdatedAt,
       isDeleted: false,
     }, {merge: true});
   });
@@ -585,14 +590,18 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
       });
     }
 
+    const existingLastMsgTs = (existingChat.lastMessage && typeof existingChat.lastMessage.timestamp === "number") ?
+      existingChat.lastMessage.timestamp : 0;
+    const effectiveChatUpdatedAt = isAlreadyJoined ? existingLastMsgTs : nowMs + i;
+
     if (chatSnap.exists) {
       const needsParticipantAdd = rawParticipants.length < MAX_COMMUNITY_MEMBERS && !rawParticipants.includes(uid);
       batch.set(chatSnap.ref, {
         ...(!isAlreadyJoined ? {
           memberCount: admin.firestore.FieldValue.increment(1),
           lastMessage: lastMessageData,
+          updatedAt: nowMs + i,
         } : {}),
-        updatedAt: nowMs + i,
         ...(needsParticipantAdd ? {participants: admin.firestore.FieldValue.arrayUnion(uid)} : {}),
       }, {merge: true});
     } else {
@@ -621,10 +630,10 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
       chatId,
       name: item.identity.name,
       type: "community",
-      ...(!isAlreadyJoined ? {lastMessage: lastMessageData} : {}),
+      ...(!isAlreadyJoined ? {lastMessage: lastMessageData} : (existingChat.lastMessage ? {lastMessage: existingChat.lastMessage} : {})),
       lastRead: nowMs + i,
-      addedAt: nowMs + i,
-      updatedAt: nowMs + i,
+      ...(!isAlreadyJoined ? {addedAt: nowMs + i} : {}),
+      updatedAt: effectiveChatUpdatedAt,
       isDeleted: false,
     }, {merge: true});
   }

@@ -120,13 +120,15 @@ class _ForwardChatSelectionScreenState
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, stack) => Center(child: Text('Error: $error')),
             data: (chats) {
-              final filteredChats = _searchQuery.isEmpty
-                  ? chats
-                  : chats.where((chat) {
-                      return chat.name.toLowerCase().contains(
-                        _searchQuery.toLowerCase(),
-                      );
-                    }).toList();
+              final filteredChats =
+                  (_searchQuery.isEmpty
+                          ? List.of(chats)
+                          : chats.where((chat) {
+                              return chat.name.toLowerCase().contains(
+                                _searchQuery.toLowerCase(),
+                              );
+                            }).toList())
+                    ..sort(ChatRepository.compareChatsByLatest);
 
               if (filteredChats.isEmpty) {
                 return const Center(child: Text('No chats found'));

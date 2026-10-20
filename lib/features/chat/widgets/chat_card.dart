@@ -217,7 +217,16 @@ class ChatCard extends ConsumerWidget {
     } else if (lastMessage.type == 'system') {
       isMedia = false;
       final senderName = lastMessage.senderName.trim();
-      final content = lastMessage.content.trim();
+      var content = lastMessage.content.trim();
+      if (content == 'Group created') {
+        if (chat.isEvent) {
+          content = 'Event created';
+        } else if (chat.isOrganization) {
+          content = 'Organization created';
+        } else if (chat.isCommunity) {
+          content = 'Community created';
+        }
+      }
       if (senderName.isNotEmpty &&
           senderName.toLowerCase() != 'system' &&
           !content.toLowerCase().startsWith(senderName.toLowerCase())) {

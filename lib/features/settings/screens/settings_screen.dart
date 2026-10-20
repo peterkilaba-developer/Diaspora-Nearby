@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/core/utils/pwa_utils.dart';
@@ -584,6 +585,28 @@ class SettingsScreen extends ConsumerWidget {
 
                           if (ctx.mounted) {
                             Navigator.of(ctx).pop();
+                            if (selectedPlatform == 'ios' ||
+                                selectedPlatform == 'both') {
+                              try {
+                                final tfDeep = Uri.parse(
+                                  'itms-beta://testflight.apple.com/join/vB3XzPKg',
+                                );
+                                if (await canLaunchUrl(tfDeep)) {
+                                  await launchUrl(
+                                    tfDeep,
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                } else {
+                                  await launchUrl(
+                                    Uri.parse(
+                                      'https://testflight.apple.com/join/vB3XzPKg',
+                                    ),
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                }
+                              } catch (_) {}
+                            }
+                            if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Row(

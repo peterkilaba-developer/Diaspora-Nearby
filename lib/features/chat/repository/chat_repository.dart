@@ -65,22 +65,40 @@ class ChatRepository {
     _realtimeUid = null;
   }
 
+  /// Effective activity timestamp for sorting chats (latest message first,
+  /// falling back to updatedAt / createdAt when no message exists).
+  static int _effectiveSortTimestamp(Chat chat) {
+    final lastMsgTs = chat.lastMessage?.timestamp ?? 0;
+    if (lastMsgTs > 0) return lastMsgTs;
+    if (chat.updatedAt > 0) return chat.updatedAt;
+    return chat.createdAt;
+  }
+
+  /// Comparator for ordering chats:
+  /// 1. Pinned chats on top
+  /// 2. Pinned-bottom chats at the end
+  /// 3. Chats with messages before empty chats ("No messages yet")
+  /// 4. Sorted by latest activity timestamp descending (latest on top)
+  static int compareChatsByLatest(Chat a, Chat b) {
+    if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+    if (a.isPinnedBottom != b.isPinnedBottom) {
+      return a.isPinnedBottom ? 1 : -1;
+    }
+    final aHasMsg = (a.lastMessage?.timestamp ?? 0) > 0;
+    final bHasMsg = (b.lastMessage?.timestamp ?? 0) > 0;
+    if (aHasMsg != bHasMsg) return aHasMsg ? -1 : 1;
+    final cmp = _effectiveSortTimestamp(b).compareTo(_effectiveSortTimestamp(a));
+    if (cmp != 0) return cmp;
+    return b.updatedAt.compareTo(a.updatedAt);
+  }
+
   /// Returns a sorted copy of the chats cache:
   /// 1. Pinned chats on top
-  /// 2. Regular chats sorted by updatedAt descending (latest first)
+  /// 2. Regular chats sorted by latest activity descending (latest first)
   /// 3. Pinned-bottom chats at the end
   List<Chat> _sortedChatsList() {
     final sorted = List<Chat>.from(_chatsCache);
-    sorted.sort((a, b) {
-      // Pinned chats always on top
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      // Pinned-bottom chats always at end
-      if (a.isPinnedBottom != b.isPinnedBottom) {
-        return a.isPinnedBottom ? 1 : -1;
-      }
-      // Sort by updatedAt descending (latest first)
-      return b.updatedAt.compareTo(a.updatedAt);
-    });
+    sorted.sort(compareChatsByLatest);
     return sorted;
   }
 
@@ -193,6 +211,17 @@ class ChatRepository {
             }
           },
         );
+  }
+
+  /// Force-refresh the user's chats from the Firestore server and emit the
+  /// re-sorted list (latest message/activity on top).
+  Future<void> refreshChatsFromServer() async {
+    final uid = currentUserId;
+    if (uid == null) return;
+    await _hydrateUserChatsFromServer(uid);
+    if (!_chatsController.isClosed) {
+      _chatsController.add(_sortedChatsList());
+    }
   }
 
   /// Directly fetches the user's `userChats` from the Firestore server when the
@@ -490,13 +519,7 @@ class ChatRepository {
 
     if (localChats.isNotEmpty) {
       final chats = localChats;
-      chats.sort((a, b) {
-        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-        if (a.isPinnedBottom != b.isPinnedBottom) {
-          return a.isPinnedBottom ? 1 : -1;
-        }
-        return b.updatedAt.compareTo(a.updatedAt);
-      });
+      chats.sort(compareChatsByLatest);
       return chats;
     }
 
@@ -512,13 +535,7 @@ class ChatRepository {
       if (chat != null) chats.add(chat);
     }
 
-    chats.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      if (a.isPinnedBottom != b.isPinnedBottom) {
-        return a.isPinnedBottom ? 1 : -1;
-      }
-      return b.updatedAt.compareTo(a.updatedAt);
-    });
+    chats.sort(compareChatsByLatest);
 
     // [NEW] Filter out blocked users
     final profile = _ref.read(userProfileProvider).value;
@@ -1773,11 +1790,17 @@ class ChatRepository {
             desc.toLowerCase().contains(query.toLowerCase())) {
           if (joinedChatIds.contains(groupId)) continue;
 
+          final resolvedType = groupId.startsWith('event_')
+              ? 'event'
+              : groupId.startsWith('org_')
+              ? 'organization'
+              : (groupData['type']?.toString() ?? 'group');
+
           results.add(
             Chat(
               id: groupId,
               communityId: groupData['communityId'],
-              type: 'group',
+              type: resolvedType,
               name: name,
               photoUrl: groupData['photoUrl'],
               participants: [],
@@ -1810,7 +1833,6 @@ class ChatRepository {
       final chatId = 'chat_$commId';
       await _userChatsCol(currentUserId!).doc(chatId).set({
         'chatId': chatId,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
         'isDeleted': false,
       }, SetOptions(merge: true));
     }
@@ -1908,9 +1930,32 @@ class ChatRepository {
         final data = snapshot.data();
         final lastMsg = data?['lastMessage'];
         if (lastMsg == null) return null;
-        return LastMessage.fromFirestore(
+        final parsed = LastMessage.fromFirestore(
           Map<String, dynamic>.from(lastMsg as Map),
         );
+        // Keep in-memory cache and sorted chat list synchronized when a chat's
+        // lastMessage updates (e.g. for large community chats not fanned out
+        // to every userChats doc).
+        final idx = _chatsCache.indexWhere((c) => c.id == chatId);
+        if (idx >= 0) {
+          final current = _chatsCache[idx];
+          final currentTs = current.lastMessage?.timestamp ?? 0;
+          if (parsed.timestamp > currentTs ||
+              (parsed.timestamp == currentTs &&
+                  parsed.content != current.lastMessage?.content)) {
+            final newUpdatedAt = parsed.timestamp > current.updatedAt
+                ? parsed.timestamp
+                : current.updatedAt;
+            _chatsCache[idx] = current.copyWith(
+              lastMessage: parsed,
+              updatedAt: newUpdatedAt,
+            );
+            if (!_chatsController.isClosed) {
+              _chatsController.add(_sortedChatsList());
+            }
+          }
+        }
+        return parsed;
       } catch (e) {
         return null;
       }

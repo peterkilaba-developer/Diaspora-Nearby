@@ -11,7 +11,7 @@ admin.initializeApp();
 const db = admin.firestore();
 const APPLY = process.argv.includes("--apply");
 const PRIVATE_FIELDS = [
-  "phone", "dateOfBirth", "currentLocation", "geo", "workLocation",
+  "dateOfBirth", "currentLocation", "geo", "workLocation",
   "pastLocations", "fcmToken", "fcmTokenUpdatedAt", "fcmTopics",
   "fcmTopicsUpdatedAt", "notificationsEnabled", "blockedUsers",
 ];

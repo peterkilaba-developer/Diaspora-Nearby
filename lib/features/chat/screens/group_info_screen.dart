@@ -21,6 +21,7 @@ class GroupInfoScreen extends ConsumerStatefulWidget {
   final String groupName;
   final String? groupImage;
   final String currentUserId;
+  final bool initialEdit;
 
   const GroupInfoScreen({
     super.key,
@@ -28,6 +29,7 @@ class GroupInfoScreen extends ConsumerStatefulWidget {
     required this.groupName,
     this.groupImage,
     required this.currentUserId,
+    this.initialEdit = false,
   });
 
   @override
@@ -155,9 +157,14 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                 chat.metadata?['isFamilyGroupImmediate'] == true;
 
             _isAdmin =
+                chat.createdBy == widget.currentUserId ||
                 (chat.admins?.contains(widget.currentUserId) ?? false) ||
                 (chat.participants.isNotEmpty &&
                     chat.participants.first == widget.currentUserId);
+
+            if (_isAdmin && widget.initialEdit) {
+              _isEditing = true;
+            }
 
             _isLoading = false;
           });

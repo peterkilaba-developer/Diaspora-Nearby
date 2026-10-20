@@ -225,22 +225,28 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
                   )
                   .toList();
 
-        final filteredChats = searchQuery.isEmpty
-            ? baseChats
-            : baseChats.where((chat) {
-                final query = searchQuery.toLowerCase();
-                final nameMatch = chat.name.toLowerCase().contains(query);
-                final messageMatch =
-                    chat.lastMessage?.content.toLowerCase().contains(query) ??
-                    false;
-                return nameMatch || messageMatch;
-              }).toList();
+        final filteredChats =
+            (searchQuery.isEmpty
+                    ? List<Chat>.from(baseChats)
+                    : baseChats.where((chat) {
+                        final query = searchQuery.toLowerCase();
+                        final nameMatch = chat.name.toLowerCase().contains(
+                          query,
+                        );
+                        final messageMatch =
+                            chat.lastMessage?.content.toLowerCase().contains(
+                              query,
+                            ) ??
+                            false;
+                        return nameMatch || messageMatch;
+                      }).toList())
+              ..sort(ChatRepository.compareChatsByLatest);
 
         if (filteredChats.isEmpty) {
           return RefreshIndicator(
             onRefresh: () async {
+              await ref.read(chatRepositoryProvider).refreshChatsFromServer();
               await _syncCommunities();
-              ref.invalidate(userChatsStreamProvider);
             },
             child: LayoutBuilder(
               builder: (context, constraints) => SingleChildScrollView(
@@ -256,8 +262,8 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
 
         return RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(userChatsStreamProvider);
             await _syncCommunities();
+            await ref.read(chatRepositoryProvider).refreshChatsFromServer();
           },
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),

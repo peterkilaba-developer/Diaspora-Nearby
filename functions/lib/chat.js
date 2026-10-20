@@ -61,6 +61,11 @@ function baseChat({
   description,
 }) {
   const now = admin.firestore.FieldValue.serverTimestamp();
+  const initialMessageByType = {
+    event: "Event created",
+    organization: "Organization created",
+    community: "Community created",
+  };
   return {
     id: chatId,
     type,
@@ -74,7 +79,7 @@ function baseChat({
     photoUrl: photoUrl || null,
     description: description || null,
     lastMessage: {
-      content: "Group created",
+      content: initialMessageByType[type] || "Group created",
       timestamp: Date.now(),
       senderId: "system",
       senderName: "System",
@@ -163,11 +168,15 @@ exports.onChatWritten = functions.firestore
       ["name", "type", "subtype", "photoUrl"].some((field) =>
         JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
     const indexTargets = projectionChanged ? [...current] : added;
-    const updatedAtMs = (after && typeof after.updatedAt === "number")
+    const lastMsgTs = (after && after.lastMessage && typeof after.lastMessage.timestamp === "number")
+      ? after.lastMessage.timestamp
+      : 0;
+    const rawUpdatedAtMs = (after && typeof after.updatedAt === "number")
       ? after.updatedAt
       : (after && after.updatedAt && typeof after.updatedAt.toMillis === "function"
           ? after.updatedAt.toMillis()
-          : Date.now());
+          : 0);
+    const updatedAtMs = lastMsgTs > 0 ? lastMsgTs : rawUpdatedAtMs;
 
     await runBounded(indexTargets, async (uid) => {
       if (!validUid(uid)) return;

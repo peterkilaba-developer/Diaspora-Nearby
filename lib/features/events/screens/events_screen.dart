@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
-import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
@@ -93,56 +92,36 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final rawEventsAsync = ref.watch(allRawEventsStreamProvider);
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-
-      // AppBar is handled by ScaffoldWithNavBar, so we just build the body.
-      // IF this screen is nested in ScaffoldWithNavBar, it provides the AppBar logic.
-      // However, if we need custom AppBar behavior inside the tab, we might need nested Navigator or just body content.
-      // Based on `ScaffoldWithNavBar` analysis, it has a global AppBar that reflects `currentScreen == 'events'`.
-      // It sets `showSearchField: true` for Chats, etc.
-      // User requested "app bar with search bar" for Events too.
-      // In `ScaffoldWithNavBar`, `showSearchField: currentScreen != 'events'` was present in previous code? No, let's verify.
-      // In `ScaffoldWithNavBar.dart` viewed earlier: `showSearchField: currentScreen != 'events'` at line 127.
-      // This disables search for Events screen in the MAIN app bar.
-      // This means we might need to rely on the MAIN app bar update to enable search, OR build our own here.
-      // But `ScaffoldWithNavBar` wraps this. If we build another Scaffold/AppBar here, we get double AppBars.
-      // Ideally, we should update `ScaffoldWithNavBar` to ENABLE search for Events, and handle logic here.
-      // But we can't easily change `ScaffoldWithNavBar` from here.
-      // ACTUALLY, the user said "Remove location and all categories tabs container and replace with app bar with search bar".
-      // If `ScaffoldWithNavBar` disables the search bar for 'events', we should probably enable it there.
-      // But let's assume `ScaffoldWithNavBar` controls the top area.
-      // Wait, if `ScaffoldWithNavBar` has `showSearchField: currentScreen != 'events'`, then currently there is NO search bar for events.
-      // I WILL NEED TO UPDATE `ScaffoldWithNavBar` to remove that restriction.
-      // For now, I will build the body assuming the search term comes from `globalSearchProvider`.
-      body: StreamBuilder<List<Event>>(
-        stream: eventRepo.getEvents(
-          isGlobal: repoIsGlobal,
-          homeCountryCode: repoCountryCode,
-          currentUserId: user.uid,
-          userCommunityMemberships: userProfile?.communityMemberships ?? [],
-        ),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          final allEvents = snapshot.data ?? [];
+      body: rawEventsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('Error: $error')),
+        data: (rawEvents) {
+          final allEvents = eventRepo.filterVisibleEvents(
+            rawEvents,
+            isGlobal: repoIsGlobal,
+            homeCountryCode: repoCountryCode,
+            currentUserId: user.uid,
+            userCommunityMemberships: userProfile?.communityMemberships ?? [],
+          );
 
           // Filter Logic
           final filteredEvents = allEvents.where((event) {
-            // 1. View Mode Strict Filtering
-            if (isGlobalViewMode) {
-              // Global View: Show all events (unfiltered)
-              // Previously we excluded local events, but user wants unfiltered.
-            } else {
-              // Home View: is already filtered by Repo to only match homeCountryCode.
-              // Double check just in case repo returns stray data?
+            // 1. Creator or RSVP'd attendee always sees the event
+            if (event.creatorId == user.uid ||
+                (event.attendees?.contains(user.uid) ?? false)) {
+              // Still apply search query below
+            } else if (!isGlobalViewMode) {
+              // Home View: match homeCountryCode (case-insensitive) when present on both
               if (userHomeCountryCode != null &&
-                  event.homeCountryCode != userHomeCountryCode) {
+                  userHomeCountryCode.isNotEmpty &&
+                  event.homeCountryCode != null &&
+                  event.homeCountryCode!.isNotEmpty &&
+                  event.homeCountryCode!.toUpperCase() !=
+                      userHomeCountryCode.toUpperCase()) {
                 return false;
               }
             }
@@ -184,7 +163,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              setState(() {});
+              ref.invalidate(allRawEventsStreamProvider);
             },
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),

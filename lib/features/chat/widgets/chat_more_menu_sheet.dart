@@ -7,6 +7,7 @@ import 'package:diaspora_nearby/features/profile/models/relationship.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship_request.dart';
 import 'package:diaspora_nearby/features/governance/models/governance_unit.dart';
 import 'package:diaspora_nearby/features/community/models/community_data.dart';
+import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/shared/widgets/bottom_sheet_item.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
@@ -21,6 +22,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
   final RelationshipRequest? pendingSentRequest;
   final RelationshipRequest? pendingIncomingRequest;
   final Community? community;
+  final Event? event;
   final GovernanceUnit? governanceUnit;
   final bool hasAnyProfileField;
   final bool hasVerifiedTarget;
@@ -55,6 +57,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     this.pendingSentRequest,
     this.pendingIncomingRequest,
     this.community,
+    this.event,
     this.governanceUnit,
     this.hasAnyProfileField = false,
     this.hasVerifiedTarget = false,
@@ -289,19 +292,93 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                   const Divider(height: 1),
                 ],
 
-                // Event Attendees
-                if (isEvent && chat.eventId != null)
-                  AppBottomSheetItem(
-                    icon: LucideIcons.userCheck,
-                    iconColor: Colors.blue.shade700,
-                    iconBgColor: Colors.blue.shade50,
-                    title: 'Event attendees',
-                    subtitle: "View who's attending this event",
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/events/${chat.eventId}/attendees');
+                // Event Actions & Inline Management
+                if (isEvent) ...[
+                  Builder(
+                    builder: (context) {
+                      final effectiveEventId =
+                          chat.eventId ??
+                          (chat.id.startsWith('event_')
+                              ? chat.id.substring('event_'.length)
+                              : null);
+                      if (effectiveEventId == null) {
+                        return const SizedBox.shrink();
+                      }
+                      final isEventCreator =
+                          currentUserId.isNotEmpty &&
+                          (event?.creatorId == currentUserId ||
+                              chat.createdBy == currentUserId ||
+                              (chat.admins?.contains(currentUserId) ?? false));
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isEventCreator) ...[
+                            AppBottomSheetItem(
+                              icon: LucideIcons.settings,
+                              iconColor: theme.colorScheme.primary,
+                              iconBgColor: theme.colorScheme.primaryContainer,
+                              title: 'Manage event',
+                              subtitle: 'Edit event details, schedule, or delete',
+                              onTap: () {
+                                Navigator.pop(context);
+                                context.push(
+                                  '/events/edit/$effectiveEventId',
+                                  extra: event,
+                                );
+                              },
+                            ),
+                            AppBottomSheetItem(
+                              icon: LucideIcons.qrCode,
+                              iconColor: Colors.teal.shade700,
+                              iconBgColor: Colors.teal.shade50,
+                              title: 'Organizer check-in QR',
+                              subtitle: 'Display QR code for attendee check-in',
+                              onTap: () {
+                                Navigator.pop(context);
+                                context.push(
+                                  '/events/qr/$effectiveEventId',
+                                  extra: {
+                                    'title': event?.title ?? chat.name,
+                                    'isCreator': true,
+                                  },
+                                );
+                              },
+                            ),
+                          ],
+                          AppBottomSheetItem(
+                            icon: LucideIcons.calendar,
+                            iconColor: Colors.orange.shade700,
+                            iconBgColor: Colors.orange.shade50,
+                            title: 'Event details',
+                            subtitle: 'View event schedule and location',
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push(
+                                '/events/$effectiveEventId?fromChat=true',
+                                extra: event,
+                              );
+                            },
+                          ),
+                          AppBottomSheetItem(
+                            icon: LucideIcons.userCheck,
+                            iconColor: Colors.blue.shade700,
+                            iconBgColor: Colors.blue.shade50,
+                            title: 'Event attendees',
+                            subtitle: "View who's attending this event",
+                            onTap: () {
+                              Navigator.pop(context);
+                              context.push(
+                                '/events/$effectiveEventId/attendees',
+                                extra: event,
+                              );
+                            },
+                          ),
+                        ],
+                      );
                     },
                   ),
+                ],
 
                 // Group / Profile actions
                 if (isDirect) ...[
@@ -344,6 +421,46 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                             onTap: onVerifyUser,
                           ),
                 ] else if (!isCommunity && !isEvent) ...[
+                  if (isGroup &&
+                      currentUserId.isNotEmpty &&
+                      (chat.createdBy == currentUserId ||
+                          (chat.admins?.contains(currentUserId) ?? false)))
+                    AppBottomSheetItem(
+                      icon: LucideIcons.edit3,
+                      iconColor: theme.colorScheme.primary,
+                      iconBgColor: theme.colorScheme.primaryContainer,
+                      title: 'Manage group',
+                      subtitle: 'Edit group name, description, and members',
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push(
+                          '/chats/${chat.id}/info',
+                          extra: {
+                            'name': chat.name,
+                            'image': chat.photoUrl,
+                            'type': chat.type,
+                            'initialEdit': true,
+                          },
+                        );
+                      },
+                    ),
+                  if (chat.isOrganization &&
+                      !isChamber &&
+                      currentUserId.isNotEmpty &&
+                      (chat.createdBy == currentUserId ||
+                          (chat.admins?.contains(currentUserId) ?? false)))
+                    AppBottomSheetItem(
+                      icon: LucideIcons.sliders,
+                      iconColor: theme.colorScheme.primary,
+                      iconBgColor: theme.colorScheme.primaryContainer,
+                      title: 'Manage organization',
+                      subtitle: 'Edit organization profile, admins, and products',
+                      onTap: () {
+                        Navigator.pop(context);
+                        final orgId = chat.id.replaceFirst('org_', '');
+                        context.push('/organization/manage?orgId=$orgId');
+                      },
+                    ),
                   AppBottomSheetItem(
                     icon: LucideIcons.settings,
                     iconColor: Colors.grey.shade700,
@@ -356,8 +473,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     subtitle: isChamber
                         ? 'Council, members, and chamber settings'
                         : (chat.isOrganization
-                              ? 'Manage organization settings'
-                              : 'Manage group settings'),
+                              ? 'View members and organization info'
+                              : 'Manage group settings and members'),
                     onTap: () {
                       Navigator.pop(context);
                       // Chambers route to their full detail screen so users

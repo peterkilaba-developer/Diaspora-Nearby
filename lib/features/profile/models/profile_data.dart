@@ -232,13 +232,13 @@ class ProfileData {
 
     // [FIX] Ensure country codes are present for querying if location data has them
     // This helps repair old/inconsistent data during loading
-    if (json['homeCountryCode'] == null && json['homeLocation'] != null) {
-      final loc = json['homeLocation'] as Map<String, dynamic>;
-      json['homeCountryCode'] = loc['country_code'];
+    if (json['homeCountryCode'] == null && json['homeLocation'] is Map) {
+      final loc = json['homeLocation'] as Map;
+      json['homeCountryCode'] = loc['country_code'] ?? loc['countryCode'];
     }
-    if (json['hostCountryCode'] == null && json['hostLocation'] != null) {
-      final loc = json['hostLocation'] as Map<String, dynamic>;
-      json['hostCountryCode'] = loc['country_code'];
+    if (json['hostCountryCode'] == null && json['hostLocation'] is Map) {
+      final loc = json['hostLocation'] as Map;
+      json['hostCountryCode'] = loc['country_code'] ?? loc['countryCode'];
     }
 
     // [FIX] Ensure required non-nullable fields have safe defaults
