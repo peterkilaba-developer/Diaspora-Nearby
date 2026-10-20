@@ -40,6 +40,8 @@ class ChatRepository {
   final _chatsController = StreamController<List<Chat>>.broadcast();
   final List<Chat> _chatsCache = [];
   StreamSubscription? _chatsSubscription;
+  StreamSubscription? _realtimeSubscription;
+  String? _realtimeUid;
 
   /// Firestore collection references
   CollectionReference<Map<String, dynamic>> get _chatsCol =>
@@ -59,9 +61,9 @@ class ChatRepository {
     _chatsController.close();
     _chatsSubscription?.cancel();
     _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _realtimeUid = null;
   }
-
-  StreamSubscription? _realtimeSubscription;
 
   /// Returns a sorted copy of the chats cache:
   /// 1. Pinned chats on top
@@ -87,15 +89,17 @@ class ChatRepository {
   // ============================================
 
   /// Subscribe to user's chat list via Firestore real-time listeners
-  Stream<List<Chat>> subscribeToUserChats() {
-    final uid = currentUserId;
+  Stream<List<Chat>> subscribeToUserChats({String? userId}) {
+    final uid = userId ?? currentUserId;
     if (uid == null) return const Stream.empty();
 
     // Start Firestore real-time sync → in-memory cache → stream
     _startRealtimeSync(uid);
 
-    // Emit initial cached list immediately so new subscribers don't hang in loading state
-    if (!_chatsController.isClosed) {
+    // Only emit initial cached list immediately if we actually have cached chats;
+    // otherwise let the stream wait for the first Firestore snapshot / server
+    // hydration so a fresh install does not flash "No conversations yet".
+    if (_chatsCache.isNotEmpty && !_chatsController.isClosed) {
       Future.microtask(() {
         if (!_chatsController.isClosed) {
           _chatsController.add(_sortedChatsList());
@@ -109,12 +113,19 @@ class ChatRepository {
 
   /// Real-time Sync (Firestore → In-memory cache → StreamController)
   void _startRealtimeSync(String uid) {
-    if (_realtimeSubscription != null) {
+    if (_realtimeSubscription != null && _realtimeUid == uid) {
       if (!_chatsController.isClosed) {
         _chatsController.add(_sortedChatsList());
       }
       return;
     }
+
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    if (_realtimeUid != uid) {
+      _chatsCache.clear();
+    }
+    _realtimeUid = uid;
 
     debugPrint('🔄 Starting Firestore real-time chat sync for $uid');
 
@@ -144,6 +155,13 @@ class ChatRepository {
               return (c.doc.data()?['isDeleted']) != true;
             }).toList();
             if (toFetch.isEmpty) {
+              // On a fresh install, Firestore emits an initial empty cache
+              // snapshot before the server snapshot arrives. If our in-memory
+              // cache is also empty, attempt a direct server fetch + community
+              // chat self-heal so the user never sees a false empty state.
+              if (_chatsCache.isEmpty && snapshot.docs.isEmpty) {
+                await _hydrateUserChatsFromServer(uid);
+              }
               if (!_chatsController.isClosed) {
                 _chatsController.add(_sortedChatsList());
               }
@@ -168,11 +186,74 @@ class ChatRepository {
           },
           onError: (Object error, StackTrace stackTrace) {
             debugPrint('Error listening to chats for $uid: $error');
+            _realtimeSubscription?.cancel();
+            _realtimeSubscription = null;
             if (!_chatsController.isClosed) {
               _chatsController.addError(error, stackTrace);
             }
           },
         );
+  }
+
+  /// Directly fetches the user's `userChats` from the Firestore server when the
+  /// initial local-cache snapshot is empty (e.g., right after a fresh install).
+  /// Also self-heals community chat index entries from `users/{uid}.communityMemberships`
+  /// if `userChats` is genuinely empty on the server.
+  Future<void> _hydrateUserChatsFromServer(String uid) async {
+    try {
+      var serverSnap = await _userChatsCol(
+        uid,
+      ).limit(100).get(const GetOptions(source: Source.server));
+
+      if (serverSnap.docs.isEmpty) {
+        final userDoc = await _firestore
+            .collection('users')
+            .doc(uid)
+            .get(const GetOptions(source: Source.server));
+        final memberships =
+            (userDoc.data()?['communityMemberships'] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList() ??
+            const <String>[];
+        if (memberships.isNotEmpty) {
+          await syncCommunityChats(memberships);
+          serverSnap = await _userChatsCol(
+            uid,
+          ).limit(100).get(const GetOptions(source: Source.server));
+        }
+      }
+
+      final activeDocs = serverSnap.docs
+          .where((doc) => doc.data()['isDeleted'] != true)
+          .toList();
+      await Future.wait(
+        activeDocs.map((doc) async {
+          final chatId = doc.id;
+          final data = doc.data();
+          try {
+            final chat = await _fetchAndSaveChat(
+              chatId,
+              skipUserChatRead: true,
+              preferCache: false,
+            );
+            if (chat != null) {
+              final chatWithPrefs = chat.withUserPreferences(data);
+              _handleDeliveryReceipt(chatWithPrefs, uid);
+              final existingIdx = _chatsCache.indexWhere((c) => c.id == chatId);
+              if (existingIdx >= 0) {
+                _chatsCache[existingIdx] = chatWithPrefs;
+              } else {
+                _chatsCache.add(chatWithPrefs);
+              }
+            }
+          } catch (e) {
+            debugPrint('Error hydrating chat $chatId from server: $e');
+          }
+        }),
+      );
+    } catch (e) {
+      debugPrint('Error hydrating userChats from server for $uid: $e');
+    }
   }
 
   /// Fetch the chat docs for a set of userChats changes in parallel and

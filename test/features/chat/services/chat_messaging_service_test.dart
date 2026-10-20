@@ -48,6 +48,18 @@ class FakeUploadTask extends Fake implements UploadTask {
   Future<TaskSnapshot> get future => Future.value(_snapshot);
 }
 
+class FakeWriteBatch extends Fake implements WriteBatch {
+  @override
+  void set<T>(
+    DocumentReference<T> document,
+    T data, [
+    SetOptions? options,
+  ]) {}
+
+  @override
+  Future<void> commit() async {}
+}
+
 void main() {
   late MockFirebaseStorage mockStorage;
   late MockFirebaseFirestore mockFirestore;
@@ -139,13 +151,21 @@ void main() {
         final mockChatDocRef = MockDocumentReference();
         final mockMessagesCollection = MockCollectionReference();
         final mockNewMsgRef = MockDocumentReference();
+        final mockUserChatsCollection = MockCollectionReference();
+        final mockUserChatDocRef = MockDocumentReference();
 
+        when(mockFirestore.batch()).thenReturn(FakeWriteBatch());
         when(mockFirestore.collection('chats')).thenReturn(mockChatsCollection);
         when(mockChatsCollection.doc(chatId)).thenReturn(mockChatDocRef);
         when(
           mockChatDocRef.collection('messages'),
         ).thenReturn(mockMessagesCollection);
         when(mockMessagesCollection.doc(any)).thenReturn(mockNewMsgRef);
+        when(mockNewMsgRef.id).thenReturn('msg_123');
+        when(
+          mockUserDocRef.collection('userChats'),
+        ).thenReturn(mockUserChatsCollection);
+        when(mockUserChatsCollection.doc(any)).thenReturn(mockUserChatDocRef);
         when(mockNewMsgRef.set(any)).thenAnswer((_) async {
           return;
         });

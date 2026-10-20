@@ -19,13 +19,14 @@ import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 final userChatsStreamProvider = StreamProvider<List<Chat>>((ref) {
   final authState = ref.watch(authStateProvider);
   final chatRepo = ref.watch(chatRepositoryProvider);
+  final userId = authState.value?.uid;
 
   // If user is not authenticated, return empty stream
-  if (authState.value == null) {
+  if (userId == null) {
     return const Stream.empty();
   }
 
-  return chatRepo.subscribeToUserChats();
+  return chatRepo.subscribeToUserChats(userId: userId);
 });
 
 final discoverableChatsProvider = FutureProvider.family<List<Chat>, String>((
@@ -236,7 +237,21 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
               }).toList();
 
         if (filteredChats.isEmpty) {
-          return _buildEmptyState(theme, chats.isEmpty);
+          return RefreshIndicator(
+            onRefresh: () async {
+              await _syncCommunities();
+              ref.invalidate(userChatsStreamProvider);
+            },
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: _buildEmptyState(theme, chats.isEmpty),
+                ),
+              ),
+            ),
+          );
         }
 
         return RefreshIndicator(

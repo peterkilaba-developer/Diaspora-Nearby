@@ -50,7 +50,7 @@ void main() {
       for (final key in ['homeLocation', 'hostLocation']) {
         final summary = publicData[key] as Map<String, dynamic>;
         expect(summary.containsKey('place_id'), isFalse);
-        expect(summary.containsKey('geometry'), isFalse);
+        expect(summary.containsKey('geometry'), isTrue);
         expect(UserLocation.fromJson(summary).city, location.city);
         expect(UserLocation.fromJson(summary).placeId, isEmpty);
         expect(privateData[key], location.toJson());
@@ -171,7 +171,7 @@ void main() {
       for (final key in ['homeLocation', 'hostLocation']) {
         final summary = publicData[key] as Map<String, dynamic>;
         expect(summary.containsKey('place_id'), isFalse);
-        expect(summary.containsKey('geometry'), isFalse);
+        expect(summary.containsKey('geometry'), isTrue);
       }
       expect(privateData['homeLocation'], homeLoc.toJson());
       expect(privateData['hostLocation'], hostLoc.toJson());
@@ -200,7 +200,7 @@ void main() {
       final updatedHostSummary =
           updatedPublic['hostLocation'] as Map<String, dynamic>;
       expect(updatedHostSummary.containsKey('place_id'), isFalse);
-      expect(updatedHostSummary.containsKey('geometry'), isFalse);
+      expect(updatedHostSummary.containsKey('geometry'), isTrue);
       expect(updatedHostSummary['city'], 'Kampala');
       expect(updatedPublic.containsKey('pastLocations'), isFalse);
       expect(updatedPrivate['hostLocation'], newHost.toJson());
