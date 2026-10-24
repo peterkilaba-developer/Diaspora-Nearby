@@ -148,7 +148,7 @@ class MarketplaceListingImage extends StatelessWidget {
   }
 }
 
-/// Seller's local-currency price row with optional viewer currency toggle.
+/// Seller's local-currency price row with buyer currency and $DIASPORA token.
 class LocalPriceRow extends StatelessWidget {
   const LocalPriceRow({
     super.key,
@@ -158,21 +158,24 @@ class LocalPriceRow extends StatelessWidget {
 
   final MarketplaceListing listing;
 
-  /// The viewer/buyer's host country code. When provided and different from
-  /// the seller's currency, a swap icon appears to toggle the converted price.
+  /// The viewer/buyer's host country code.
   final String? viewerCountryCode;
 
   @override
   Widget build(BuildContext context) {
     final sellerCountry = listing.sellerCountryCode;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        CurrencyPriceDisplay(
-          amount: listing.priceAmount,
-          sellerCountryCode: sellerCountry,
-          viewerCountryCode: viewerCountryCode,
-          primaryColor: marketplaceSageGreen,
-          compact: true,
+        Flexible(
+          child: CurrencyPriceDisplay(
+            amount: listing.priceAmount,
+            sellerCountryCode: sellerCountry,
+            viewerCountryCode: viewerCountryCode,
+            primaryColor: marketplaceSageGreen,
+            compact: true,
+            showToggle: false,
+          ),
         ),
         if (listing.priceNegotiable) ...[
           const SizedBox(width: 6),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' as cf;
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -22,23 +23,42 @@ final userProfileProvider =
       UserProfileNotifier.new,
     );
 
-// Added missing provider for fetching profile by ID
+// Added missing provider for fetching profile by ID (streams live updates)
+final userProfileStreamByIdProvider =
+    StreamProvider.family<ProfileData?, String>((ref, userId) {
+      final repo = ref.watch(profileRepositoryProvider);
+      return repo.watchProfile(userId);
+    });
+
 final userProfileByIdProvider = FutureProvider.family<ProfileData?, String>((
   ref,
   userId,
 ) async {
-  final repo = ref.watch(profileRepositoryProvider);
-  return repo.getUserProfile(userId);
+  return ref.watch(userProfileStreamByIdProvider(userId).future);
 });
 
 class UserProfileNotifier extends AsyncNotifier<ProfileData?> {
+  StreamSubscription<ProfileData?>? _profileSub;
+
   @override
   Future<ProfileData?> build() async {
+    await _profileSub?.cancel();
+    _profileSub = null;
+    ref.onDispose(() {
+      _profileSub?.cancel();
+      _profileSub = null;
+    });
+
     final auth = ref.watch(authStateProvider);
     final user = auth.asData?.value;
     if (user == null) return null;
 
     final repo = ref.watch(profileRepositoryProvider);
+    _profileSub = repo.watchOwnProfile(user.uid).listen((liveProfile) {
+      if (liveProfile != null && liveProfile.firstName.isNotEmpty) {
+        state = AsyncData(liveProfile);
+      }
+    });
     return repo.getUserProfile(user.uid);
   }
 
@@ -231,8 +251,9 @@ class ProfileRepository {
 
   Future<Map<String, dynamic>> _mergeOwnPrivateData(
     String uid,
-    Map<String, dynamic> publicData,
-  ) async {
+    Map<String, dynamic> publicData, {
+    bool forceServer = false,
+  }) async {
     try {
       String? currentUid;
       try {
@@ -242,10 +263,18 @@ class ProfileRepository {
         currentUid = uid;
       }
       if (currentUid != uid) return publicData;
-      final privateDoc = await _privateRef(uid).get();
+      final privateDoc = forceServer
+          ? await _privateRef(uid)
+              .get(const cf.GetOptions(source: cf.Source.server))
+              .timeout(const Duration(seconds: 5))
+          : await _privateRef(uid).get();
       if (privateDoc.exists) return {...publicData, ...?privateDoc.data()};
     } catch (_) {
       // A cached public profile remains useful while private data reconnects.
+      try {
+        final privateDoc = await _privateRef(uid).get();
+        if (privateDoc.exists) return {...publicData, ...?privateDoc.data()};
+      } catch (_) {}
     }
     return publicData;
   }
@@ -256,10 +285,33 @@ class ProfileRepository {
   /// Clear entire cache (call on logout)
   void clearProfileCache() => _profileCache.clear();
 
-  Future<ProfileData?> getUserProfile(String uid) async {
-    // [PERF] Check in-memory cache first
+  /// [PERF] Synchronously read an in-memory cached profile if available.
+  /// Allows screens and cards to render on frame 0 without waiting on a Future.
+  ProfileData? getCachedProfile(String uid) {
     final cached = _profileCache[uid];
     if (cached != null &&
+        cached.profile != null &&
+        cached.profile!.firstName.isNotEmpty) {
+      return cached.profile;
+    }
+    return null;
+  }
+
+  /// [PERF] Seed or update a profile directly into the in-memory cache.
+  void cacheProfile(String uid, ProfileData profile) {
+    if (profile.firstName.isNotEmpty) {
+      _profileCache[uid] = _CachedProfile(profile, DateTime.now());
+    }
+  }
+
+  Future<ProfileData?> getUserProfile(
+    String uid, {
+    bool forceServer = false,
+  }) async {
+    // [PERF] Check in-memory cache first
+    final cached = _profileCache[uid];
+    if (!forceServer &&
+        cached != null &&
         DateTime.now().difference(cached.fetchedAt) < _cacheTtl) {
       final p = cached.profile;
       // [FIX] Don't serve bare/FCM-only docs from cache — they have empty
@@ -285,22 +337,30 @@ class ProfileRepository {
       // network/DNS before their profile can render. Fall back to the server
       // when the cache is empty or unavailable.
       cf.DocumentSnapshot<Map<String, dynamic>> doc;
-      try {
-        doc = await _firestore
-            .collection('users')
-            .doc(uid)
-            .get(const cf.GetOptions(source: cf.Source.cache))
-            .timeout(const Duration(seconds: 2));
-        if (!doc.exists || doc.data() == null) {
-          throw StateError('Profile is not cached');
-        }
-      } catch (_) {
-        // Cache miss: fetch a fresh profile from the server.
+      if (forceServer) {
         doc = await _firestore
             .collection('users')
             .doc(uid)
             .get(const cf.GetOptions(source: cf.Source.server))
             .timeout(const Duration(seconds: 8));
+      } else {
+        try {
+          doc = await _firestore
+              .collection('users')
+              .doc(uid)
+              .get(const cf.GetOptions(source: cf.Source.cache))
+              .timeout(const Duration(seconds: 2));
+          if (!doc.exists || doc.data() == null) {
+            throw StateError('Profile is not cached');
+          }
+        } catch (_) {
+          // Cache miss: fetch a fresh profile from the server.
+          doc = await _firestore
+              .collection('users')
+              .doc(uid)
+              .get(const cf.GetOptions(source: cf.Source.server))
+              .timeout(const Duration(seconds: 8));
+        }
       }
       debugPrint(
         '📋 [getUserProfile] READ for $uid → '
@@ -308,7 +368,11 @@ class ProfileRepository {
       );
       if (doc.exists && doc.data() != null) {
         try {
-          final data = await _mergeOwnPrivateData(uid, doc.data()!);
+          final data = await _mergeOwnPrivateData(
+            uid,
+            doc.data()!,
+            forceServer: forceServer,
+          );
           debugPrint(
             '📋 [getUserProfile] FIRESTORE DATA for $uid → '
             'firstName="${data['firstName']}", lastName="${data['lastName']}", '
@@ -369,16 +433,86 @@ class ProfileRepository {
   }
 
   Stream<ProfileData?> watchProfile(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().asyncMap((
-      doc,
-    ) async {
-      if (doc.exists && doc.data() != null) {
-        final data = await _mergeOwnPrivateData(uid, doc.data()!);
-        data['uid'] = uid;
-        return ProfileData.fromJson(data);
+    return Stream.multi((controller) {
+      final cached = getCachedProfile(uid);
+      if (cached != null) {
+        controller.add(cached);
       }
-      return null;
+      final sub = _firestore
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .asyncMap((doc) async {
+            if (doc.exists && doc.data() != null) {
+              final data = await _mergeOwnPrivateData(uid, doc.data()!);
+              data['uid'] = uid;
+              final profile = ProfileData.fromJson(data);
+              if (profile.firstName.isNotEmpty) {
+                _profileCache[uid] = _CachedProfile(profile, DateTime.now());
+              }
+              return profile;
+            }
+            return null;
+          })
+          .listen(
+            controller.add,
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
     });
+  }
+
+  Stream<ProfileData?> watchOwnProfile(String uid) {
+    late StreamController<ProfileData?> controller;
+    Map<String, dynamic>? latestPub;
+    Map<String, dynamic>? latestPriv;
+    StreamSubscription<cf.DocumentSnapshot<Map<String, dynamic>>>? pubSub;
+    StreamSubscription<cf.DocumentSnapshot<Map<String, dynamic>>>? privSub;
+
+    void emitCombined() {
+      if (latestPub == null) return;
+      try {
+        final merged = <String, dynamic>{
+          ...latestPub!,
+          if (latestPriv != null) ...latestPriv!,
+          'uid': uid,
+        };
+        final profile = ProfileData.fromJson(merged);
+        if (profile.firstName.isNotEmpty) {
+          _profileCache[uid] = _CachedProfile(profile, DateTime.now());
+        }
+        if (!controller.isClosed) {
+          controller.add(profile);
+        }
+      } catch (e) {
+        debugPrint('Error parsing live own profile for $uid: $e');
+      }
+    }
+
+    controller = StreamController<ProfileData?>.broadcast(
+      onListen: () {
+        pubSub = _firestore.collection('users').doc(uid).snapshots().listen((
+          doc,
+        ) {
+          if (doc.exists && doc.data() != null) {
+            latestPub = doc.data();
+            emitCombined();
+          }
+        }, onError: (_) {});
+        privSub = _privateRef(uid).snapshots().listen((doc) {
+          if (doc.exists && doc.data() != null) {
+            latestPriv = doc.data();
+            emitCombined();
+          }
+        }, onError: (_) {});
+      },
+      onCancel: () {
+        pubSub?.cancel();
+        privSub?.cancel();
+      },
+    );
+    return controller.stream;
   }
 
   Future<List<ProfileData>> searchUsers(
@@ -432,10 +566,27 @@ class ProfileRepository {
     if (uids.isEmpty) return [];
     try {
       final List<ProfileData> profiles = [];
+      final List<String> missingUids = [];
+      final now = DateTime.now();
+
+      for (final uid in uids.toSet()) {
+        final cached = _profileCache[uid];
+        if (cached != null &&
+            cached.profile != null &&
+            cached.profile!.firstName.isNotEmpty &&
+            now.difference(cached.fetchedAt) < _cacheTtl) {
+          profiles.add(cached.profile!);
+        } else {
+          missingUids.add(uid);
+        }
+      }
+
+      if (missingUids.isEmpty) return profiles;
+
       // Firestore 'whereIn' allows max 10 items
-      for (var i = 0; i < uids.length; i += 10) {
-        final end = (i + 10 < uids.length) ? i + 10 : uids.length;
-        final chunk = uids.sublist(i, end);
+      for (var i = 0; i < missingUids.length; i += 10) {
+        final end = (i + 10 < missingUids.length) ? i + 10 : missingUids.length;
+        final chunk = missingUids.sublist(i, end);
 
         final query = await _firestore
             .collection('users')
@@ -446,7 +597,11 @@ class ProfileRepository {
           if (doc.exists) {
             final data = doc.data();
             data['uid'] = doc.id;
-            profiles.add(ProfileData.fromJson(data));
+            final profile = ProfileData.fromJson(data);
+            if (profile.firstName.isNotEmpty) {
+              _profileCache[doc.id] = _CachedProfile(profile, now);
+            }
+            profiles.add(profile);
           }
         }
       }
@@ -497,8 +652,15 @@ class ProfileRepository {
     );
     batch.set(_privateRef(uid), split.privateData, cf.SetOptions(merge: true));
     await batch.commit();
-    // [FIX] Invalidate in-memory cache so next getUserProfile reads fresh data
-    invalidateProfileCache(uid);
+    // [PERF] Immediately update in-memory cache with saved profile so UI reads are instant
+    if (profile.firstName.isNotEmpty) {
+      _profileCache[uid] = _CachedProfile(
+        profile.copyWith(uid: uid),
+        DateTime.now(),
+      );
+    } else {
+      invalidateProfileCache(uid);
+    }
     // Cache UID locally for quick existence checks
     await _sessionService.setUserCached(uid);
   }

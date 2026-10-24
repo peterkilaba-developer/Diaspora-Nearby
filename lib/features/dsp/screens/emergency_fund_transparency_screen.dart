@@ -583,7 +583,7 @@ class _CountrySortedUserList extends ConsumerWidget {
               for (final p in list) {
                 final card = UserCardView(
                   user: p,
-                  showCurrentLocation: false,
+                  showCurrentLocation: true,
                   isStatic: true,
                 );
                 children.add(

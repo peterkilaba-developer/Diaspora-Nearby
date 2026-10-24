@@ -739,23 +739,17 @@ class PointsRepository {
     String newUserId,
     String code,
   ) async {
-    await addPoints(
-      referrerId,
-      1000,
-      'referral_signup',
-      metadata: {'referredUserId': newUserId, 'code': code},
-    );
-    await addPoints(
-      newUserId,
-      1000,
-      'referral_signup',
-      metadata: {'referrerId': referrerId, 'code': code},
-    );
-
-    await _firestore.collection('referral_codes').doc(code).update({
-      'usedCount': FieldValue.increment(1),
-    });
-    // Note: supply is already incremented inside each addPoints() call above.
+    try {
+      await _functions.httpsCallable('redeemReferralCode').call({'code': code});
+    } catch (e) {
+      // Fallback to awardPoints using whitelisted referral_reward action
+      await addPoints(
+        referrerId,
+        1000,
+        'referral_reward',
+        metadata: {'referredUserId': newUserId, 'code': code},
+      );
+    }
   }
 
   // Manually increment referral count

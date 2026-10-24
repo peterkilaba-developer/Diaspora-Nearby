@@ -4,6 +4,7 @@
  */
 const { functions, admin, db, sendPushToUser } = require("./shared");
 const { requireAuth, requireAppCheck, consumeRateLimit } = require("./security");
+const { syncProfileMilestoneAndTrust } = require("./dsp");
 
 /**
  * ==================================================================
@@ -214,12 +215,14 @@ exports.stripeEmergencyFundWebhook = functions
           paymentId,
         }, { merge: true });
 
-        const trustRef = db.collection('trust_scores').doc(userId);
-        transaction.set(trustRef, {
-          emergencyFundContributor: true,
-          lastPctAwardReason: 'emergency_fund_contribution', lastPoctAwardReason: 'emergency_fund_contribution',
-          lastPctAwardAt: admin.firestore.FieldValue.serverTimestamp(), lastPoctAwardAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        for (const col of ['trust_data', 'trust_scores']) {
+          const trustRef = db.collection(col).doc(userId);
+          transaction.set(trustRef, {
+            emergencyFundContributor: true,
+            lastPctAwardReason: 'emergency_fund_contribution', lastPoctAwardReason: 'emergency_fund_contribution',
+            lastPctAwardAt: admin.firestore.FieldValue.serverTimestamp(), lastPoctAwardAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
         transaction.create(paymentRef, {
           userId,
           eventId: event.id,
@@ -233,6 +236,12 @@ exports.stripeEmergencyFundWebhook = functions
         });
         transaction.delete(db.collection('payment_checkout_locks').doc(userId));
       });
+
+      try {
+        await syncProfileMilestoneAndTrust(userId);
+      } catch (syncErr) {
+        console.warn(`[Stripe Webhook] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+      }
 
       console.log(`[Stripe Webhook] ✅ User ${userId} membership activated, +10 PCT awarded`);
     } catch (error) {

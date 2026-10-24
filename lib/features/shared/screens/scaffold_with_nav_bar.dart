@@ -26,6 +26,7 @@ import 'package:diaspora_nearby/features/chat/services/audio_playback_service.da
 
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/core/services/app_update_service.dart';
+import 'package:diaspora_nearby/features/home/repository/home_repository.dart';
 
 class ScaffoldWithNavBar extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -186,7 +187,10 @@ class _ScaffoldWithNavBarState extends ConsumerState<ScaffoldWithNavBar>
 
     // [NEW] Track Tab Actions
     if (index == 0) _trackExploration(ExplorationAction.tabChats);
-    if (index == 1) _trackExploration(ExplorationAction.tabNearby);
+    if (index == 1) {
+      _trackExploration(ExplorationAction.tabNearby);
+      ref.read(nearbyUsersProvider.notifier).refreshIfStale();
+    }
     if (index == 2) _trackExploration(ExplorationAction.tabEvents);
 
     widget.navigationShell.goBranch(

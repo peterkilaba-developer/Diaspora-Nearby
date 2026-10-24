@@ -7,7 +7,7 @@ part of 'trust_data.dart';
 // **************************************************************************
 
 TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
-  uid: json['uid'] as String,
+  uid: (json['uid'] as String?) ?? '',
   trustScore: (json['trustScore'] as num?)?.toDouble() ?? 0.0,
   level:
       $enumDecodeNullable(_$TrustLevelEnumMap, json['level']) ??
@@ -106,6 +106,11 @@ TrustData _$TrustDataFromJson(Map<String, dynamic> json) => TrustData(
           ?.map((e) => e as String)
           .toList() ??
       const [],
+  relationshipTypes:
+      (json['relationshipTypes'] as Map<String, dynamic>?)?.map(
+        (k, e) => MapEntry(k, e?.toString() ?? ''),
+      ) ??
+      const {},
 );
 
 Map<String, dynamic> _$TrustDataToJson(TrustData instance) => <String, dynamic>{
@@ -158,6 +163,7 @@ Map<String, dynamic> _$TrustDataToJson(TrustData instance) => <String, dynamic>{
   'genesisTrustIds': instance.genesisTrustIds,
   'genesisVerificationIds': instance.genesisVerificationIds,
   'genesisVouchIds': instance.genesisVouchIds,
+  'relationshipTypes': instance.relationshipTypes,
 };
 
 const _$TrustLevelEnumMap = {

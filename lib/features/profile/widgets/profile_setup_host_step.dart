@@ -57,6 +57,9 @@ class ProfileSetupHostStep extends StatelessWidget {
           controller: searchController,
           focusNode: focusNode,
           textCapitalization: TextCapitalization.sentences,
+          autofillHints: const <String>[],
+          autocorrect: false,
+          enableSuggestions: false,
           decoration: InputDecoration(
             hintText: 'Search your current city',
             prefixIcon: const Icon(LucideIcons.search),
@@ -76,7 +79,10 @@ class ProfileSetupHostStep extends StatelessWidget {
         ),
 
         // 2. Suggestions List
-        if (predictions.isNotEmpty) _buildSuggestionsList(theme, context),
+        if (predictions.isNotEmpty &&
+            searchController.text.trim().isNotEmpty &&
+            selectedLocation == null)
+          _buildSuggestionsList(theme, context),
 
         // 3. Selection Confirmation
         if (selectedLocation != null &&

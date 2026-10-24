@@ -110,29 +110,45 @@ async function isPohQualified(userId, userDocData, pointsDocData) {
     return true;
   }
 
-  const [userDoc, pointsDoc, trustDoc] = await Promise.all([
+  const [userDoc, pointsDoc, trustDataDoc, trustScoresDoc] = await Promise.all([
     userDocData ? Promise.resolve({ exists: true, data: () => userDocData }) : db.collection("users").doc(userId).get(),
     pointsDocData ? Promise.resolve({ exists: true, data: () => pointsDocData }) : db.collection("user_points").doc(userId).get(),
+    db.collection("trust_data").doc(userId).get(),
     db.collection("trust_scores").doc(userId).get(),
   ]);
 
   const userData = userDoc.exists ? userDoc.data() : {};
   const pointsData = pointsDoc.exists ? pointsDoc.data() : {};
-  const trustData = trustDoc.exists ? trustDoc.data() : {};
+  const trustData = trustDataDoc.exists
+    ? trustDataDoc.data()
+    : (trustScoresDoc.exists ? trustScoresDoc.data() : {});
+
+  if (trustData && trustData.isPoHComplete === true) {
+    return true;
+  }
+
+  const milestones = Array.isArray(trustData.awardedQualificationMilestones)
+    ? trustData.awardedQualificationMilestones
+    : [];
 
   // 1. Location Milestone (Active live location sharing)
-  const hasLocation = !!(
-    userData.homeCountryCode ||
-    pointsData.homeCountryCode ||
-    userData.locationEnabled ||
-    userData.currentCity ||
-    userData.homeCity
-  );
+  const hasLocation = !userData.cityVisibilityForfeited &&
+    userData.showCurrentLocationName !== false &&
+    !!(
+      milestones.includes("LocationTransparency") ||
+      userData.homeCountryCode ||
+      pointsData.homeCountryCode ||
+      userData.locationEnabled ||
+      userData.currentLocation ||
+      userData.currentCity ||
+      userData.homeCity
+    );
 
-  // 2. Profile Complete Milestone (All 10 profile fields completed)
-  const completedFields = Number(userData.completedMilestoneFieldCount || 0);
-  const totalFields = Number(userData.totalMilestoneFields || 10);
+  // 2. Profile Complete Milestone (All 12 profile fields completed)
+  const completedFields = countCompletedProfileMilestoneFields(userData);
+  const totalFields = PROFILE_MILESTONE_FIELDS.length;
   const isProfileComplete = !!(
+    milestones.includes("Profile") ||
     userData.isProfileComplete ||
     userData.isComplete ||
     (completedFields >= totalFields && totalFields > 0)
@@ -140,19 +156,19 @@ async function isPohQualified(userId, userDocData, pointsDocData) {
 
   // 3. 10 QR Exchanges Milestone
   const qrCount = Number(trustData.uniqueQrCount || pointsData.qrConnectionCount || 0);
-  const hasTenQr = qrCount >= 10;
+  const hasTenQr = milestones.includes("QR") || qrCount >= 10;
 
   // 4. Family Circle (10 Family Connections)
   const familyCount = Number(trustData.uniqueFamilyCount || 0);
-  const hasTenFamily = familyCount >= 10;
+  const hasTenFamily = milestones.includes("Family") || familyCount >= 10;
 
   // 5. Friend Circle (10 Friend Connections)
   const friendCount = Number(trustData.uniqueFriendCount || 0);
-  const hasTenFriends = friendCount >= 10;
+  const hasTenFriends = milestones.includes("Friend") || friendCount >= 10;
 
   // 6. Peer Verifications (10 Peer Profile Field Verifications)
   const verificationCount = Number(trustData.uniqueVerificationCount || 0);
-  const hasTenVerifications = verificationCount >= 10;
+  const hasTenVerifications = milestones.includes("Verified") || verificationCount >= 10;
 
   // 7. Ubuntu Emergency Fund Contribution (voluntary +10 PCT once members have tokens)
   // Excluded from the required completion gate to avoid token-requirement deadlock.
@@ -851,12 +867,16 @@ exports.awardPoints = functions
   // scanner's session ends up calling awardPoints for the scannee).
   const CROSS_USER_ACTIONS = [
     'trust_vouch_reward', 'vouch_reward',
+    'vouch_consensus_agree',
     'family_connection', 'friend_connection',
-    'identity_qr_exchange',
+    'identity_qr_exchange', 'identity_qr_exchange_continuous',
     'verified_by_peer', 'verifier_reward',
     'vouched_by_peer',
     'verified_solution_milestone', 'verified_solution_verifier_reward',
     'host_traveler_host_reward', 'host_traveler_guest_reward',
+    'peer_visit_visitor_reward',
+    'economy_transaction_seller',
+    'referral_reward', 'referral_bonus', 'referral_reward_referrer',
     'event_hosting_per_attendee', 'event_attendance',
     'message_received', 'new_dm_received', 'reaction_received',
     'share_received', 'link_opened_by_peer'
@@ -1086,6 +1106,7 @@ exports.deductPoints = functions.https.onCall(async (data, context) => {
     'blocked_by_milestone', 'cumulative_block_penalty',
     'cumulative_flag_penalty', 'fake_verification_penalty',
     'confirmed_fraud_penalty', 'vouching_bad_actor_penalty',
+    'vouch_consensus_disagree',
     'event_no_show_penalty', 'misinformation_penalty',
     'deceptive_org_submission_penalty', 'unresponsive_liaison_penalty',
     'chat_ad_penalty', 'poct_blocked_by_milestone',
@@ -2677,11 +2698,19 @@ exports.onVouchWrite = functions.firestore
 
         await db.collection("points_transactions").doc().set({
           userId: beforeData.fromUserId,
+          points: beforeData.remainingStake,
           amount: beforeData.remainingStake,
           action: "trust_stake_refund",
           type: "earn",
           timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
+      }
+      if (beforeData && beforeData.toUserId) {
+        try {
+          await syncProfileMilestoneAndTrust(beforeData.toUserId);
+        } catch (err) {
+          console.warn(`[onVouchWrite] syncProfileMilestoneAndTrust warning on delete: ${err.message}`);
+        }
       }
       return null;
     }
@@ -2705,6 +2734,7 @@ exports.onVouchWrite = functions.firestore
     const wasStaked = wasNoTrust || wasFullTrust;
 
     const batch = db.batch();
+    const now = admin.firestore.FieldValue.serverTimestamp();
 
     // 1. First-time vouch reward
     if (!beforeData) {
@@ -2712,31 +2742,46 @@ exports.onVouchWrite = functions.firestore
        batch.set(db.collection("user_points").doc(fromUserId), {
            availablePoints: admin.firestore.FieldValue.increment(1000),
            totalPoints: admin.firestore.FieldValue.increment(1000),
-           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+           lastUpdated: now,
+           lifetimeEarnings: {
+             trust_vouch_reward: admin.firestore.FieldValue.increment(1000),
+           },
        }, {merge: true});
 
        batch.set(db.collection("points_transactions").doc(), {
           userId: fromUserId,
+          points: 1000,
           amount: 1000,
           action: "trust_vouch_reward",
           type: "earn",
-          timestamp: admin.firestore.FieldValue.serverTimestamp()
+          timestamp: now,
+          metadata: { toUserId, score }
        });
+
+       await distributeUbuntuMatchingSupply(batch, fromUserId, 1000, now, "trust_vouch_reward_match");
 
        // Reward vouchee
        batch.set(db.collection("user_points").doc(toUserId), {
            availablePoints: admin.firestore.FieldValue.increment(1000),
            totalPoints: admin.firestore.FieldValue.increment(1000),
-           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+           lastUpdated: now,
+           lifetimeEarnings: {
+             vouched_by_peer: admin.firestore.FieldValue.increment(1000),
+             trust_vouch_reward: admin.firestore.FieldValue.increment(1000),
+           },
        }, {merge: true});
 
        batch.set(db.collection("points_transactions").doc(), {
           userId: toUserId,
+          points: 1000,
           amount: 1000,
-          action: "trust_vouch_reward",
+          action: "vouched_by_peer",
           type: "earn",
-          timestamp: admin.firestore.FieldValue.serverTimestamp()
+          timestamp: now,
+          metadata: { fromUserId, score }
        });
+
+       await distributeUbuntuMatchingSupply(batch, toUserId, 1000, now, "vouched_by_peer_match");
     }
 
     // 2. Staking logic
@@ -2747,15 +2792,17 @@ exports.onVouchWrite = functions.firestore
        // Deduct 1000 DSP (lock)
        batch.set(db.collection("user_points").doc(fromUserId), {
            availablePoints: admin.firestore.FieldValue.increment(-1000),
-           lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+           lastUpdated: now
        }, {merge: true});
 
        batch.set(db.collection("points_transactions").doc(), {
           userId: fromUserId,
+          points: -1000,
           amount: 1000,
           action: "trust_stake_locked",
           type: "spend",
-          timestamp: admin.firestore.FieldValue.serverTimestamp()
+          timestamp: now,
+          metadata: { toUserId, score }
        });
        stakedAmount = 1000;
        remainingStake = 1000;
@@ -2764,14 +2811,16 @@ exports.onVouchWrite = functions.firestore
        if (remainingStake > 0) {
            batch.set(db.collection("user_points").doc(fromUserId), {
                availablePoints: admin.firestore.FieldValue.increment(remainingStake),
-               lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+               lastUpdated: now
            }, {merge: true});
            batch.set(db.collection("points_transactions").doc(), {
                userId: fromUserId,
+               points: remainingStake,
                amount: remainingStake,
                action: "trust_stake_refund",
                type: "earn",
-               timestamp: admin.firestore.FieldValue.serverTimestamp()
+               timestamp: now,
+               metadata: { toUserId, score }
            });
        }
        stakedAmount = 0;
@@ -2801,11 +2850,28 @@ exports.onVouchWrite = functions.firestore
 
             if (!otherIsStaked || vouch.remainingStake <= 0) continue;
 
-            let agree = false;
             if ((isNowNoTrust && otherIsNoTrust) || (isNowFullTrust && otherIsFullTrust)) {
-               agree = true;
+                // Agreeing staker earns +100 DSP consensus reward
+                batch.set(db.collection("user_points").doc(vouch.fromUserId), {
+                    availablePoints: admin.firestore.FieldValue.increment(100),
+                    totalPoints: admin.firestore.FieldValue.increment(100),
+                    lastUpdated: now,
+                    lifetimeEarnings: {
+                      vouch_consensus_agree: admin.firestore.FieldValue.increment(100),
+                    },
+                }, { merge: true });
+
+                batch.set(db.collection("points_transactions").doc(), {
+                    userId: vouch.fromUserId,
+                    points: 100,
+                    amount: 100,
+                    action: "vouch_consensus_agree",
+                    type: "earn",
+                    timestamp: now,
+                    metadata: { toUserId, agreedWith: fromUserId, score }
+                });
             } else {
-                // Deduct 100 DSP from the other staker
+                // Deduct 100 DSP from the other staker's locked stake
                 const otherRemaining = vouch.remainingStake - 100;
                 let newScore = vouch.score;
                 let otherIsNowFullTrust = otherIsFullTrust;
@@ -2820,6 +2886,16 @@ exports.onVouchWrite = functions.firestore
                     score: newScore,
                     isFullTrust: otherIsNowFullTrust
                 });
+
+                batch.set(db.collection("points_transactions").doc(), {
+                    userId: vouch.fromUserId,
+                    points: -100,
+                    amount: 100,
+                    action: "vouch_consensus_disagree",
+                    type: "penalty",
+                    timestamp: now,
+                    metadata: { toUserId, disagreedWith: fromUserId, score, remainingStake: Math.max(0, otherRemaining) }
+                });
             }
         }
     }
@@ -2833,6 +2909,15 @@ exports.onVouchWrite = functions.firestore
     }
 
     await batch.commit();
+
+    if (toUserId) {
+      try {
+        await syncProfileMilestoneAndTrust(toUserId);
+      } catch (err) {
+        console.warn(`[onVouchWrite] syncProfileMilestoneAndTrust warning for ${toUserId}: ${err.message}`);
+      }
+    }
+
     return null;
   });
 
@@ -2845,19 +2930,73 @@ exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) 
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
   }
   const userId = context.auth.uid;
-  const userDoc = await db.collection("users").doc(userId).get();
+
+  try {
+    await syncProfileMilestoneAndTrust(userId);
+  } catch (err) {
+    console.warn(`[evaluatePoHGenesisStatus] syncProfileMilestoneAndTrust warning: ${err.message}`);
+  }
+
+  const [userDoc, pointsDoc, trustDataDoc, trustScoresDoc] = await Promise.all([
+    db.collection("users").doc(userId).get(),
+    db.collection("user_points").doc(userId).get(),
+    db.collection("trust_data").doc(userId).get(),
+    db.collection("trust_scores").doc(userId).get(),
+  ]);
+
   if (!userDoc.exists) {
     throw new functions.https.HttpsError("not-found", "User profile not found.");
   }
-  const userData = userDoc.data();
+  const userData = userDoc.data() || {};
+  const pointsData = pointsDoc.exists ? (pointsDoc.data() || {}) : {};
+  const trustData = trustDataDoc.exists
+    ? (trustDataDoc.data() || {})
+    : (trustScoresDoc.exists ? (trustScoresDoc.data() || {}) : {});
   const poh = userData.pohMilestones || {};
+  const milestones = Array.isArray(trustData.awardedQualificationMilestones)
+    ? trustData.awardedQualificationMilestones
+    : [];
 
-  const locationEnabled = !!userData.locationSharingEnabled || !!poh.locationEnabled;
-  const profileComplete = !!userData.isProfileComplete || !!poh.profileComplete;
-  const qrCount = Number(poh.qrExchangesCount || 0);
-  const familyCount = Number(poh.familyConnectionsCount || 0);
-  const friendCount = Number(poh.friendConnectionsCount || 0);
-  const peerVerificationsCount = Number(poh.peerVerificationsCount || 0);
+  const locationEnabled =
+    !userData.cityVisibilityForfeited &&
+    userData.showCurrentLocationName !== false &&
+    !!(
+      milestones.includes("LocationTransparency") ||
+      userData.locationSharingEnabled ||
+      userData.locationEnabled ||
+      userData.currentLocation ||
+      userData.currentCity ||
+      userData.homeCity ||
+      poh.locationEnabled
+    );
+
+  const completedFields = countCompletedProfileMilestoneFields(userData);
+  const profileComplete = !!(
+    milestones.includes("Profile") ||
+    userData.isProfileComplete ||
+    userData.isComplete ||
+    completedFields >= PROFILE_MILESTONE_FIELDS.length ||
+    poh.profileComplete
+  );
+
+  const qrCount = Number(
+    trustData.uniqueQrCount ?? pointsData.qrConnectionCount ?? poh.qrExchangesCount ?? 0
+  );
+  const familyCount = Number(
+    trustData.uniqueFamilyCount ?? pointsData.familyConnectionCount ?? poh.familyConnectionsCount ?? 0
+  );
+  const friendCount = Number(
+    trustData.uniqueFriendCount ?? poh.friendConnectionsCount ?? 0
+  );
+  const peerVerificationsCount = Number(
+    trustData.uniqueVerificationCount ?? pointsData.verifiedCount ?? poh.peerVerificationsCount ?? 0
+  );
+  const emergencyFundContributed = !!(
+    milestones.includes("EmergencyFund") ||
+    milestones.includes("UbuntuEmergencyFund") ||
+    trustData.emergencyFundContributor ||
+    poh.emergencyFundContributed
+  );
 
   const baseMilestonesComplete = (
     locationEnabled &&
@@ -2881,7 +3020,7 @@ exports.evaluatePoHGenesisStatus = functions.https.onCall(async (data, context) 
       friendCount,
       peerVerificationsCount,
       emergencyFundDeferred: true,
-      emergencyFundContributed: !!poh.emergencyFundContributed,
+      emergencyFundContributed,
     },
     genesisAmount: 7000,
   };
@@ -3174,4 +3313,703 @@ exports.recordDailyCheckIn = functions.https.onCall(async (data, context) => {
     currentStreak: streak,
     pointsAwarded: awardedBonus,
   };
+});
+
+/**
+ * Required profile milestone fields (12 fields matching ProfileData in Dart).
+ */
+const PROFILE_MILESTONE_FIELDS = [
+  "bio",
+  "occupation",
+  "yearsInHostCountry",
+  "industry",
+  "profession",
+  "languages",
+  "meetingPreferences",
+  "availability",
+  "interests",
+  "servicesOffered",
+  "lookingFor",
+  "education",
+];
+
+function countCompletedProfileMilestoneFields(userData) {
+  if (!userData || typeof userData !== "object") return 0;
+  let completed = 0;
+  for (const field of PROFILE_MILESTONE_FIELDS) {
+    const val = userData[field];
+    if (Array.isArray(val)) {
+      if (val.length > 0) completed++;
+    } else if (typeof val === "string") {
+      if (val.trim().length > 0) completed++;
+    } else if (val != null) {
+      completed++;
+    }
+  }
+  return completed;
+}
+
+function getTrustLevelFromScore(score) {
+  if (score >= 81) return "highTrust";
+  if (score >= 61) return "standardTrust";
+  if (score >= 41) return "mediumTrust";
+  if (score >= 21) return "basicTrust";
+  return "lowTrust";
+}
+
+const FAMILY_TYPES_SET = new Set([
+  "wife", "husband", "daughter", "son", "mother", "father", "sister",
+  "brother", "aunt", "uncle", "nephew", "niece", "cousin", "relative",
+]);
+
+/**
+ * syncProfileMilestoneAndTrust — Server-authoritative evaluation of all 7
+ * Proof of Humanity (PoH) Genesis Milestones (+10,000 DSP & +10 PCT each),
+ * continuous HTS deltas (QR 11+, net vouches, seniority, event attendance, penalties),
+ * and full projection sync to trust_data, trust_scores, user_points, and governance.
+ * Idempotent: safe to call from any trigger or callable.
+ */
+async function syncProfileMilestoneAndTrust(userId) {
+  if (!userId) return { success: false, reason: "missing_userId" };
+
+  const [
+    userDoc,
+    privateDoc,
+    pointsDoc,
+    trustDataDoc,
+    trustScoresDoc,
+    stakerDoc,
+    membershipDoc,
+    relationshipsSnap,
+    qrSnap,
+    verificationsSnap,
+    ratingsSnap,
+  ] = await Promise.all([
+    db.collection("users").doc(userId).get(),
+    db.collection("user_private").doc(userId).get(),
+    db.collection("user_points").doc(userId).get(),
+    db.collection("trust_data").doc(userId).get(),
+    db.collection("trust_scores").doc(userId).get(),
+    db.collection("emergency_fund_stakers").doc(userId).get(),
+    db.collection("emergency_fund_memberships").doc(userId).get(),
+    db.collection("users").doc(userId).collection("relationships").where("status", "==", "active").get(),
+    db.collection("qr_exchanges").where("users", "array-contains", userId).get(),
+    db.collection("field_verifications").where("toUserId", "==", userId).get(),
+    db.collection("trust_ratings").where("toUserId", "==", userId).get(),
+  ]);
+
+  if (!userDoc.exists) {
+    return { success: false, reason: "user_not_found" };
+  }
+
+  const userData = userDoc.data() || {};
+  const privateData = privateDoc.exists ? (privateDoc.data() || {}) : {};
+  const pointsData = pointsDoc.exists ? (pointsDoc.data() || {}) : {};
+  const trustData = trustDataDoc.exists
+    ? (trustDataDoc.data() || {})
+    : (trustScoresDoc.exists ? (trustScoresDoc.data() || {}) : {});
+
+  const completedFields = countCompletedProfileMilestoneFields(userData);
+  const totalFields = PROFILE_MILESTONE_FIELDS.length; // 12
+  const isProfileComplete = completedFields >= totalFields;
+
+  const milestones = new Set(
+    Array.isArray(trustData.awardedQualificationMilestones)
+      ? trustData.awardedQualificationMilestones
+      : []
+  );
+  const ledger = {
+    ...(trustData.awardedHtsTracking && typeof trustData.awardedHtsTracking === "object"
+      ? trustData.awardedHtsTracking
+      : {}),
+  };
+
+  const lifetimeEarnings = pointsData.lifetimeEarnings || {};
+  const completedExplorationActions = new Set(
+    Array.isArray(pointsData.completedExplorationActions)
+      ? pointsData.completedExplorationActions
+      : []
+  );
+
+  // 1. Compute Family & Friend sets from active relationships
+  const familyIdsSet = new Set();
+  const friendIdsSet = new Set();
+  for (const relDoc of relationshipsSnap.docs) {
+    const r = relDoc.data() || {};
+    const peerId = String(r.id || relDoc.id || "").trim();
+    if (!peerId || peerId === userId) continue;
+    const rType = String(r.type || "").trim().toLowerCase();
+    if (FAMILY_TYPES_SET.has(rType)) {
+      familyIdsSet.add(peerId);
+    }
+  }
+  for (const relDoc of relationshipsSnap.docs) {
+    const r = relDoc.data() || {};
+    const peerId = String(r.id || relDoc.id || "").trim();
+    if (!peerId || peerId === userId) continue;
+    const rType = String(r.type || "").trim().toLowerCase();
+    if (!FAMILY_TYPES_SET.has(rType) && !familyIdsSet.has(peerId)) {
+      friendIdsSet.add(peerId);
+    }
+  }
+  // Preserve any existing genesis IDs if subcollection was empty during migration
+  if (familyIdsSet.size === 0 && Array.isArray(trustData.genesisFamilyIds)) {
+    for (const id of trustData.genesisFamilyIds) {
+      if (typeof id === "string" && id.trim()) familyIdsSet.add(id.trim());
+    }
+  }
+  if (friendIdsSet.size === 0 && Array.isArray(trustData.genesisFriendIds)) {
+    for (const id of trustData.genesisFriendIds) {
+      if (typeof id === "string" && id.trim() && !familyIdsSet.has(id.trim())) {
+        friendIdsSet.add(id.trim());
+      }
+    }
+  }
+
+  const circleOfTrustIds = new Set([...familyIdsSet, ...friendIdsSet]);
+
+  // 2. Compute Unique QR Exchanges
+  const qrIdsSet = new Set(
+    Array.isArray(trustData.genesisQrIds)
+      ? trustData.genesisQrIds.filter((id) => typeof id === "string" && id.trim())
+      : []
+  );
+  for (const qDoc of qrSnap.docs) {
+    const q = qDoc.data() || {};
+    const users = Array.isArray(q.users) ? q.users : [];
+    for (const u of users) {
+      if (typeof u === "string" && u.trim() && u.trim() !== userId) {
+        qrIdsSet.add(u.trim());
+      }
+    }
+    const otherUid = q.fromUid === userId ? q.toUid : (q.toUid === userId ? q.fromUid : null);
+    if (typeof otherUid === "string" && otherUid.trim() && otherUid.trim() !== userId) {
+      qrIdsSet.add(otherUid.trim());
+    }
+  }
+
+  // 3. Compute Trust Ratings (Strictly excluding Circle of Trust for Full/No Trust staking)
+  const fullTrustVoterIdsSet = new Set();
+  const noTrustVoterIdsSet = new Set();
+  let ratingSum = 0;
+  let reviewCount = 0;
+  for (const rDoc of ratingsSnap.docs) {
+    const r = rDoc.data() || {};
+    const fromId = String(r.fromUserId || "").trim();
+    const score = Number(r.score || 0);
+    if (!fromId || fromId === userId || score <= 0) continue;
+    reviewCount++;
+    ratingSum += score;
+    if (!circleOfTrustIds.has(fromId)) {
+      if (score > 90) {
+        fullTrustVoterIdsSet.add(fromId);
+      } else if (score >= 1 && score <= 10) {
+        noTrustVoterIdsSet.add(fromId);
+      }
+    }
+  }
+  const averageRating = reviewCount > 0 ? ratingSum / reviewCount : Number(trustData.averageRating || 0);
+
+  // 4. Compute Field Verifications
+  const verificationIdsSet = new Set();
+  let verifiedFieldsTotal = 0;
+  let flaggedFieldsTotal = 0;
+  for (const vDoc of verificationsSnap.docs) {
+    const v = vDoc.data() || {};
+    const fromId = String(v.fromUserId || "").trim();
+    if (!fromId || fromId === userId) continue;
+    const fields = v.fields && typeof v.fields === "object" ? v.fields : {};
+    let hasVerifiedField = false;
+    for (const status of Object.values(fields)) {
+      if (status === "verified" || status === true) {
+        hasVerifiedField = true;
+        verifiedFieldsTotal++;
+      } else if (status === "flagged" || status === false) {
+        flaggedFieldsTotal++;
+      }
+    }
+    if (hasVerifiedField || Object.keys(fields).length > 0) {
+      if (!fullTrustVoterIdsSet.has(fromId)) {
+        verificationIdsSet.add(fromId);
+      }
+    }
+  }
+  if (verificationIdsSet.size === 0 && Array.isArray(trustData.genesisVerificationIds)) {
+    for (const id of trustData.genesisVerificationIds) {
+      if (typeof id === "string" && id.trim() && !fullTrustVoterIdsSet.has(id.trim())) {
+        verificationIdsSet.add(id.trim());
+      }
+    }
+  }
+
+  const uniqueFamilyCount = Math.max(familyIdsSet.size, Number(trustData.uniqueFamilyCount || 0));
+  const uniqueFriendCount = Math.max(friendIdsSet.size, Number(trustData.uniqueFriendCount || 0));
+  const uniqueQrCount = Math.max(
+    qrIdsSet.size,
+    Number(trustData.uniqueQrCount || pointsData.qrConnectionCount || 0)
+  );
+  const uniqueVerificationCount = Math.max(
+    verificationIdsSet.size,
+    Number(trustData.uniqueVerificationCount || 0)
+  );
+  const uniqueVouchCount = fullTrustVoterIdsSet.size;
+  const noTrustVouchCount = noTrustVoterIdsSet.size;
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  const userPointsRef = db.collection("user_points").doc(userId);
+  let anyDspChanged = false;
+  let awardedProfileDsp = false;
+  const newExplorationActions = [];
+
+  async function awardMilestoneDsp(action, amount, description, extraMeta = {}) {
+    anyDspChanged = true;
+    batch.set(
+      userPointsRef,
+      {
+        userId,
+        totalPoints: admin.firestore.FieldValue.increment(amount),
+        availablePoints: admin.firestore.FieldValue.increment(amount),
+        lastUpdated: now,
+        lifetimeEarnings: {
+          [action]: admin.firestore.FieldValue.increment(amount),
+        },
+      },
+      { merge: true }
+    );
+
+    const txRef = db.collection("points_transactions").doc();
+    batch.set(txRef, {
+      userId,
+      type: "earn",
+      action,
+      points: amount,
+      amount,
+      timestamp: now,
+      metadata: {
+        description,
+        ...extraMeta,
+      },
+    });
+
+    await distributeUbuntuMatchingSupply(
+      batch,
+      userId,
+      amount,
+      now,
+      `${action}_match`
+    );
+  }
+
+  // ── Milestone 1: Profile Completion (12 fields -> 10,000 DSP + 10 PCT) ──
+  const alreadyAwardedProfileDsp =
+    Number(lifetimeEarnings.profile_completion || 0) >= 10000 ||
+    Number(ledger.Profile_dsp_count || 0) >= totalFields ||
+    completedExplorationActions.has("milestone_10_profile_fields");
+
+  if (isProfileComplete) {
+    milestones.add("Profile");
+    ledger.Profile_dsp_count = totalFields;
+    newExplorationActions.push("milestone_10_profile_fields", "complete_profile");
+
+    if (!alreadyAwardedProfileDsp) {
+      awardedProfileDsp = true;
+      await awardMilestoneDsp(
+        "profile_completion",
+        10000,
+        `Completed all ${totalFields} profile milestone fields`,
+        { completedFields, totalFields }
+      );
+    }
+  }
+
+  // ── Milestone 2: Family Circle (10 Family -> 10,000 DSP + 10 PCT) ──
+  if (uniqueFamilyCount >= 10) {
+    milestones.add("Family");
+    newExplorationActions.push("milestone_10_family");
+    const alreadyAwardedFamilyMilestone =
+      Number(ledger.Family_dsp_count || 0) >= 10 ||
+      completedExplorationActions.has("milestone_10_family");
+    if (!alreadyAwardedFamilyMilestone) {
+      ledger.Family_dsp_count = 10;
+      await awardMilestoneDsp(
+        "family_connection",
+        10000,
+        "Completed 10 Family Circle connections milestone",
+        { uniqueFamilyCount }
+      );
+    } else {
+      ledger.Family_dsp_count = Math.max(Number(ledger.Family_dsp_count || 0), 10);
+    }
+  }
+
+  // ── Milestone 3: Friend Circle (10 Friends -> 10,000 DSP + 10 PCT) ──
+  if (uniqueFriendCount >= 10) {
+    milestones.add("Friend");
+    newExplorationActions.push("milestone_10_friend");
+    const alreadyAwardedFriendMilestone =
+      Number(ledger.Friend_dsp_count || 0) >= 10 ||
+      completedExplorationActions.has("milestone_10_friend");
+    if (!alreadyAwardedFriendMilestone) {
+      ledger.Friend_dsp_count = 10;
+      await awardMilestoneDsp(
+        "friend_connection",
+        10000,
+        "Completed 10 Friend Circle connections milestone",
+        { uniqueFriendCount }
+      );
+    } else {
+      ledger.Friend_dsp_count = Math.max(Number(ledger.Friend_dsp_count || 0), 10);
+    }
+  }
+
+  // ── Milestone 4: Identity QR Exchanges (10 QR -> 10,000 DSP + 10 PCT; 11+ -> 1,000 DSP each) ──
+  let prevQrDspCount = Number(ledger.QR_dsp_count || 0);
+  if (uniqueQrCount >= 10) {
+    milestones.add("QR");
+    newExplorationActions.push("milestone_10_qr");
+    const alreadyAwardedQrMilestone =
+      prevQrDspCount >= 10 ||
+      completedExplorationActions.has("milestone_10_qr");
+    if (!alreadyAwardedQrMilestone) {
+      prevQrDspCount = 10;
+      ledger.QR_dsp_count = 10;
+      await awardMilestoneDsp(
+        "identity_qr_exchange",
+        10000,
+        "Completed 10 Identity QR Exchanges milestone",
+        { uniqueQrCount }
+      );
+    } else if (prevQrDspCount < 10) {
+      prevQrDspCount = 10;
+      ledger.QR_dsp_count = 10;
+    }
+    if (uniqueQrCount > 10 && uniqueQrCount > prevQrDspCount) {
+      const extraScans = uniqueQrCount - prevQrDspCount;
+      if (extraScans > 0) {
+        ledger.QR_dsp_count = uniqueQrCount;
+        await awardMilestoneDsp(
+          "identity_qr_exchange_continuous",
+          1000 * extraScans,
+          `Completed ${extraScans} additional Identity QR Exchange(s)`,
+          { extraScans, uniqueQrCount }
+        );
+      }
+    }
+  }
+
+  // ── Milestone 5: Peer Verifications (10 Verifications -> 10,000 DSP + 10 PCT) ──
+  if (uniqueVerificationCount >= 10) {
+    milestones.add("Verified");
+    newExplorationActions.push("milestone_10_verified");
+    const alreadyAwardedVerifiedMilestone =
+      Number(ledger.Verified_dsp_count || 0) >= 10 ||
+      completedExplorationActions.has("milestone_10_verified");
+    if (!alreadyAwardedVerifiedMilestone) {
+      ledger.Verified_dsp_count = 10;
+      await awardMilestoneDsp(
+        "verified_by_peer",
+        10000,
+        "Completed 10 Peer Profile Verifications milestone",
+        { uniqueVerificationCount }
+      );
+    } else {
+      ledger.Verified_dsp_count = Math.max(Number(ledger.Verified_dsp_count || 0), 10);
+    }
+  }
+
+  // ── Milestone 6: Location Transparency (10,000 DSP + 10 PCT; burned & forfeited if turned off) ──
+  const cityForfeited = userData.cityVisibilityForfeited === true;
+  const hasCurrentLocation = !!(
+    userData.currentLocation ||
+    privateData.currentLocation ||
+    userData.currentCity ||
+    userData.locationEnabled ||
+    userData.locationSharingEnabled
+  );
+  const visibilityOn = userData.showCurrentLocationName !== false;
+  const locationMilestoneAwarded =
+    Number(ledger.LocationTransparency_dsp_awarded || 0) === 1 ||
+    Number(lifetimeEarnings.location_transparency || 0) >= 10000 ||
+    completedExplorationActions.has("location_transparency");
+
+  let cityVisibilityPoCT = 0;
+  if (!cityForfeited && hasCurrentLocation && visibilityOn) {
+    cityVisibilityPoCT = 10;
+    milestones.add("LocationTransparency");
+    newExplorationActions.push("location_transparency");
+    if (!locationMilestoneAwarded && Number(ledger.LocationTransparency_dsp_awarded || 0) !== -1) {
+      ledger.LocationTransparency_dsp_awarded = 1;
+      await awardMilestoneDsp(
+        "location_transparency",
+        10000,
+        "Enabled Location Transparency milestone"
+      );
+    } else if (Number(ledger.LocationTransparency_dsp_awarded || 0) === 0) {
+      ledger.LocationTransparency_dsp_awarded = 1;
+    }
+  } else if (locationMilestoneAwarded && Number(ledger.LocationTransparency_dsp_awarded || 0) !== -1 && (cityForfeited || !visibilityOn)) {
+    // User toggled off location after earning milestone: burn 10,000 DSP & permanently forfeit
+    milestones.delete("LocationTransparency");
+    ledger.LocationTransparency_dsp_awarded = -1;
+    anyDspChanged = true;
+    const currentAvail = Number(pointsData.availablePoints || 0);
+    const burnAmount = Math.min(10000, Math.max(0, currentAvail));
+    if (burnAmount > 0) {
+      batch.set(
+        userPointsRef,
+        {
+          totalPoints: admin.firestore.FieldValue.increment(-burnAmount),
+          availablePoints: admin.firestore.FieldValue.increment(-burnAmount),
+          lastUpdated: now,
+        },
+        { merge: true }
+      );
+      batch.set(db.collection("points_transactions").doc(), {
+        userId,
+        type: "burn",
+        action: "location_transparency_burned",
+        points: -burnAmount,
+        amount: burnAmount,
+        timestamp: now,
+        metadata: { description: "Location transparency disabled — milestone forfeited" },
+      });
+    }
+    if (!cityForfeited) {
+      batch.set(db.collection("users").doc(userId), { cityVisibilityForfeited: true }, { merge: true });
+    }
+  }
+
+  // ── Milestone 7: Ubuntu Emergency Fund Contribution (10,000 DSP + 10 PCT) ──
+  const membershipData = membershipDoc.exists ? (membershipDoc.data() || {}) : {};
+  const hasEmergencyFund =
+    stakerDoc.exists ||
+    membershipData.status === "active" ||
+    trustData.emergencyFundContributor === true ||
+    milestones.has("EmergencyFund") ||
+    milestones.has("UbuntuEmergencyFund");
+  const emergencyFundAwarded =
+    Number(ledger.EmergencyFund_dsp_awarded || 0) === 1 ||
+    Number(lifetimeEarnings.emergency_fund_contribution || 0) >= 10000 ||
+    completedExplorationActions.has("economy_emergency_fund");
+
+  let emergencyFundPoCT = 0;
+  if (hasEmergencyFund) {
+    emergencyFundPoCT = 10;
+    milestones.add("EmergencyFund");
+    newExplorationActions.push("economy_emergency_fund");
+    if (!emergencyFundAwarded) {
+      ledger.EmergencyFund_dsp_awarded = 1;
+      await awardMilestoneDsp(
+        "emergency_fund_contribution",
+        10000,
+        "Contributed to Ubuntu Emergency Fund milestone"
+      );
+    } else {
+      ledger.EmergencyFund_dsp_awarded = 1;
+    }
+  }
+
+  if (newExplorationActions.length > 0) {
+    batch.set(
+      userPointsRef,
+      {
+        completedExplorationActions: admin.firestore.FieldValue.arrayUnion(...newExplorationActions),
+        lastUpdated: now,
+      },
+      { merge: true }
+    );
+  }
+
+  // ── Calculate Authoritative PCT Score ──
+  let milestonePoCT = 0;
+  if (isProfileComplete || milestones.has("Profile")) milestonePoCT += 10;
+  if (uniqueFamilyCount >= 10 || milestones.has("Family")) milestonePoCT += 10;
+  if (uniqueFriendCount >= 10 || milestones.has("Friend")) milestonePoCT += 10;
+  if (uniqueQrCount >= 10 || milestones.has("QR")) milestonePoCT += 10;
+  if (uniqueVerificationCount >= 10 || milestones.has("Verified")) milestonePoCT += 10;
+
+  const verifiedCheckInCount = Number(trustData.verifiedCheckInCount || 0);
+  const eventAttendancePoCT = verifiedCheckInCount >= 10 ? 10 : 0;
+
+  // Continuous HTS Deltas
+  let htsPoctDelta = 0;
+  if (uniqueQrCount > 10) {
+    htsPoctDelta += Math.floor((uniqueQrCount - 10) / 10);
+  }
+  const netVouches = uniqueVouchCount - noTrustVouchCount;
+  htsPoctDelta += Math.trunc(netVouches / 10);
+
+  const flaggedMessagesCount = Number(trustData.flaggedMessagesCount || 0);
+  const blockedByCount = Number(userData.blockedByCount ?? trustData.blockedByCount ?? 0);
+  const reportedFraudCount = Number(trustData.reportedFraudCount || 0);
+  const fakeVerificationsCount = Number(trustData.fakeVerificationsCount || 0);
+  const eventNoShowCount = Number(trustData.eventNoShowCount || 0);
+  const rejectedFamilyConnectionsCount = Number(trustData.rejectedFamilyConnectionsCount || 0);
+
+  htsPoctDelta -= Math.floor(flaggedMessagesCount / 10) * 10;
+  htsPoctDelta -= Math.floor(blockedByCount / 10);
+  htsPoctDelta -= Math.floor(reportedFraudCount / 10);
+  htsPoctDelta -= Math.floor(fakeVerificationsCount / 10);
+  htsPoctDelta -= Math.floor(eventNoShowCount / 10);
+  htsPoctDelta -= Math.floor(rejectedFamilyConnectionsCount / 10);
+
+  // Seniority (+1 PCT per 100 days active)
+  let daysActive = 0;
+  let createdAtDate = null;
+  const rawCreatedAt = userData.createdAt || pointsData.signupDate;
+  if (rawCreatedAt) {
+    if (typeof rawCreatedAt.toDate === "function") {
+      createdAtDate = rawCreatedAt.toDate();
+    } else if (typeof rawCreatedAt === "string" || typeof rawCreatedAt === "number") {
+      const parsed = new Date(rawCreatedAt);
+      if (!isNaN(parsed.getTime())) createdAtDate = parsed;
+    }
+  }
+  if (createdAtDate) {
+    daysActive = Math.max(0, Math.floor((Date.now() - createdAtDate.getTime()) / (1000 * 60 * 60 * 24)));
+  }
+  const seniorityScore = Math.floor(daysActive / 100);
+
+  const calculatedPoCT =
+    milestonePoCT +
+    cityVisibilityPoCT +
+    emergencyFundPoCT +
+    eventAttendancePoCT +
+    htsPoctDelta +
+    seniorityScore;
+
+  const finalTrustScore = Math.min(100, Math.max(0, calculatedPoCT));
+  const level = getTrustLevelFromScore(finalTrustScore);
+  const isVerified = Boolean(trustData.isVerified) || isProfileComplete || finalTrustScore >= 80;
+  const identityScore = (isProfileComplete ? 5 : 0) + (uniqueQrCount > 0 ? 15 : 0);
+
+  const isPoHComplete =
+    isProfileComplete &&
+    uniqueFamilyCount >= 10 &&
+    uniqueFriendCount >= 10 &&
+    uniqueQrCount >= 10 &&
+    uniqueVerificationCount >= 10 &&
+    cityVisibilityPoCT >= 10;
+
+  const isDdiEligible = isPoHComplete && daysActive >= 100 && finalTrustScore >= 91;
+  const isCouncilEligible = Boolean(trustData.isCouncilEligible) || (isDdiEligible && Boolean(userData.isAdminOfLargeGroup));
+
+  const uniqueTrustIds = Array.from(new Set([...fullTrustVoterIdsSet, ...verificationIdsSet]));
+
+  const trustPatch = {
+    uid: userId,
+    trustScore: finalTrustScore,
+    level,
+    isVerified,
+    isPoHComplete,
+    isDdiEligible,
+    isCouncilEligible,
+    emergencyFundContributor: hasEmergencyFund,
+    identityScore,
+    activityScore: Math.min(20, Math.max(0, Number(pointsData.currentStreak || 0))),
+    vouchTrustScore: Math.min(20, uniqueVouchCount * 2),
+    vouchCount: uniqueVouchCount,
+    vouchedBy: Array.from(fullTrustVoterIdsSet),
+    fullTrustVoterIds: Array.from(fullTrustVoterIdsSet),
+    noTrustVoterIds: Array.from(noTrustVoterIdsSet),
+    reviewCount,
+    averageRating,
+    identityQRExchange: uniqueQrCount > 0,
+    uniqueFamilyCount,
+    uniqueFriendCount,
+    uniqueQrCount,
+    uniqueVerificationCount,
+    uniqueVouchCount,
+    vouchedByCount: uniqueVouchCount,
+    verifiedByCount: verificationsSnap.size,
+    verifiedFieldsCount: verifiedFieldsTotal,
+    flaggedFieldsCount: flaggedFieldsTotal,
+    genesisFamilyIds: Array.from(familyIdsSet).slice(0, 10),
+    genesisFriendIds: Array.from(friendIdsSet).slice(0, 10),
+    genesisQrIds: Array.from(qrIdsSet).slice(0, 10),
+    genesisTrustIds: uniqueTrustIds.slice(0, 10),
+    genesisVerificationIds: Array.from(verificationIdsSet).slice(0, 10),
+    genesisVouchIds: Array.from(fullTrustVoterIdsSet).slice(0, 10),
+    blockedByCount,
+    awardedQualificationMilestones: Array.from(milestones),
+    awardedHtsTracking: ledger,
+    lastUpdated: now,
+  };
+
+  batch.set(db.collection("trust_data").doc(userId), trustPatch, { merge: true });
+  batch.set(db.collection("trust_scores").doc(userId), trustPatch, { merge: true });
+  batch.set(
+    userPointsRef,
+    {
+      trustScore: finalTrustScore,
+      qrConnectionCount: uniqueQrCount,
+      familyConnectionCount: uniqueFamilyCount,
+      verifiedCount: uniqueVerificationCount,
+      lastUpdated: now,
+    },
+    { merge: true }
+  );
+
+  // Sync community governance averagePoCT / averagePct so performTGE never fails on missing averagePoCT
+  const memberships = Array.isArray(userData.communityMemberships) ? userData.communityMemberships : [];
+  for (const commId of memberships) {
+    if (!commId || typeof commId !== "string") continue;
+    const govId = commId === "global_community"
+      ? "global_community"
+      : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+    if (govId) {
+      batch.set(
+        db.collection("governance").doc(govId),
+        {
+          id: govId,
+          communityId: commId,
+          type: "community",
+          averagePoCT: finalTrustScore,
+          averagePct: finalTrustScore,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+  }
+
+  await batch.commit();
+
+  return {
+    success: true,
+    completedFields,
+    totalFields,
+    isProfileComplete,
+    isPoHComplete,
+    awardedProfileDsp,
+    anyDspChanged,
+    trustScore: finalTrustScore,
+    isVerified,
+  };
+}
+
+exports.syncProfileMilestoneAndTrust = syncProfileMilestoneAndTrust;
+exports.distributeUbuntuMatchingSupply = distributeUbuntuMatchingSupply;
+
+/**
+ * evaluateProfileMilestone — Client-callable endpoint triggered after profile updates
+ * or trust refreshes to ensure profile completion rewards (+10,000 DSP and +10 PCT)
+ * are evaluated and synced by the server.
+ */
+exports.evaluateProfileMilestone = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const callerId = context.auth.uid;
+  const targetUserId = (data && typeof data.userId === "string" && data.userId.trim())
+    ? data.userId.trim()
+    : callerId;
+
+  // Only allow evaluating self unless admin
+  if (targetUserId !== callerId && !(context.auth.token && context.auth.token.admin === true)) {
+    throw new functions.https.HttpsError("permission-denied", "Can only evaluate your own profile milestone.");
+  }
+
+  return await syncProfileMilestoneAndTrust(targetUserId);
 });

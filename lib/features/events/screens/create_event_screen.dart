@@ -1719,10 +1719,18 @@ class _JoinedEventsList extends ConsumerWidget {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
 
-        final events = snapshot.data ?? [];
+        final now = DateTime.now();
+        final events = (snapshot.data ?? [])
+            .where((e) => !EventRepository.isEventExpired(e, now))
+            .toList()
+          ..sort((a, b) {
+            final dateCmp = a.startDate.compareTo(b.startDate);
+            if (dateCmp != 0) return dateCmp;
+            return a.startTime.compareTo(b.startTime);
+          });
         if (events.isEmpty) {
           return const Center(
-            child: Text('You have not joined any events yet.'),
+            child: Text('You have no upcoming joined events.'),
           );
         }
 

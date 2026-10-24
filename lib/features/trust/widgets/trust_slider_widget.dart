@@ -7,8 +7,31 @@ import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart'
 import 'package:diaspora_nearby/features/shared/utils/app_snackbar.dart';
 import 'package:diaspora_nearby/features/shared/utils/loading_mixin.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
 
 class TrustSliderWidget extends ConsumerStatefulWidget {
+  static const Set<String> familyRelationshipTypes = {
+    'wife',
+    'husband',
+    'daughter',
+    'son',
+    'mother',
+    'father',
+    'sister',
+    'brother',
+    'aunt',
+    'uncle',
+    'nephew',
+    'niece',
+    'cousin',
+    'relative',
+  };
+
+  static bool isFamilyRelationshipType(String? type) {
+    if (type == null || type.isEmpty) return false;
+    return familyRelationshipTypes.contains(type.trim().toLowerCase());
+  }
+
   final String targetUserId;
   final String currentUserId;
   final String? displayName;
@@ -33,6 +56,9 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
   bool _wasFullTrust = false;
   bool _wasNoTrust = false;
   bool _isLoadingPrevious = true;
+  bool _isFamilyMember = false;
+  bool _isFriendMember = false;
+  bool _isOwnProfileIncomplete = false;
 
   @override
   void initState() {
@@ -45,6 +71,67 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
 
   Future<void> _loadPreviousRating() async {
     try {
+      final myProfile = await ref
+          .read(profileRepositoryProvider)
+          .getUserProfile(widget.currentUserId);
+      if (mounted && (myProfile == null || !myProfile.isComplete)) {
+        setState(() {
+          _isOwnProfileIncomplete = true;
+        });
+      }
+
+      final relRepo = ref.read(relationshipRepositoryProvider);
+      final existingRel = await relRepo.getRelationship(
+        userId: widget.currentUserId,
+        relatedUserId: widget.targetUserId,
+      );
+      if (existingRel != null && existingRel.status == 'active') {
+        if (TrustSliderWidget.isFamilyRelationshipType(existingRel.type)) {
+          if (mounted) {
+            setState(() {
+              _isFamilyMember = true;
+              _isLoadingPrevious = false;
+            });
+          }
+          return;
+        } else {
+          if (mounted) {
+            setState(() {
+              _isFriendMember = true;
+            });
+          }
+        }
+      }
+
+      final pendingSent = await relRepo.getPendingSentRequest(
+        fromUserId: widget.currentUserId,
+        toUserId: widget.targetUserId,
+      );
+      final pendingIncoming = await relRepo.getPendingIncomingRequest(
+        userId: widget.currentUserId,
+        fromUserId: widget.targetUserId,
+      );
+      if (TrustSliderWidget.isFamilyRelationshipType(
+            pendingSent?.relationshipType,
+          ) ||
+          TrustSliderWidget.isFamilyRelationshipType(
+            pendingIncoming?.relationshipType,
+          )) {
+        if (mounted) {
+          setState(() {
+            _isFamilyMember = true;
+            _isLoadingPrevious = false;
+          });
+        }
+        return;
+      } else if (pendingSent != null || pendingIncoming != null) {
+        if (mounted) {
+          setState(() {
+            _isFriendMember = true;
+          });
+        }
+      }
+
       final existingScore = await ref
           .read(trustRepositoryProvider)
           .getRating(
@@ -52,8 +139,11 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
             toUserId: widget.targetUserId,
           );
       if (existingScore != null && mounted) {
+        final clampedScore = _isFriendMember && existingScore > 0
+            ? existingScore.clamp(11.0, 90.0)
+            : existingScore;
         setState(() {
-          _currentValue = existingScore;
+          _currentValue = clampedScore;
           _previousValue = existingScore;
           _wasFullTrust = existingScore > 90;
           _wasNoTrust = existingScore >= 1 && existingScore <= 10;
@@ -222,6 +312,58 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.currentUserId.isEmpty ||
+        widget.targetUserId.isEmpty ||
+        widget.currentUserId == widget.targetUserId) {
+      return const SizedBox.shrink();
+    }
+
+    final relationshipsAsync = ref.watch(
+      userRelationshipsProvider(widget.currentUserId),
+    );
+    final trustAsync = ref.watch(userTrustProvider(widget.currentUserId));
+
+    final isFamilyFromRelationships =
+        relationshipsAsync.value?.any(
+          (r) =>
+              r.id == widget.targetUserId &&
+              r.status == 'active' &&
+              TrustSliderWidget.isFamilyRelationshipType(r.type),
+        ) ??
+        false;
+
+    final isFamilyFromTrust = TrustSliderWidget.isFamilyRelationshipType(
+      trustAsync.value?.relationshipTypes[widget.targetUserId],
+    );
+
+    if (_isFamilyMember || isFamilyFromRelationships || isFamilyFromTrust) {
+      return const SizedBox.shrink();
+    }
+
+    final isFriendFromRelationships =
+        relationshipsAsync.value?.any(
+          (r) =>
+              r.id == widget.targetUserId &&
+              r.status == 'active' &&
+              !TrustSliderWidget.isFamilyRelationshipType(r.type),
+        ) ??
+        false;
+
+    final relTypeFromTrust =
+        trustAsync.value?.relationshipTypes[widget.targetUserId];
+    final isFriendFromTrust =
+        relTypeFromTrust != null &&
+        relTypeFromTrust.isNotEmpty &&
+        !TrustSliderWidget.isFamilyRelationshipType(relTypeFromTrust);
+
+    final isFriend =
+        _isFriendMember || isFriendFromRelationships || isFriendFromTrust;
+
+    final myProfileAsync = ref.watch(userProfileProvider);
+    final isProfileIncomplete =
+        (myProfileAsync.value != null && !myProfileAsync.value!.isComplete) ||
+        (myProfileAsync.value == null && _isOwnProfileIncomplete);
+
     if (_isLoadingPrevious) {
       return Card(
         elevation: 2,
@@ -259,15 +401,20 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
       );
     }
 
-    final color = _getColor(context, _currentValue);
-    final isStaked = _isStaked;
-    final canSubmit = _canSubmit;
-    final isAtZero = _currentValue == 0;
+    final effectiveValue = isFriend && _currentValue > 0
+        ? _currentValue.clamp(11.0, 90.0)
+        : _currentValue;
+    final color = _getColor(context, effectiveValue);
+    final isStaked = !isFriend && _isStaked;
+    final canSubmit = !isProfileIncomplete && _canSubmit;
+    final isAtZero = effectiveValue == 0;
     final firstName = widget.displayName?.split(' ').first;
     final String buttonText;
     final wasStakedLocal = _wasFullTrust || _wasNoTrust;
 
-    if (isAtZero && firstName != null) {
+    if (isProfileIncomplete) {
+      buttonText = 'Complete your profile to vouch';
+    } else if (isAtZero && firstName != null) {
       buttonText = 'Vouch for $firstName Trustworthy';
     } else if (isAtZero) {
       buttonText = 'Vouch Trustworthy';
@@ -324,7 +471,9 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                         const SizedBox(width: 4),
                       ],
                       Text(
-                        _getLabel(_currentValue),
+                        isFriend && effectiveValue > 0
+                            ? 'Friend · Standard Trust (11–90)'
+                            : _getLabel(effectiveValue),
                         style: TextStyle(
                           color: color,
                           fontWeight: FontWeight.bold,
@@ -349,16 +498,24 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                 ),
               ),
               child: Slider(
-                value: _currentValue,
+                value: effectiveValue,
                 min: 0.0,
-                max: 100.0,
-                divisions: 100,
-                label: _currentValue.round().toString(),
-                onChanged: (value) {
-                  setState(() {
-                    _currentValue = value;
-                  });
-                },
+                max: isFriend ? 90.0 : 100.0,
+                divisions: isFriend ? 90 : 100,
+                label: effectiveValue.round().toString(),
+                onChanged: isProfileIncomplete
+                    ? null
+                    : (value) {
+                        setState(() {
+                          if (isFriend && value > 0 && value < 11) {
+                            _currentValue = 11.0;
+                          } else if (isFriend && value > 90) {
+                            _currentValue = 90.0;
+                          } else {
+                            _currentValue = value;
+                          }
+                        });
+                      },
               ),
             ),
             if (isLoading)
@@ -368,7 +525,7 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${_currentValue.round()}%',
+                    '${effectiveValue.round()}%',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,

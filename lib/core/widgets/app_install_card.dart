@@ -31,19 +31,10 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
   bool _showEmailError = false;
 
   static const _testerSignedUpKey = 'tester_signed_up';
-  static const _testFlightDeepLink =
-      'itms-beta://testflight.apple.com/join/vB3XzPKg';
   static const _testFlightWebUrl =
       'https://testflight.apple.com/join/vB3XzPKg';
 
   Future<void> _openTestFlight() async {
-    try {
-      final uri = Uri.parse(_testFlightDeepLink);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return;
-      }
-    } catch (_) {}
     try {
       await launchUrl(
         Uri.parse(_testFlightWebUrl),

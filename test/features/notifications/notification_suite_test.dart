@@ -1,5 +1,6 @@
 // ignore_for_file: subtype_of_sealed_class, must_be_immutable
 
+import 'dart:ui' show AppLifecycleState;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/core/services/proximity_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -11,8 +12,25 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/chat/services/chat_messaging_service.dart';
 import 'package:diaspora_nearby/features/notifications/models/notification_item.dart';
+import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 
 // Manual Fakes to bypass build_runner dependency issues
+
+class ShownNotificationCall {
+  final int id;
+  final String? title;
+  final String? body;
+  final NotificationDetails? notificationDetails;
+  final String? payload;
+
+  ShownNotificationCall({
+    required this.id,
+    this.title,
+    this.body,
+    this.notificationDetails,
+    this.payload,
+  });
+}
 
 // ==========================================
 // Fake Notifications
@@ -23,6 +41,9 @@ class FakeLocalNotifications extends Mock
   int? lastId;
   String? lastTitle;
   String? lastBody;
+  NotificationDetails? lastNotificationDetails;
+  final List<ShownNotificationCall> shownCalls = [];
+  final List<Map<String, Object?>> cancelCalls = [];
 
   @override
   Future<void> show({
@@ -36,6 +57,21 @@ class FakeLocalNotifications extends Mock
     lastId = id;
     lastTitle = title;
     lastBody = body;
+    lastNotificationDetails = notificationDetails;
+    shownCalls.add(
+      ShownNotificationCall(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: notificationDetails,
+        payload: payload,
+      ),
+    );
+  }
+
+  @override
+  Future<void> cancel({required int id, String? tag}) async {
+    cancelCalls.add({'id': id, 'tag': tag});
   }
 
   @override
@@ -430,5 +466,163 @@ void main() {
         NotificationType.eventCancelled,
       );
     });
+  });
+
+  group('Chat Push Notification Suppression & Stacking Tests', () {
+    late FakeLocalNotifications localNotifications;
+    late PushNotificationService pushService;
+
+    setUp(() {
+      localNotifications = FakeLocalNotifications();
+      pushService = PushNotificationService(
+        null,
+        localNotifications: localNotifications,
+        firestore: fakeFirestore,
+      );
+      ActiveChatTracker.instance.clearActiveChat();
+      ActiveChatTracker.instance.setLifecycleState(AppLifecycleState.resumed);
+    });
+
+    tearDown(() {
+      ActiveChatTracker.instance.clearActiveChat();
+      ActiveChatTracker.instance.setLifecycleState(AppLifecycleState.resumed);
+    });
+
+    test(
+      'suppresses push notification when actively chatting in the same chatId or with partnerUserId',
+      () async {
+        await pushService.setActiveChat(
+          chatId: 'chat_active_1',
+          partnerUserId: 'partner_99',
+        );
+
+        // Message in active chat -> suppressed
+        await pushService.handleIncomingMessage(
+          messageId: 'm1',
+          notificationTitle: 'Ama',
+          notificationBody: 'Are you there?',
+          data: {
+            'type': 'direct_message',
+            'chatId': 'chat_active_1',
+            'senderId': 'partner_99',
+            'senderName': 'Ama',
+            'content': 'Are you there?',
+          },
+        );
+
+        expect(localNotifications.shownCalls, isEmpty);
+
+        // Message from a different chat while in chat_active_1 -> still shown
+        await pushService.handleIncomingMessage(
+          messageId: 'm2',
+          notificationTitle: 'Kofi',
+          notificationBody: 'Hey from another chat!',
+          data: {
+            'type': 'direct_message',
+            'chatId': 'chat_other_2',
+            'senderId': 'user_kofi',
+            'senderName': 'Kofi',
+            'content': 'Hey from another chat!',
+          },
+        );
+
+        expect(localNotifications.shownCalls, hasLength(1));
+        expect(localNotifications.lastTitle, 'Kofi');
+        expect(localNotifications.lastBody, 'Hey from another chat!');
+      },
+    );
+
+    test(
+      'delivers push notification when app is backgrounded or after leaving active chat',
+      () async {
+        await pushService.setActiveChat(
+          chatId: 'chat_active_1',
+          partnerUserId: 'partner_99',
+        );
+
+        // Backgrounding the app while on the chat screen should allow notifications
+        pushService.setLifecycleState(AppLifecycleState.paused);
+
+        await pushService.handleIncomingMessage(
+          messageId: 'm_paused',
+          notificationTitle: 'Ama',
+          notificationBody: 'Message while app is paused',
+          data: {
+            'type': 'direct_message',
+            'chatId': 'chat_active_1',
+            'senderId': 'partner_99',
+            'senderName': 'Ama',
+            'content': 'Message while app is paused',
+          },
+        );
+
+        expect(localNotifications.shownCalls, hasLength(1));
+      },
+    );
+
+    test(
+      'stacks multiple messages from the same chat into a single push notification container',
+      () async {
+        const chatId = 'chat_stack_123';
+
+        await pushService.handleIncomingMessage(
+          messageId: 'msg_1',
+          notificationTitle: 'Kwame',
+          notificationBody: 'First message',
+          data: {
+            'type': 'direct_message',
+            'chatId': chatId,
+            'senderId': 'user_kwame',
+            'senderName': 'Kwame',
+            'content': 'First message',
+          },
+        );
+
+        await pushService.handleIncomingMessage(
+          messageId: 'msg_2',
+          notificationTitle: 'Kwame',
+          notificationBody: 'Second message',
+          data: {
+            'type': 'direct_message',
+            'chatId': chatId,
+            'senderId': 'user_kwame',
+            'senderName': 'Kwame',
+            'content': 'Second message',
+          },
+        );
+
+        expect(localNotifications.shownCalls, hasLength(2));
+
+        final firstCall = localNotifications.shownCalls[0];
+        final secondCall = localNotifications.shownCalls[1];
+
+        // Both updates must target the exact same notification container ID and tag
+        final expectedId = PushNotificationService.chatNotificationId(chatId);
+        expect(firstCall.id, expectedId);
+        expect(secondCall.id, expectedId);
+        expect(firstCall.notificationDetails?.android?.tag, 'chat_$chatId');
+        expect(secondCall.notificationDetails?.android?.tag, 'chat_$chatId');
+
+        // The second notification container update contains both messages stacked
+        expect(secondCall.body, 'First message\nSecond message');
+
+        final style =
+            secondCall.notificationDetails?.android?.styleInformation
+                as MessagingStyleInformation?;
+        expect(style, isNotNull);
+        expect(style!.messages, hasLength(2));
+        expect(style.messages![0].text, 'First message');
+        expect(style.messages![1].text, 'Second message');
+        expect(secondCall.notificationDetails?.android?.subText, '2 messages');
+        expect(secondCall.notificationDetails?.android?.number, 2);
+
+        // Entering the chat clears the stacked buffer and cancels the container
+        await pushService.setActiveChat(
+          chatId: chatId,
+          partnerUserId: 'user_kwame',
+        );
+        expect(pushService.getBufferedChatMessages(chatId), isEmpty);
+      },
+    );
   });
 }

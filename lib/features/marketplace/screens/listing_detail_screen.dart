@@ -285,15 +285,18 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    CurrencyPriceDisplay(
-                      amount: listing.priceAmount,
-                      sellerCountryCode: listing.sellerCountryCode,
-                      viewerCountryCode: _viewerCountryCode,
-                      primaryColor: marketplaceSageGreen,
-                      primaryStyle: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: marketplaceSageGreen,
+                    Flexible(
+                      child: CurrencyPriceDisplay(
+                        amount: listing.priceAmount,
+                        sellerCountryCode: listing.sellerCountryCode,
+                        viewerCountryCode: _viewerCountryCode,
+                        showToggle: false,
+                        primaryColor: marketplaceSageGreen,
+                        primaryStyle: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: marketplaceSageGreen,
+                        ),
                       ),
                     ),
                     if (listing.priceNegotiable) ...[
@@ -545,8 +548,117 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
 
       // ── Bottom Action Bar ────────────────────────────────────────
       bottomNavigationBar: isOwner
-          ? null
+          ? _buildOwnerBottomBar(listing, theme, isDark)
           : _buildBottomBar(listing, theme, isDark),
+    );
+  }
+
+  // ─── Owner Bottom Action Bar ────────────────────────────────────────
+  Widget _buildOwnerBottomBar(
+    MarketplaceListing listing,
+    ThemeData theme,
+    bool isDark,
+  ) {
+    const sageGreen = marketplaceSageGreen;
+    final isJob = listing.listingType == ListingType.job;
+    final isSold = listing.status == ListingStatus.sold;
+    final isPaused = listing.status == ListingStatus.paused;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.02)
+            : Colors.black.withValues(alpha: 0.01),
+        border: Border(
+          top: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            // Primary action: Open Shop Chat
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final sellerRole = _getSellerRole(listing.category);
+                  final listingType = _getListingType(listing.category);
+                  _navigateToListingChat(listing, sellerRole, listingType);
+                },
+                icon: const Icon(LucideIcons.shoppingCart, size: 18),
+                label: const Text(
+                  'Open Shop Chat',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: sageGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Secondary: Mark Sold / Filled or Relist
+            ElevatedButton.icon(
+              onPressed: () => _onMenuAction(
+                (isSold || isPaused) ? 'activate' : 'sold',
+                listing,
+              ),
+              icon: Icon(
+                (isSold || isPaused)
+                    ? LucideIcons.rotateCcw
+                    : LucideIcons.checkCircle2,
+                size: 16,
+              ),
+              label: Text(
+                (isSold || isPaused)
+                    ? 'Relist'
+                    : (isJob ? 'Mark Filled' : 'Mark Sold'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                foregroundColor: (isSold || isPaused)
+                    ? AppTheme.accent
+                    : sageGreen,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Edit button
+            SizedBox(
+              width: 48,
+              child: ElevatedButton(
+                onPressed: () => _onMenuAction('edit', listing),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  foregroundColor: theme.colorScheme.onSurface,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Icon(LucideIcons.edit3, size: 18),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1589,14 +1701,22 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         break;
       case 'pause':
         await repo.updateListingStatus(listing.id, ListingStatus.paused);
+        await _notifyShopChatStatus(listing, 'Listing paused by seller');
         _loadListing();
         break;
       case 'activate':
         await repo.updateListingStatus(listing.id, ListingStatus.active);
+        await _notifyShopChatStatus(listing, 'Listing is now available again');
         _loadListing();
         break;
       case 'sold':
         await repo.updateListingStatus(listing.id, ListingStatus.sold);
+        await _notifyShopChatStatus(
+          listing,
+          listing.listingType == ListingType.job
+              ? 'Position marked as Filled'
+              : 'Item marked as Sold',
+        );
         _loadListing();
         break;
       case 'delete':
@@ -1624,6 +1744,28 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           await repo.deleteListing(listing.id);
           if (mounted) context.pop();
         }
+    }
+  }
+
+  /// Post a system status update in the listing's Shop Chat when status changes
+  Future<void> _notifyShopChatStatus(
+    MarketplaceListing listing,
+    String statusMessage,
+  ) async {
+    try {
+      final chatRepo = ref.read(chatRepositoryProvider);
+      final chatId = await chatRepo.getExistingListingChat(listing.id);
+      if (chatId != null) {
+        final chat = await chatRepo.getChat(chatId);
+        await chatRepo.sendTextMessage(
+          chatId,
+          statusMessage,
+          type: 'system',
+          participants: chat?.participants,
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Marketplace] Could not post shop status update: $e');
     }
   }
 

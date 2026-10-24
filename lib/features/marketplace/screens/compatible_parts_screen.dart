@@ -5,8 +5,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.dart';
 import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
-import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 /// Screen that displays car parts matching a specific vehicle (make + model).
 class CompatiblePartsScreen extends ConsumerStatefulWidget {
@@ -381,16 +381,12 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
                     const SizedBox(height: 6),
 
                     // Price
-                    Text(
-                      CurrencyHelper.formatLocalPrice(
-                        part.priceAmount,
-                        part.sellerCountryCode,
-                      ),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: marketplaceSageGreen,
-                      ),
+                    LocalPriceRow(
+                      listing: part,
+                      viewerCountryCode: ref
+                          .watch(userProfileProvider)
+                          .value
+                          ?.hostCountryCode,
                     ),
                   ],
                 ),

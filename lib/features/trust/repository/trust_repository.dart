@@ -22,7 +22,9 @@ class TrustRepository {
     try {
       final doc = await _firestore.collection('trust_data').doc(uid).get();
       if (doc.exists && doc.data() != null) {
-        return TrustData.fromJson(doc.data()!);
+        final raw = Map<String, dynamic>.from(doc.data()!);
+        raw['uid'] ??= doc.id;
+        return TrustData.fromJson(raw);
       }
       return null;
     } catch (e) {
@@ -34,7 +36,9 @@ class TrustRepository {
   Stream<TrustData?> streamTrustData(String uid) {
     return _firestore.collection('trust_data').doc(uid).snapshots().map((doc) {
       if (doc.exists && doc.data() != null) {
-        return TrustData.fromJson(doc.data()!);
+        final raw = Map<String, dynamic>.from(doc.data()!);
+        raw['uid'] ??= doc.id;
+        return TrustData.fromJson(raw);
       }
       return null;
     });

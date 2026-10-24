@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart'; // [NEW]
-import 'package:any_link_preview/any_link_preview.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/models/message.dart';
+import 'package:diaspora_nearby/features/chat/widgets/message_content/chat_link_preview.dart';
 
 class TextMessageContent extends StatefulWidget {
   final Message message;
@@ -20,6 +20,10 @@ class TextMessageContent extends StatefulWidget {
 }
 
 class _TextMessageContentState extends State<TextMessageContent> {
+  static final RegExp _urlRegex = RegExp(
+    r'((https?:www\.)|(https?:\/\/)|(www\.))[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9]{1,24}(\/[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)?',
+  );
+
   final List<TapGestureRecognizer> _recognizers = [];
 
   @override
@@ -32,6 +36,11 @@ class _TextMessageContentState extends State<TextMessageContent> {
 
   @override
   Widget build(BuildContext context) {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+
     final theme = Theme.of(context);
     final textStyle = theme.textTheme.bodyMedium?.copyWith(
       color: widget.isOwn
@@ -76,12 +85,8 @@ class _TextMessageContentState extends State<TextMessageContent> {
         },
         onNonMatch: (String text) {
           // Now check for URLs in the non-mention text
-          final urlRegex = RegExp(
-            r'((https?:www\.)|(https?:\/\/)|(www\.))[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9]{1,6}(\/[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)?',
-          );
-
           text.splitMapJoin(
-            urlRegex,
+            _urlRegex,
             onMatch: (Match urlMatch) {
               final url = urlMatch.group(0)!;
               final recognizer = TapGestureRecognizer()
@@ -119,12 +124,8 @@ class _TextMessageContentState extends State<TextMessageContent> {
       );
     } else {
       // Check for URLs in standard content too
-      final urlRegex = RegExp(
-        r'((https?:www\.)|(https?:\/\/)|(www\.))[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9]{1,6}(\/[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)?',
-      );
-
       content.splitMapJoin(
-        urlRegex,
+        _urlRegex,
         onMatch: (Match urlMatch) {
           final url = urlMatch.group(0)!;
           final recognizer = TapGestureRecognizer()
@@ -159,10 +160,7 @@ class _TextMessageContentState extends State<TextMessageContent> {
 
     // Extract first URL for preview
     String? firstUrl;
-    final urlRegex = RegExp(
-      r'((https?:www\.)|(https?:\/\/)|(www\.))[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9]{1,6}(\/[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)?',
-    );
-    final match = urlRegex.firstMatch(content);
+    final match = _urlRegex.firstMatch(content);
     if (match != null) {
       firstUrl = match.group(0);
       if (firstUrl != null && !firstUrl.startsWith('http')) {
@@ -176,41 +174,17 @@ class _TextMessageContentState extends State<TextMessageContent> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           RichText(text: TextSpan(children: spans)),
-          if (firstUrl != null) ...[
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AnyLinkPreview(
-                link: firstUrl,
-                displayDirection: UIDirection.uiDirectionVertical,
-                showMultimedia: true,
-                bodyMaxLines: 2,
-                bodyTextOverflow: TextOverflow.ellipsis,
-                titleStyle:
-                    theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ) ??
-                    const TextStyle(fontWeight: FontWeight.bold),
-                bodyStyle:
-                    theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12),
-                errorWidget: const SizedBox.shrink(),
-                errorTitle: '',
-                errorBody: '',
-                cache: const Duration(days: 7),
-                backgroundColor: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.3),
-                borderRadius: 8,
-                removeElevation: true,
-                boxShadow: const [],
-                onTap: () async {
-                  final uri = Uri.parse(firstUrl!);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
+          if (firstUrl != null)
+            ChatLinkPreview(
+              url: firstUrl,
+              isOwn: widget.isOwn,
+              onTap: () async {
+                final uri = Uri.parse(firstUrl!);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
             ),
-          ],
         ],
       ),
     );

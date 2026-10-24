@@ -137,35 +137,20 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
     super.dispose();
   }
 
-  static const _testFlightDeepLink =
-      'itms-beta://testflight.apple.com/join/vB3XzPKg';
   static const _testFlightWebUrl =
       'https://testflight.apple.com/join/vB3XzPKg';
   static const _playStoreUrl =
       'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
 
   Future<void> _openDirectStoreLink() async {
-    final primary = _detectedPlatform == 'ios'
-        ? _testFlightDeepLink
-        : _playStoreUrl;
-    final fallback = _detectedPlatform == 'ios' ? _testFlightWebUrl : null;
+    final url = _detectedPlatform == 'ios' ? _testFlightWebUrl : _playStoreUrl;
     try {
-      final uri = Uri.parse(primary);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (mounted) Navigator.of(context).pop();
-        return;
-      }
+      await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (mounted) Navigator.of(context).pop();
     } catch (_) {}
-    if (fallback != null) {
-      try {
-        await launchUrl(
-          Uri.parse(fallback),
-          mode: LaunchMode.externalApplication,
-        );
-        if (mounted) Navigator.of(context).pop();
-      } catch (_) {}
-    }
   }
 
   Future<void> _submit() async {

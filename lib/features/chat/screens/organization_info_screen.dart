@@ -475,28 +475,10 @@ class _OrganizationInfoScreenState
                     ),
                     const SizedBox(height: 8),
                     ..._admins.map((p) {
-                      double? distanceKm;
-                      if (currentUserProfile
-                                  ?.currentLocation
-                                  ?.geometry
-                                  .location !=
-                              null &&
-                          p.hostLocation.geometry?.location != null) {
-                        distanceKm = calculateDistance(
-                          currentUserProfile!
-                              .currentLocation!
-                              .geometry
-                              .location
-                              .lat,
-                          currentUserProfile
-                              .currentLocation!
-                              .geometry
-                              .location
-                              .lng,
-                          p.hostLocation.geometry!.location.lat,
-                          p.hostLocation.geometry!.location.lng,
-                        );
-                      }
+                      final distanceKm = calculateProfileDistanceKm(
+                        currentUserProfile,
+                        p,
+                      );
                       return UserCardView(
                         user: p,
                         distanceKm: distanceKm,
@@ -525,28 +507,10 @@ class _OrganizationInfoScreenState
                     ),
                     const SizedBox(height: 8),
                     ..._participants.map((p) {
-                      double? distanceKm;
-                      if (currentUserProfile
-                                  ?.currentLocation
-                                  ?.geometry
-                                  .location !=
-                              null &&
-                          p.hostLocation.geometry?.location != null) {
-                        distanceKm = calculateDistance(
-                          currentUserProfile!
-                              .currentLocation!
-                              .geometry
-                              .location
-                              .lat,
-                          currentUserProfile
-                              .currentLocation!
-                              .geometry
-                              .location
-                              .lng,
-                          p.hostLocation.geometry!.location.lat,
-                          p.hostLocation.geometry!.location.lng,
-                        );
-                      }
+                      final distanceKm = calculateProfileDistanceKm(
+                        currentUserProfile,
+                        p,
+                      );
                       return UserCardView(
                         user: p,
                         distanceKm: distanceKm,
@@ -592,28 +556,10 @@ class _OrganizationInfoScreenState
                     ),
                     const SizedBox(height: 8),
                     ..._followers.map((p) {
-                      double? distanceKm;
-                      if (currentUserProfile
-                                  ?.currentLocation
-                                  ?.geometry
-                                  .location !=
-                              null &&
-                          p.hostLocation.geometry?.location != null) {
-                        distanceKm = calculateDistance(
-                          currentUserProfile!
-                              .currentLocation!
-                              .geometry
-                              .location
-                              .lat,
-                          currentUserProfile
-                              .currentLocation!
-                              .geometry
-                              .location
-                              .lng,
-                          p.hostLocation.geometry!.location.lat,
-                          p.hostLocation.geometry!.location.lng,
-                        );
-                      }
+                      final distanceKm = calculateProfileDistanceKm(
+                        currentUserProfile,
+                        p,
+                      );
                       return UserCardView(
                         user: p,
                         distanceKm: distanceKm,

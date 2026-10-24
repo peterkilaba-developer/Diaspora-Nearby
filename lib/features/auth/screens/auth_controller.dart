@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:whatsapp_zero_tap/whatsapp_zero_tap.dart';
 // Needed for FirebaseAuthException
 import '../repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/auth/services/session_service.dart';
@@ -12,6 +15,56 @@ import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart'
 final authControllerProvider = NotifierProvider<AuthController, bool>(
   AuthController.new,
 );
+
+/// Holds the active pre-flight WhatsApp Zero-Tap OTP Future started before
+/// calling the Cloud Function so that zero-tap broadcasts arriving while the
+/// network call / navigation is in-flight are never dropped.
+final pendingWhatsAppZeroTapProvider = Provider<WhatsAppZeroTapSession>((ref) {
+  return WhatsAppZeroTapSession();
+});
+
+class WhatsAppZeroTapSession {
+  Future<String?>? _activeFuture;
+
+  /// Starts the WhatsApp Zero-Tap handshake and BroadcastReceiver before
+  /// the OTP request is sent over the network, avoiding race conditions.
+  Future<String?> startPreFlightListener() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return Future.value(null);
+    }
+    final future = _listen();
+    _activeFuture = future;
+    return future;
+  }
+
+  /// Consumes the pre-flight listener if one is active, or starts a new one.
+  Future<String?> consumeOrStartListener() {
+    final existing = _activeFuture;
+    _activeFuture = null;
+    if (existing != null) {
+      return existing;
+    }
+    return startPreFlightListener();
+  }
+
+  Future<String?> _listen() async {
+    try {
+      final zeroTap = WhatsappZeroTap();
+      final isSupported = await zeroTap.isWhatsAppOtpHandshakeSupported();
+      if (!isSupported) {
+        debugPrint('WhatsApp Zero-Tap handshake not supported on this device');
+        return null;
+      }
+      debugPrint('WhatsApp Zero-Tap: listening for incoming OTP...');
+      return await zeroTap.listenForOTP(
+        timeout: const Duration(minutes: 2),
+      );
+    } catch (e) {
+      debugPrint('WhatsApp Zero-Tap listener completed or skipped: $e');
+      return null;
+    }
+  }
+}
 
 class AuthController extends Notifier<bool> {
   @override
@@ -201,6 +254,10 @@ class AuthController extends Notifier<bool> {
     state = true;
     final repository = ref.read(authRepositoryProvider);
     try {
+      // Initiate the WhatsApp Zero-Tap handshake BEFORE requesting the OTP
+      // so the BroadcastReceiver is ready before the WhatsApp message arrives.
+      ref.read(pendingWhatsAppZeroTapProvider).startPreFlightListener();
+
       await repository.requestWhatsAppOtp(phoneNumber);
       state = false;
       if (context.mounted) {

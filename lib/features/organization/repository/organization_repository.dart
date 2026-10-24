@@ -28,6 +28,7 @@ final userOrganizationsProvider = StreamProvider<List<Map<String, dynamic>>>((
 
 final organizationByIdProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, id) {
+      ref.keepAlive();
       return ref.watch(organizationRepositoryProvider).getOrganization(id);
     });
 
@@ -35,8 +36,11 @@ class OrganizationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final OrganizationLocalService _localService;
+  final Map<String, Map<String, dynamic>> _orgCache = {};
 
   OrganizationRepository(Ref ref) : _localService = OrganizationLocalService();
+
+  Map<String, dynamic>? getCachedOrganization(String orgId) => _orgCache[orgId];
 
   /// Watch organizations where the user is an admin, superAdmin, or pendingAdmin
   Stream<List<Map<String, dynamic>>> watchUserOrganizations(String userId) {
@@ -175,10 +179,16 @@ class OrganizationRepository {
     String orgId, {
     bool force = false,
   }) async {
-    // 1. Check Local Cache
+    // 1. Check In-Memory Cache
+    if (!force && _orgCache.containsKey(orgId)) {
+      _fetchAndSaveOrg(orgId);
+      return _orgCache[orgId];
+    }
+    // 2. Check Local Cache
     if (!force) {
       final localOrg = await _localService.getOrganization(orgId);
       if (localOrg != null) {
+        _orgCache[orgId] = localOrg;
         // Background refresh
         _fetchAndSaveOrg(orgId);
         return localOrg;
@@ -194,6 +204,7 @@ class OrganizationRepository {
       if (doc.exists) {
         final data = doc.data()!;
         data['id'] = doc.id;
+        _orgCache[orgId] = data;
 
         // Cache to Isar
         await _localService.saveOrganization(data);
@@ -203,7 +214,7 @@ class OrganizationRepository {
       return null;
     } catch (e) {
       debugPrint('Error fetching/saving org: $e');
-      return null;
+      return _orgCache[orgId];
     }
   }
 

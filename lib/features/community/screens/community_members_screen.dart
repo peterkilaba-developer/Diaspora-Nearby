@@ -16,6 +16,7 @@ import 'package:diaspora_nearby/features/shared/widgets/confetti_overlay.dart';
 // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
 import 'package:diaspora_nearby/features/community/widgets/share_community_dialog.dart'; // [NEW]
+import 'package:diaspora_nearby/theme/app_theme.dart';
 
 class CommunityMembersScreen extends ConsumerStatefulWidget {
   final String communityId;
@@ -60,6 +61,19 @@ class _CommunityMembersScreenState
 
   @override
   Widget build(BuildContext context) {
+    final viewerHomeCountryCode = ref
+        .watch(userProfileProvider)
+        .value
+        ?.homeCountryCode;
+    final displayTitle = CommunityChatUtils.generateCommunityNameFromParts(
+      name: widget.community.name,
+      locationType: widget.community.locationType ?? '',
+      id: widget.community.id,
+      homeCountryCode: widget.community.homeCountryCode,
+      hostCountryCode: widget.community.hostCountryCode,
+      viewerHomeCountryCode: viewerHomeCountryCode,
+    );
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -75,14 +89,26 @@ class _CommunityMembersScreenState
               locationType: widget.community.locationType,
               homeCountryCode: widget.community.homeCountryCode,
               hostCountryCode: widget.community.hostCountryCode,
+              viewerHomeCountryCode: viewerHomeCountryCode,
               communityId: widget.community.id,
               profileImage: widget.community.profileImage,
               size: 32,
             ),
             const SizedBox(width: 12),
+            if (CommunityChatUtils.isBilateral(
+              id: widget.community.id,
+              locationType: widget.community.locationType,
+            )) ...[
+              const Icon(
+                LucideIcons.heartHandshake,
+                size: 16,
+                color: AppTheme.accent,
+              ),
+              const SizedBox(width: 6),
+            ],
             Expanded(
               child: Text(
-                widget.community.name,
+                displayTitle,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 18,
@@ -108,22 +134,28 @@ class _CommunityMembersScreenState
       ),
 
       body: SafeArea(
-        child: FutureBuilder<List<ProfileData>>(
-          // Fetch members from Firestore
-          future: _fetchMembers(),
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          // Stream members from Firestore in real time
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .where('communityMemberships', arrayContains: widget.communityId)
+              .limit(50)
+              .snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
               return Center(child: Text('Error: ${snapshot.error}'));
             }
 
-            final members = snapshot.data ?? [];
             final currentUser = ref.watch(authRepositoryProvider).currentUser;
-
-            // [FIX] Check if current user is actually a member of this community
             final currentProfile = ref.watch(userProfileProvider).value;
+            final members = _parseAndSortMembers(
+              snapshot.data?.docs ?? const [],
+              currentProfile,
+            );
             final isMember =
                 currentProfile?.communityMemberships?.contains(
                   widget.communityId,
@@ -356,53 +388,19 @@ class _CommunityMembersScreenState
     );
   }
 
-  Future<List<ProfileData>> _fetchMembers() async {
+  List<ProfileData> _parseAndSortMembers(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    ProfileData? currentUserProfile,
+  ) {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('communityMemberships', arrayContains: widget.communityId)
-          .limit(50)
-          .get();
-
-      final currentUserProfile = ref.read(userProfileProvider).value;
-      // Viewer's location: prefer live `currentLocation`, fall back to
-      // `hostLocation` (set at signup). Without this fallback every distance
-      // collapses to null → the UI used to render that as "1 km away".
-      final currentLat =
-          currentUserProfile?.currentLocation?.geometry.location.lat ??
-          currentUserProfile?.hostLocation.geometry?.location.lat;
-      final currentLng =
-          currentUserProfile?.currentLocation?.geometry.location.lng ??
-          currentUserProfile?.hostLocation.geometry?.location.lng;
-
       final List<ProfileData> members = [];
-      for (final doc in snapshot.docs) {
+      for (final doc in docs) {
         try {
           final data = doc.data();
           final profile = ProfileData.fromJson(data);
           profile.uid = doc.id;
 
-          // Calculate distance
-          double? dist;
-          if (currentLat != null && currentLng != null) {
-            // Priority: 1. member.currentLocation, 2. member.hostLocation
-            final targetLat =
-                profile.currentLocation?.geometry.location.lat ??
-                profile.hostLocation.geometry?.location.lat;
-            final targetLng =
-                profile.currentLocation?.geometry.location.lng ??
-                profile.hostLocation.geometry?.location.lng;
-
-            if (targetLat != null && targetLng != null) {
-              dist = calculateDistance(
-                currentLat,
-                currentLng,
-                targetLat,
-                targetLng,
-              );
-            }
-          }
-
+          final dist = calculateProfileDistanceKm(currentUserProfile, profile);
           members.add(profile.copyWith(distance: dist));
         } catch (docErr) {
           debugPrint('Error parsing member ${doc.id}: $docErr');
@@ -418,20 +416,19 @@ class _CommunityMembersScreenState
 
       // [FIX] Self-Correction for "First Member" scenario involving index lag.
       if (members.isEmpty) {
-        final currentUserData = ref.read(userProfileProvider).value;
         // If provider has data and confirms membership, assume we are the first member
-        if (currentUserData != null &&
-            currentUserData.communityMemberships != null &&
-            currentUserData.communityMemberships!.contains(
+        if (currentUserProfile != null &&
+            currentUserProfile.communityMemberships != null &&
+            currentUserProfile.communityMemberships!.contains(
               widget.communityId,
             )) {
-          return [currentUserData];
+          return [currentUserProfile.copyWith(distance: 0.0)];
         }
       }
 
       return members;
     } catch (e) {
-      debugPrint('Error fetching members: $e');
+      debugPrint('Error parsing members: $e');
       return [];
     }
   }

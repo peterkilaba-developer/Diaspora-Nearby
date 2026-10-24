@@ -588,22 +588,12 @@ class SettingsScreen extends ConsumerWidget {
                             if (selectedPlatform == 'ios' ||
                                 selectedPlatform == 'both') {
                               try {
-                                final tfDeep = Uri.parse(
-                                  'itms-beta://testflight.apple.com/join/vB3XzPKg',
+                                await launchUrl(
+                                  Uri.parse(
+                                    'https://testflight.apple.com/join/vB3XzPKg',
+                                  ),
+                                  mode: LaunchMode.externalApplication,
                                 );
-                                if (await canLaunchUrl(tfDeep)) {
-                                  await launchUrl(
-                                    tfDeep,
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                } else {
-                                  await launchUrl(
-                                    Uri.parse(
-                                      'https://testflight.apple.com/join/vB3XzPKg',
-                                    ),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                }
                               } catch (_) {}
                             }
                             if (!context.mounted) return;

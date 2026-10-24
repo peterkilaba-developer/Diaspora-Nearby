@@ -5,7 +5,7 @@ const {continentForCountry, CONTINENT_NAMES, hasStateLevel} = require("./country
 
 const MAX_COMMUNITY_MEMBERS = 500;
 const TYPES = new Set(["global", "continent", "country", "state", "city"]);
-const LOCATION_TYPES = new Set(["global", "home", "host", "past"]);
+const LOCATION_TYPES = new Set(["global", "home", "host", "past", "bilateral"]);
 
 function validUid(value) {
   return typeof value === "string" && value.length > 0 && value.length <= 128;
@@ -70,6 +70,25 @@ function communityIdentity(type, locationType, location, homeCountryCode) {
       id: "global_community",
       name: "Global Community",
       continent: "Global",
+    };
+  }
+  if (locationType === "bilateral") {
+    const codeA = String(homeCountryCode || "").trim().toUpperCase();
+    const codeB = String(location.countryCode || "").trim().toUpperCase();
+    if (!codeA || !codeB || codeA === "XX" || codeB === "XX" || codeA === codeB) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Two distinct valid countries are required for a bilateral community.",
+      );
+    }
+    const [firstCode, secondCode] = [codeA, codeB].sort();
+    const continentKey = continentForCountry(firstCode) || continentForCountry(secondCode);
+    return {
+      id: `bilateral_country_${firstCode.toLowerCase()}_${secondCode.toLowerCase()}`,
+      name: `${firstCode} - ${secondCode} Community`,
+      continent: (continentKey && CONTINENT_NAMES[continentKey]) || "Global",
+      homeCountryCode: firstCode,
+      hostCountryCode: secondCode,
     };
   }
   const continentKey = continentForCountry(location.countryCode);
@@ -177,16 +196,33 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
   if (communitySnap.exists) {
     const existing = communitySnap.data() || {};
     const effectiveLocationType = locationType === "past" ? "host" : locationType;
+    const expectedHomeCode = effectiveLocationType === "bilateral" ?
+      identity.homeCountryCode : homeCountryCode;
     if (!isGlobal &&
         (existing.type !== type || existing.locationType !== effectiveLocationType ||
-          String(existing.homeCountryCode || "").toUpperCase() !== homeCountryCode)) {
+          String(existing.homeCountryCode || "").toUpperCase() !== expectedHomeCode)) {
       throw new functions.https.HttpsError(
           "already-exists",
           "The canonical community identifier is already in use.",
       );
     }
     const userMemberships = Array.isArray(profile.communityMemberships) ? profile.communityMemberships : [];
-    if (userMemberships.includes(identity.id)) {
+    const rawMembers = Array.isArray(existing.members) ? existing.members : [];
+    const chatSnap = await chatRef.get();
+    const existingChat = chatSnap.exists ? (chatSnap.data() || {}) : {};
+    const rawChatParticipants = Array.isArray(existingChat.participants) ? existingChat.participants : [];
+
+    const isAlreadyMember = userMemberships.includes(identity.id) ||
+        rawMembers.includes(uid) ||
+        rawChatParticipants.includes(uid);
+
+    const needsMemberAdd = rawMembers.length < MAX_COMMUNITY_MEMBERS && !rawMembers.includes(uid);
+    const needsChatAdd = chatSnap.exists ?
+      (rawChatParticipants.length < MAX_COMMUNITY_MEMBERS && !rawChatParticipants.includes(uid)) :
+      true;
+    const needsProfileMembershipAdd = !userMemberships.includes(identity.id);
+
+    if (isAlreadyMember && !needsMemberAdd && !needsChatAdd && !needsProfileMembershipAdd) {
       return {communityId: identity.id, chatId, name: existing.name || identity.name, created: false};
     }
 
@@ -195,24 +231,27 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
         chatRef, chatId, uid, profile, nowMs,
     );
     const batch = db.batch();
-    const rawMembers = Array.isArray(existing.members) ? existing.members : [];
-    const needsMemberAdd = rawMembers.length < MAX_COMMUNITY_MEMBERS && !rawMembers.includes(uid);
     batch.set(communityRef, {
-      memberCount: admin.firestore.FieldValue.increment(1),
-      totalMembers: admin.firestore.FieldValue.increment(1),
+      ...(!isAlreadyMember ? {
+        memberCount: admin.firestore.FieldValue.increment(1),
+        totalMembers: admin.firestore.FieldValue.increment(1),
+      } : {}),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ...(needsMemberAdd ? {members: admin.firestore.FieldValue.arrayUnion(uid)} : {}),
     }, {merge: true});
 
-    const chatSnap = await chatRef.get();
+    const existingLastMsg = chatSnap.exists ? (existingChat.lastMessage || null) : lastMessageData;
+    const existingLastMsgTs = (existingLastMsg && typeof existingLastMsg.timestamp === "number") ?
+      existingLastMsg.timestamp : 0;
+    const effectiveChatUpdatedAt = !isAlreadyMember ? nowMs : (existingLastMsgTs || nowMs);
+
     if (chatSnap.exists) {
-      const existingChat = chatSnap.data() || {};
-      const rawChatParticipants = Array.isArray(existingChat.participants) ? existingChat.participants : [];
-      const needsChatAdd = rawChatParticipants.length < MAX_COMMUNITY_MEMBERS && !rawChatParticipants.includes(uid);
       batch.set(chatRef, {
-        memberCount: admin.firestore.FieldValue.increment(1),
-        updatedAt: nowMs,
-        lastMessage: lastMessageData,
+        ...(!isAlreadyMember ? {
+          memberCount: admin.firestore.FieldValue.increment(1),
+          updatedAt: nowMs,
+          lastMessage: lastMessageData,
+        } : {}),
         ...(needsChatAdd ? {participants: admin.firestore.FieldValue.arrayUnion(uid)} : {}),
       }, {merge: true});
     } else {
@@ -220,6 +259,9 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
         id: chatId,
         communityId: identity.id,
         type: "community",
+        locationType: isGlobal ? "global" : effectiveLocationType,
+        homeCountryCode: isGlobal ? null : (effectiveLocationType === "bilateral" ? identity.homeCountryCode : homeCountryCode),
+        hostCountryCode: isGlobal ? null : (effectiveLocationType === "bilateral" ? identity.hostCountryCode : (effectiveLocationType === "host" ? location.countryCode : null)),
         name: existing.name || identity.name,
         participants: [uid],
         memberCount: 1,
@@ -231,7 +273,9 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
         lastMessage: lastMessageData,
       }, {merge: true});
     }
-    batch.set(msgRef, messageData);
+    if (!isAlreadyMember) {
+      batch.set(msgRef, messageData);
+    }
 
     batch.set(user.ref, {
       communityMemberships: admin.firestore.FieldValue.arrayUnion(identity.id),
@@ -242,10 +286,10 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       chatId,
       name: existing.name || identity.name,
       type: "community",
-      lastMessage: lastMessageData,
+      ...(!isAlreadyMember ? {lastMessage: lastMessageData} : (existingLastMsg ? {lastMessage: existingLastMsg} : {})),
       lastRead: nowMs,
-      addedAt: nowMs,
-      updatedAt: nowMs,
+      ...(!isAlreadyMember ? {addedAt: nowMs} : {}),
+      updatedAt: effectiveChatUpdatedAt,
       isDeleted: false,
     }, {merge: true});
 
@@ -260,9 +304,11 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
     const chat = await transaction.get(chatRef);
     const existing = community.exists ? community.data() : {};
     const effectiveLocationType = locationType === "past" ? "host" : locationType;
+    const expectedHomeCode = effectiveLocationType === "bilateral" ?
+      identity.homeCountryCode : homeCountryCode;
     if (community.exists && !isGlobal &&
         (existing.type !== type || existing.locationType !== effectiveLocationType ||
-          String(existing.homeCountryCode || "").toUpperCase() !== homeCountryCode)) {
+          String(existing.homeCountryCode || "").toUpperCase() !== expectedHomeCode)) {
       throw new functions.https.HttpsError(
           "already-exists",
           "The canonical community identifier is already in use.",
@@ -301,8 +347,8 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
         countryCode: location.countryCode,
         placeId: location.placeId,
       },
-      homeCountryCode: isGlobal ? null : homeCountryCode,
-      hostCountryCode: isGlobal ? null : (effectiveLocationType === "host" ? location.countryCode : null),
+      homeCountryCode: isGlobal ? null : (effectiveLocationType === "bilateral" ? identity.homeCountryCode : homeCountryCode),
+      hostCountryCode: isGlobal ? null : (effectiveLocationType === "bilateral" ? identity.hostCountryCode : (effectiveLocationType === "host" ? location.countryCode : null)),
       continent: identity.continent,
       members,
       admins,
@@ -344,6 +390,9 @@ exports.ensureCommunity = functions.https.onCall(async (data, context) => {
       id: chatId,
       communityId: identity.id,
       type: "community",
+      locationType: isGlobal ? "global" : effectiveLocationType,
+      homeCountryCode: isGlobal ? null : (effectiveLocationType === "bilateral" ? identity.homeCountryCode : homeCountryCode),
+      hostCountryCode: isGlobal ? null : (effectiveLocationType === "bilateral" ? identity.hostCountryCode : (effectiveLocationType === "host" ? location.countryCode : null)),
       name: identity.name,
       participants: chatParticipants,
       memberCount: updatedCount,
@@ -485,6 +534,29 @@ function computeHierarchyIdentities(homeLocation, hostLocation, homeCountryCode,
     }
   }
 
+  // 4. Bilateral Country Community (shared by both diaspora directions)
+  if (homeCountryCode &&
+      effectiveHostCountry &&
+      homeCountryCode !== "XX" &&
+      effectiveHostCountry !== "XX" &&
+      homeCountryCode !== effectiveHostCountry) {
+    const [firstCode, secondCode] = [homeCountryCode.toUpperCase(), effectiveHostCountry.toUpperCase()].sort();
+    const biContKey = continentForCountry(firstCode) || continentForCountry(secondCode);
+    const biContName = (biContKey && CONTINENT_NAMES[biContKey]) || "Global";
+    identities.push({
+      identity: {
+        id: `bilateral_country_${firstCode.toLowerCase()}_${secondCode.toLowerCase()}`,
+        name: `${firstCode} - ${secondCode} Community`,
+        continent: biContName,
+      },
+      type: "country",
+      locationType: "bilateral",
+      location: {countryCode: firstCode},
+      homeCountryCode: firstCode,
+      hostCountryCode: secondCode,
+    });
+  }
+
   return identities;
 }
 
@@ -609,6 +681,9 @@ exports.provisionSignupCommunities = functions.https.onCall(async (data, context
         id: chatId,
         communityId: commId,
         type: "community",
+        locationType: item.locationType,
+        homeCountryCode: item.homeCountryCode,
+        hostCountryCode: item.hostCountryCode,
         name: item.identity.name,
         participants: [uid],
         memberCount: 1,

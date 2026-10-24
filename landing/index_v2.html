@@ -69,7 +69,8 @@
                     var isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
 
                     if (isIOS) {
-                        window.location.href = 'itms-beta://testflight.apple.com/join/vB3XzPKg';
+                        // iOS Universal Links require a direct user tap on <a href="https://testflight.apple.com/join/...">;
+                        // script.js renders the 1-tap TestFlight join overlay.
                     } else if (isAndroid) {
                         var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
                         if (code) {
@@ -187,15 +188,6 @@
                                     <span class="play-badge-main">Google Play</span>
                                 </div>
                             </a>
-
-                            <a href="downloads/diaspora-nearby.apk" download class="btn-outline-hero"
-                                title="Download native Android APK directly">
-                                <i data-lucide="download" style="width:18px;height:18px"></i>
-                                <div class="play-badge-copy">
-                                    <span class="play-badge-sub">DIRECT INSTALL</span>
-                                    <span class="play-badge-main">Download APK</span>
-                                </div>
-                            </a>
                         </div>
                         <div class="hero-sublinks">
                             <a href="https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby" target="_blank" rel="noopener">
@@ -252,10 +244,6 @@
                                     <span class="play-badge-sub">TESTFLIGHT BETA</span>
                                     <span class="play-badge-main">Get iOS Invite</span>
                                 </div>
-                            </a>
-
-                            <a href="https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk" download class="btn" style="background: var(--surface); border: 1px solid var(--border); padding: 10px 20px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
-                                <i data-lucide="download" style="width:16px;height:16px"></i> Download APK
                             </a>
                         </div>
 
@@ -1370,7 +1358,7 @@
     </footer>
 
     <!-- Script imports -->
-    <script src="script.js?v=20261012d"></script>
+    <script src="script.js?v=20261020a"></script>
 </body>
 
 </html>

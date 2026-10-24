@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
-import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart'; // [FIX] Added import
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart'; // [FIX] Added LucideIcons import
 
@@ -23,27 +24,30 @@ class EventAttendeesScreen extends ConsumerStatefulWidget {
 class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
   @override
   Widget build(BuildContext context) {
-    // If event is passed, use its attendees list directly or fetch fresh.
-    // Fetching fresh is better.
-    final eventRepo = ref.watch(eventRepositoryProvider);
     final profileRepo = ref.read(profileRepositoryProvider);
+    final currentUserProfile = ref.watch(userProfileProvider).value;
+    final currentUserId = ref.watch(authRepositoryProvider).currentUser?.uid;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Attendees')),
-      body: FutureBuilder<Event?>(
-        future: eventRepo.getEvent(widget.eventId),
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('events')
+            .doc(widget.eventId)
+            .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final event = snapshot.data;
-          if (event == null ||
-              event.attendees == null ||
-              event.attendees!.isEmpty) {
+          final data = snapshot.data?.data();
+          final attendeeIds =
+              (data?['attendees'] as List?)?.whereType<String>().toList() ??
+              widget.event?.attendees ??
+              const <String>[];
+          if (attendeeIds.isEmpty) {
             return const Center(child: Text('No attendees yet.'));
           }
-
-          final attendeeIds = event.attendees!;
 
           // Fetch profiles for all attendees
           return FutureBuilder<List<ProfileData?>>(
@@ -51,12 +55,28 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
               attendeeIds.map((uid) => profileRepo.getUserProfile(uid)),
             ),
             builder: (context, profileSnapshot) {
-              if (profileSnapshot.connectionState == ConnectionState.waiting) {
+              if (profileSnapshot.connectionState == ConnectionState.waiting &&
+                  !profileSnapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
 
               final profiles =
-                  profileSnapshot.data?.whereType<ProfileData>().toList() ?? [];
+                  (profileSnapshot.data?.whereType<ProfileData>().toList() ??
+                          [])
+                      .map(
+                        (p) => p.copyWith(
+                          distance: calculateProfileDistanceKm(
+                            currentUserProfile,
+                            p,
+                          ),
+                        ),
+                      )
+                      .toList()
+                    ..sort((a, b) {
+                      final dA = a.distance ?? double.infinity;
+                      final dB = b.distance ?? double.infinity;
+                      return dA.compareTo(dB);
+                    });
 
               if (profiles.isEmpty) {
                 return const Center(
@@ -65,10 +85,6 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
               }
 
               // [NEW] Congratulatory Message
-              final currentUserId = ref
-                  .read(authRepositoryProvider)
-                  .currentUser
-                  ?.uid;
               if (profiles.length == 1 && profiles.first.uid == currentUserId) {
                 return Center(
                   child: Padding(
@@ -122,16 +138,16 @@ class _EventAttendeesScreenState extends ConsumerState<EventAttendeesScreen> {
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final profile = profiles[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: CachedNetworkImageProvider(
-                        profile.profileImage,
-                      ),
-                      child: null,
+                  return UserCardView(
+                    user: profile,
+                    distanceKm: profile.distance,
+                    onNameTap: () => context.push(
+                      '/profile/${profile.uid}',
+                      extra: {'distance': profile.distance},
                     ),
-                    title: Text('${profile.firstName} ${profile.lastName}'),
-                    subtitle: Text(profile.bio ?? ''),
-                    onTap: () => context.push('/profile/${profile.uid}'),
+                    onChatTap: (profile.uid == currentUserId)
+                        ? null
+                        : () => context.push('/chat/direct/${profile.uid}'),
                   );
                 },
               );

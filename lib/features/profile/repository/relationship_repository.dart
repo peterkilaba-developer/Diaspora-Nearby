@@ -159,7 +159,7 @@ class RelationshipRepository {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map((doc) => RelationshipRequest.fromMap(doc.data()))
+              .map((doc) => RelationshipRequest.fromMap(doc.data(), doc.id))
               .toList(),
         );
   }
@@ -174,7 +174,7 @@ class RelationshipRepository {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map((doc) => RelationshipRequest.fromMap(doc.data()))
+              .map((doc) => RelationshipRequest.fromMap(doc.data(), doc.id))
               .toList(),
         );
   }
@@ -200,7 +200,8 @@ class RelationshipRepository {
         .get();
 
     if (snapshot.docs.isNotEmpty) {
-      return RelationshipRequest.fromMap(snapshot.docs.first.data());
+      final doc = snapshot.docs.first;
+      return RelationshipRequest.fromMap(doc.data(), doc.id);
     }
     return null;
   }
@@ -219,7 +220,8 @@ class RelationshipRepository {
         .get();
 
     if (snapshot.docs.isNotEmpty) {
-      return RelationshipRequest.fromMap(snapshot.docs.first.data());
+      final doc = snapshot.docs.first;
+      return RelationshipRequest.fromMap(doc.data(), doc.id);
     }
     return null;
   }

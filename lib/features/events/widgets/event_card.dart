@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -8,8 +9,10 @@ import 'package:diaspora_nearby/features/shared/utils/search_highlight_utils.dar
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_venue_card.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
-class EventCard extends StatelessWidget {
+class EventCard extends ConsumerWidget {
   final Event event;
   final VoidCallback? onTap;
   final Widget? extraContent;
@@ -36,7 +39,7 @@ class EventCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -85,20 +88,15 @@ class EventCard extends StatelessWidget {
     final displayStartTime = formatToAmPm(timeStr);
     final displayEndTime = formatToAmPm(endTimeStr);
 
-    // [NEW] Calculate distance if missing and user location is available
-    if (event.distance == null &&
-        userLocation != null &&
-        event.latitude != null &&
-        event.longitude != null) {
-      event.distance =
-          Geolocator.distanceBetween(
-            userLocation!.latitude,
-            userLocation!.longitude,
-            event.latitude!,
-            event.longitude!,
-          ) /
-          1000; // Convert to km
-    }
+    // Compute distance dynamically in real time from GPS or logged-in user's profile
+    final viewer = ref.watch(userProfileProvider).value;
+    final livePos = ref.watch(liveUserPositionProvider).value ?? userLocation;
+    event.distance = calculateEventDistanceKm(
+      event,
+      viewer: viewer,
+      livePosition: livePos,
+      fallbackDistanceKm: event.distance,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),

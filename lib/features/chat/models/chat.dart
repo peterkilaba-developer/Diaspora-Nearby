@@ -440,6 +440,10 @@ class Chat {
           (metadata!['isFamilyGroupImmediate'] == true ||
               metadata!['isFamilyGroupExtended'] == true));
 
+  /// Check if this is a marketplace listing / shop chat
+  bool get isListingChat =>
+      metadata?['isListingChat'] == true || id.startsWith('listing_');
+
   /// Check if this is an event chat
   bool get isEvent =>
       type == 'event' || eventId != null || id.startsWith('event_');

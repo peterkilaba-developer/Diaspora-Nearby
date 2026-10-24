@@ -395,6 +395,14 @@ exports.onUserWrite = functions
       }
     }
 
+    // 2b. Evaluate Profile Completion Milestone (+10,000 DSP & +10 PCT) and sync trust projections
+    try {
+      const { syncProfileMilestoneAndTrust } = require("./dsp");
+      await syncProfileMilestoneAndTrust(userId);
+    } catch (milestoneErr) {
+      console.warn(`[onUserWrite] Could not evaluate profile milestone for ${userId}: ${milestoneErr.message}`);
+    }
+
     // Skip wallet creation if wallet already assigned
     if (newData.walletAddress) return null;
 

@@ -29,6 +29,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/features/profile/widgets/relationship_response_modal.dart';
 
 import 'package:diaspora_nearby/features/profile/widgets/profile_qr_code_dialog.dart';
+import 'package:diaspora_nearby/features/profile/widgets/relationship_selection_modal.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
@@ -44,6 +46,23 @@ class UserProfileView extends ConsumerWidget {
   final double? distanceKm;
   final VoidCallback onRefresh;
   final String? src;
+
+  static const Set<String> _familyRelationshipTypes = {
+    'wife',
+    'husband',
+    'daughter',
+    'son',
+    'mother',
+    'father',
+    'sister',
+    'brother',
+    'aunt',
+    'uncle',
+    'nephew',
+    'niece',
+    'cousin',
+    'relative',
+  };
 
   Widget _buildFlagWarning() {
     return Container(
@@ -110,6 +129,7 @@ class UserProfileView extends ConsumerWidget {
               if (isSelf) {
                 showDialog(
                   context: context,
+                  useRootNavigator: true,
                   builder: (context) => ProfileQRCodeDialog(profile: profile),
                 );
               } else {
@@ -121,11 +141,21 @@ class UserProfileView extends ConsumerWidget {
                 myProfile ??= await ref
                     .read(profileRepositoryProvider)
                     .getUserProfile(currentUser.uid);
-                if (myProfile != null && context.mounted) {
+                if (!context.mounted) return;
+                if (myProfile != null) {
                   showDialog(
                     context: context,
+                    useRootNavigator: true,
                     builder: (context) =>
                         ProfileQRCodeDialog(profile: myProfile!),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Unable to load your profile for QR exchange.',
+                      ),
+                    ),
                   );
                 }
               }
@@ -180,20 +210,73 @@ class UserProfileView extends ConsumerWidget {
                   // ══════════════════════════════════
                   // 🔝 GLOBAL USER CARD (stays on top)
                   // ══════════════════════════════════
-                  UserCardView(
-                    key: const ValueKey('view_UserCard'),
-                    user: profile,
-                    flaggedFields: flaggedFields,
-                    searchQuery: '',
-                    onNameTap: () {},
-                    onChatTap: isSelf
-                        ? null
-                        : () => context.push('/chat/direct/${profile.uid}'),
-                    isStatic: true,
-                    distanceKm: distanceKm,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(AppTheme.standardBorderRadius),
-                    ),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      String? topFamilyRelationshipLabel;
+                      if (!isSelf && profile.uid != null) {
+                        final currentUid = ref
+                            .watch(authRepositoryProvider)
+                            .currentUser
+                            ?.uid;
+                        if (currentUid != null) {
+                          final myRels = ref
+                              .watch(userRelationshipsProvider(currentUid))
+                              .value;
+                          final match = myRels
+                              ?.where(
+                                (r) =>
+                                    r.id == profile.uid && r.status == 'active',
+                              )
+                              .firstOrNull;
+                          String? rawLabel;
+                          if (match != null && match.type.isNotEmpty) {
+                            rawLabel = match.type.trim();
+                          } else {
+                            final myTrust = ref
+                                .watch(userTrustProvider(currentUid))
+                                .value;
+                            rawLabel = myTrust?.relationshipTypes[profile.uid!]
+                                ?.trim();
+                          }
+                          if (rawLabel != null &&
+                              rawLabel.isNotEmpty &&
+                              _familyRelationshipTypes.contains(
+                                rawLabel.toLowerCase(),
+                              )) {
+                            topFamilyRelationshipLabel = rawLabel;
+                          }
+                        }
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (topFamilyRelationshipLabel != null)
+                            _buildRelationshipAboveCardLabel(
+                              context,
+                              topFamilyRelationshipLabel,
+                            ),
+                          UserCardView(
+                            key: const ValueKey('view_UserCard'),
+                            user: profile,
+                            flaggedFields: flaggedFields,
+                            searchQuery: '',
+                            onNameTap: () {},
+                            onChatTap: isSelf
+                                ? null
+                                : () => context.push(
+                                    '/chat/direct/${profile.uid}',
+                                  ),
+                            isStatic: true,
+                            distanceKm: distanceKm,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(
+                                AppTheme.standardBorderRadius,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   // 🎚️ TRUST SLIDER — removed from profile page.
@@ -203,7 +286,7 @@ class UserProfileView extends ConsumerWidget {
                   // ══════════════════════════════════
                   // 📊 COMMUNITY STATUS CARD (no onTap)
                   // ══════════════════════════════════
-                  if (!isSelf && profile.uid != null) ...[
+                  if (profile.uid != null) ...[
                     Consumer(
                       builder: (context, ref, child) {
                         final pointsAsync = ref.watch(
@@ -384,31 +467,6 @@ class UserProfileView extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
                   ],
-
-                  const SizedBox(height: 16),
-
-                  // ══════════════════════════════════════════
-                  // 📍 GENESIS MILESTONES — Section Header
-                  // ══════════════════════════════════════════
-                  _buildPoctSectionHeader(
-                    context,
-                    title: 'Genesis Milestones',
-                    subtitle: 'One-time +10 PCT at first 10 unique',
-                    icon: LucideIcons.trophy,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ─────────────────────────────────────
-                  // 1️⃣ PROFILE COMPLETION (X/12)
-                  // ─────────────────────────────────────
-                  _buildMilestoneSubHeader(
-                    context,
-                    title: 'Profile Completion',
-                    icon: LucideIcons.userCheck,
-                    current: profile.completedMilestoneFieldCount,
-                    target: profile.totalMilestoneFields,
-                  ),
-                  const SizedBox(height: 8),
 
                   // -- Bio --
                   if (profile.bio != null && profile.bio!.isNotEmpty)
@@ -737,6 +795,32 @@ class UserProfileView extends ConsumerWidget {
 
                   const SizedBox(height: 20),
 
+                  // ══════════════════════════════════════════
+                  // 📍 GENESIS MILESTONES — Section Header
+                  // ══════════════════════════════════════════
+                  _buildPoctSectionHeader(
+                    context,
+                    title: 'Genesis Milestones',
+                    subtitle: 'One-time +10 PCT at first 10 unique',
+                    icon: LucideIcons.trophy,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ─────────────────────────────────────
+                  // 1️⃣ PROFILE COMPLETION (X/12)
+                  // ─────────────────────────────────────
+                  _buildMilestoneSubHeader(
+                    context,
+                    title: 'Profile Completion',
+                    icon: LucideIcons.userCheck,
+                    current: profile.completedMilestoneFieldCount,
+                    target: profile.totalMilestoneFields,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildProfileCompletionMilestoneCard(context),
+
+                  const SizedBox(height: 20),
+
                   // ─────────────────────────────────────
                   // 2️⃣ FAMILY CONNECTIONS (X/10)
                   // ─────────────────────────────────────
@@ -747,8 +831,72 @@ class UserProfileView extends ConsumerWidget {
                           userTrustProvider(profile.uid!),
                         );
                         final trust = trustAsync.value;
-                        final familyCount = trust?.uniqueFamilyCount ?? 0;
-                        final genesisFamilyIds = trust?.genesisFamilyIds ?? [];
+                        final rels = isSelf
+                            ? (ref
+                                      .watch(
+                                        userRelationshipsProvider(profile.uid!),
+                                      )
+                                      .value ??
+                                  const <Relationship>[])
+                            : const <Relationship>[];
+                        final activeFamilyRels = rels.where(
+                          (r) =>
+                              r.status == 'active' &&
+                              _familyRelationshipTypes.contains(
+                                r.type.toLowerCase(),
+                              ),
+                        );
+                        final trustFamilyFromTypes =
+                            (trust?.relationshipTypes ??
+                                    const <String, String>{})
+                                .entries
+                                .where(
+                                  (e) => _familyRelationshipTypes.contains(
+                                    e.value.toLowerCase(),
+                                  ),
+                                )
+                                .map((e) => e.key);
+                        final allFamilyIds = <String>{
+                          ...(trust?.genesisFamilyIds ?? const <String>[]),
+                          ...trustFamilyFromTypes,
+                          ...activeFamilyRels.map((r) => r.id),
+                        }.toList();
+                        final displayedFamilyIds = allFamilyIds
+                            .take(10)
+                            .toList();
+                        final roleByUserId = <String, String>{
+                          for (final entry
+                              in (trust?.relationshipTypes ??
+                                      const <String, String>{})
+                                  .entries)
+                            if (_familyRelationshipTypes.contains(
+                              entry.value.toLowerCase(),
+                            ))
+                              entry.key: entry.value,
+                          for (final r in activeFamilyRels)
+                            if (r.type.isNotEmpty) r.id: r.type,
+                        };
+                        final rawFamilyCount = trust?.uniqueFamilyCount ?? 0;
+                        final familyCount = rawFamilyCount > allFamilyIds.length
+                            ? rawFamilyCount
+                            : allFamilyIds.length;
+                        final allRelationshipIds = <String>{
+                          ...allFamilyIds,
+                          ...(trust?.genesisFriendIds ?? const <String>[]),
+                          ...(trust?.relationshipTypes.keys ??
+                              const Iterable<String>.empty()),
+                          ...rels
+                              .where((r) => r.status == 'active')
+                              .map((r) => r.id),
+                        };
+                        final onConnectFamily = isSelf
+                            ? () => _showConnectContactsSheet(
+                                context,
+                                ref,
+                                mode: _MilestoneConnectMode.family,
+                                existingUserIds: allRelationshipIds,
+                              )
+                            : null;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -758,20 +906,42 @@ class UserProfileView extends ConsumerWidget {
                               icon: LucideIcons.heartHandshake,
                               current: familyCount > 10 ? 10 : familyCount,
                               target: 10,
+                              onViewAll: familyCount > 10
+                                  ? () => _showAllConnectionsSheet(
+                                      context,
+                                      title: 'All Family Connections',
+                                      userIds: allFamilyIds,
+                                      roleByUserId: roleByUserId,
+                                      showRoleAboveCard: true,
+                                    )
+                                  : null,
                             ),
                             const SizedBox(height: 8),
-                            if (genesisFamilyIds.isNotEmpty)
+                            if (displayedFamilyIds.isNotEmpty) ...[
                               _buildMilestoneUserCards(
                                 context,
                                 ref,
-                                userIds: genesisFamilyIds,
+                                userIds: displayedFamilyIds,
+                                roleByUserId: roleByUserId,
+                                showRoleAboveCard: true,
                                 emptyMessage: 'No family connections yet',
-                              )
-                            else
+                              ),
+                              if (onConnectFamily != null)
+                                _buildMilestoneActionBanner(
+                                  context,
+                                  label:
+                                      'Tap to send family request to chat contacts',
+                                  icon: LucideIcons.userPlus,
+                                  onTap: onConnectFamily,
+                                ),
+                            ] else
                               _buildEmptyMilestoneCard(
                                 context,
-                                'No family connections yet',
+                                isSelf
+                                    ? 'No family connections yet · Tap to send family request'
+                                    : 'No family connections yet',
                                 LucideIcons.heartHandshake,
+                                onTap: onConnectFamily,
                               ),
                             // Incoming/Sent requests (self only)
                             if (isSelf) _buildIncomingRequests(context, ref),
@@ -784,7 +954,225 @@ class UserProfileView extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   // ─────────────────────────────────────
-                  // 3️⃣ COMMUNITY VERIFICATIONS (X/10)
+                  // 3️⃣ FRIEND CONNECTIONS (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final rels = isSelf
+                            ? (ref
+                                      .watch(
+                                        userRelationshipsProvider(profile.uid!),
+                                      )
+                                      .value ??
+                                  const <Relationship>[])
+                            : const <Relationship>[];
+                        final activeFriendRels = rels.where(
+                          (r) =>
+                              r.status == 'active' &&
+                              !_familyRelationshipTypes.contains(
+                                r.type.toLowerCase(),
+                              ),
+                        );
+                        final trustFriendFromTypes =
+                            (trust?.relationshipTypes ??
+                                    const <String, String>{})
+                                .entries
+                                .where(
+                                  (e) => !_familyRelationshipTypes.contains(
+                                    e.value.toLowerCase(),
+                                  ),
+                                )
+                                .map((e) => e.key);
+                        final allFriendIds = <String>{
+                          ...(trust?.genesisFriendIds ?? const <String>[]),
+                          ...trustFriendFromTypes,
+                          ...activeFriendRels.map((r) => r.id),
+                        }.toList();
+                        final displayedFriendIds = allFriendIds
+                            .take(10)
+                            .toList();
+                        final rawFriendCount = trust?.uniqueFriendCount ?? 0;
+                        final friendCount = rawFriendCount > allFriendIds.length
+                            ? rawFriendCount
+                            : allFriendIds.length;
+                        final allRelationshipIds = <String>{
+                          ...allFriendIds,
+                          ...(trust?.genesisFamilyIds ?? const <String>[]),
+                          ...(trust?.relationshipTypes.keys ??
+                              const Iterable<String>.empty()),
+                          ...rels
+                              .where((r) => r.status == 'active')
+                              .map((r) => r.id),
+                        };
+                        final onConnectFriend = isSelf
+                            ? () => _showConnectContactsSheet(
+                                context,
+                                ref,
+                                mode: _MilestoneConnectMode.friend,
+                                existingUserIds: allRelationshipIds,
+                              )
+                            : null;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'Friend Connections',
+                              icon: LucideIcons.users,
+                              current: friendCount > 10 ? 10 : friendCount,
+                              target: 10,
+                              onViewAll: friendCount > 10
+                                  ? () => _showAllConnectionsSheet(
+                                      context,
+                                      title: 'All Friend Connections',
+                                      userIds: allFriendIds,
+                                      showRoleAboveCard: false,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(height: 8),
+                            if (displayedFriendIds.isNotEmpty) ...[
+                              _buildMilestoneUserCards(
+                                context,
+                                ref,
+                                userIds: displayedFriendIds,
+                                showRoleAboveCard: false,
+                                emptyMessage: 'No friend connections yet',
+                              ),
+                              if (onConnectFriend != null)
+                                _buildMilestoneActionBanner(
+                                  context,
+                                  label:
+                                      'Tap to send friend request to chat contacts',
+                                  icon: LucideIcons.userPlus,
+                                  onTap: onConnectFriend,
+                                ),
+                            ] else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                isSelf
+                                    ? 'No friend connections yet · Tap to send friend request'
+                                    : 'No friend connections yet',
+                                LucideIcons.users,
+                                onTap: onConnectFriend,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 4️⃣ QR CONNECTIONS (X/10)
+                  // ─────────────────────────────────────
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        final trust = trustAsync.value;
+                        final rels = isSelf
+                            ? (ref
+                                      .watch(
+                                        userRelationshipsProvider(profile.uid!),
+                                      )
+                                      .value ??
+                                  const <Relationship>[])
+                            : const <Relationship>[];
+                        final activeRels = rels.where(
+                          (r) => r.status == 'active',
+                        );
+                        final qrRoleByUserId = <String, String>{
+                          for (final id
+                              in (trust?.genesisFriendIds ?? const <String>[]))
+                            id: 'Friend',
+                          for (final id
+                              in (trust?.genesisFamilyIds ?? const <String>[]))
+                            id: 'Family',
+                          for (final entry
+                              in (trust?.relationshipTypes ??
+                                      const <String, String>{})
+                                  .entries)
+                            if (entry.value.trim().isNotEmpty)
+                              entry.key: entry.value.trim(),
+                          for (final r in activeRels)
+                            if (r.type.trim().isNotEmpty) r.id: r.type.trim(),
+                        };
+                        final genesisQrIds =
+                            trust?.genesisQrIds ?? const <String>[];
+                        final rawQrCount = trust?.uniqueQrCount ?? 0;
+                        final qrCount = rawQrCount > genesisQrIds.length
+                            ? rawQrCount
+                            : genesisQrIds.length;
+                        final onOpenQr = isSelf
+                            ? () => showDialog(
+                                context: context,
+                                useRootNavigator: true,
+                                builder: (context) =>
+                                    ProfileQRCodeDialog(profile: profile),
+                              )
+                            : null;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildMilestoneSubHeader(
+                              context,
+                              title: 'QR Identity Exchanges',
+                              icon: LucideIcons.qrCode,
+                              current: qrCount > 10 ? 10 : qrCount,
+                              target: 10,
+                              onViewAll: qrCount > 10
+                                  ? () => _showAllQrExchangesSheet(
+                                      context,
+                                      ref,
+                                      profileUid: profile.uid!,
+                                      initialUserIds: genesisQrIds,
+                                      roleByUserId: qrRoleByUserId,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(height: 8),
+                            // Show QR exchange cards with location/timestamp
+                            if (genesisQrIds.isNotEmpty) ...[
+                              _buildQrExchangeCards(
+                                context,
+                                ref,
+                                userIds: genesisQrIds.take(10).toList(),
+                                profileUid: profile.uid!,
+                                roleByUserId: qrRoleByUserId,
+                              ),
+                              if (onOpenQr != null)
+                                _buildMilestoneActionBanner(
+                                  context,
+                                  label: 'Tap to open your Identity QR Code',
+                                  icon: LucideIcons.qrCode,
+                                  onTap: onOpenQr,
+                                ),
+                            ] else
+                              _buildEmptyMilestoneCard(
+                                context,
+                                isSelf
+                                    ? 'No QR identity exchanges yet · Tap to open QR code'
+                                    : 'No QR identity exchanges yet',
+                                LucideIcons.qrCode,
+                                onTap: onOpenQr,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // ─────────────────────────────────────
+                  // 5️⃣ COMMUNITY VERIFICATIONS (X/10)
                   // ─────────────────────────────────────
                   if (profile.uid != null)
                     Consumer(
@@ -800,6 +1188,14 @@ class UserProfileView extends ConsumerWidget {
                             : verificationCount;
                         final genesisVerificationIds =
                             trust?.genesisVerificationIds ?? [];
+                        final onSolicitVerification = isSelf
+                            ? () => _showConnectContactsSheet(
+                                context,
+                                ref,
+                                mode: _MilestoneConnectMode.verification,
+                                existingUserIds: genesisVerificationIds.toSet(),
+                              )
+                            : null;
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -811,18 +1207,29 @@ class UserProfileView extends ConsumerWidget {
                               target: 10,
                             ),
                             const SizedBox(height: 8),
-                            if (genesisVerificationIds.isNotEmpty)
+                            if (genesisVerificationIds.isNotEmpty) ...[
                               _buildMilestoneUserCards(
                                 context,
                                 ref,
                                 userIds: genesisVerificationIds,
                                 emptyMessage: 'No verifications yet',
-                              )
-                            else
+                              ),
+                              if (onSolicitVerification != null)
+                                _buildMilestoneActionBanner(
+                                  context,
+                                  label:
+                                      'Tap to solicit profile verification from chat contacts',
+                                  icon: LucideIcons.shieldCheck,
+                                  onTap: onSolicitVerification,
+                                ),
+                            ] else
                               _buildEmptyMilestoneCard(
                                 context,
-                                'No verifications yet',
+                                isSelf
+                                    ? 'No verifications yet · Tap to solicit profile verification'
+                                    : 'No verifications yet',
                                 LucideIcons.shieldCheck,
+                                onTap: onSolicitVerification,
                               ),
                           ],
                         );
@@ -831,8 +1238,34 @@ class UserProfileView extends ConsumerWidget {
 
                   const SizedBox(height: 20),
 
+                  // ══════════════════════════════════════════
+                  // 🔄 TRUST SLIDER VOUCHES — Section Header
+                  // ══════════════════════════════════════════
+                  if (profile.uid != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final trustAsync = ref.watch(
+                          userTrustProvider(profile.uid!),
+                        );
+                        return trustAsync.when(
+                          data: (trust) {
+                            if (trust == null) return const SizedBox.shrink();
+                            return _buildTrustSliderVouchesSection(
+                              context,
+                              ref,
+                              trust,
+                            );
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 20),
+
                   // ─────────────────────────────────────
-                  // 4️⃣ COMMUNITY VOUCHES (X/10)
+                  // 6️⃣ COMMUNITY VOUCHES (X/10)
                   // ─────────────────────────────────────
                   if (profile.uid != null)
                     Consumer(
@@ -873,93 +1306,6 @@ class UserProfileView extends ConsumerWidget {
                       },
                     ),
 
-                  const SizedBox(height: 20),
-
-                  // ─────────────────────────────────────
-                  // 5️⃣ FRIENDS (X/10)
-                  // ─────────────────────────────────────
-                  if (profile.uid != null)
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final trustAsync = ref.watch(
-                          userTrustProvider(profile.uid!),
-                        );
-                        final trust = trustAsync.value;
-                        final friendCount = trust?.uniqueFriendCount ?? 0;
-                        final genesisFriendIds = trust?.genesisFriendIds ?? [];
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildMilestoneSubHeader(
-                              context,
-                              title: 'Friend Connections',
-                              icon: LucideIcons.users,
-                              current: friendCount > 10 ? 10 : friendCount,
-                              target: 10,
-                            ),
-                            const SizedBox(height: 8),
-                            if (genesisFriendIds.isNotEmpty)
-                              _buildMilestoneUserCards(
-                                context,
-                                ref,
-                                userIds: genesisFriendIds,
-                                emptyMessage: 'No friend connections yet',
-                              )
-                            else
-                              _buildEmptyMilestoneCard(
-                                context,
-                                'No friend connections yet',
-                                LucideIcons.users,
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-
-                  const SizedBox(height: 20),
-
-                  // ─────────────────────────────────────
-                  // 6️⃣ QR CONNECTIONS (X/10)
-                  // ─────────────────────────────────────
-                  if (profile.uid != null)
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final trustAsync = ref.watch(
-                          userTrustProvider(profile.uid!),
-                        );
-                        final trust = trustAsync.value;
-                        final qrCount = trust?.uniqueQrCount ?? 0;
-                        final genesisQrIds = trust?.genesisQrIds ?? [];
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildMilestoneSubHeader(
-                              context,
-                              title: 'QR Identity Exchanges',
-                              icon: LucideIcons.qrCode,
-                              current: qrCount > 10 ? 10 : qrCount,
-                              target: 10,
-                            ),
-                            const SizedBox(height: 8),
-                            // Show QR exchange cards with location/timestamp
-                            if (genesisQrIds.isNotEmpty)
-                              _buildQrExchangeCards(
-                                context,
-                                ref,
-                                userIds: genesisQrIds,
-                                profileUid: profile.uid!,
-                              )
-                            else
-                              _buildEmptyMilestoneCard(
-                                context,
-                                'No QR identity exchanges yet',
-                                LucideIcons.qrCode,
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-
                   const SizedBox(height: 24),
 
                   // ─────────────────────────────────────
@@ -993,15 +1339,13 @@ class UserProfileView extends ConsumerWidget {
                             if (isTransparent)
                               Container(
                                 width: double.infinity,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: AppTheme.pageHorizontalPadding,
+                                ),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.accent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: AppTheme.accent.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                  ),
+                                  color: AppTheme.elevationColor(context, 1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   children: [
@@ -1050,32 +1394,6 @@ class UserProfileView extends ConsumerWidget {
                                     : null,
                               ),
                           ],
-                        );
-                      },
-                    ),
-
-                  const SizedBox(height: 24),
-
-                  // ══════════════════════════════════════════
-                  // 🔄 TRUST SLIDER VOUCHES — Section Header
-                  // ══════════════════════════════════════════
-                  if (profile.uid != null)
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final trustAsync = ref.watch(
-                          userTrustProvider(profile.uid!),
-                        );
-                        return trustAsync.when(
-                          data: (trust) {
-                            if (trust == null) return const SizedBox.shrink();
-                            return _buildTrustSliderVouchesSection(
-                              context,
-                              ref,
-                              trust,
-                            );
-                          },
-                          loading: () => const SizedBox.shrink(),
-                          error: (_, _) => const SizedBox.shrink(),
                         );
                       },
                     ),
@@ -1216,10 +1534,20 @@ class UserProfileView extends ConsumerWidget {
     );
   }
 
+  int _parsePastLocationYear(String until) {
+    try {
+      return DateTime.parse(until).year;
+    } catch (_) {
+      return int.tryParse(until) ?? 0;
+    }
+  }
+
   Widget _buildPastLocationsSection(BuildContext context) {
     if (profile.pastLocations == null || profile.pastLocations!.isEmpty) {
       return const SizedBox.shrink();
     }
+    final sortedPastLocations = List.of(profile.pastLocations!)
+      ..sort((a, b) => _parsePastLocationYear(b.until).compareTo(_parsePastLocationYear(a.until)));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1228,7 +1556,7 @@ class UserProfileView extends ConsumerWidget {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         const SizedBox(height: 8),
-        ...profile.pastLocations!.map((p) {
+        ...sortedPastLocations.map((p) {
           return (() {
             try {
               String? flag;
@@ -2415,7 +2743,7 @@ class UserProfileView extends ConsumerWidget {
           if (doc.exists && doc.data() != null) {
             final data = doc.data()!;
             if (data['status'] == 'pending') {
-              final req = RelationshipRequest.fromMap(data);
+              final req = RelationshipRequest.fromMap(data, doc.id);
               // Show the same card but in dialog
               if (context.mounted) {
                 showDialog(
@@ -2521,6 +2849,7 @@ class UserProfileView extends ConsumerWidget {
     required IconData icon,
     required int current,
     required int target,
+    VoidCallback? onViewAll,
   }) {
     final theme = Theme.of(context);
     final fg = theme.colorScheme.onSurface;
@@ -2549,6 +2878,27 @@ class UserProfileView extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (onViewAll != null) ...[
+                GestureDetector(
+                  onTap: onViewAll,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      'View All',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               if (isComplete)
                 const Icon(
                   LucideIcons.checkCircle,
@@ -2585,12 +2935,125 @@ class UserProfileView extends ConsumerWidget {
     );
   }
 
+  /// Card for Profile Completion milestone (1/7 in Genesis Milestones)
+  Widget _buildProfileCompletionMilestoneCard(BuildContext context) {
+    final completed = profile.completedMilestoneFieldCount;
+    final total = profile.totalMilestoneFields;
+    final isComplete = completed >= total;
+    final missing = profile.getMissingRequiredFields();
+    final theme = Theme.of(context);
+
+    if (isComplete) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(
+          horizontal: AppTheme.pageHorizontalPadding,
+        ),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.elevationColor(context, 1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            const Icon(LucideIcons.checkCircle2, color: AppTheme.accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Profile Fully Completed',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'All $total milestone profile fields are filled (+10 PCT).',
+                    style: TextStyle(fontSize: 12, color: theme.hintColor),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildEmptyMilestoneCard(
+      context,
+      isSelf
+          ? '$completed of $total fields completed (${missing.take(3).join(', ')}${missing.length > 3 ? '...' : ''}) · Tap to complete profile'
+          : '$completed of $total profile fields completed',
+      LucideIcons.userCheck,
+      onTap: isSelf ? onEdit : null,
+    );
+  }
+
+  /// Call-to-action banner displayed below populated milestone cards on own profile
+  Widget _buildMilestoneActionBanner(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppTheme.pageHorizontalPadding,
+        right: AppTheme.pageHorizontalPadding,
+        top: 6,
+      ),
+      child: Material(
+        color: AppTheme.elevationColor(context, 1),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.85,
+                      ),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Build QR exchange cards with location and timestamp
   Widget _buildQrExchangeCards(
     BuildContext context,
     WidgetRef ref, {
     required List<String> userIds,
     required String profileUid,
+    Map<String, String> roleByUserId = const {},
   }) {
     if (userIds.isEmpty) {
       return _buildEmptyMilestoneCard(
@@ -2614,6 +3077,7 @@ class UserProfileView extends ConsumerWidget {
           child: Column(
             children: userIds.map((uid) {
               final exchangeData = records[uid];
+              final roleLabel = roleByUserId[uid]?.trim();
               return Consumer(
                 builder: (context, ref, _) {
                   final profileAsync = ref.watch(userProfileByIdProvider(uid));
@@ -2625,6 +3089,11 @@ class UserProfileView extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (roleLabel != null && roleLabel.isNotEmpty)
+                              _buildRelationshipAboveCardLabel(
+                                context,
+                                roleLabel,
+                              ),
                             UserCardView(
                               user: userProfile,
                               searchQuery: '',
@@ -2731,12 +3200,354 @@ class UserProfileView extends ConsumerWidget {
     return '';
   }
 
+  Widget _buildRelationshipAboveCardLabel(BuildContext context, String label) {
+    final theme = Theme.of(context);
+    final isFamily =
+        _familyRelationshipTypes.contains(label.toLowerCase()) ||
+        label.toLowerCase() == 'family';
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 4, top: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isFamily ? LucideIcons.heartHandshake : LucideIcons.users,
+            size: 13,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAllQrExchangesSheet(
+    BuildContext context,
+    WidgetRef ref, {
+    required String profileUid,
+    required List<String> initialUserIds,
+    Map<String, String> roleByUserId = const {},
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return FutureBuilder<Map<String, Map<String, dynamic>>>(
+              future: ref
+                  .read(trustRepositoryProvider)
+                  .getQrExchangeRecords(profileUid),
+              builder: (context, snapshot) {
+                final records = snapshot.data ?? {};
+                final allQrIds = <String>{
+                  ...initialUserIds,
+                  ...records.keys,
+                }.toList();
+                return Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.4,
+                        ),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'All QR Identity Exchanges (${allQrIds.length})',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(LucideIcons.x),
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.pageHorizontalPadding,
+                          vertical: 12,
+                        ),
+                        itemCount: allQrIds.length,
+                        itemBuilder: (context, index) {
+                          final uid = allQrIds[index];
+                          final exchangeData = records[uid];
+                          final roleLabel = roleByUserId[uid]?.trim();
+                          return Consumer(
+                            builder: (context, ref, _) {
+                              final profileAsync = ref.watch(
+                                userProfileByIdProvider(uid),
+                              );
+                              return profileAsync.when(
+                                data: (userProfile) {
+                                  if (userProfile == null) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (roleLabel != null &&
+                                            roleLabel.isNotEmpty)
+                                          _buildRelationshipAboveCardLabel(
+                                            context,
+                                            roleLabel,
+                                          ),
+                                        UserCardView(
+                                          user: userProfile,
+                                          searchQuery: '',
+                                          onNameTap: () {
+                                            Navigator.of(sheetContext).pop();
+                                            context.push('/profile/$uid');
+                                          },
+                                          onChatTap: () {
+                                            Navigator.of(sheetContext).pop();
+                                            context.push('/chat/direct/$uid');
+                                          },
+                                          isStatic: false,
+                                        ),
+                                        if (exchangeData != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 12,
+                                              right: 12,
+                                              bottom: 8,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                if (exchangeData['locationAddress'] !=
+                                                        null &&
+                                                    exchangeData['locationAddress'] !=
+                                                        'Location Unavailable') ...[
+                                                  const Icon(
+                                                    LucideIcons.mapPin,
+                                                    size: 12,
+                                                    color: Colors.grey,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Flexible(
+                                                    child: Text(
+                                                      exchangeData['locationAddress']
+                                                          as String,
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.grey,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                ],
+                                                if (exchangeData['timestamp'] !=
+                                                    null) ...[
+                                                  const Icon(
+                                                    LucideIcons.calendar,
+                                                    size: 12,
+                                                    color: Colors.grey,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    _formatExchangeTimestamp(
+                                                      exchangeData['timestamp'],
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                loading: () => const SizedBox(height: 60),
+                                error: (_, _) => const SizedBox.shrink(),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAllConnectionsSheet(
+    BuildContext context, {
+    required String title,
+    required List<String> userIds,
+    Map<String, String> roleByUserId = const {},
+    bool showRoleAboveCard = false,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.4,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$title (${userIds.length})',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.pageHorizontalPadding,
+                      vertical: 12,
+                    ),
+                    itemCount: userIds.length,
+                    itemBuilder: (context, index) {
+                      final uid = userIds[index];
+                      final roleLabel = showRoleAboveCard
+                          ? roleByUserId[uid]?.trim()
+                          : null;
+                      return Consumer(
+                        builder: (context, ref, _) {
+                          final profileAsync = ref.watch(
+                            userProfileByIdProvider(uid),
+                          );
+                          return profileAsync.when(
+                            data: (userProfile) {
+                              if (userProfile == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (roleLabel != null &&
+                                        roleLabel.isNotEmpty)
+                                      _buildRelationshipAboveCardLabel(
+                                        context,
+                                        roleLabel,
+                                      ),
+                                    UserCardView(
+                                      user: userProfile,
+                                      searchQuery: '',
+                                      onNameTap: () {
+                                        Navigator.of(sheetContext).pop();
+                                        context.push('/profile/$uid');
+                                      },
+                                      onChatTap: () {
+                                        Navigator.of(sheetContext).pop();
+                                        context.push('/chat/direct/$uid');
+                                      },
+                                      isStatic: false,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            loading: () => const SizedBox(height: 60),
+                            error: (_, _) => const SizedBox.shrink(),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   /// Build milestone user cards for a list of user IDs
   Widget _buildMilestoneUserCards(
     BuildContext context,
     WidgetRef ref, {
     required List<String> userIds,
     required String emptyMessage,
+    Map<String, String> roleByUserId = const {},
+    bool showRoleAboveCard = false,
   }) {
     if (userIds.isEmpty) {
       return _buildEmptyMilestoneCard(context, emptyMessage, LucideIcons.users);
@@ -2751,17 +3562,27 @@ class UserProfileView extends ConsumerWidget {
           return Consumer(
             builder: (context, ref, _) {
               final profileAsync = ref.watch(userProfileByIdProvider(uid));
+              final roleLabel = showRoleAboveCard
+                  ? roleByUserId[uid]?.trim()
+                  : null;
               return profileAsync.when(
                 data: (profile) {
                   if (profile == null) return const SizedBox.shrink();
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: UserCardView(
-                      user: profile,
-                      searchQuery: '',
-                      onNameTap: () => context.push('/profile/$uid'),
-                      onChatTap: () => context.push('/chat/direct/$uid'),
-                      isStatic: false,
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (roleLabel != null && roleLabel.isNotEmpty)
+                          _buildRelationshipAboveCardLabel(context, roleLabel),
+                        UserCardView(
+                          user: profile,
+                          searchQuery: '',
+                          onNameTap: () => context.push('/profile/$uid'),
+                          onChatTap: () => context.push('/chat/direct/$uid'),
+                          isStatic: false,
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -2797,11 +3618,10 @@ class UserProfileView extends ConsumerWidget {
     String message,
     IconData icon, {
     Color? iconColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(
-        horizontal: AppTheme.pageHorizontalPadding,
-      ),
+    final theme = Theme.of(context);
+    final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
@@ -2814,22 +3634,67 @@ class UserProfileView extends ConsumerWidget {
             size: 20,
             color:
                 iconColor ??
-                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
               style: TextStyle(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                color: onTap != null
+                    ? theme.colorScheme.onSurface.withValues(alpha: 0.85)
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 fontSize: 13,
-                fontStyle: FontStyle.italic,
+                fontStyle: onTap != null ? FontStyle.normal : FontStyle.italic,
+                fontWeight: onTap != null ? FontWeight.w500 : FontWeight.normal,
               ),
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 18,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ],
         ],
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.pageHorizontalPadding,
+      ),
+      child: onTap != null
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: content,
+            )
+          : content,
+    );
+  }
+
+  /// Opens a bottom sheet listing all direct chat contacts with messages > 0
+  /// so the user can send a Family request, Friend request, or solicit profile verification.
+  void _showConnectContactsSheet(
+    BuildContext context,
+    WidgetRef ref, {
+    required _MilestoneConnectMode mode,
+    required Set<String> existingUserIds,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => _MilestoneContactsSheet(
+        mode: mode,
+        existingUserIds: existingUserIds,
+        selfProfile: profile,
       ),
     );
   }
@@ -3415,6 +4280,517 @@ class _PendingRequestMonitorState
         }
 
         return const SizedBox.shrink();
+      },
+    );
+  }
+}
+
+enum _MilestoneConnectMode { family, friend, verification }
+
+/// Bottom sheet listing all direct chat contacts with messages > 0
+/// so the user can send a Family request, Friend request, or solicit profile verification.
+class _MilestoneContactsSheet extends ConsumerStatefulWidget {
+  final _MilestoneConnectMode mode;
+  final Set<String> existingUserIds;
+  final ProfileData selfProfile;
+
+  const _MilestoneContactsSheet({
+    required this.mode,
+    required this.existingUserIds,
+    required this.selfProfile,
+  });
+
+  @override
+  ConsumerState<_MilestoneContactsSheet> createState() =>
+      _MilestoneContactsSheetState();
+}
+
+class _MilestoneContactsSheetState
+    extends ConsumerState<_MilestoneContactsSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isLoading = true;
+  List<ProfileData> _contacts = [];
+  final Map<String, String> _chatIdByUserId = {};
+  final Set<String> _sentSolicitationUserIds = {};
+  final Set<String> _alreadyRelatedOrRequestedUserIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContactsWithMessages();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadContactsWithMessages() async {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUserId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final chatRepo = ref.read(chatRepositoryProvider);
+      final relRepo = ref.read(relationshipRepositoryProvider);
+
+      // Load active relationships + pending sent/incoming requests
+      final isRelationshipMode =
+          widget.mode == _MilestoneConnectMode.family ||
+          widget.mode == _MilestoneConnectMode.friend;
+      if (isRelationshipMode) {
+        try {
+          final results = await Future.wait([
+            relRepo.getRelationshipsList(currentUserId),
+            relRepo.getSentRequests(currentUserId).first,
+            relRepo.getIncomingRequests(currentUserId).first,
+          ]);
+          final activeRels = results[0] as List<Relationship>;
+          final sentReqs = results[1] as List<RelationshipRequest>;
+          final incomingReqs = results[2] as List<RelationshipRequest>;
+
+          for (final r in activeRels) {
+            if (r.status == 'active' && r.id.isNotEmpty) {
+              _alreadyRelatedOrRequestedUserIds.add(r.id);
+            }
+          }
+          for (final req in sentReqs) {
+            if (req.status == 'pending' && req.toUserId.isNotEmpty) {
+              _alreadyRelatedOrRequestedUserIds.add(req.toUserId);
+            }
+          }
+          for (final req in incomingReqs) {
+            if (req.status == 'pending' && req.fromUserId.isNotEmpty) {
+              _alreadyRelatedOrRequestedUserIds.add(req.fromUserId);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error checking existing relationships/requests: $e');
+        }
+      }
+
+      final chats = await chatRepo.getUserChats();
+
+      final contactIds = <String>{};
+      for (final chat in chats) {
+        final isDirect =
+            chat.type == 'direct' || chat.id.startsWith('direct_');
+        final hasMessages =
+            chat.lastMessage != null &&
+            (chat.lastMessage!.timestamp > 0 ||
+                chat.lastMessage!.content.trim().isNotEmpty);
+        if (isDirect && hasMessages) {
+          for (final uid in chat.participants) {
+            if (uid != currentUserId && uid.isNotEmpty) {
+              contactIds.add(uid);
+              _chatIdByUserId[uid] = chat.id;
+            }
+          }
+        }
+      }
+
+      if (contactIds.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _contacts = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final idList = contactIds.toList();
+      final List<ProfileData> loadedProfiles = [];
+      final firestore = FirebaseFirestore.instance;
+
+      for (var i = 0; i < idList.length; i += 10) {
+        final chunk = idList.sublist(
+          i,
+          i + 10 > idList.length ? idList.length : i + 10,
+        );
+        final snap = await firestore
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final doc in snap.docs) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data['uid'] ??= doc.id;
+          loadedProfiles.add(ProfileData.fromJson(data));
+        }
+      }
+
+      loadedProfiles.sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
+
+      if (mounted) {
+        setState(() {
+          _contacts = loadedProfiles;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading contacts with messages > 0: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String get _sheetTitle {
+    switch (widget.mode) {
+      case _MilestoneConnectMode.family:
+        return 'Send Family Request';
+      case _MilestoneConnectMode.friend:
+        return 'Send Friend Request';
+      case _MilestoneConnectMode.verification:
+        return 'Solicit Profile Verification';
+    }
+  }
+
+  String get _sheetSubtitle {
+    switch (widget.mode) {
+      case _MilestoneConnectMode.family:
+        return 'Select a user you have messaged to send a family connection request.';
+      case _MilestoneConnectMode.friend:
+        return 'Select a user you have messaged to send a friend connection request.';
+      case _MilestoneConnectMode.verification:
+        return 'Select a user you have messaged to request profile verification.';
+    }
+  }
+
+  String get _actionButtonLabel {
+    switch (widget.mode) {
+      case _MilestoneConnectMode.family:
+        return 'Add Family';
+      case _MilestoneConnectMode.friend:
+        return 'Add Friend';
+      case _MilestoneConnectMode.verification:
+        return 'Request';
+    }
+  }
+
+  IconData get _actionIcon {
+    switch (widget.mode) {
+      case _MilestoneConnectMode.family:
+        return LucideIcons.heartHandshake;
+      case _MilestoneConnectMode.friend:
+        return LucideIcons.userPlus;
+      case _MilestoneConnectMode.verification:
+        return LucideIcons.shieldCheck;
+    }
+  }
+
+  Future<void> _handleSelectContact(ProfileData contact) async {
+    final targetUid = contact.uid;
+    if (targetUid == null || targetUid.isEmpty) return;
+
+    if (widget.mode == _MilestoneConnectMode.family) {
+      Navigator.of(context).pop();
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => RelationshipSelectionModal(
+          otherUserId: targetUid,
+          otherUserName: contact.fullName,
+          otherUserPhoto: contact.profileImage,
+          includeFriend: false,
+          includeFamily: true,
+        ),
+      );
+      return;
+    }
+
+    if (widget.mode == _MilestoneConnectMode.friend) {
+      Navigator.of(context).pop();
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => RelationshipSelectionModal(
+          otherUserId: targetUid,
+          otherUserName: contact.fullName,
+          otherUserPhoto: contact.profileImage,
+          includeFriend: true,
+          includeFamily: false,
+        ),
+      );
+      return;
+    }
+
+    // Mode: Solicit Profile Verification
+    await _solicitVerification(contact);
+  }
+
+  Future<void> _solicitVerification(ProfileData contact) async {
+    final targetUid = contact.uid;
+    if (targetUid == null || targetUid.isEmpty) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final chatRepo = ref.read(chatRepositoryProvider);
+      String? chatId = _chatIdByUserId[targetUid];
+      chatId ??= await chatRepo.getExistingDirectChat(targetUid);
+      if (chatId == null) {
+        final chat = await chatRepo.createDirectChat(targetUid);
+        chatId = chat?.id;
+      }
+      if (chatId == null) {
+        messenger?.showSnackBar(
+          const SnackBar(content: Text('Unable to open direct chat.')),
+        );
+        return;
+      }
+
+      final contactFirst = contact.firstName.trim().isNotEmpty
+          ? contact.firstName.trim()
+          : contact.fullName.trim();
+      final messageText =
+          'Hi $contactFirst, could you please verify my profile on Diaspora Nearby? '
+          'You can open our chat menu (⋯) and tap "Verify & Vouch" to help me complete my Community Verifications milestone. Thank you!';
+
+      await chatRepo.sendTextMessage(chatId, messageText);
+
+      if (mounted) {
+        setState(() {
+          _sentSolicitationUserIds.add(targetUid);
+        });
+      }
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Verification request sent to ${contact.fullName} in chat!',
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Failed to send request: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final filtered = _contacts.where((c) {
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = _searchQuery.toLowerCase();
+      return c.fullName.toLowerCase().contains(q) ||
+          (c.homeCountry?.toLowerCase().contains(q) ?? false) ||
+          (c.hostCountry?.toLowerCase().contains(q) ?? false);
+    }).toList();
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.78,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.4,
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+              child: Row(
+                children: [
+                  Icon(_actionIcon, size: 20, color: theme.colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _sheetTitle,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.x),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                _sheetSubtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                decoration: InputDecoration(
+                  hintText: 'Search contacts with messages...',
+                  prefixIcon: const Icon(LucideIcons.search, size: 18),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(LucideIcons.x, size: 16),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  filled: true,
+                  fillColor: AppTheme.elevationColor(context, 1),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : filtered.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.messageSquare,
+                              size: 36,
+                              color: theme.hintColor,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _contacts.isEmpty
+                                  ? 'No users with messages found yet.\nStart a direct chat with community members first!'
+                                  : 'No matching contacts found.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: theme.hintColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.pageHorizontalPadding,
+                        vertical: 12,
+                      ),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final user = filtered[index];
+                        final uid = user.uid ?? '';
+                        final isAlreadyAdded = widget.existingUserIds.contains(
+                          uid,
+                        );
+                        final isAlreadyRelatedOrPending =
+                            isAlreadyAdded ||
+                            _alreadyRelatedOrRequestedUserIds.contains(uid);
+                        final isSolicitationSent = _sentSolicitationUserIds
+                            .contains(uid);
+                        final isRelationshipMode =
+                            widget.mode == _MilestoneConnectMode.family ||
+                            widget.mode == _MilestoneConnectMode.friend;
+                        final hideActionButton = isRelationshipMode
+                            ? isAlreadyRelatedOrPending
+                            : (isAlreadyAdded || isSolicitationSent);
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              UserCardView(
+                                user: user,
+                                searchQuery: _searchQuery,
+                                onNameTap: () {
+                                  if (hideActionButton) {
+                                    Navigator.of(context).pop();
+                                    context.push('/profile/$uid');
+                                  } else {
+                                    _handleSelectContact(user);
+                                  }
+                                },
+                                onChatTap: () {
+                                  Navigator.of(context).pop();
+                                  context.push('/chat/direct/$uid');
+                                },
+                                isStatic: false,
+                              ),
+                              if (!hideActionButton) ...[
+                                const SizedBox(height: 4),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: SizedBox(
+                                    height: 32,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () =>
+                                          _handleSelectContact(user),
+                                      icon: Icon(_actionIcon, size: 14),
+                                      label: Text(
+                                        _actionButtonLabel,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            theme.colorScheme.primary,
+                                        foregroundColor:
+                                            theme.colorScheme.onPrimary,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
       },
     );
   }

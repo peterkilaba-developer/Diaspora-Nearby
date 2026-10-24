@@ -9,6 +9,7 @@ class ChatRestrictionView extends StatelessWidget {
   final bool isCommunity;
   final bool isOrganization;
   final bool isEvent;
+  final bool isListingChat;
   final String chatName;
   final String chatType;
   final VoidCallback? onJoin;
@@ -19,6 +20,7 @@ class ChatRestrictionView extends StatelessWidget {
     required this.isCommunity,
     required this.isOrganization,
     required this.isEvent,
+    this.isListingChat = false,
     required this.chatName,
     required this.chatType,
     this.onJoin,
@@ -58,7 +60,11 @@ class ChatRestrictionView extends StatelessWidget {
                     ),
                   )
                 : const Icon(LucideIcons.plus),
-            label: Text(isJoining ? 'Joining...' : 'Join Group'),
+            label: Text(
+              isJoining
+                  ? 'Joining...'
+                  : (isListingChat ? 'Join Shop' : 'Join Group'),
+            ),
           ),
         ),
       );

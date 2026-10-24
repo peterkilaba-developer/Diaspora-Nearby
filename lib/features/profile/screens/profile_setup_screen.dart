@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -60,8 +61,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   bool _isSubmitting = false;
   bool _showCurrentLocationName = true;
 
-  // Places Search
-  List<AutocompletePrediction> _predictions = [];
+  // Places Search (isolated per step to prevent cross-step leakage)
+  List<AutocompletePrediction> _homePredictions = [];
+  List<AutocompletePrediction> _hostPredictions = [];
+  Timer? _homeSearchDebounce;
+  Timer? _hostSearchDebounce;
+  int _homeSearchSeq = 0;
+  int _hostSearchSeq = 0;
   final _homeSearchController = TextEditingController();
   final _hostSearchController = TextEditingController();
 
@@ -100,6 +106,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   @override
   void dispose() {
+    _homeSearchDebounce?.cancel();
+    _hostSearchDebounce?.cancel();
     _firstNameController.removeListener(_onNameChanged);
     _lastNameController.removeListener(_onNameChanged);
     _homeFocusNode.dispose();
@@ -219,22 +227,84 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     }
   }
 
-  void _onSearchChanged(String input, bool isHome) async {
-    if (input.isEmpty) {
-      setState(() => _predictions = []);
-      return;
-    }
-
-    final places = ref.read(googlePlacesServiceProvider);
-    final results = await places.autocomplete(input);
-    if (mounted) {
-      setState(() {
-        _predictions = results;
+  void _onSearchChanged(String input, bool isHome) {
+    final trimmed = input.trim();
+    if (isHome) {
+      _homeSearchDebounce?.cancel();
+      final seq = ++_homeSearchSeq;
+      if (trimmed.isEmpty) {
+        setState(() {
+          _homePredictions = [];
+          _homeLocation = null;
+        });
+        return;
+      }
+      if (_homeLocation != null &&
+          trimmed != _homeLocation!.formattedAddress.trim()) {
+        setState(() => _homeLocation = null);
+      }
+      _homeSearchDebounce = Timer(const Duration(milliseconds: 250), () async {
+        if (!mounted || _currentStep != SetupStep.home || seq != _homeSearchSeq) {
+          return;
+        }
+        final places = ref.read(googlePlacesServiceProvider);
+        final results = await places.autocomplete(trimmed);
+        if (!mounted ||
+            _currentStep != SetupStep.home ||
+            seq != _homeSearchSeq ||
+            _homeSearchController.text.trim().isEmpty) {
+          return;
+        }
+        setState(() {
+          _homePredictions = results;
+        });
+      });
+    } else {
+      _hostSearchDebounce?.cancel();
+      final seq = ++_hostSearchSeq;
+      if (trimmed.isEmpty) {
+        setState(() {
+          _hostPredictions = [];
+          _hostLocation = null;
+        });
+        return;
+      }
+      if (_hostLocation != null &&
+          trimmed != _hostLocation!.formattedAddress.trim()) {
+        setState(() => _hostLocation = null);
+      }
+      _hostSearchDebounce = Timer(const Duration(milliseconds: 250), () async {
+        if (!mounted || _currentStep != SetupStep.host || seq != _hostSearchSeq) {
+          return;
+        }
+        final places = ref.read(googlePlacesServiceProvider);
+        final results = await places.autocomplete(trimmed);
+        if (!mounted ||
+            _currentStep != SetupStep.host ||
+            seq != _hostSearchSeq ||
+            _hostSearchController.text.trim().isEmpty) {
+          return;
+        }
+        setState(() {
+          _hostPredictions = results;
+        });
       });
     }
   }
 
   Future<void> _selectPlace(String placeId, bool isHome) async {
+    if (isHome) {
+      _homeSearchDebounce?.cancel();
+      _homeSearchSeq++;
+      setState(() => _homePredictions = []);
+      _homeFocusNode.unfocus();
+    } else {
+      _hostSearchDebounce?.cancel();
+      _hostSearchSeq++;
+      setState(() => _hostPredictions = []);
+      _hostFocusNode.unfocus();
+    }
+
     final places = ref.read(googlePlacesServiceProvider);
     final response = await places.getPlaceDetails(placeId);
     final place = response?.place;
@@ -266,13 +336,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         );
 
         setState(() {
-          _predictions = [];
-
           if (isHome) {
+            _homePredictions = [];
             _homeLocation = loc;
             _homeComponents = components;
             _homeSearchController.text = loc.formattedAddress;
           } else {
+            _hostPredictions = [];
             // For Host Location, Verify against GPS
             _verifySelectedHostLocation(loc, components);
           }
@@ -348,7 +418,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
         // [NEW] Clear input so user can search again immediately
         setState(() {
-          _predictions = [];
+          _hostPredictions = [];
           _hostSearchController.clear();
         });
         return;
@@ -356,6 +426,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
       // Verification Success
       setState(() {
+        _hostPredictions = [];
         _hostLocation = selected;
         _hostComponents = components;
         _hostSearchController.text = selected.formattedAddress;
@@ -367,7 +438,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   void _goToNextStep() {
+    _homeSearchDebounce?.cancel();
+    _hostSearchDebounce?.cancel();
+    _homeSearchSeq++;
+    _hostSearchSeq++;
+    _homeFocusNode.unfocus();
     setState(() {
+      _homePredictions = [];
+      _hostPredictions = [];
       // [NOTE] We do NOT auto-fill host location anymore based on pivot.
       // We might show the detected location as a hint in the UI, but we let user search.
       _currentStep = SetupStep.host;
@@ -375,10 +453,25 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   void _goBack() {
-    if (_currentStep == SetupStep.host) {
-      setState(() => _currentStep = SetupStep.home);
+    _homeSearchDebounce?.cancel();
+    _hostSearchDebounce?.cancel();
+    _homeSearchSeq++;
+    _hostSearchSeq++;
+    FocusScope.of(context).unfocus();
+    if (_currentStep == SetupStep.home) {
+      context.go('/permissions?review=1');
+    } else if (_currentStep == SetupStep.host) {
+      setState(() {
+        _homePredictions = [];
+        _hostPredictions = [];
+        _currentStep = SetupStep.home;
+      });
     } else if (_currentStep == SetupStep.profile) {
-      setState(() => _currentStep = SetupStep.host);
+      setState(() {
+        _homePredictions = [];
+        _hostPredictions = [];
+        _currentStep = SetupStep.host;
+      });
     }
   }
 
@@ -859,12 +952,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: _currentStep != SetupStep.home
-            ? IconButton(
-                icon: const Icon(LucideIcons.arrowLeft),
-                onPressed: _goBack,
-              )
-            : null,
+        leading: IconButton(
+          icon: const Icon(LucideIcons.arrowLeft),
+          onPressed: _goBack,
+        ),
         title: Text(_getStepTitle()),
       ),
       body: SafeArea(
@@ -922,17 +1013,18 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         return ProfileSetupHomeStep(
           searchController: _homeSearchController,
           focusNode: _homeFocusNode,
-          predictions: _predictions,
+          predictions: _homePredictions,
           selectedLocation: _homeLocation,
           onSearchChanged: (v) => _onSearchChanged(v, true),
           onSelectPlace: (id) => _selectPlace(id, true),
           onNext: _goToNextStep,
+          onBack: _goBack,
         );
       case SetupStep.host:
         return ProfileSetupHostStep(
           searchController: _hostSearchController,
           focusNode: _hostFocusNode,
-          predictions: _predictions,
+          predictions: _hostPredictions,
           selectedLocation: _hostLocation,
           onSearchChanged: (v) => _onSearchChanged(v, false),
           onSelectPlace: (id) => _selectPlace(id, false),

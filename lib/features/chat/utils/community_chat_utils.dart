@@ -20,15 +20,94 @@ class CommunityChatUtils {
     'caribbean': 'Caribbean',
   };
 
-  /// Generate dynamic community name based on relation (Home vs Host)
+  /// Canonical bilateral community ID (alphabetically sorted country codes)
+  static String getBilateralCommunityId(String codeA, String codeB) {
+    final sorted = [codeA.trim().toLowerCase(), codeB.trim().toLowerCase()]
+      ..sort();
+    return 'bilateral_country_${sorted[0]}_${sorted[1]}';
+  }
+
+  /// Canonical bilateral chat ID
+  static String getBilateralChatId(String codeA, String codeB) {
+    return 'chat_${getBilateralCommunityId(codeA, codeB)}';
+  }
+
+  /// Check whether a chat or ID represents a bilateral community chat
+  static bool isBilateral({Chat? chat, String? id, String? locationType}) {
+    final effectiveLocType = locationType ?? chat?.locationType ?? '';
+    final effectiveId = id ?? chat?.id ?? '';
+    final effectiveCommId = chat?.communityId ?? '';
+    return effectiveLocType == 'bilateral' ||
+        effectiveId.contains('bilateral_country_') ||
+        effectiveCommId.contains('bilateral_country_') ||
+        chat?.metadata?['isBilateral'] == true;
+  }
+
+  /// Extract [primaryCode, secondaryCode] ordered relative to [viewerHomeCountryCode]
+  /// so the viewer's own home country ISO code and flag always start first.
+  static List<String> resolveBilateralCountryCodes({
+    Chat? chat,
+    String? id,
+    String? homeCountryCode,
+    String? hostCountryCode,
+    String? viewerHomeCountryCode,
+  }) {
+    String? code1;
+    String? code2;
+
+    final effectiveId = id ?? chat?.communityId ?? chat?.id ?? '';
+    if (effectiveId.contains('bilateral_country_')) {
+      final parts = effectiveId.split('_');
+      final idx = parts.indexOf('country');
+      if (idx != -1 && idx + 2 < parts.length) {
+        code1 = parts[idx + 1].toUpperCase();
+        code2 = parts[idx + 2].toUpperCase();
+      }
+    }
+
+    code1 ??= (homeCountryCode ?? chat?.homeCountryCode)?.trim().toUpperCase();
+    code2 ??= (hostCountryCode ?? chat?.hostCountryCode)?.trim().toUpperCase();
+
+    if ((code1 == null || code1.isEmpty || code2 == null || code2.isEmpty) &&
+        chat != null &&
+        chat.name.isNotEmpty) {
+      final match = RegExp(
+        r'^([A-Za-z]{2})\s*-\s*([A-Za-z]{2})\b',
+      ).firstMatch(chat.name.trim());
+      if (match != null) {
+        code1 ??= match.group(1)?.toUpperCase();
+        code2 ??= match.group(2)?.toUpperCase();
+      }
+    }
+
+    if (code1 == null || code1.isEmpty || code2 == null || code2.isEmpty) {
+      return const [];
+    }
+
+    final viewerOwn = viewerHomeCountryCode?.trim().toUpperCase();
+    if (viewerOwn != null &&
+        viewerOwn.isNotEmpty &&
+        code2 == viewerOwn &&
+        code1 != viewerOwn) {
+      return [code2, code1];
+    }
+    return [code1, code2];
+  }
+
+  /// Generate dynamic community name based on relation (Home vs Host vs Bilateral)
   /// Ports logic from React: `utils/communityLocationUtils.ts`
-  static String generateCommunityName(Chat chat) {
+  static String generateCommunityName(
+    Chat chat, {
+    String? viewerHomeCountryCode,
+  }) {
     if (!chat.isCommunity) return chat.name;
 
     // [FIX] Derive locationType from ID if not present on object
     String type = chat.locationType ?? '';
     if (type.isEmpty) {
-      if (chat.id.contains('_host_')) {
+      if (isBilateral(chat: chat)) {
+        type = 'bilateral';
+      } else if (chat.id.contains('_host_')) {
         type = 'host';
       } else if (chat.id.contains('_past_')) {
         type = 'past';
@@ -41,6 +120,9 @@ class CommunityChatUtils {
       name: chat.name,
       locationType: type,
       id: chat.id,
+      homeCountryCode: chat.homeCountryCode,
+      hostCountryCode: chat.hostCountryCode,
+      viewerHomeCountryCode: viewerHomeCountryCode,
     );
   }
 
@@ -50,7 +132,21 @@ class CommunityChatUtils {
     required String name,
     required String locationType,
     String id = '',
+    String? homeCountryCode,
+    String? hostCountryCode,
+    String? viewerHomeCountryCode,
   }) {
+    if (isBilateral(id: id, locationType: locationType)) {
+      final codes = resolveBilateralCountryCodes(
+        id: id,
+        homeCountryCode: homeCountryCode,
+        hostCountryCode: hostCountryCode,
+        viewerHomeCountryCode: viewerHomeCountryCode,
+      );
+      if (codes.length == 2) {
+        return '${codes[0]} - ${codes[1]} Community';
+      }
+    }
     final rawName = name;
     // [FIX] Strip existing "Community" suffix (case-insensitive) to avoid duplications
     // e.g. "Africa Community" -> "Africa"
@@ -158,6 +254,7 @@ class CommunityChatUtils {
     String? locationType,
     String? homeCountryCode,
     String? hostCountryCode,
+    String? viewerHomeCountryCode,
     String? flag,
     String? communityId,
     String? profileImage,
@@ -187,7 +284,9 @@ class CommunityChatUtils {
     final effectiveId = communityId ?? chat?.id ?? '';
     var effectiveLocationType = locationType ?? chat?.locationType;
     if (effectiveLocationType == null) {
-      if (effectiveId.contains('_host_')) {
+      if (isBilateral(chat: chat, id: effectiveId)) {
+        effectiveLocationType = 'bilateral';
+      } else if (effectiveId.contains('_host_')) {
         effectiveLocationType = 'host';
       } else if (effectiveId.contains('_past_')) {
         effectiveLocationType = 'past';
@@ -197,6 +296,60 @@ class CommunityChatUtils {
         effectiveLocationType = 'global';
       } else {
         effectiveLocationType = 'home';
+      }
+    }
+
+    // 1.5 Bilateral Dual-Flag Avatar — matches Corridor Chamber of Commerce design
+    // (viewer's own country flag larger at bottom-left, partner country flag smaller at top-right)
+    if (isBilateral(
+      chat: chat,
+      id: effectiveId,
+      locationType: effectiveLocationType,
+    )) {
+      final codes = resolveBilateralCountryCodes(
+        chat: chat,
+        id: effectiveId,
+        homeCountryCode: homeCountryCode,
+        hostCountryCode: hostCountryCode,
+        viewerHomeCountryCode: viewerHomeCountryCode,
+      );
+      if (codes.length == 2) {
+        final ownFlag = getCountryByCode(codes[0])?.flag;
+        final otherFlag = getCountryByCode(codes[1])?.flag;
+        if (ownFlag != null && otherFlag != null) {
+          final double leadingFontSize = size == 56
+              ? 34
+              : (size == 36 ? 22 : size * (34 / 56));
+          final double secondaryFontSize = size == 56
+              ? 26
+              : (size == 36 ? 16 : size * (26 / 56));
+          return SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              children: [
+                // Viewer's own country flag — bottom-left, larger (leads)
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: Text(
+                    ownFlag,
+                    style: TextStyle(fontSize: leadingFontSize),
+                  ),
+                ),
+                // Partner country flag — top-right, smaller
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Text(
+                    otherFlag,
+                    style: TextStyle(fontSize: secondaryFontSize),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
       }
     }
 

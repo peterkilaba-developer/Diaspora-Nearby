@@ -319,3 +319,70 @@ exports.updateHostingSessionState = functions.https.onCall(async (data, context)
   });
   return {success: true};
 });
+
+exports.updateHostingRequestState = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  const uid = requireAuth(context);
+  await consumeRateLimit("hosting-request-state", uid, 60, 60 * 60 * 1000);
+  const requestId = data && data.requestId;
+  const operation = data && data.operation;
+  if (!validId(requestId) || !["show_interest", "withdraw_interest", "cancel"].includes(operation)) {
+    throw new functions.https.HttpsError("invalid-argument", "Invalid hosting request operation.");
+  }
+
+  const requestRef = db.collection("hosting_requests").doc(requestId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(requestRef);
+    if (!snapshot.exists) {
+      throw new functions.https.HttpsError(
+          "not-found", "This hosting request no longer exists. It may have expired.",
+      );
+    }
+    const request = snapshot.data();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (operation === "cancel") {
+      if (request.travelerId !== uid) {
+        throw new functions.https.HttpsError(
+            "permission-denied", "Only the traveler can cancel this hosting request.",
+        );
+      }
+      if (!["pending", "matched"].includes(request.status)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition", "This request cannot be cancelled in its current state.",
+        );
+      }
+      transaction.update(requestRef, {
+        status: "cancelled",
+        updatedAt: now,
+      });
+      return;
+    }
+
+    if (operation === "show_interest") {
+      if (request.travelerId === uid) {
+        throw new functions.https.HttpsError(
+            "failed-precondition", "You cannot offer to host your own request.",
+        );
+      }
+      if (!["pending", "matched"].includes(request.status)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition", "This hosting request is no longer accepting hosts.",
+        );
+      }
+      transaction.update(requestRef, {
+        interestedHostIds: admin.firestore.FieldValue.arrayUnion(uid),
+        updatedAt: now,
+      });
+      return;
+    }
+
+    if (operation === "withdraw_interest") {
+      transaction.update(requestRef, {
+        interestedHostIds: admin.firestore.FieldValue.arrayRemove(uid),
+        updatedAt: now,
+      });
+    }
+  });
+  return {success: true};
+});

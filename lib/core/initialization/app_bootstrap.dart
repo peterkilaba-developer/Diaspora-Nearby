@@ -86,19 +86,14 @@ class AppBootstrap {
               ? const AppleDebugProvider(debugToken: appleDebugToken)
               : const AppleDeviceCheckProvider(),
         );
-        if (kIsWeb) {
-          // [PERF] Don't block first paint on the reCAPTCHA script download.
-          // Tokens are fetched lazily by the SDK once activation completes.
-          unawaited(
-            activation.catchError(
-              (Object e) =>
-                  debugPrint('AppBootstrap: App Check Init Error: $e'),
-            ),
-          );
-        } else {
-          await activation;
-        }
-        debugPrint('  → AppCheck.activate done');
+        // [PERF] Don't block first paint on App Check activation/network handshakes.
+        // Tokens are fetched lazily by the SDK once activation completes.
+        unawaited(
+          activation.catchError(
+            (Object e) => debugPrint('AppBootstrap: App Check Init Error: $e'),
+          ),
+        );
+        debugPrint('  → AppCheck.activate started (non-blocking)');
       } catch (e) {
         debugPrint('AppBootstrap: App Check Init Error: $e');
       }

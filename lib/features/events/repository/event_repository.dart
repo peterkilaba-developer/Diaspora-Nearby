@@ -15,6 +15,7 @@ import 'package:http/http.dart' as http;
 import 'package:diaspora_nearby/config/env.dart';
 import 'package:diaspora_nearby/features/events/repository/event_local_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) {
   return EventRepository(
@@ -24,11 +25,18 @@ final eventRepositoryProvider = Provider<EventRepository>((ref) {
   );
 });
 
-final eventDetailsProvider = FutureProvider.family<Event?, String>((
+final eventDetailsStreamProvider = StreamProvider.family<Event?, String>((
   ref,
   eventId,
 ) {
-  return ref.read(eventRepositoryProvider).getEvent(eventId);
+  return ref.watch(eventRepositoryProvider).watchEvent(eventId);
+});
+
+final eventDetailsProvider = FutureProvider.family<Event?, String>((
+  ref,
+  eventId,
+) async {
+  return ref.watch(eventDetailsStreamProvider(eventId).future);
 });
 
 final userEventsProvider = StreamProvider.family<List<Event>, String>((
@@ -61,6 +69,15 @@ class EventRepository {
   // Cache for geocoding results
   final Map<String, Map<String, double>> _geocodingCache = {};
 
+  // [PERF] In-memory cache of events by ID for instant detail views & optimistic updates
+  final Map<String, Event> _eventsByIdCache = {};
+
+  /// [PERF] Synchronously read a cached event by ID
+  Event? getCachedEvent(String eventId) => _eventsByIdCache[eventId];
+
+  /// [PERF] Synchronously read all cached raw events
+  List<Event> get cachedRawEvents => _eventsByIdCache.values.toList();
+
   EventRepository(this._firestore, this._storage, this._ref)
     : _localService = EventLocalService();
   // isGlobal: false -> Show only events where creator's homeCountryCode matches current user's
@@ -68,27 +85,130 @@ class EventRepository {
   // FETCHING & STREAMS
   // ============================================
 
-  Stream<List<Event>> watchAllRawEvents() {
-    return _firestore
-        .collection('events')
-        .limit(200)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          final events = snapshot.docs
-              .map((doc) {
-                try {
-                  final data = doc.data();
-                  return Event.fromJson({...data, 'id': doc.id});
-                } catch (e) {
-                  debugPrint('Error parsing event ${doc.id}: $e');
-                  return null;
-                }
-              })
-              .whereType<Event>()
-              .toList();
+  /// Apply any already-cached creator profile & geocoding data synchronously
+  /// so the event list can emit on frame 0 without waiting on network calls.
+  List<Event> _applySyncEnrichment(List<Event> events) {
+    final profileRepo = _ref.read(profileRepositoryProvider);
+    final result = <Event>[];
+    for (var event in events) {
+      if (event.creatorId.isNotEmpty &&
+          (event.creatorName == null || event.creatorName!.isEmpty)) {
+        final cachedProfile = profileRepo.getCachedProfile(event.creatorId);
+        if (cachedProfile != null) {
+          event.creatorName =
+              '${cachedProfile.firstName} ${cachedProfile.lastName}'.trim();
+          event.creatorPhoto = cachedProfile.profileImage;
+        }
+      }
+      if ((event.latitude == null || event.longitude == null) &&
+          event.location.isNotEmpty &&
+          _geocodingCache.containsKey(event.location)) {
+        final coords = _geocodingCache[event.location]!;
+        final updatedJson = event.toJson()
+          ..['latitude'] = coords['lat']
+          ..['longitude'] = coords['lng']
+          ..['id'] = event.id;
+        event = Event.fromJson(updatedJson)
+          ..creatorName = event.creatorName
+          ..creatorPhoto = event.creatorPhoto;
+      }
+      _eventsByIdCache[event.id] = event;
+      result.add(event);
+    }
+    return result;
+  }
 
-          return await _enrichEvents(events);
-        });
+  Stream<List<Event>> watchAllRawEvents() {
+    return Stream.multi((controller) {
+      if (_eventsByIdCache.isNotEmpty) {
+        controller.add(_eventsByIdCache.values.toList());
+      }
+      final sub = _firestore
+          .collection('events')
+          .limit(200)
+          .snapshots()
+          .listen(
+            (snapshot) async {
+              final events = snapshot.docs
+                  .map((doc) {
+                    try {
+                      final data = doc.data();
+                      return Event.fromJson({...data, 'id': doc.id});
+                    } catch (e) {
+                      debugPrint('Error parsing event ${doc.id}: $e');
+                      return null;
+                    }
+                  })
+                  .whereType<Event>()
+                  .toList();
+
+              // 1. Emit immediately with synchronous cache enrichment (0ms delay)
+              final immediate = _applySyncEnrichment(events);
+              if (!controller.isClosed) {
+                controller.add(immediate);
+              }
+
+              // 2. Enrich missing creator profiles / coordinates in the background
+              final enriched = await _enrichEvents(immediate);
+              for (final e in enriched) {
+                _eventsByIdCache[e.id] = e;
+              }
+              if (!controller.isClosed) {
+                controller.add(enriched);
+              }
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
+  }
+
+  /// Returns true if the event has already ended (past its end date/time, or past midnight of its end date).
+  static bool isEventExpired(Event event, [DateTime? now]) {
+    final current = now ?? DateTime.now();
+    final todayStr =
+        "${current.year}-${current.month.toString().padLeft(2, '0')}-${current.day.toString().padLeft(2, '0')}";
+
+    final effectiveEndDate =
+        (event.endDate != null && event.endDate!.isNotEmpty)
+        ? event.endDate!
+        : event.startDate;
+
+    if (effectiveEndDate.isEmpty) return false;
+
+    // Strictly before today -> expired
+    if (effectiveEndDate.compareTo(todayStr) < 0) {
+      return true;
+    }
+
+    // If the event ends today and has an explicit endTime, check if endTime has passed
+    if (effectiveEndDate == todayStr) {
+      final timeStr = (event.endTime != null && event.endTime!.isNotEmpty)
+          ? event.endTime!
+          : '';
+      if (timeStr.isNotEmpty) {
+        final parts = timeStr.split(':');
+        if (parts.length >= 2) {
+          final hour = int.tryParse(parts[0]);
+          final minute = int.tryParse(parts[1]);
+          if (hour != null && minute != null) {
+            final endDateTime = DateTime(
+              current.year,
+              current.month,
+              current.day,
+              hour,
+              minute,
+            );
+            if (current.isAfter(endDateTime)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   List<Event> filterVisibleEvents(
@@ -98,30 +218,24 @@ class EventRepository {
     required String currentUserId,
     required List<String> userCommunityMemberships,
   }) {
-    final today = DateTime.now();
-    final todayStr =
-        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+    final now = DateTime.now();
 
     final filteredEvents = events.where((event) {
       final permission = event.attendingPermission;
       final creatorId = event.creatorId;
 
-      // 1. Creator or RSVP'd attendee always sees the event
-      if (creatorId == currentUserId) return true;
-      if (event.attendees?.contains(currentUserId) ?? false) return true;
-
-      // 1.5 Must be published for others
-      if (event.status != 'published') return false;
-
-      // Show events until midnight after they end (for non-creators)
-      final effectiveEndDate =
-          (event.endDate != null && event.endDate!.isNotEmpty)
-          ? event.endDate!
-          : event.startDate;
-      if (effectiveEndDate.isNotEmpty &&
-          effectiveEndDate.compareTo(todayStr) < 0) {
+      // 0. Never show expired events on the main discovery feed (even to creator/attendees;
+      // creators can still view/manage past events in Event Dashboard -> Manage).
+      if (isEventExpired(event, now)) {
         return false;
       }
+
+      // 1. Must be published to appear on the main discovery feed
+      if (event.status != 'published') return false;
+
+      // 1.5 Creator or RSVP'd attendee always sees upcoming published events
+      if (creatorId == currentUserId) return true;
+      if (event.attendees?.contains(currentUserId) ?? false) return true;
 
       // 2. Country Filter (If not global view)
       if (!isGlobal &&
@@ -165,8 +279,12 @@ class EventRepository {
       return false;
     }).toList();
 
-    // Sort by Start Date
-    filteredEvents.sort((a, b) => a.startDate.compareTo(b.startDate));
+    // Sort by Start Date + Start Time (soonest upcoming first)
+    filteredEvents.sort((a, b) {
+      final dateCmp = a.startDate.compareTo(b.startDate);
+      if (dateCmp != 0) return dateCmp;
+      return a.startTime.compareTo(b.startTime);
+    });
     return filteredEvents;
   }
 
@@ -187,47 +305,57 @@ class EventRepository {
     );
   }
 
-  // Enrich events with creator profiles
+  // Enrich events with creator profiles and missing coordinates
   Future<List<Event>> _enrichEvents(List<Event> events) async {
+    final profileRepo = _ref.read(profileRepositoryProvider);
     final creatorIds = events
         .map((e) => e.creatorId)
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
-    if (creatorIds.isEmpty) return events;
+    if (creatorIds.isNotEmpty) {
+      final profiles = await profileRepo.getProfiles(creatorIds);
+      final profileMap = {
+        for (final p in profiles)
+          if (p.uid != null) p.uid!: p,
+      };
 
-    // Fetch profiles safely so a single failing profile lookup never breaks event loading
-    final profiles = <String, Map<String, dynamic>>{};
-
-    final futures = creatorIds.map((id) async {
-      try {
-        return await _firestore
-            .collection('users')
-            .doc(id)
-            .get()
-            .timeout(const Duration(seconds: 4));
-      } catch (_) {
-        return null;
-      }
-    });
-    final snapshots = await Future.wait(futures);
-
-    for (var doc in snapshots) {
-      if (doc != null && doc.exists && doc.data() != null) {
-        profiles[doc.id] = doc.data()!;
+      for (var event in events) {
+        final profile =
+            profileMap[event.creatorId] ??
+            profileRepo.getCachedProfile(event.creatorId);
+        if (profile != null) {
+          event.creatorName = '${profile.firstName} ${profile.lastName}'.trim();
+          event.creatorPhoto = profile.profileImage;
+        }
       }
     }
 
-    for (var event in events) {
-      final profile = profiles[event.creatorId];
-      if (profile != null) {
-        event.creatorName =
-            '${profile['firstName'] ?? ''} ${profile['lastName'] ?? ''}'.trim();
-        event.creatorPhoto = profile['profilePhoto']; // Use Firestore key
-      }
-    }
+    // Geocode any legacy events that are missing latitude/longitude in parallel
+    final result = await Future.wait(
+      events.map((event) async {
+        if ((event.latitude == null || event.longitude == null) &&
+            event.location.isNotEmpty) {
+          try {
+            final coords = await _geocodeAddress(event.location);
+            if (coords != null &&
+                coords['lat'] != null &&
+                coords['lng'] != null) {
+              final updatedJson = event.toJson()
+                ..['latitude'] = coords['lat']
+                ..['longitude'] = coords['lng']
+                ..['id'] = event.id;
+              return Event.fromJson(updatedJson)
+                ..creatorName = event.creatorName
+                ..creatorPhoto = event.creatorPhoto;
+            }
+          } catch (_) {}
+        }
+        return event;
+      }),
+    );
 
-    return events;
+    return result;
   }
 
   // Add distances to events
@@ -318,12 +446,62 @@ class EventRepository {
     return null;
   }
 
+  // Watch Single Event by ID in real time
+  Stream<Event?> watchEvent(String eventId) {
+    return Stream.multi((controller) {
+      final cached = _eventsByIdCache[eventId];
+      if (cached != null) {
+        controller.add(cached);
+      }
+      final sub = _firestore
+          .collection('events')
+          .doc(eventId)
+          .snapshots()
+          .listen(
+            (doc) async {
+              if (!doc.exists || doc.data() == null) {
+                if (!controller.isClosed) controller.add(null);
+                return;
+              }
+              try {
+                final data = doc.data()!;
+                final rawEvent = Event.fromJson({...data, 'id': doc.id});
+                final immediate = _applySyncEnrichment([rawEvent]).first;
+                if (!controller.isClosed) {
+                  controller.add(immediate);
+                }
+                final enriched = await _enrichEvents([immediate]);
+                final finalEvent = enriched.isNotEmpty
+                    ? enriched.first
+                    : immediate;
+                _eventsByIdCache[eventId] = finalEvent;
+                await _localService.saveEvent(finalEvent);
+                if (!controller.isClosed) {
+                  controller.add(finalEvent);
+                }
+              } catch (e) {
+                debugPrint('Error watching event $eventId: $e');
+              }
+            },
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+      controller.onCancel = sub.cancel;
+    });
+  }
+
   // Fetch Single Event by ID
   Future<Event?> getEvent(String eventId, {bool force = false}) async {
-    // 1. Try Local
+    // 1. Try Memory Cache
+    if (!force && _eventsByIdCache.containsKey(eventId)) {
+      _fetchAndSaveEvent(eventId);
+      return _eventsByIdCache[eventId];
+    }
+    // 2. Try Local
     if (!force) {
       final localEvent = await _localService.getEvent(eventId);
       if (localEvent != null) {
+        _eventsByIdCache[eventId] = localEvent;
         // Background refresh
         _fetchAndSaveEvent(eventId);
         return localEvent;
@@ -462,10 +640,21 @@ class EventRepository {
 
   // Attend Event (RSVP)
   Future<void> joinEvent(String eventId, String userId) async {
-    // 0. Fetch event to check if it's paid
-    final eventDoc = await _firestore.collection('events').doc(eventId).get();
-    if (!eventDoc.exists) throw Exception('Event not found');
-    final event = Event.fromJson(eventDoc.data()!);
+    // Optimistically update in-memory cache immediately
+    final cached = _eventsByIdCache[eventId];
+    if (cached != null) {
+      final updatedAttendees = <String>{...?cached.attendees, userId}.toList();
+      cached.attendees = updatedAttendees;
+      cached.attendeeCount = updatedAttendees.length;
+    }
+
+    // 0. Fetch event to check if it's paid (prefer memory cache)
+    Event? event = cached;
+    if (event == null) {
+      final eventDoc = await _firestore.collection('events').doc(eventId).get();
+      if (!eventDoc.exists) throw Exception('Event not found');
+      event = Event.fromJson({...eventDoc.data()!, 'id': eventId});
+    }
 
     await FirebaseFunctions.instance.httpsCallable('setEventAttendance').call({
       'eventId': eventId,
@@ -495,22 +684,43 @@ class EventRepository {
     }
 
     // 3. Refresh Local Cache
-    await getEvent(eventId, force: true);
+    unawaited(getEvent(eventId, force: true));
   }
 
   // Leave Event
   Future<void> leaveEvent(String eventId, String userId) async {
+    // Optimistically update in-memory cache immediately
+    final cached = _eventsByIdCache[eventId];
+    if (cached != null && cached.attendees != null) {
+      cached.attendees = cached.attendees!
+          .where((id) => id != userId)
+          .toList();
+      cached.attendeeCount = cached.attendees!.length;
+    }
+
     await FirebaseFunctions.instance.httpsCallable('setEventAttendance').call({
       'eventId': eventId,
       'attending': false,
     });
 
     // 3. Refresh Local Cache
-    await getEvent(eventId, force: true);
+    unawaited(getEvent(eventId, force: true));
   }
 
   // Toggle Interest
   Future<void> toggleInterest(String eventId, String userId, bool add) async {
+    // Optimistically update in-memory cache immediately
+    final cached = _eventsByIdCache[eventId];
+    if (cached != null) {
+      final current = <String>{...?cached.interested};
+      if (add) {
+        current.add(userId);
+      } else {
+        current.remove(userId);
+      }
+      cached.interested = current.toList();
+    }
+
     await FirebaseFunctions.instance.httpsCallable('setEventInterest').call({
       'eventId': eventId,
       'interested': add,
@@ -723,10 +933,17 @@ class EventRepository {
           })
           .whereType<Event>()
           .where((event) {
+            if (isEventExpired(event, today)) return false;
+            if (event.status != 'published') return false;
             if (query.isEmpty) return true;
             return event.title.toLowerCase().contains(queryLower);
           })
-          .toList();
+          .toList()
+        ..sort((a, b) {
+          final dateCmp = a.startDate.compareTo(b.startDate);
+          if (dateCmp != 0) return dateCmp;
+          return a.startTime.compareTo(b.startTime);
+        });
 
       return await _enrichEvents(events);
     } catch (e) {

@@ -1,6 +1,12 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/shared/models/google_places_models.dart';
+import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
+import 'package:diaspora_nearby/features/events/models/event_data.dart';
+import 'package:diaspora_nearby/core/services/plus_code_service.dart';
 
 // --------------------------------------------------------------------------
 // Models
@@ -287,6 +293,186 @@ String generateCommunityName({
 /// Calculate distance between two points in kilometers using Haversine formula
 double calculateDistance(double lat1, double lon1, double lat2, double lon2) =>
     GeoUtils.haversine(lat1, lon1, lat2, lon2);
+
+/// Extract the best available non-zero coordinates from a user profile:
+/// 1. currentLocation, 2. hostLocation, 3. homeLocation, 4. country centroid.
+(double, double)? extractProfileCoords(ProfileData? profile) {
+  if (profile == null) return null;
+
+  (double, double)? validCoords(double? lat, double? lng) {
+    if (lat != null &&
+        lng != null &&
+        lat.isFinite &&
+        lng.isFinite &&
+        (lat != 0 || lng != 0)) {
+      return (lat, lng);
+    }
+    return null;
+  }
+
+  final cur = profile.currentLocation?.geometry.location;
+  final c1 = validCoords(cur?.lat, cur?.lng);
+  if (c1 != null) return c1;
+
+  final host = profile.hostLocation.geometry?.location;
+  final c2 = validCoords(host?.lat, host?.lng);
+  if (c2 != null) return c2;
+
+  final home = profile.homeLocation.geometry?.location;
+  final c3 = validCoords(home?.lat, home?.lng);
+  if (c3 != null) return c3;
+
+  return null;
+}
+
+/// Calculate distance in km between a viewer and a target profile.
+double? calculateProfileDistanceKm(
+  ProfileData? viewer,
+  ProfileData? target, {
+  double? fallbackDistanceKm,
+}) {
+  if (viewer != null &&
+      target != null &&
+      viewer.uid != null &&
+      viewer.uid == target.uid) {
+    return 0.0;
+  }
+  final myCoords = extractProfileCoords(viewer);
+  final theirCoords = extractProfileCoords(target);
+  if (myCoords != null && theirCoords != null) {
+    return calculateDistance(
+      myCoords.$1,
+      myCoords.$2,
+      theirCoords.$1,
+      theirCoords.$2,
+    );
+  }
+  return fallbackDistanceKm ?? target?.distance;
+}
+
+/// Real-time stream of the device's GPS position when permission is granted.
+final liveUserPositionProvider = StreamProvider<Position?>((ref) {
+  final controller = StreamController<Position?>();
+  StreamSubscription<Position>? sub;
+
+  Future<void> init() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!controller.isClosed) controller.add(null);
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!controller.isClosed) controller.add(null);
+        return;
+      }
+
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && !controller.isClosed) {
+        controller.add(lastKnown);
+      }
+
+      try {
+        final current = await Geolocator.getCurrentPosition().timeout(
+          const Duration(seconds: 5),
+        );
+        if (!controller.isClosed) {
+          controller.add(current);
+        }
+      } catch (_) {}
+
+      sub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          distanceFilter: 100,
+        ),
+      ).listen(
+        (pos) {
+          if (!controller.isClosed) controller.add(pos);
+        },
+        onError: (_) {},
+      );
+    } catch (_) {
+      if (!controller.isClosed) controller.add(null);
+    }
+  }
+
+  init();
+
+  ref.onDispose(() {
+    sub?.cancel();
+    controller.close();
+  });
+
+  return controller.stream;
+});
+
+/// Extract the best available non-zero coordinates from an Event:
+/// 1. (event.latitude, event.longitude), 2. PlusCode decode, 3. country centroid.
+(double, double)? extractEventCoords(Event? event) {
+  if (event == null) return null;
+
+  (double, double)? validCoords(double? lat, double? lng) {
+    if (lat != null &&
+        lng != null &&
+        lat.isFinite &&
+        lng.isFinite &&
+        (lat != 0 || lng != 0)) {
+      return (lat, lng);
+    }
+    return null;
+  }
+
+  final c1 = validCoords(event.latitude, event.longitude);
+  if (c1 != null) return c1;
+
+  if (event.plusCode != null && event.plusCode!.isNotEmpty) {
+    final decoded = PlusCodeService.decode(event.plusCode!);
+    final c2 = validCoords(decoded?['latitude'], decoded?['longitude']);
+    if (c2 != null) return c2;
+  }
+
+  if (event.location.isNotEmpty &&
+      PlusCodeService.isValidPlusCode(event.location)) {
+    final decoded = PlusCodeService.decode(event.location);
+    final c3 = validCoords(decoded?['latitude'], decoded?['longitude']);
+    if (c3 != null) return c3;
+  }
+
+  return null;
+}
+
+/// Calculate distance in km between the logged-in user and an Event.
+double? calculateEventDistanceKm(
+  Event event, {
+  ProfileData? viewer,
+  Position? livePosition,
+  double? fallbackDistanceKm,
+}) {
+  (double, double)? myCoords;
+  if (livePosition != null &&
+      livePosition.latitude.isFinite &&
+      livePosition.longitude.isFinite &&
+      (livePosition.latitude != 0 || livePosition.longitude != 0)) {
+    myCoords = (livePosition.latitude, livePosition.longitude);
+  } else {
+    myCoords = extractProfileCoords(viewer);
+  }
+
+  final eventCoords = extractEventCoords(event);
+  if (myCoords != null && eventCoords != null) {
+    return calculateDistance(
+      myCoords.$1,
+      myCoords.$2,
+      eventCoords.$1,
+      eventCoords.$2,
+    );
+  }
+  return fallbackDistanceKm ?? event.distance;
+}
 
 /// Human readable distance string
 String formatDistance(double km) {

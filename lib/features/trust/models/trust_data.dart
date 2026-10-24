@@ -118,6 +118,7 @@ class TrustData {
   final List<String> genesisTrustIds;
   final List<String> genesisVerificationIds;
   final List<String> genesisVouchIds;
+  final Map<String, String> relationshipTypes;
 
   TrustData({
     required this.uid,
@@ -170,15 +171,19 @@ class TrustData {
     this.genesisTrustIds = const [],
     this.genesisVerificationIds = const [],
     this.genesisVouchIds = const [],
+    this.relationshipTypes = const {},
   });
 
   factory TrustData.fromJson(Map<String, dynamic> json) {
-    if (json['lastUpdated'] is Timestamp) {
-      json['lastUpdated'] = (json['lastUpdated'] as Timestamp)
+    final normalized = Map<String, dynamic>.from(json);
+    if (normalized['lastUpdated'] is Timestamp) {
+      normalized['lastUpdated'] = (normalized['lastUpdated'] as Timestamp)
           .toDate()
           .toIso8601String();
+    } else if (normalized['lastUpdated'] is! String) {
+      normalized['lastUpdated'] = DateTime.now().toIso8601String();
     }
-    return _$TrustDataFromJson(json);
+    return _$TrustDataFromJson(normalized);
   }
 
   Map<String, dynamic> toJson() => _$TrustDataToJson(this);
@@ -224,6 +229,7 @@ class TrustData {
     List<String>? genesisTrustIds,
     List<String>? genesisVerificationIds,
     List<String>? genesisVouchIds,
+    Map<String, String>? relationshipTypes,
     int? blockedByCount,
     int? flaggedMessagesCount,
     int? bannedVoucheeCount,
@@ -283,6 +289,7 @@ class TrustData {
       genesisVerificationIds:
           genesisVerificationIds ?? this.genesisVerificationIds,
       genesisVouchIds: genesisVouchIds ?? this.genesisVouchIds,
+      relationshipTypes: relationshipTypes ?? this.relationshipTypes,
       blockedByCount: blockedByCount ?? this.blockedByCount,
       flaggedMessagesCount: flaggedMessagesCount ?? this.flaggedMessagesCount,
       bannedVoucheeCount: bannedVoucheeCount ?? this.bannedVoucheeCount,

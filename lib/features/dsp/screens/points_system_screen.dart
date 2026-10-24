@@ -439,7 +439,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Complete Your Profile',
               subtitle:
-                  'Fill all 10 profile fields to unlock the genesis bonus',
+                  'Fill all ${userProfileAsync.value?.totalMilestoneFields ?? 12} profile fields to unlock the genesis bonus',
               amount: '10,000 DSP',
               earned: lifetimeEarnings['profile_completion'] ?? 0,
             ),
@@ -710,10 +710,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               context,
               title: 'Complete Your Profile',
               subtitle:
-                  'Fill 10 profile fields to fully complete your profile and earn your genesis bonus.',
+                  'Fill ${userProfileAsync.value?.totalMilestoneFields ?? 12} profile fields to fully complete your profile and earn your genesis bonus.',
               amount: '+10 PCT  •  10,000 DSP',
               standing:
-                  '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/10 Fields',
+                  '${userProfileAsync.value?.completedMilestoneFieldCount ?? 0}/${userProfileAsync.value?.totalMilestoneFields ?? 12} Fields',
             ),
 
             // --- Dual Geographic Locations ---
@@ -3204,7 +3204,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
     final isProfileComplete =
         userProfile?.isComplete == true ||
-        (userProfile?.completedMilestoneFieldCount ?? 0) >= 10;
+        (userProfile != null &&
+            userProfile.completedMilestoneFieldCount >=
+                userProfile.totalMilestoneFields);
 
     final qrCount = trustData?.uniqueQrCount ?? displayPoints.qrConnectionCount;
     final hasTenQr = qrCount >= 10;

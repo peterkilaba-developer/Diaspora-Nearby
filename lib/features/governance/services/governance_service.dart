@@ -12,7 +12,6 @@ import '../repository/governance_repository.dart';
 import '../../trust/models/trust_data.dart';
 import '../../trust/services/trust_service.dart';
 import '../../trust/repository/trust_repository.dart';
-import '../../chat/services/chat_messaging_service.dart';
 
 final governanceRepositoryProviderAlias = governanceRepositoryProvider;
 
@@ -123,47 +122,15 @@ class GovernanceService {
   }
 
   /// Send system message to community chat announcing candidacy.
+  /// Handled server-side inside `nominateForGovernanceRole`.
   Future<void> _sendCandidacyAnnouncement(
     GovernanceUnit unit,
     String userId,
     String role,
   ) async {
-    if (unit.communityId == null) return;
-
-    try {
-      final chatId = 'community_${unit.communityId}';
-      final roleName = GovernanceRoles.displayName(role);
-      final roleEmoji = GovernanceRoles.emoji(role);
-
-      // Check community has min 4 members
-      final community = await _ref
-          .read(communityRepositoryProvider)
-          .getCommunity(unit.communityId!);
-      final memberCount = community?.memberCount ?? 0;
-      if (memberCount < 4) {
-        debugPrint('⚠️ Community has < 4 members, skipping vote notification.');
-        return;
-      }
-
-      final chatService = _ref.read(chatMessagingServiceProvider);
-      await chatService.sendTextMessage(
-        chatId,
-        '$roleEmoji A community member has announced their candidacy for '
-        '$roleName! Open Voice of Diaspora to cast your vote: '
-        'Yay, Nay, or Abstain',
-        senderIdOverride: 'system',
-        senderNameOverride: '🗳️ Voice of Diaspora',
-        type: 'system',
-        metadata: {
-          'systemType': 'election_announcement',
-          'candidateId': userId,
-          'role': role,
-          'unitId': unit.id,
-        },
-      );
-    } catch (e) {
-      debugPrint('Error sending candidacy announcement: $e');
-    }
+    // Server-side `nominateForGovernanceRole` posts the system announcement
+    // directly with the Admin SDK so clients do not fail on senderId=='system'.
+    return;
   }
 
   // ────────────────────────────────
@@ -236,37 +203,9 @@ class GovernanceService {
     String unitId,
     List<Map<String, dynamic>> removedMembers,
   ) async {
-    final unit = await _ref
-        .read(governanceRepositoryProvider)
-        .getGovernanceUnit(unitId);
-    if (unit?.communityId == null) return;
-
-    for (final member in removedMembers) {
-      final memberId = member['userId'] as String?;
-      final role = member['role'] as String?;
-      if (memberId == null || role == null) continue;
-
-      try {
-        await _ref
-            .read(chatMessagingServiceProvider)
-            .sendTextMessage(
-              'community_${unit!.communityId}',
-              'A ${GovernanceRoles.displayName(role)} has been removed from '
-                  'council by community vote. The role is now open for candidates.',
-              senderIdOverride: 'system',
-              senderNameOverride: 'Voice of Diaspora',
-              type: 'system',
-              metadata: {
-                'systemType': 'election_vote_out',
-                'removedUserId': memberId,
-                'role': role,
-                'unitId': unitId,
-              },
-            );
-      } catch (e) {
-        debugPrint('Error sending vote-out notification: $e');
-      }
-    }
+    // Server-side `evaluateGovernanceVote` posts the vote-out system message
+    // directly with the Admin SDK so clients do not fail on senderId=='system'.
+    return;
   }
 
   // ──────────────────────────────────

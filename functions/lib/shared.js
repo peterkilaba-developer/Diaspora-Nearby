@@ -46,12 +46,22 @@ async function sendPushToUser(userId, payload) {
     if (payload.androidCollapseKey || payload.androidTag) {
         message.android = {
             collapseKey: payload.androidCollapseKey,
-            notification: payload.androidTag ? { tag: payload.androidTag } : undefined,
+            notification: {
+                channelId: "high_importance_channel",
+                ...(payload.androidTag ? { tag: payload.androidTag } : {}),
+            },
         };
     }
-    if (payload.apnsThreadId) {
+    if (payload.apnsThreadId || payload.apnsCollapseId) {
         message.apns = {
-            payload: { aps: { "thread-id": payload.apnsThreadId } },
+            ...(payload.apnsCollapseId ? {
+                headers: { "apns-collapse-id": payload.apnsCollapseId },
+            } : {}),
+            payload: {
+                aps: {
+                    ...(payload.apnsThreadId ? { "thread-id": payload.apnsThreadId } : {}),
+                },
+            },
         };
     }
 

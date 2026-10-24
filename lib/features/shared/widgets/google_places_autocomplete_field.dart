@@ -35,6 +35,7 @@ class _GooglePlacesAutocompleteFieldState
   // ... existing state items ...
   late TextEditingController _controller;
   Timer? _debounce;
+  int _searchSeq = 0;
   List<dynamic> _predictions = [];
   bool _isLoading = false;
   final LayerLink _layerLink = LayerLink();
@@ -64,40 +65,45 @@ class _GooglePlacesAutocompleteFieldState
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
+    final trimmed = query.trim();
+    final seq = ++_searchSeq;
 
-    if (query.isEmpty) {
+    if (trimmed.isEmpty) {
       setState(() {
         _predictions = [];
+        _isLoading = false;
         _removeOverlay();
       });
       return;
     }
 
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      if (!mounted) return;
+      if (!mounted || seq != _searchSeq) return;
       setState(() => _isLoading = true);
 
       try {
         final service = ref.read(googlePlacesServiceProvider);
         final results = await service.autocomplete(
-          query,
+          trimmed,
           filter: widget.filter,
         ); // [FIX] Pass filter
 
-        if (!mounted) return;
+        if (!mounted || seq != _searchSeq || _controller.text.trim().isEmpty) {
+          return;
+        }
 
         setState(() {
           _predictions = results;
           _isLoading = false;
         });
 
-        if (_predictions.isNotEmpty) {
+        if (_predictions.isNotEmpty && _focusNode.hasFocus) {
           _showOverlay();
         } else {
           _removeOverlay();
         }
       } catch (e) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted && seq == _searchSeq) setState(() => _isLoading = false);
       }
     });
   }
@@ -158,6 +164,9 @@ class _GooglePlacesAutocompleteFieldState
                         : null,
                     dense: true,
                     onTap: () {
+                      _debounce?.cancel();
+                      _searchSeq++;
+                      _predictions = [];
                       _controller.text = '$mainText, $secondaryText';
                       widget.onSelected(_controller.text, placeId);
                       _removeOverlay();
@@ -188,6 +197,9 @@ class _GooglePlacesAutocompleteFieldState
         controller: _controller,
         focusNode: _focusNode,
         autofocus: false, // [FIX] Disable auto-focus
+        autofillHints: const <String>[],
+        autocorrect: false,
+        enableSuggestions: false,
         textCapitalization: TextCapitalization.words,
         validator: widget.validator,
         decoration: InputDecoration(

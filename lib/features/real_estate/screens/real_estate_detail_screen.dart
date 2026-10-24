@@ -320,15 +320,17 @@ class _RealEstateDetailScreenState
                   ),
                   child: Row(
                     children: [
-                      CurrencyPriceDisplay(
-                        amount: listing.price,
-                        sellerCountryCode: listing.countryCode,
-                        viewerCountryCode: profile?.hostCountryCode,
-                        showToggle: false,
-                        primaryStyle: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
+                      Flexible(
+                        child: CurrencyPriceDisplay(
+                          amount: listing.price,
+                          sellerCountryCode: listing.countryCode,
+                          viewerCountryCode: profile?.hostCountryCode,
+                          showToggle: false,
+                          primaryStyle: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
                         ),
                       ),
                       const Spacer(),

@@ -138,10 +138,9 @@ class EmergencyFundService {
   /// Record this user's interest in joining the fund.
   /// Used when balance is too low to contribute right now.
   Future<void> expressInterest(String userId) async {
-    await _firestore.collection('emergency_fund_interest').doc(userId).set({
-      'userId': userId,
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await FirebaseFunctions.instance
+        .httpsCallable('expressEmergencyFundInterest')
+        .call({'userId': userId});
   }
 
   /// Whether the user has already expressed interest.
@@ -252,24 +251,37 @@ class EmergencyFundService {
     required String proxyUserId,
     required List<String> coveredFamilyMembers,
   }) async {
-    final membership = EmergencyFundMembership(
-      userId: userId,
-      country: country,
-      status: MembershipStatus.pending_proxy,
-      joinedDate: DateTime.now(),
-      annualContribution: 100.0, // Fixed: Standardized to $100
-      supportNumber: 'DN-EMG-${_uuid.v4().substring(0, 8).toUpperCase()}',
-      proxyUserId: proxyUserId,
-      proxyStatus: ProxyStatus.pending,
-      coveredFamilyMembers: coveredFamilyMembers,
-    );
-
-    await _firestore
-        .collection('emergency_fund_memberships')
-        .doc(userId)
-        .set(membership.toMap());
-
-    // Logic to notify proxy would go here
+    final supportNumber = 'DN-EMG-${_uuid.v4().substring(0, 8).toUpperCase()}';
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('requestEmergencyProxy')
+          .call({
+            'userId': userId,
+            'country': country,
+            'status': MembershipStatus.pending_proxy.name,
+            'joinedDate': DateTime.now().toIso8601String(),
+            'annualContribution': 100.0,
+            'supportNumber': supportNumber,
+            'proxyUserId': proxyUserId,
+            'coveredFamilyMembers': coveredFamilyMembers,
+          });
+    } catch (_) {
+      final membership = EmergencyFundMembership(
+        userId: userId,
+        country: country,
+        status: MembershipStatus.pending_proxy,
+        joinedDate: DateTime.now(),
+        annualContribution: 100.0,
+        supportNumber: supportNumber,
+        proxyUserId: proxyUserId,
+        proxyStatus: ProxyStatus.pending,
+        coveredFamilyMembers: coveredFamilyMembers,
+      );
+      await _firestore
+          .collection('emergency_fund_memberships')
+          .doc(userId)
+          .set(membership.toMap());
+    }
   }
 
   // Step 2: Proxy Accepts (Called by Proxy User)
@@ -277,14 +289,12 @@ class EmergencyFundService {
     String memberUserId,
     String proxyUserId,
   ) async {
-    // Logic to validate proxy user would go here
-
-    await _firestore
-        .collection('emergency_fund_memberships')
-        .doc(memberUserId)
-        .update({
-          'proxyStatus': ProxyStatus.accepted.name,
-          'status': MembershipStatus.pending_payment.name,
+    await FirebaseFunctions.instance
+        .httpsCallable('respondEmergencyProxy')
+        .call({
+          'fromUserId': memberUserId,
+          'memberUserId': memberUserId,
+          'accepted': true,
         });
   }
 
@@ -297,23 +307,14 @@ class EmergencyFundService {
     required String userName,
     required String proxyUserId,
   }) async {
-    // 1. Save proxy as pending on the membership doc
-    await _firestore.collection('emergency_fund_memberships').doc(userId).set({
-      'proxyUserId': proxyUserId,
-      'proxyStatus': ProxyStatus.pending.name,
-    }, SetOptions(merge: true));
-
-    // 2. Write a proxy_requests doc so the proxy user gets notified
-    final requestId = '${userId}_$proxyUserId';
-    await _firestore.collection('proxy_requests').doc(requestId).set({
-      'fromUserId': userId,
-      'fromUserName': userName,
-      'toUserId': proxyUserId,
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    debugPrint('✅ [EmergencyFund] Proxy request created: $requestId');
+    await FirebaseFunctions.instance
+        .httpsCallable('requestEmergencyProxy')
+        .call({
+          'userId': userId,
+          'userName': userName,
+          'proxyUserId': proxyUserId,
+        });
+    debugPrint('✅ [EmergencyFund] Proxy request created: ${userId}_$proxyUserId');
   }
 
   // Proxy user responds to the request (accept or reject)
@@ -322,26 +323,16 @@ class EmergencyFundService {
     required String fromUserId,
     required bool accepted,
   }) async {
-    final newStatus = accepted ? 'accepted' : 'rejected';
-
-    // 1. Update the proxy_requests doc
-    await _firestore.collection('proxy_requests').doc(requestId).update({
-      'status': newStatus,
-      'respondedAt': FieldValue.serverTimestamp(),
-    });
-
-    // 2. Update the membership doc
-    final proxyStatus = accepted ? ProxyStatus.accepted : ProxyStatus.rejected;
-    final updateData = <String, dynamic>{'proxyStatus': proxyStatus.name};
-    if (!accepted) {
-      updateData['proxyUserId'] = null;
-    }
-    await _firestore
-        .collection('emergency_fund_memberships')
-        .doc(fromUserId)
-        .set(updateData, SetOptions(merge: true));
-
-    debugPrint('✅ [EmergencyFund] Proxy request $requestId $newStatus');
+    await FirebaseFunctions.instance
+        .httpsCallable('respondEmergencyProxy')
+        .call({
+          'requestId': requestId,
+          'fromUserId': fromUserId,
+          'accepted': accepted,
+        });
+    debugPrint(
+      '✅ [EmergencyFund] Proxy request $requestId ${accepted ? 'accepted' : 'rejected'}',
+    );
   }
 
   // Stream pending proxy requests for a given user (they are the proxy)
@@ -379,22 +370,38 @@ class EmergencyFundService {
     required String description,
   }) async {
     final claimId = _uuid.v4();
-    final claim = EmergencyFundClaim(
-      id: claimId,
-      userId: userId,
-      type: type,
-      beneficiaryName: beneficiaryName,
-      relationship: relationship,
-      incidentDate: incidentDate,
-      status: ClaimStatus.submitted,
-      submittedDate: DateTime.now(),
-      description: description,
-    );
-
-    await _firestore
-        .collection('emergency_fund_claims')
-        .doc(claimId)
-        .set(claim.toMap());
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('submitEmergencyClaim')
+          .call({
+            'id': claimId,
+            'userId': userId,
+            'type': type.name,
+            'emergencyType': type.name,
+            'beneficiaryName': beneficiaryName,
+            'relationship': relationship,
+            'incidentDate': incidentDate.toIso8601String(),
+            'submittedDate': DateTime.now().toIso8601String(),
+            'description': description,
+            'requestedAmountUsd': 1000,
+          });
+    } catch (_) {
+      final claim = EmergencyFundClaim(
+        id: claimId,
+        userId: userId,
+        type: type,
+        beneficiaryName: beneficiaryName,
+        relationship: relationship,
+        incidentDate: incidentDate,
+        status: ClaimStatus.submitted,
+        submittedDate: DateTime.now(),
+        description: description,
+      );
+      await _firestore
+          .collection('emergency_fund_claims')
+          .doc(claimId)
+          .set(claim.toMap());
+    }
   }
 
   // --- Helpers ---

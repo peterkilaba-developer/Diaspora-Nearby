@@ -130,39 +130,27 @@ class HostingRepository {
 
   /// Host shows interest in a hosting request.
   Future<void> showInterest(String requestId, String hostId) async {
-    final doc = await _requestsCol.doc(requestId).get();
-    if (!doc.exists) {
-      debugPrint('[Hosting] Request $requestId not found — may have expired.');
-      throw Exception(
-        'This hosting request no longer exists. It may have expired.',
-      );
-    }
-    await _requestsCol.doc(requestId).update({
-      'interestedHostIds': FieldValue.arrayUnion([hostId]),
-      'updatedAt': FieldValue.serverTimestamp(),
+    await _functions.httpsCallable('updateHostingRequestState').call({
+      'requestId': requestId,
+      'operation': 'show_interest',
     });
     debugPrint('✅ [Hosting] Host $hostId showed interest in $requestId');
   }
 
   /// Host withdraws interest.
   Future<void> withdrawInterest(String requestId, String hostId) async {
-    final doc = await _requestsCol.doc(requestId).get();
-    if (!doc.exists) {
-      debugPrint('[Hosting] Request $requestId not found — may have expired.');
-      return;
-    }
-    await _requestsCol.doc(requestId).update({
-      'interestedHostIds': FieldValue.arrayRemove([hostId]),
-      'updatedAt': FieldValue.serverTimestamp(),
+    await _functions.httpsCallable('updateHostingRequestState').call({
+      'requestId': requestId,
+      'operation': 'withdraw_interest',
     });
     debugPrint('[Hosting] Host $hostId withdrew interest from $requestId');
   }
 
   /// Cancel a hosting request (traveler only, before check-in).
   Future<void> cancelRequest(String requestId) async {
-    await _requestsCol.doc(requestId).update({
-      'status': HostingRequestStatus.cancelled.name,
-      'updatedAt': FieldValue.serverTimestamp(),
+    await _functions.httpsCallable('updateHostingRequestState').call({
+      'requestId': requestId,
+      'operation': 'cancel',
     });
     debugPrint('✅ [Hosting] Request $requestId cancelled');
   }

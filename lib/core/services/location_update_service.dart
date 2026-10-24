@@ -108,6 +108,9 @@ class LocationUpdateService {
         GeoPoint(position.latitude, position.longitude),
       );
 
+      final tsMs = DateTime.now().millisecondsSinceEpoch;
+      final isoNow = DateTime.fromMillisecondsSinceEpoch(tsMs).toIso8601String();
+
       // Create currentLocation data matching React structure
       final currentLocationData = {
         'formatted_address': formattedAddress,
@@ -119,7 +122,9 @@ class LocationUpdateService {
         'state': state,
         'country': country,
         'countryCode': countryCode,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'country_code': countryCode,
+        'timestamp': tsMs,
+        'lastUpdated': isoNow,
       };
 
       // Determine whether to auto-enable city visibility for the +10 PCT.
@@ -129,6 +134,9 @@ class LocationUpdateService {
       final userData = userDoc.data() ?? {};
       final forfeited = userData['cityVisibilityForfeited'] == true;
       final hasExplicitChoice = userData.containsKey('showCurrentLocationName');
+      final showCity = hasExplicitChoice
+          ? userData['showCurrentLocationName'] != false
+          : !forfeited;
 
       final updates = <String, dynamic>{
         'currentLocation': currentLocationData,
@@ -136,15 +144,37 @@ class LocationUpdateService {
         'locationUpdatedAt': FieldValue.serverTimestamp(),
       };
 
-      // First-ever location fetch + user hasn't forfeited → grant visibility,
-      // which immediately triggers the +10 City Visibility PCT.
-      if (!forfeited && !hasExplicitChoice) {
-        await _firestore.collection('users').doc(userId).update({
-          'showCurrentLocationName': true,
+      // Keep public users/{userId} city-level (~1km rounded) currentLocation
+      // updated in real time so member lists, profile views, and distance
+      // displays stay accurate across the app.
+      if (showCity) {
+        final safeLat = (position.latitude * 100).round() / 100;
+        final safeLng = (position.longitude * 100).round() / 100;
+        final summaryParts = [city, state, country]
+            .whereType<String>()
+            .where((p) => p.trim().isNotEmpty)
+            .join(', ');
+        final publicCurrentLocation = {
+          'formatted_address': summaryParts,
+          'place_id': '',
+          'city': city,
+          'state': state,
+          'country': country,
+          'country_code': countryCode,
+          'countryCode': countryCode,
+          'timestamp': tsMs,
+          'lastUpdated': isoNow,
+          'geometry': {
+            'location': {'lat': safeLat, 'lng': safeLng},
+          },
+        };
+        await _firestore.collection('users').doc(userId).set({
+          if (!forfeited && !hasExplicitChoice) 'showCurrentLocationName': true,
           'currentCity': city,
           'currentState': state,
           'currentCountryCode': countryCode,
-        });
+          'currentLocation': publicCurrentLocation,
+        }, SetOptions(merge: true));
       }
 
       await _firestore

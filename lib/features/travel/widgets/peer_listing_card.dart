@@ -109,10 +109,16 @@ class PeerListingCard extends StatelessWidget {
                         viewerCountryCode: viewerCountryCode,
                         priceSuffix: _isCar ? '/day' : '/night',
                         compact: true,
+                        showToggle: false,
                         primaryStyle: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                        ),
+                        secondaryStyle: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white70,
                         ),
                       ),
                     ),

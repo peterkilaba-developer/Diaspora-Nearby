@@ -7,6 +7,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.dart';
 import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 class MyListingsScreen extends ConsumerWidget {
   const MyListingsScreen({super.key});
@@ -145,15 +146,15 @@ class MyListingsScreen extends ConsumerWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                width: 110,
-                height: 110,
+                width: 115,
+                height: 118,
                 child: MarketplaceListingImage(listing: listing),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: SizedBox(
-                height: 110,
+                height: 118,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -172,7 +173,13 @@ class MyListingsScreen extends ConsumerWidget {
                       ),
                     ),
                     const Spacer(),
-                    LocalPriceRow(listing: listing),
+                    LocalPriceRow(
+                      listing: listing,
+                      viewerCountryCode: ref
+                          .watch(userProfileProvider)
+                          .value
+                          ?.hostCountryCode,
+                    ),
                     const Spacer(),
                     QuickSpecs(listing: listing),
                     const SizedBox(height: 4),

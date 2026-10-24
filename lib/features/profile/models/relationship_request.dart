@@ -43,9 +43,25 @@ class RelationshipRequest {
     };
   }
 
-  factory RelationshipRequest.fromMap(Map<String, dynamic> map) {
+  factory RelationshipRequest.fromMap(
+    Map<String, dynamic> map, [
+    String? docId,
+  ]) {
+    DateTime parsedTimestamp;
+    final rawTimestamp = map['timestamp'];
+    if (rawTimestamp is Timestamp) {
+      parsedTimestamp = rawTimestamp.toDate();
+    } else if (rawTimestamp is int) {
+      parsedTimestamp = DateTime.fromMillisecondsSinceEpoch(rawTimestamp);
+    } else if (rawTimestamp is String) {
+      parsedTimestamp = DateTime.tryParse(rawTimestamp) ?? DateTime.now();
+    } else {
+      parsedTimestamp = DateTime.now();
+    }
+
+    final mapId = (map['id'] as String?)?.trim();
     return RelationshipRequest(
-      id: map['id'] ?? '',
+      id: (mapId != null && mapId.isNotEmpty) ? mapId : (docId ?? ''),
       fromUserId: map['fromUserId'] ?? '',
       fromUserName: map['fromUserName'] ?? '',
       fromUserFlag: map['fromUserFlag'] ?? '',
@@ -54,7 +70,7 @@ class RelationshipRequest {
       toUserName: map['toUserName'] ?? '',
       toUserPhoto: map['toUserPhoto'] as String?,
       relationshipType: map['relationshipType'] ?? '',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      timestamp: parsedTimestamp,
       status: map['status'] ?? 'pending',
     );
   }

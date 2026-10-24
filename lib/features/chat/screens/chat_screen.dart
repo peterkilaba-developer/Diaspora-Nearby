@@ -43,6 +43,8 @@ import 'package:diaspora_nearby/features/chat/repository/report_repository.dart'
 import 'package:diaspora_nearby/features/chat/providers/chat_identity_provider.dart'; // [NEW]
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart'; // [NEW]
 import 'package:diaspora_nearby/features/profile/widgets/relationship_selection_modal.dart';
+import 'package:diaspora_nearby/features/profile/widgets/relationship_response_modal.dart';
+import 'package:diaspora_nearby/features/profile/widgets/profile_qr_code_dialog.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship.dart';
 import 'package:diaspora_nearby/features/profile/models/relationship_request.dart'; // [NEW]
 import 'package:diaspora_nearby/features/chat/providers/pending_message_provider.dart';
@@ -51,6 +53,7 @@ import 'package:diaspora_nearby/features/chat/providers/pending_message_provider
 import 'package:diaspora_nearby/features/chat/widgets/chat_more_menu_sheet.dart';
 import 'package:diaspora_nearby/features/trust/widgets/profile_verification_modal.dart'; // [NEW]
 import 'package:diaspora_nearby/features/trust/widgets/trust_vouch_modal.dart'; // [NEW] Trust Vouch Modal
+import 'package:diaspora_nearby/features/trust/widgets/trust_slider_widget.dart';
 import 'package:diaspora_nearby/features/trust/widgets/verification_alert_modal.dart'; // [NEW]
 import 'package:diaspora_nearby/features/governance/repository/governance_repository.dart'; // [NEW]
 
@@ -72,6 +75,7 @@ import 'package:diaspora_nearby/features/chat/providers/chat_providers.dart'; //
 import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_scroll_to_bottom_fab.dart';
 import 'package:diaspora_nearby/features/chat/widgets/chat_typing_indicator.dart';
+import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 
 // Local providers removed (moved to chat_providers.dart)
 
@@ -105,7 +109,8 @@ class ChatScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends ConsumerState<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen>
+    with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _messageController =
       TextEditingController(); // [NEW]
@@ -114,6 +119,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// The actual chatId (either from props or created after first message)
   String? _activeChatId;
+
+  /// Partner user ID when this conversation is a 1-on-1 direct chat or pending DM
+  String? _activePartnerUserId;
+
+  /// Cached reference to PushNotificationService for safe cleanup in dispose()
+  PushNotificationService? _pushNotificationService;
 
   /// Message being replied to (null if not replying)
   Message? _replyingTo;
@@ -137,14 +148,50 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Guard to prevent duplicate "More" menu opens during async loading
   bool _isShowingMoreMenu = false;
 
+  void _syncActiveChatNotificationState() {
+    final pushService = _pushNotificationService;
+    if (pushService != null) {
+      unawaited(
+        pushService.setActiveChat(
+          chatId: _activeChatId,
+          partnerUserId: _activePartnerUserId,
+        ),
+      );
+    } else {
+      ActiveChatTracker.instance.setActiveChat(
+        chatId: _activeChatId,
+        partnerUserId: _activePartnerUserId,
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _activeChatId = widget.chatId;
+    _activePartnerUserId = widget.pendingUserId;
+    _pushNotificationService = ref.read(pushNotificationServiceProvider);
     _scrollController.addListener(_onScroll);
 
+    // Synchronously resolve partnerUserId from cached chat if available
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final currentUserId = chatRepo.currentUserId;
+    if (_activeChatId != null && currentUserId != null) {
+      final cachedChat = chatRepo.getCachedChat(_activeChatId!);
+      if (cachedChat != null && cachedChat.isDirect) {
+        final otherId = cachedChat.participants.firstWhere(
+          (id) => id != currentUserId,
+          orElse: () => '',
+        );
+        if (otherId.isNotEmpty) {
+          _activePartnerUserId = otherId;
+        }
+      }
+    }
+    _syncActiveChatNotificationState();
+
     // LOGGING TO DEBUG "NOTHING HAPPENS"
-    final currentUserId = ref.read(chatRepositoryProvider).currentUserId;
     debugPrint('📩 ChatScreen INIT:');
     debugPrint('   - chatId: ${widget.chatId}');
     debugPrint('   - pendingUserId: ${widget.pendingUserId}');
@@ -161,6 +208,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         // Fetch chat once to check participation and type
         final chat = await chatRepo.getChat(_activeChatId!);
         if (chat != null) {
+          if (chat.isDirect) {
+            final otherId = chat.participants.firstWhere(
+              (id) => id != currentUserId,
+              orElse: () => '',
+            );
+            if (otherId.isNotEmpty && _activePartnerUserId != otherId) {
+              _activePartnerUserId = otherId;
+              if (mounted) {
+                _syncActiveChatNotificationState();
+              }
+            }
+          }
           final isParticipant = chat.participants.contains(currentUserId);
 
           if (isParticipant) {
@@ -193,10 +252,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _pushNotificationService?.setLifecycleState(state);
+    if (state == AppLifecycleState.resumed && mounted) {
+      _syncActiveChatNotificationState();
+      if (_activeChatId != null) {
+        ref.read(chatRepositoryProvider).markChatAsRead(_activeChatId!);
+      }
+    }
+  }
+
   // Scroll persistence methods removed
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pushNotificationService?.clearActiveChat(
+      chatId: _activeChatId,
+      partnerUserId: _activePartnerUserId,
+    );
+
     // [FIX] Flush pending read receipts before disposing
     if (_visibleUnreadMessageIds.isNotEmpty) {
       final ids = _visibleUnreadMessageIds.toList();
@@ -319,6 +395,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         setState(() {
           _activeChatId = chat.id;
         });
+        _syncActiveChatNotificationState();
         debugPrint('✅ Chat created: ${chat.id}');
       } else {
         debugPrint(
@@ -374,13 +451,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             .read(pendingMessagesProvider.notifier)
             .addMessage(_activeChatId!, optimisticMessage);
 
-        // Now fetch participants (non-blocking for UI)
-        List<String>? participants;
-        try {
-          final chat = await chatRepo.getChat(_activeChatId!);
-          participants = chat?.participants;
-        } catch (e) {
-          debugPrint('Error fetching chat for participants: $e');
+        // [PERF] Use synchronous cached chat first; only await getChat if missing
+        List<String>? participants = chatRepo
+            .getCachedChat(_activeChatId!)
+            ?.participants;
+        if (participants == null || participants.isEmpty) {
+          try {
+            final chat = await chatRepo.getChat(_activeChatId!);
+            participants = chat?.participants;
+          } catch (e) {
+            debugPrint('Error fetching chat for participants: $e');
+          }
         }
 
         try {
@@ -472,6 +553,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       setState(() {
         _activeChatId = chat.id;
       });
+      _syncActiveChatNotificationState();
       debugPrint('✅ Chat created: ${chat.id}');
       return chat.id;
     } else {
@@ -1250,9 +1332,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final cachedChat = chatRepo.getCachedChat(_activeChatId!);
+    final cachedMessages = chatRepo.getCachedMessagesSync(_activeChatId!);
     final displayNameAsync = ref.watch(chatDisplayNameProvider(_activeChatId!));
-    final chatAsync = ref.watch(chatProvider(_activeChatId!));
-    final messagesAsync = ref.watch(messagesStreamProvider(_activeChatId!));
+    final rawChatAsync = ref.watch(chatProvider(_activeChatId!));
+    final chatAsync = rawChatAsync.isLoading && cachedChat != null
+        ? AsyncData<Chat?>(cachedChat)
+        : rawChatAsync;
+    final rawMessagesAsync = ref.watch(messagesStreamProvider(_activeChatId!));
+    final messagesAsync = rawMessagesAsync.isLoading && cachedMessages != null
+        ? AsyncData<List<Message>>(cachedMessages)
+        : rawMessagesAsync;
     final typingAsync = ref.watch(typingIndicatorsProvider(_activeChatId!));
 
     return Scaffold(
@@ -1291,15 +1382,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 data: (profile) => ChatHeaderTitle(
                   profile: profile,
                   fallbackTitle: displayNameAsync.value ?? chat.name,
-                  onTap: () {
-                    if (profile?.uid != null) {
-                      TrustVouchModal.show(
-                        context: context,
-                        targetUserId: profile!.uid!,
-                        currentUserId: currentUserId,
-                        displayName: displayNameAsync.value ?? chat.name,
-                      );
+                  onTap: () async {
+                    final targetUid = profile?.uid;
+                    if (targetUid == null || targetUid.isEmpty) return;
+                    final rel = await ref
+                        .read(relationshipRepositoryProvider)
+                        .getRelationship(
+                          userId: currentUserId,
+                          relatedUserId: targetUid,
+                        );
+                    final trustRelType = ref
+                        .read(userTrustProvider(currentUserId))
+                        .value
+                        ?.relationshipTypes[targetUid];
+                    final isFamily =
+                        (rel != null &&
+                            rel.status == 'active' &&
+                            TrustSliderWidget.isFamilyRelationshipType(
+                              rel.type,
+                            )) ||
+                        TrustSliderWidget.isFamilyRelationshipType(
+                          trustRelType,
+                        );
+                    if (!mounted) return;
+                    if (isFamily) {
+                      context.push('/profile/$targetUid');
+                      return;
                     }
+                    TrustVouchModal.show(
+                      context: context,
+                      targetUserId: targetUid,
+                      currentUserId: currentUserId,
+                      displayName: displayNameAsync.value ?? chat.name,
+                    );
                   },
                 ),
                 loading: () => Text(
@@ -1327,6 +1442,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 Event? event;
                 Widget? communityAvatar;
                 String? eventStatus;
+                final viewerHomeCountryCode = ref
+                    .watch(userProfileProvider)
+                    .value
+                    ?.homeCountryCode;
 
                 if (chat?.type == 'community' && chat?.communityId != null) {
                   final communityAsync = ref.watch(
@@ -1344,6 +1463,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       locationType: community.locationType,
                       homeCountryCode: community.homeCountryCode,
                       hostCountryCode: community.hostCountryCode,
+                      viewerHomeCountryCode: viewerHomeCountryCode,
                       profileImage: community.profileImage,
                       flag: community.flag,
                       size: 36, // Header specific size
@@ -1352,9 +1472,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     communityAvatar = CommunityChatUtils.getCommunityAvatar(
                       context: context,
                       chat: chat,
+                      viewerHomeCountryCode: viewerHomeCountryCode,
                       size: 36,
                     );
                   }
+                } else if (chat?.type == 'community') {
+                  communityAvatar = CommunityChatUtils.getCommunityAvatar(
+                    context: context,
+                    chat: chat,
+                    viewerHomeCountryCode: viewerHomeCountryCode,
+                    size: 36,
+                  );
                 } else if (chat?.isEvent == true) {
                   final effectiveEventId =
                       chat?.eventId ??
@@ -1452,6 +1580,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               chat?.locationType ??
                               'home',
                           id: chat?.id ?? '',
+                          homeCountryCode:
+                              community?.homeCountryCode ??
+                              chat?.homeCountryCode,
+                          hostCountryCode:
+                              community?.hostCountryCode ??
+                              chat?.hostCountryCode,
+                          viewerHomeCountryCode: viewerHomeCountryCode,
                         )
                       : displayName,
                   imageUrl: (chat?.isEvent == true)
@@ -1470,6 +1605,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           LucideIcons.building2,
                           size: 16,
                           color: Colors.blue,
+                        )
+                      : (chat?.type == 'community' &&
+                            CommunityChatUtils.isBilateral(
+                              chat: chat,
+                              id: community?.id ?? chat?.id,
+                              locationType:
+                                  community?.locationType ?? chat?.locationType,
+                            ))
+                      ? const Icon(
+                          LucideIcons.heartHandshake,
+                          size: 16,
+                          color: AppTheme.accent,
+                        )
+                      : (chat?.isListingChat == true)
+                      ? Icon(
+                          LucideIcons.shoppingCart,
+                          size: 16,
+                          color: Colors.green.shade700,
                         )
                       : (chat?.isGroup == true)
                       ? Icon(
@@ -1492,6 +1645,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 ? chat?.participants.length
                                 : chat?.memberCount))
                       : null,
+                  memberLabel: (chat?.isListingChat == true)
+                      ? 'shoppers'
+                      : 'members',
                   // [NEW] Event Status
                   eventStatus: eventStatus,
                   onTap: () async {
@@ -1502,6 +1658,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         (chat?.id ?? '').startsWith('org_chamber_')) {
                       final orgId = chat!.id.replaceFirst('org_', '');
                       context.push('/organization/$orgId');
+                    } else if (chat?.isListingChat == true &&
+                        chat?.metadata?['listingId'] != null) {
+                      context.push(
+                        '/marketplace/listing/${chat!.metadata!['listingId']}',
+                      );
                     } else if (chat?.type == 'group' ||
                         chat?.type == 'organization') {
                       context.push(
@@ -1513,7 +1674,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         },
                       );
                     } else if (chat?.type == 'direct') {
-                      // [CHANGED] Open Trust Vouch Modal instead of profile
+                      // [CHANGED] Open Trust Vouch Modal instead of profile (except for family members)
                       final currentUid = ref
                           .read(authRepositoryProvider)
                           .currentUser
@@ -1525,6 +1686,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       if (otherId != null &&
                           otherId.isNotEmpty &&
                           currentUid != null) {
+                        final rel = await ref
+                            .read(relationshipRepositoryProvider)
+                            .getRelationship(
+                              userId: currentUid,
+                              relatedUserId: otherId,
+                            );
+                        final trustRelType = ref
+                            .read(userTrustProvider(currentUid))
+                            .value
+                            ?.relationshipTypes[otherId];
+                        final isFamily =
+                            (rel != null &&
+                                rel.status == 'active' &&
+                                TrustSliderWidget.isFamilyRelationshipType(
+                                  rel.type,
+                                )) ||
+                            TrustSliderWidget.isFamilyRelationshipType(
+                              trustRelType,
+                            );
+                        if (!mounted) return;
+                        if (isFamily) {
+                          context.push('/profile/$otherId');
+                          return;
+                        }
                         TrustVouchModal.show(
                           context: context,
                           targetUserId: otherId,
@@ -1690,7 +1875,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 allMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
                 if (allMessages.isEmpty) {
-                  return _buildEmptyState(theme);
+                  return _buildEmptyState(
+                    theme,
+                    chat: chatAsync.value,
+                    currentUserId: currentUserId,
+                  );
                 }
 
                 // Initial scroll is bottom (offset 0) by default in reverse mode.
@@ -1853,6 +2042,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   isCommunity: chat.isCommunity,
                   isOrganization: chat.isOrganization,
                   isEvent: chat.isEvent,
+                  isListingChat: chat.isListingChat,
                   chatName: chat.name,
                   chatType: chat.type,
                   onJoin: (chat.type == 'group')
@@ -1863,7 +2053,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 .joinGroup(chat.id);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Joined group!')),
+                                SnackBar(
+                                  content: Text(
+                                    chat.isListingChat
+                                        ? 'Joined shop!'
+                                        : 'Joined group!',
+                                  ),
+                                ),
                               );
                               ref.invalidate(chatProvider(chat.id));
                               ref.invalidate(messagesStreamProvider(chat.id));
@@ -1980,8 +2176,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return ChatDateSeparator(timestamp: timestamp);
   }
 
-  Widget _buildEmptyState(ThemeData theme) {
-    return const ChatEmptyState();
+  Widget _buildEmptyState(
+    ThemeData theme, {
+    Chat? chat,
+    String? currentUserId,
+  }) {
+    final isListing = chat?.isListingChat == true;
+    final isSeller =
+        isListing &&
+        currentUserId != null &&
+        (chat?.createdBy == currentUserId ||
+            (chat?.admins?.contains(currentUserId) ?? false));
+    return ChatEmptyState(
+      isListingChat: isListing,
+      listingType: chat?.metadata?['listingType']?.toString(),
+      isSeller: isSeller,
+      onQuickPromptTap: isListing ? (prompt) => _sendMessage(prompt) : null,
+    );
   }
 
   void _onMessageVisibilityChanged(
@@ -2173,6 +2384,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             displayName,
           );
         },
+        onAcceptRelationshipRequest: pendingIncomingRequest == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: outerContext,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => RelationshipResponseModal(
+                    request: pendingIncomingRequest!,
+                  ),
+                );
+              },
+        onQRExchange: () async {
+          final user = ref.read(authRepositoryProvider).currentUser;
+          if (user == null) return;
+          final cachedProfile = ref.read(userProfileProvider).value;
+          final profileRepo = ref.read(profileRepositoryProvider);
+          final myProfile =
+              cachedProfile ?? await profileRepo.getUserProfile(user.uid);
+          if (myProfile != null && outerContext.mounted) {
+            showDialog(
+              context: outerContext,
+              useRootNavigator: true,
+              builder: (_) => ProfileQRCodeDialog(profile: myProfile),
+            );
+          } else if (outerContext.mounted) {
+            ScaffoldMessenger.of(outerContext).showSnackBar(
+              const SnackBar(
+                content: Text('Unable to load your profile for QR exchange.'),
+              ),
+            );
+          }
+        },
         onVerifyUser: () {
           Navigator.pop(context);
           _handleVerifyChatUser(outerContext, ref, chat);
@@ -2214,7 +2459,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             chat.id,
             displayName,
             isLeave: true,
-            titleOverride: chat.isGroup
+            titleOverride: chat.isListingChat
+                ? 'Leave Shop?'
+                : chat.isGroup
                 ? 'Leave Group?'
                 : chat.isEvent
                 ? 'Leave Event?'
@@ -3002,22 +3249,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
 
       if (rel != null && rel.status == 'active') {
-        const Set<String> familyTypes = {
-          'wife',
-          'husband',
-          'daughter',
-          'son',
-          'mother',
-          'father',
-          'sister',
-          'brother',
-          'aunt',
-          'uncle',
-          'nephew',
-          'niece',
-          'cousin',
-        };
-        if (familyTypes.contains(rel.type.toLowerCase())) {
+        if (TrustSliderWidget.isFamilyRelationshipType(rel.type)) {
           if (context.mounted) {
             VerificationAlertModal.show(
               context,

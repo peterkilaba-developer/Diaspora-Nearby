@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 
-/// A reusable widget that displays a price in the seller/lister's local
-/// currency and lets the buyer/viewer toggle to see the equivalent in
-/// *their* host-country currency.
+/// A reusable widget that displays a price in:
+/// 1. The seller/lister's local currency
+/// 2. The buyer/viewer's host-country currency (when different from seller's)
+/// 3. The `$DIASPORA` token equivalent based on the live dynamic price floor
 ///
-/// If both parties share the same currency (e.g. two users both in Nigeria),
-/// only the primary price is shown and the toggle is hidden.
+/// When [showToggle] is true, tapping cycles through Seller currency →
+/// Buyer currency (if different) → `$DIASPORA` token.
+/// When [showToggle] is false, all applicable prices are displayed together.
 ///
 /// Usage:
 /// ```dart
@@ -17,7 +21,7 @@ import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart'
 ///   priceSuffix: '/night',  // optional
 /// )
 /// ```
-class CurrencyPriceDisplay extends StatefulWidget {
+class CurrencyPriceDisplay extends ConsumerStatefulWidget {
   const CurrencyPriceDisplay({
     super.key,
     required this.amount,
@@ -53,31 +57,43 @@ class CurrencyPriceDisplay extends StatefulWidget {
   final Color? primaryColor;
 
   /// Whether to show the tap-toggle for conversion. Set false to always
-  /// show both prices stacked (useful in detail screens).
+  /// show all prices stacked (useful in detail screens).
   final bool showToggle;
 
   /// If true, uses a more compact layout for list cards.
   final bool compact;
 
   @override
-  State<CurrencyPriceDisplay> createState() => _CurrencyPriceDisplayState();
+  ConsumerState<CurrencyPriceDisplay> createState() =>
+      _CurrencyPriceDisplayState();
 }
 
-class _CurrencyPriceDisplayState extends State<CurrencyPriceDisplay> {
-  bool _showConverted = false;
+class _CurrencyPriceDisplayState extends ConsumerState<CurrencyPriceDisplay> {
+  /// 0 = Seller currency, 1 = Buyer currency (or $DIASPORA if same), 2 = $DIASPORA
+  int _modeIndex = 0;
 
-  bool get _sameCurrency => CurrencyHelper.isSameCurrency(
-    widget.sellerCountryCode,
-    widget.viewerCountryCode,
-  );
+  bool get _sameCurrency =>
+      widget.viewerCountryCode == null ||
+      CurrencyHelper.isSameCurrency(
+        widget.sellerCountryCode,
+        widget.viewerCountryCode,
+      );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final valuation = ref.watch(dspValuationProvider);
+    final suffix = widget.priceSuffix ?? '';
 
     final primaryText =
-        '${CurrencyHelper.formatLocalPrice(widget.amount, widget.sellerCountryCode)}${widget.priceSuffix ?? ''}';
+        '${CurrencyHelper.formatLocalPrice(widget.amount, widget.sellerCountryCode)}$suffix';
+
+    final convertedText =
+        '≈ ${CurrencyHelper.formatConvertedPrice(widget.amount, widget.sellerCountryCode, widget.viewerCountryCode)}$suffix';
+
+    final tokenText =
+        '≈ ${CurrencyHelper.formatDiasporaTokenPrice(widget.amount, widget.sellerCountryCode, dspPriceFloorUsd: valuation.impliedValueUsd)}$suffix';
 
     // Default styles
     final defaultPrimary = TextStyle(
@@ -94,27 +110,29 @@ class _CurrencyPriceDisplayState extends State<CurrencyPriceDisplay> {
           : Colors.black.withValues(alpha: 0.45),
     );
 
-    // If same currency, just show the primary price
-    if (_sameCurrency) {
-      return Text(primaryText, style: widget.primaryStyle ?? defaultPrimary);
-    }
+    final modes = _sameCurrency
+        ? <String>[primaryText, tokenText]
+        : <String>[primaryText, convertedText, tokenText];
 
-    final convertedText =
-        '≈ ${CurrencyHelper.formatConvertedPrice(widget.amount, widget.sellerCountryCode, widget.viewerCountryCode)}${widget.priceSuffix ?? ''}';
+    final activeIdx = _modeIndex % modes.length;
 
-    // Toggle mode – tap to switch between seller and buyer currency
+    // Toggle mode – tap to cycle Seller → Buyer → $DIASPORA
     if (widget.showToggle) {
       return GestureDetector(
-        onTap: () => setState(() => _showConverted = !_showConverted),
+        onTap: () => setState(() => _modeIndex = (_modeIndex + 1) % modes.length),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Text(
-                _showConverted ? convertedText : primaryText,
-                key: ValueKey(_showConverted),
-                style: widget.primaryStyle ?? defaultPrimary,
+            Flexible(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Text(
+                  modes[activeIdx],
+                  key: ValueKey(activeIdx),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: widget.primaryStyle ?? defaultPrimary,
+                ),
               ),
             ),
             const SizedBox(width: 4),
@@ -130,14 +148,29 @@ class _CurrencyPriceDisplayState extends State<CurrencyPriceDisplay> {
       );
     }
 
-    // Stacked mode – show both prices at once (for detail screens)
+    // Stacked mode – show Seller currency, Buyer currency, and $DIASPORA token
+    final subParts = <String>[
+      if (!_sameCurrency) convertedText,
+      tokenText,
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(primaryText, style: widget.primaryStyle ?? defaultPrimary),
-        const SizedBox(height: 2),
-        Text(convertedText, style: widget.secondaryStyle ?? defaultSecondary),
+        Text(
+          primaryText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: widget.primaryStyle ?? defaultPrimary,
+        ),
+        SizedBox(height: widget.compact ? 1 : 2),
+        Text(
+          subParts.join('  ·  '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: widget.secondaryStyle ?? defaultSecondary,
+        ),
       ],
     );
   }

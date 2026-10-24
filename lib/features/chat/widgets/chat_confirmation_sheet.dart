@@ -81,19 +81,58 @@ class ChatConfirmationSheet extends StatelessWidget {
 
             const Divider(height: 1),
 
-            AppBottomSheetItem(
-              icon: icon,
-              iconColor: isDestructive
-                  ? Colors.red.shade700
-                  : theme.colorScheme.primary,
-              iconBgColor: isDestructive
-                  ? Colors.red.shade50
-                  : theme.colorScheme.primaryContainer.withValues(alpha: 0.1),
-              title: actionTitle,
-              subtitle: subtitle,
-              onTap: onAction,
-              isDestructive: isDestructive,
-            ),
+            if (isDestructive)
+              AppBottomSheetItem(
+                icon: icon,
+                iconColor: Colors.red.shade700,
+                iconBgColor: Colors.red.shade50,
+                title: actionTitle,
+                subtitle: subtitle,
+                onTap: onAction,
+                isDestructive: true,
+              )
+            else ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    if (subtitle.isNotEmpty) ...[
+                      Text(
+                        subtitle,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: onAction,
+                        icon: Icon(icon, size: 18),
+                        label: Text(
+                          actionTitle,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 8),
             Padding(

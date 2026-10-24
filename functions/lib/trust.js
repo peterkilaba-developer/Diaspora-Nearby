@@ -7,6 +7,10 @@ const {
   stableHash,
   consumeRateLimit,
 } = require("./security");
+const {
+  syncProfileMilestoneAndTrust,
+  distributeUbuntuMatchingSupply,
+} = require("./dsp");
 
 const QR_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
@@ -129,9 +133,58 @@ exports.completeQrHandshake = functions.https.onCall(async (data, context) => {
     }
   });
 
-  // Rewards remain paused until treasury expansion and anti-sybil policy can
-  // be committed with the exchange as one economic invariant.
-  return { success: true, peerUid, earnedPoints: 0 };
+  // Award 1,000 DSP to both scanner and peer for in-person QR exchange,
+  // distribute 1:1 Ubuntu matching supply, and evaluate PoH milestones & PCT.
+  const QR_EXCHANGE_REWARD = 1000;
+  try {
+    const rewardBatch = db.batch();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    for (const [uid, otherUid] of [[scannerUid, peerUid], [peerUid, scannerUid]]) {
+      rewardBatch.set(
+        db.collection("user_points").doc(uid),
+        {
+          userId: uid,
+          totalPoints: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+          availablePoints: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+          lastUpdated: now,
+          lifetimeEarnings: {
+            identity_qr_exchange: admin.firestore.FieldValue.increment(QR_EXCHANGE_REWARD),
+          },
+        },
+        { merge: true }
+      );
+      rewardBatch.set(db.collection("points_transactions").doc(), {
+        userId: uid,
+        type: "earn",
+        action: "identity_qr_exchange",
+        points: QR_EXCHANGE_REWARD,
+        amount: QR_EXCHANGE_REWARD,
+        timestamp: now,
+        metadata: { peerUid: otherUid, locationAddress },
+      });
+      await distributeUbuntuMatchingSupply(
+        rewardBatch,
+        uid,
+        QR_EXCHANGE_REWARD,
+        now,
+        "identity_qr_exchange_match"
+      );
+    }
+    await rewardBatch.commit();
+  } catch (rewardErr) {
+    console.warn(`[completeQrHandshake] Reward distribution warning: ${rewardErr.message}`);
+  }
+
+  try {
+    await Promise.all([
+      syncProfileMilestoneAndTrust(scannerUid),
+      syncProfileMilestoneAndTrust(peerUid),
+    ]);
+  } catch (syncErr) {
+    console.warn(`[completeQrHandshake] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+  }
+
+  return { success: true, peerUid, earnedPoints: QR_EXCHANGE_REWARD };
 });
 
 exports.verifyChatSolution = functions.https.onCall(async (data, context) => {
@@ -190,6 +243,124 @@ exports.verifyChatSolution = functions.https.onCall(async (data, context) => {
       verifiedSolutionsCount: admin.firestore.FieldValue.increment(1),
       lastUpdated: now,
     }, {merge: true});
+    transaction.set(db.collection("trust_scores").doc(senderId), {
+      verifiedSolutionsCount: admin.firestore.FieldValue.increment(1),
+      lastUpdated: now,
+    }, {merge: true});
   });
+
+  if (!alreadyVerified && senderId) {
+    try {
+      const rewardBatch = db.batch();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const REWARD = 1000;
+      for (const [uid, action, peerUid] of [
+        [senderId, "verified_solution_milestone", reporterId],
+        [reporterId, "verified_solution_verifier_reward", senderId],
+      ]) {
+        rewardBatch.set(
+          db.collection("user_points").doc(uid),
+          {
+            userId: uid,
+            totalPoints: admin.firestore.FieldValue.increment(REWARD),
+            availablePoints: admin.firestore.FieldValue.increment(REWARD),
+            lastUpdated: now,
+            lifetimeEarnings: {
+              [action]: admin.firestore.FieldValue.increment(REWARD),
+            },
+          },
+          { merge: true }
+        );
+        rewardBatch.set(db.collection("points_transactions").doc(), {
+          userId: uid,
+          type: "earn",
+          action,
+          points: REWARD,
+          amount: REWARD,
+          timestamp: now,
+          metadata: { chatId, messageId, peerUid },
+        });
+        await distributeUbuntuMatchingSupply(rewardBatch, uid, REWARD, now, `${action}_match`);
+      }
+      await rewardBatch.commit();
+    } catch (err) {
+      console.warn(`[verifyChatSolution] Reward warning: ${err.message}`);
+    }
+  }
+
   return {success: true, alreadyVerified, senderId};
 });
+
+/**
+ * onFieldVerificationWrite — Server-authoritative trigger for peer profile field verifications.
+ * Awards 1,000 DSP to both verifier and verified user on first verification between the pair
+ * and calls syncProfileMilestoneAndTrust(toUserId) so uniqueVerificationCount, verifiedFieldsCount,
+ * flaggedFieldsCount, and the 10-verification PoH milestone (+10,000 DSP & +10 PCT) are synced.
+ */
+exports.onFieldVerificationWrite = functions.firestore
+  .document("field_verifications/{verificationId}")
+  .onWrite(async (change) => {
+    const beforeData = change.before.exists ? change.before.data() : null;
+    const afterData = change.after.exists ? change.after.data() : null;
+    const data = afterData || beforeData;
+    if (!data) return null;
+
+    const fromUserId = String(data.fromUserId || "").trim();
+    const toUserId = String(data.toUserId || "").trim();
+    if (!fromUserId || !toUserId || fromUserId === toUserId) return null;
+
+    // Award 1,000 DSP to verifier and 1,000 DSP to verified user on first creation (or if not yet rewarded)
+    if (afterData && !afterData.dspRewarded) {
+      const fields = afterData.fields && typeof afterData.fields === "object" ? afterData.fields : {};
+      const hasVerifiedField = Object.values(fields).some((v) => v === "verified" || v === true);
+      if (hasVerifiedField) {
+        try {
+          const rewardBatch = db.batch();
+          const now = admin.firestore.FieldValue.serverTimestamp();
+          const REWARD = 1000;
+          rewardBatch.set(change.after.ref, { dspRewarded: true }, { merge: true });
+
+          for (const [uid, action, peerUid] of [
+            [fromUserId, "verifier_reward", toUserId],
+            [toUserId, "verified_by_peer", fromUserId],
+          ]) {
+            rewardBatch.set(
+              db.collection("user_points").doc(uid),
+              {
+                userId: uid,
+                totalPoints: admin.firestore.FieldValue.increment(REWARD),
+                availablePoints: admin.firestore.FieldValue.increment(REWARD),
+                ...(uid === toUserId ? { verifiedCount: admin.firestore.FieldValue.increment(1) } : {}),
+                lastUpdated: now,
+                lifetimeEarnings: {
+                  [action]: admin.firestore.FieldValue.increment(REWARD),
+                },
+              },
+              { merge: true }
+            );
+            rewardBatch.set(db.collection("points_transactions").doc(), {
+              userId: uid,
+              type: "earn",
+              action,
+              points: REWARD,
+              amount: REWARD,
+              timestamp: now,
+              metadata: { peerUid, verificationId: change.after.id },
+            });
+            await distributeUbuntuMatchingSupply(rewardBatch, uid, REWARD, now, `${action}_match`);
+          }
+          await rewardBatch.commit();
+        } catch (rewardErr) {
+          console.warn(`[onFieldVerificationWrite] Reward warning: ${rewardErr.message}`);
+        }
+      }
+    }
+
+    try {
+      await syncProfileMilestoneAndTrust(toUserId);
+    } catch (syncErr) {
+      console.warn(`[onFieldVerificationWrite] syncProfileMilestoneAndTrust warning for ${toUserId}: ${syncErr.message}`);
+    }
+
+    return null;
+  });

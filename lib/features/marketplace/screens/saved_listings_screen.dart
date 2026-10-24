@@ -9,7 +9,8 @@ import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.
 import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/screens/marketplace_screen.dart'
     show categoryIcon;
-import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
+import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_helpers.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 class SavedListingsScreen extends ConsumerWidget {
   const SavedListingsScreen({super.key});
@@ -152,24 +153,12 @@ class SavedListingsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            CurrencyHelper.formatLocalPrice(
-                              listing.priceAmount,
-                              listing.sellerCountryCode,
-                            ),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.orange.shade700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                    LocalPriceRow(
+                      listing: listing,
+                      viewerCountryCode: ref
+                          .watch(userProfileProvider)
+                          .value
+                          ?.hostCountryCode,
                     ),
                     const SizedBox(height: 4),
                     Text(

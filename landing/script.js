@@ -4,7 +4,6 @@
    ═══════════════════════════════════════════════════════ */
 
 // ── Download URLs ──
-const APK_DOWNLOAD_URL = 'https://github.com/peterkilaba-developer/Diaspora-Nearby/releases/latest/download/app-production-release.apk';
 // Deep link & listing for Google Play Store
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
 const PLAY_STORE_TEST_URL = PLAY_STORE_URL;
@@ -47,8 +46,11 @@ const detectedPlatform = detectPlatform();
         const platform = detectedPlatform;
 
         if (platform === 'ios') {
-            renderRedirectScreen('ios', TESTFLIGHT_DEEPLINK_URL);
-            window.location.href = TESTFLIGHT_DEEPLINK_URL;
+            renderRedirectScreen('ios', TESTFLIGHT_URL);
+            // Do NOT call window.location.href/replace on iOS: iOS blocks Universal Links
+            // on script-initiated navigations, and itms-beta:// opens TestFlight to the Redeem Code screen.
+            // A direct user tap on the <a href="https://testflight.apple.com/join/vB3XzPKg"> button
+            // triggers the iOS Universal Link into Diaspora Nearby's Accept/Install sheet.
             return;
         } else if (platform === 'android') {
             let androidUrl = PLAY_STORE_URL;
@@ -98,12 +100,12 @@ function renderRedirectScreen(platform, targetUrl) {
         overlay.innerHTML = `
             <div class="redirect-card">
                 <img src="icons/Icon-192.png" alt="Diaspora Nearby" class="redirect-app-icon" onerror="this.src='favicon.png'">
-                <div class="redirect-spinner"></div>
-                <h2>Opening Diaspora Nearby...</h2>
-                <p>Redirecting you to <strong>${storeName}</strong> to download the app.</p>
+                ${isIOS ? '' : '<div class="redirect-spinner"></div>'}
+                <h2>${isIOS ? 'Join Diaspora Nearby on iOS' : 'Opening Diaspora Nearby...'}</h2>
+                <p>${isIOS ? 'Tap below to open the beta directly in <strong>Apple TestFlight</strong> (no invite code needed).' : `Redirecting you to <strong>${storeName}</strong> to download the app.`}</p>
                 <a href="${targetUrl}" class="btn-primary-redirect" id="redirect-now-btn">
                     <span>${btnLabel}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${isIOS ? `<div style="margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--surface-hover, rgba(128,128,128,0.08)); border: 1px solid var(--border); font-size: 12px; color: var(--fg-muted); text-align: left; line-height: 1.5; width: 100%;"><strong style="color: var(--fg); display: block; margin-bottom: 4px;">Don’t have TestFlight installed yet?</strong>1. <a href="${TESTFLIGHT_APP_STORE_URL}" target="_blank" rel="noopener" style="color: var(--sage); font-weight: 600; text-decoration: underline;">Install Apple TestFlight</a> from the App Store first.<br>2. Return to this page and tap <strong>Open in TestFlight</strong> above (no invite code needed).</div>` : ''}<a style="display:none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${isIOS ? `<div style="margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--surface-hover, rgba(128,128,128,0.08)); border: 1px solid var(--border); font-size: 13px; color: var(--fg-muted); text-align: left; line-height: 1.55; width: 100%;"><strong style="color: var(--fg); display: block; margin-bottom: 6px;">First time using TestFlight?</strong>1. <a href="${TESTFLIGHT_APP_STORE_URL}" target="_blank" rel="noopener" style="color: var(--sage); font-weight: 600; text-decoration: underline;">Install Apple TestFlight</a> from the App Store first.<br>2. <strong>Come back to this page</strong> and tap <strong>Open in TestFlight</strong> above (do <em>not</em> open TestFlight from the App Store or tap "Redeem"—no invite code is needed).<br><span style="display:block; margin-top:6px; font-size:12px; opacity:0.85;">💡 If you opened this inside WhatsApp/Instagram and it asks for a code, tap the browser icon in the corner to <strong>Open in Safari</strong>.</span></div>` : ''}<a style="display:none">
                 </a>
                 <div style="margin-top: 18px;">
                     <button type="button" class="redirect-cancel-link" onclick="dismissRedirectOverlay(event)">
@@ -193,7 +195,7 @@ function initPlatformUI() {
             if (pill) {
                 pill.style.display = 'inline-flex';
                 if (pillIcon) pillIcon.textContent = '🤖 ';
-                if (pillText) pillText.textContent = 'Android detected — Google Play & Direct APK available';
+                if (pillText) pillText.textContent = 'Android detected — Google Play available';
             }
         } else if (isIOS) {
             blockAndroid.style.display = 'none';
@@ -228,7 +230,7 @@ function initPlatformUI() {
             if (pillV2) {
                 pillV2.style.display = 'inline-flex';
                 if (pillIconV2) pillIconV2.textContent = '🤖 ';
-                if (pillTextV2) pillTextV2.textContent = 'Android detected — Google Play & Direct APK available';
+                if (pillTextV2) pillTextV2.textContent = 'Android detected — Google Play available';
             }
         } else if (isIOS) {
             blockAndroidV2.style.display = 'none';
@@ -254,11 +256,11 @@ function initPlatformUI() {
 
     if (installDetectedText) {
         if (isAndroid) {
-            installDetectedText.textContent = 'Android detected — install directly from Google Play or download APK';
+            installDetectedText.textContent = 'Android detected — install directly from Google Play';
         } else if (isIOS) {
             installDetectedText.textContent = 'iOS detected — request TestFlight invite';
         } else {
-            installDetectedText.textContent = 'Google Play (Android), TestFlight (iOS), or Direct APK';
+            installDetectedText.textContent = 'Google Play (Android) or TestFlight (iOS)';
         }
     }
 
@@ -285,7 +287,7 @@ function initPlatformUI() {
         if (installIOSBtn) installIOSBtn.style.setProperty('display', 'none', 'important');
         if (installSignupBtn) installSignupBtn.style.setProperty('display', 'inline-flex', 'important');
         if (playStoreDirect) playStoreDirect.style.display = 'block';
-        if (apkFallback) apkFallback.style.display = 'block';
+        if (apkFallback) apkFallback.style.display = 'none';
         if (getAppSubtitle) getAppSubtitle.textContent = 'Install the native Android app from Google Play.';
     } else {
         // Desktop / Mac: show both links
@@ -386,7 +388,10 @@ async function submitEarlyAccess(formPrefix) {
             showTesterSteps(msgEl);
         } else if (detectedPlatform === 'ios') {
             showMessage(msgEl, 'You\u2019re in! Opening TestFlight now (no invite code required)...', 'success');
-            window.location.href = TESTFLIGHT_DEEPLINK_URL;
+            // Do NOT call window.location.href/replace on iOS: iOS blocks Universal Links
+            // on script-initiated navigations, and itms-beta:// opens TestFlight to the Redeem Code screen.
+            // A direct user tap on the <a href="https://testflight.apple.com/join/vB3XzPKg"> button
+            // triggers the iOS Universal Link into Diaspora Nearby's Accept/Install sheet.
             emailInput.value = '';
             hideFormAfterSignup(formPrefix);
         } else {
@@ -418,15 +423,6 @@ function hideFormAfterSignup(formPrefix) {
     localStorage.setItem('dn_signup_' + formPrefix, 'done');
 }
 
-function triggerAPKDownload() {
-    const link = document.createElement('a');
-    link.href = APK_DOWNLOAD_URL;
-    link.download = 'diaspora-nearby.apk';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
 /**
  * Shows the install options below the signup message.
  * Option 1: Install from Google Play
@@ -450,16 +446,6 @@ function showTesterSteps(msgEl) {
                 <p>Download directly to your Android device</p>
                 <a href="${PLAY_STORE_LISTING_URL}" target="_blank" rel="noopener" class="step-btn step-btn-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Open Google Play
-                </a>
-            </div>
-        </div>
-        <div class="tester-step">
-            <span class="step-number">2</span>
-            <div class="step-content">
-                <strong>Or Download Direct APK</strong>
-                <p>Instant install without Google Play</p>
-                <a href="${APK_DOWNLOAD_URL}" download class="step-btn step-btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download APK
                 </a>
             </div>
         </div>

@@ -39,9 +39,29 @@ class ChatRepository {
 
   final _chatsController = StreamController<List<Chat>>.broadcast();
   final List<Chat> _chatsCache = [];
+  final Map<String, List<Message>> _messagesCache = {};
+  final Map<String, StreamController<List<Message>>> _messageStreamControllers =
+      {};
   StreamSubscription? _chatsSubscription;
   StreamSubscription? _realtimeSubscription;
   String? _realtimeUid;
+
+  /// [PERF] Synchronously access the sorted in-memory chat list
+  List<Chat> get cachedChats => _sortedChatsList();
+
+  /// [PERF] Synchronously look up a chat in memory
+  Chat? getCachedChat(String chatId) {
+    try {
+      final chat = _chatsCache.firstWhere((c) => c.id == chatId);
+      if (chat.participants.isNotEmpty || !chat.isDirect) {
+        return chat;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// [PERF] Synchronously look up cached messages for a chat
+  List<Message>? getCachedMessagesSync(String chatId) => _messagesCache[chatId];
 
   /// Firestore collection references
   CollectionReference<Map<String, dynamic>> get _chatsCol =>
@@ -358,52 +378,34 @@ class ChatRepository {
   // MESSAGES STREAM (Firestore Subcollection)
   // ============================================
 
+  void _emitMessagesUpdate(String chatId, List<Message> messages) {
+    _messagesCache[chatId] = messages;
+    final ctrl = _messageStreamControllers[chatId];
+    if (ctrl != null && !ctrl.isClosed) {
+      ctrl.add(List<Message>.unmodifiable(messages));
+    }
+  }
+
   Stream<List<Message>> subscribeToMessages(String chatId) {
     final uid = currentUserId;
     if (uid == null) return const Stream.empty();
 
-    final controller = StreamController<List<Message>>();
+    final controller = StreamController<List<Message>>.broadcast();
+    _messageStreamControllers[chatId] = controller;
     int clearedAt = 0;
-    List<Message> lastMessages = [];
+    List<Message> lastMessages = _messagesCache[chatId] ?? [];
     StreamSubscription? userChatSub;
     StreamSubscription? subscription;
-    bool hasAccess = false;
 
-    // Always leave Riverpod's loading state immediately. Cached/remote
-    // messages replace this value as soon as they arrive.
-    controller.add(const []);
-
-    Future<bool> canReadMessages() async {
-      try {
-        final chatDoc = await _chatsCol.doc(chatId).get();
-        final data = chatDoc.data();
-        final participants =
-            (data?['participants'] as List<dynamic>?)?.cast<String>() ??
-            const <String>[];
-        if (participants.contains(uid)) return true;
-
-        final userChatDoc = await _userChatsCol(uid).doc(chatId).get();
-        return userChatDoc.exists;
-      } catch (e) {
-        debugPrint('Error checking message access for $chatId: $e');
-        return false;
-      }
-    }
-
-    Future<void> emitCachedMessages() async {
-      try {
-        final messages = await _localService.getCachedMessages(chatId);
-        messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        lastMessages = messages;
+    // [PERF] Emit in-memory cached messages immediately so re-opening a chat
+    // renders on frame 0 with zero flicker or empty-chat flash.
+    final initialCached = _messagesCache[chatId];
+    if (initialCached != null) {
+      Future.microtask(() {
         if (!controller.isClosed) {
-          final filtered = clearedAt > 0
-              ? messages.where((m) => m.timestamp > clearedAt).toList()
-              : messages;
-          controller.add(filtered);
+          controller.add(initialCached);
         }
-      } catch (e) {
-        debugPrint('Error reading cached messages: $e');
-      }
+      });
     }
 
     void startMessagesListener() {
@@ -427,53 +429,63 @@ class ChatRepository {
               // [PERF] Query already returns sorted by timestamp desc — skip redundant sort
               lastMessages = messages;
 
+              final filtered = clearedAt > 0
+                  ? messages.where((m) => m.timestamp > clearedAt).toList()
+                  : messages;
+              _messagesCache[chatId] = filtered;
+
               if (!controller.isClosed) {
-                // [PERF] Only filter if clearedAt is actually set
-                final filtered = clearedAt > 0
-                    ? messages.where((m) => m.timestamp > clearedAt).toList()
-                    : messages;
                 controller.add(filtered);
                 _cacheMessagesLocally(chatId, messages);
               }
             },
             onError: (Object error, StackTrace stackTrace) {
               debugPrint('Error listening to messages for $chatId: $error');
-              if (!controller.isClosed) controller.addError(error, stackTrace);
+              // If permission is denied (e.g. previewing an unjoined group),
+              // emit empty list gracefully instead of crashing the UI.
+              if (!controller.isClosed) {
+                controller.add(const []);
+              }
             },
           );
     }
 
-    // Public chat docs can be readable while their message subcollections are
-    // restricted. Wait for participant/userChats access before subscribing.
+    // [PERF] Start the messages snapshot listener IMMEDIATELY in parallel
+    // with userChats instead of blocking behind sequential network .get() calls!
+    // Firestore serves cached messages from SQLite/IndexedDB on the first frame.
+    startMessagesListener();
+
     userChatSub = _userChatsCol(uid)
         .doc(chatId)
         .snapshots()
         .listen(
-          (snapshot) async {
+          (snapshot) {
             final data = snapshot.data();
-            clearedAt = (data?['clearedAt'] as int?) ?? 0;
-
-            if (!hasAccess) {
-              hasAccess = snapshot.exists || await canReadMessages();
-              if (hasAccess) {
-                await emitCachedMessages();
-                startMessagesListener();
+            final newClearedAt = (data?['clearedAt'] as int?) ?? 0;
+            if (newClearedAt != clearedAt) {
+              clearedAt = newClearedAt;
+              if (lastMessages.isNotEmpty && !controller.isClosed) {
+                final filtered = clearedAt > 0
+                    ? lastMessages
+                          .where((m) => m.timestamp > clearedAt)
+                          .toList()
+                    : lastMessages;
+                _messagesCache[chatId] = filtered;
+                controller.add(filtered);
               }
-            } else if (lastMessages.isNotEmpty && !controller.isClosed) {
-              controller.add(
-                lastMessages.where((m) => m.timestamp > clearedAt).toList(),
-              );
             }
           },
           onError: (Object error, StackTrace stackTrace) {
             debugPrint('Error listening to chat index for $chatId: $error');
-            if (!controller.isClosed) controller.addError(error, stackTrace);
           },
         );
 
     controller.onCancel = () {
       userChatSub?.cancel();
       subscription?.cancel();
+      if (_messageStreamControllers[chatId] == controller) {
+        _messageStreamControllers.remove(chatId);
+      }
     };
 
     return controller.stream;
@@ -514,7 +526,27 @@ class ChatRepository {
   Future<List<Chat>> getUserChats() async {
     if (currentUserId == null) return [];
 
-    // 1. Return Local Data
+    // 1. Return in-memory cached chats immediately if already hydrated
+    if (_chatsCache.isNotEmpty) {
+      final chats = _sortedChatsList();
+      final profile = _ref.read(userProfileProvider).value;
+      final blockedUsers = profile?.blockedUsers ?? [];
+      if (blockedUsers.isNotEmpty) {
+        chats.removeWhere((chat) {
+          if (chat.type == 'direct') {
+            final otherId = chat.participants.firstWhere(
+              (id) => id != currentUserId,
+              orElse: () => '',
+            );
+            return blockedUsers.contains(otherId);
+          }
+          return false;
+        });
+      }
+      return chats;
+    }
+
+    // 2. Return Local Data
     final localChats = await _localService.getAllChats();
 
     if (localChats.isNotEmpty) {
@@ -523,17 +555,17 @@ class ChatRepository {
       return chats;
     }
 
-    // 2. Fetch Remote if empty (Fallback via Firestore)
+    // 3. Fetch Remote in parallel if empty (Fallback via Firestore)
     final userChatsSnap = await _userChatsCol(currentUserId!).limit(100).get();
     if (userChatsSnap.docs.isEmpty) return [];
 
-    final List<Chat> chats = [];
-    for (final doc in userChatsSnap.docs) {
-      final data = doc.data();
-      if (data['isDeleted'] == true) continue;
-      final chat = await getChat(doc.id);
-      if (chat != null) chats.add(chat);
-    }
+    final activeDocs = userChatsSnap.docs
+        .where((doc) => doc.data()['isDeleted'] != true)
+        .toList();
+    final fetched = await Future.wait(
+      activeDocs.map((doc) => getChat(doc.id)),
+    );
+    final List<Chat> chats = fetched.whereType<Chat>().toList();
 
     chats.sort(compareChatsByLatest);
 
@@ -767,7 +799,41 @@ class ChatRepository {
           replyToSenderId: replyToSenderId,
           type: type,
           metadata: metadata,
-        );
+        )
+        .then((msg) {
+          if (msg != null) {
+            _updateChatCacheWithMessage(chatId, msg);
+          }
+          return msg;
+        });
+  }
+
+  /// [PERF] Optimistically update `_chatsCache` and emit sorted chat list
+  /// when a message is sent so the chat immediately jumps to the top.
+  void _updateChatCacheWithMessage(String chatId, Message msg) {
+    final idx = _chatsCache.indexWhere((c) => c.id == chatId);
+    if (idx >= 0) {
+      final current = _chatsCache[idx];
+      final lastMsg = LastMessage(
+        id: msg.id,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        senderId: msg.senderId,
+        senderName: msg.senderName,
+        type: msg.type,
+        status: msg.status ?? 'sent',
+        mentions: msg.mentions,
+        metadata: msg.metadata,
+      );
+      _chatsCache[idx] = current.copyWith(
+        lastMessage: lastMsg,
+        updatedAt: msg.timestamp,
+        unreadCount: 0,
+      );
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+    }
   }
 
   // ============================================
@@ -1027,11 +1093,23 @@ class ChatRepository {
           : firstUserId;
       final chatId = await getExistingDirectChat(otherUid);
       if (chatId == null) return false;
-      final messagesSnap = await _messagesCol(chatId).limit(50).get();
-      final senders = messagesSnap.docs
-          .map((d) => d.data()['senderId'] as String?)
-          .toSet();
-      return senders.contains(firstUserId) && senders.contains(secondUserId);
+      final results = await Future.wait([
+        _messagesCol(chatId)
+            .where('senderId', isEqualTo: firstUserId)
+            .limit(20)
+            .get(),
+        _messagesCol(chatId)
+            .where('senderId', isEqualTo: secondUserId)
+            .limit(20)
+            .get(),
+      ]);
+      bool hasActiveMsg(QuerySnapshot<Map<String, dynamic>> snap) {
+        return snap.docs.any((doc) {
+          final d = doc.data();
+          return d['deletedForEveryone'] != true && d['isDeleted'] != true;
+        });
+      }
+      return hasActiveMsg(results[0]) && hasActiveMsg(results[1]);
     } catch (e) {
       debugPrint('hasBilateralDialogue error: $e');
       return false;
@@ -1129,6 +1207,7 @@ class ChatRepository {
         .call<Map<String, dynamic>>({
           'mode': 'listing',
           'listingId': listingId,
+          'sellerRole': ?sellerRole,
         });
     final chatId = result.data['chatId'] as String?;
     if (chatId == null) return null;
@@ -1471,6 +1550,7 @@ class ChatRepository {
           final newVal = (current - messageIds.length).clamp(0, current);
           batch.update(_userChatsCol(currentUserId!).doc(chatId), {
             'unreadCount': newVal,
+            if (newVal == 0) 'unreadNotificationLines': <String>[],
           });
         }
       }
@@ -1495,6 +1575,14 @@ class ChatRepository {
 
   Future<void> markChatAsRead(String chatId) async {
     if (currentUserId == null) return;
+    // [PERF] Optimistically clear unread badge in memory immediately
+    final idx = _chatsCache.indexWhere((c) => c.id == chatId);
+    if (idx >= 0 && _chatsCache[idx].unreadCount > 0) {
+      _chatsCache[idx] = _chatsCache[idx].copyWith(unreadCount: 0);
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+    }
     try {
       // Update lastRead timestamp in userChats
       final userChatRef = _userChatsCol(currentUserId!).doc(chatId);
@@ -1505,6 +1593,7 @@ class ChatRepository {
         if (data['isDeleted'] != true) {
           await userChatRef.update({
             'unreadCount': 0,
+            'unreadNotificationLines': <String>[],
             'lastRead': DateTime.now().millisecondsSinceEpoch,
           });
         }
@@ -1545,23 +1634,59 @@ class ChatRepository {
 
   Future<void> toggleMute(String chatId, bool mute) async {
     if (currentUserId == null) return;
+    final idx = _chatsCache.indexWhere((c) => c.id == chatId);
+    if (idx >= 0) {
+      _chatsCache[idx] = _chatsCache[idx].copyWith(isMuted: mute);
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+    }
     await _userChatsCol(currentUserId!).doc(chatId).update({'muted': mute});
   }
 
   Future<void> togglePin(String chatId, bool pin) async {
     if (currentUserId == null) return;
-    await _userChatsCol(currentUserId!).doc(chatId).update({'pinned': pin});
+    final idx = _chatsCache.indexWhere((c) => c.id == chatId);
+    if (idx >= 0) {
+      _chatsCache[idx] = _chatsCache[idx].copyWith(
+        isPinned: pin,
+        isPinnedBottom: pin ? false : _chatsCache[idx].isPinnedBottom,
+      );
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+    }
+    await _userChatsCol(currentUserId!).doc(chatId).update({
+      'pinned': pin,
+      if (pin) 'pinnedBottom': false,
+    });
   }
 
   Future<void> togglePinBottom(String chatId, bool pin) async {
     if (currentUserId == null) return;
-    await _userChatsCol(
-      currentUserId!,
-    ).doc(chatId).update({'pinnedBottom': pin});
+    final idx = _chatsCache.indexWhere((c) => c.id == chatId);
+    if (idx >= 0) {
+      _chatsCache[idx] = _chatsCache[idx].copyWith(
+        isPinnedBottom: pin,
+        isPinned: pin ? false : _chatsCache[idx].isPinned,
+      );
+      if (!_chatsController.isClosed) {
+        _chatsController.add(_sortedChatsList());
+      }
+    }
+    await _userChatsCol(currentUserId!).doc(chatId).update({
+      'pinnedBottom': pin,
+      if (pin) 'pinned': false,
+    });
   }
 
   Future<void> deleteChat(String chatId) async {
     if (currentUserId == null) return;
+    _chatsCache.removeWhere((c) => c.id == chatId);
+    _messagesCache.remove(chatId);
+    if (!_chatsController.isClosed) {
+      _chatsController.add(_sortedChatsList());
+    }
 
     await _userChatsCol(currentUserId!).doc(chatId).update({
       'isDeleted': true,
@@ -1573,6 +1698,7 @@ class ChatRepository {
 
   Future<void> clearChat(String chatId) async {
     if (currentUserId == null) return;
+    _emitMessagesUpdate(chatId, const []);
     await _userChatsCol(currentUserId!).doc(chatId).update({
       'clearedAt': DateTime.now().millisecondsSinceEpoch,
       'lastMessage': FieldValue.delete(),
@@ -1599,6 +1725,23 @@ class ChatRepository {
     bool deleteForEveryone = false,
   }) async {
     if (currentUserId == null) return;
+    // [PERF] Optimistically update in-memory message list immediately
+    final cachedMsgs = _messagesCache[chatId];
+    if (cachedMsgs != null) {
+      final updated = cachedMsgs.map((m) {
+        if (m.id != messageId) return m;
+        if (!deleteForEveryone) {
+          final nextDeletedFor = <String>{...?m.deletedFor, currentUserId!}.toList();
+          return m.copyWith(deletedFor: nextDeletedFor);
+        }
+        return m.copyWith(
+          content: '🚫 Message deleted',
+          type: 'deleted',
+          deletedForEveryone: true,
+        );
+      }).toList();
+      _emitMessagesUpdate(chatId, updated);
+    }
     try {
       final msgRef = _messagesCol(chatId).doc(messageId);
 
@@ -1659,12 +1802,52 @@ class ChatRepository {
     }
   }
 
+  void _optimisticReactionUpdate(
+    String chatId,
+    String messageId,
+    String emoji, {
+    required bool remove,
+  }) {
+    final uid = currentUserId;
+    if (uid == null) return;
+    final cachedMsgs = _messagesCache[chatId];
+    if (cachedMsgs == null) return;
+
+    final updated = cachedMsgs.map((m) {
+      if (m.id != messageId) return m;
+      final existing = List<MessageReaction>.from(m.reactions ?? const []);
+      // Remove user's previous reaction(s) first (one reaction per user per message)
+      final cleaned = <MessageReaction>[];
+      for (final r in existing) {
+        final nextUsers = r.userIds.where((id) => id != uid).toList();
+        if (nextUsers.isNotEmpty) {
+          cleaned.add(MessageReaction(emoji: r.emoji, userIds: nextUsers));
+        }
+      }
+      if (!remove) {
+        final idx = cleaned.indexWhere((r) => r.emoji == emoji);
+        if (idx >= 0) {
+          cleaned[idx] = MessageReaction(
+            emoji: emoji,
+            userIds: [...cleaned[idx].userIds, uid],
+          );
+        } else {
+          cleaned.add(MessageReaction(emoji: emoji, userIds: [uid]));
+        }
+      }
+      return m.copyWith(reactions: cleaned);
+    }).toList();
+
+    _emitMessagesUpdate(chatId, updated);
+  }
+
   Future<void> addReaction(
     String chatId,
     String messageId,
     String emoji,
     String messageSenderId,
   ) async {
+    _optimisticReactionUpdate(chatId, messageId, emoji, remove: false);
     return _ref
         .read(chatMessagingServiceProvider)
         .sendReaction(
@@ -1681,6 +1864,7 @@ class ChatRepository {
     String emoji,
   ) async {
     if (currentUserId == null) return;
+    _optimisticReactionUpdate(chatId, messageId, emoji, remove: true);
     await FirebaseFunctions.instance.httpsCallable('reactToMessage').call({
       'chatId': chatId,
       'messageId': messageId,
@@ -1842,12 +2026,18 @@ class ChatRepository {
     if (currentUserId == null) return chat.name;
     if (chat.isDirect) {
       final otherId = chat.getOtherParticipantId(currentUserId!);
-      if (otherId == null) return chat.name;
+      if (otherId == null || otherId.isEmpty) return chat.name;
       try {
-        final doc = await _firestore.collection('users').doc(otherId).get();
-        if (doc.exists) {
-          final data = doc.data();
-          return '${data?['firstName']} ${data?['lastName']}'.trim();
+        final profileRepo = _ref.read(profileRepositoryProvider);
+        final cached = profileRepo.getCachedProfile(otherId);
+        if (cached != null) {
+          final name = '${cached.firstName} ${cached.lastName}'.trim();
+          if (name.isNotEmpty) return name;
+        }
+        final profile = await profileRepo.getUserProfile(otherId);
+        if (profile != null) {
+          final name = '${profile.firstName} ${profile.lastName}'.trim();
+          if (name.isNotEmpty) return name;
         }
       } catch (e) {
         /* ignore */

@@ -78,7 +78,8 @@
                     var isIOS = (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
 
                     if (isIOS) {
-                        window.location.href = 'itms-beta://testflight.apple.com/join/vB3XzPKg';
+                        // iOS Universal Links require a direct user tap on <a href="https://testflight.apple.com/join/...">;
+                        // script.js renders the 1-tap TestFlight join overlay.
                     } else if (isAndroid) {
                         var playUrl = 'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
                         if (code) {
@@ -1972,27 +1973,6 @@
                         <span>Install from Google Play</span>
                     </a>
                 </div>
-
-                <!-- APK fallback for users who can’t use Play Store -->
-                <div id="apk-fallback" class="apk-fallback" style="display:none;">
-                    <details>
-                        <summary style="color:var(--fg-muted); font-size:13px; cursor:pointer; text-align:center;">
-                            <i data-lucide="download" style="width:12px;height:12px;display:inline;vertical-align:middle;margin-right:4px"></i>
-                            Can’t install from Google Play? Download APK directly
-                        </summary>
-                        <div style="margin-top:12px; padding:16px; background:var(--bg-card); border-radius:12px; border:1px solid var(--border);">
-                            <p style="color:var(--fg-muted); font-size:13px; margin-bottom:12px;">
-                                <i data-lucide="alert-triangle" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;color:var(--orange)"></i>
-                                <strong>Note:</strong> APK installs require enabling "Install from unknown sources" in your phone settings.
-                                We recommend installing from Google Play for the smoothest experience.
-                            </p>
-                            <button class="btn btn-outline-small" onclick="triggerAPKDownload()" style="width:100%;justify-content:center;">
-                                <i data-lucide="download" style="width:14px;height:14px"></i>
-                                Download APK (advanced)
-                            </button>
-                        </div>
-                    </details>
-                </div>
             </div>
         </div>
     </section>
@@ -2127,7 +2107,7 @@
         });
     </script>
 
-    <script src="script.js?v=20261012d"></script>
+    <script src="script.js?v=20261020a"></script>
 </body>
 
 </html>

@@ -135,7 +135,17 @@ class TrustService {
     // Recalculation used to fan out across relationships, ratings, chats,
     // verifications, and communities before attempting writes denied by the
     // production rules. Refresh the server-authored projection instead.
+    if (FirebaseAuth.instance.currentUser?.uid == userId) {
+      try {
+        await FirebaseFunctions.instance
+            .httpsCallable('evaluateProfileMilestone')
+            .call<Map<String, dynamic>>({'userId': userId});
+      } catch (e) {
+        debugPrint('evaluateProfileMilestone sync note: $e');
+      }
+    }
     _ref.invalidate(userTrustProvider(userId));
+    _ref.invalidate(userPointsProvider(userId));
   }
 
   /// Main Calculation Engine
@@ -174,6 +184,7 @@ class TrustService {
       'nephew',
       'niece',
       'cousin',
+      'relative',
     };
 
     final familyIds = relationships
@@ -735,13 +746,41 @@ class TrustService {
     if (fromUserId == toUserId) throw Exception("Cannot rate yourself");
     if (score < 0 || score > 100) throw Exception("Score must be 0-100");
 
+    final relationships = await _ref
+        .read(relationshipRepositoryProvider)
+        .getRelationshipsList(fromUserId);
+    const Set<String> familyTypes = {
+      'wife',
+      'husband',
+      'daughter',
+      'son',
+      'mother',
+      'father',
+      'sister',
+      'brother',
+      'aunt',
+      'uncle',
+      'nephew',
+      'niece',
+      'cousin',
+      'relative',
+    };
+    final isFamilyMember = relationships.any(
+      (r) =>
+          r.id == toUserId &&
+          r.status == 'active' &&
+          familyTypes.contains(r.type.toLowerCase()),
+    );
+    if (isFamilyMember) {
+      throw Exception(
+        "You cannot vouch for a family member (Conflict of Interest).",
+      );
+    }
+
     // Circle of Trust Anti-Collusion Firewall:
     // Close relationships (Family + Friends) CANNOT participate in staked ratings (1-10 or 91-100).
     final isStakedRating = score <= 10 || score > 90;
     if (isStakedRating) {
-      final relationships = await _ref
-          .read(relationshipRepositoryProvider)
-          .getRelationshipsList(fromUserId);
       final isInCircleOfTrust = relationships.any(
         (r) => r.id == toUserId && r.status == 'active',
       );
@@ -883,6 +922,7 @@ class TrustService {
         'nephew',
         'niece',
         'cousin',
+        'relative',
       };
       if (familyTypes.contains(relationship.type.toLowerCase())) {
         return 'You cannot vouch for a family member (Conflict of Interest).';

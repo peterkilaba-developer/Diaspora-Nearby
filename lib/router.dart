@@ -564,7 +564,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       GoRoute(
         path: '/permissions',
-        builder: (context, state) => const UserPermissionsScreen(),
+        builder: (context, state) => UserPermissionsScreen(
+          isReviewMode: state.uri.queryParameters['review'] == '1',
+        ),
       ),
 
       // Profile Setup (No Shell)
@@ -1027,6 +1029,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           model: state.uri.queryParameters['model'],
           year: state.uri.queryParameters['year'],
         ),
+      ),
+      GoRoute(
+        path: '/marketplace/:id',
+        parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) =>
+            '/marketplace/listing/${state.pathParameters['id']}',
       ),
 
       // Current User Profile (Self)

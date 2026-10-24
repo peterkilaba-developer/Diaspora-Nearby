@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
@@ -73,12 +74,20 @@ class PointsService {
     Map<String, dynamic>? metadata,
     bool skipTreasury = false,
   }) async {
-    UserPoints? oldPoints = await _repository.getUserPoints(userId);
-
-    // For cross-user awards (skipTreasury), skip initialization and daily reset
+    // For cross-user awards (or skipTreasury), skip initialization and daily reset
     // since those write fields the calling user doesn't have permission to modify
     // on another user's document (e.g., dailyMessageCount, signupDate, etc.).
-    if (!skipTreasury) {
+    bool isCurrentUser = true;
+    try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUid != null) {
+        isCurrentUser = currentUid == userId;
+      }
+    } catch (_) {
+      isCurrentUser = true;
+    }
+    if (!skipTreasury && isCurrentUser) {
+      UserPoints? oldPoints = await _repository.getUserPoints(userId);
       // [SAFETY] If user doesn't have a points doc yet (e.g. initial set failed),
       // initialize it first to ensure base fields (signupDate, streak, etc) exist.
       if (oldPoints == null) {
@@ -88,7 +97,9 @@ class PointsService {
         ); // Re-fetch after initialization
       }
 
-      await _checkAndResetDaily(userId, oldPoints!);
+      if (oldPoints != null) {
+        await _checkAndResetDaily(userId, oldPoints);
+      }
     }
 
     _validateAmount(points, action);
@@ -316,8 +327,18 @@ class PointsService {
             'cousin',
           };
           if (familyTypes.contains(relationshipType.toLowerCase())) {
-            await _repository.incrementFamilyConnectionCount(senderId);
-            await _repository.incrementFamilyConnectionCount(receiverId);
+            String? currentUid;
+            try {
+              currentUid = FirebaseAuth.instance.currentUser?.uid;
+            } catch (_) {}
+            if (currentUid == null) {
+              await _repository.incrementFamilyConnectionCount(senderId);
+              await _repository.incrementFamilyConnectionCount(receiverId);
+            } else if (currentUid == senderId) {
+              await _repository.incrementFamilyConnectionCount(senderId);
+            } else if (currentUid == receiverId) {
+              await _repository.incrementFamilyConnectionCount(receiverId);
+            }
           }
         }
 
@@ -349,8 +370,16 @@ class PointsService {
   }
 
   Future<void> trackProfileCompletion(String userId) async {
-    // [UPDATED v9] Profile completion awards 10,000 DSP (10x scale)
-    // Logic centralized in TrustService.recalculateTrustScore
+    // [UPDATED v9] Profile completion awards 10,000 DSP + 10 PCT via server-authoritative callable
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('evaluateProfileMilestone')
+          .call<Map<String, dynamic>>({'userId': userId});
+    } catch (e) {
+      debugPrint('DSP: evaluateProfileMilestone fallback: $e');
+      // Fallback: if callable is not yet deployed, ensure 10,000 DSP is awarded when all 12 fields are complete
+      await trackCompleteProfile(userId);
+    }
     await _trustService.updateTrustForUser(userId);
   }
 
@@ -358,7 +387,9 @@ class PointsService {
     // [UPDATED v9] Legacy fallback/manual trigger
     // Ensure 10,000 DSP is awarded if the milestone hasn't been hit yet
     final points = await _repository.getUserPoints(userId);
+    final alreadyEarned = (points?.lifetimeEarnings['profile_completion'] ?? 0) >= 10000;
     if (points != null &&
+        !alreadyEarned &&
         !points.completedExplorationActions.contains(
           'milestone_10_profile_fields',
         )) {
@@ -366,6 +397,10 @@ class PointsService {
       await _repository.markExplorationActionCompleted(
         userId,
         'milestone_10_profile_fields',
+      );
+      await _repository.markExplorationActionCompleted(
+        userId,
+        'complete_profile',
       );
       await _trustService.updateTrustForUser(userId);
     }

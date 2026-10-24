@@ -7,7 +7,6 @@ import 'package:sms_autofill/sms_autofill.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:whatsapp_zero_tap/whatsapp_zero_tap.dart';
 import 'auth_controller.dart';
 
 class OTPVerificationScreen extends ConsumerStatefulWidget {
@@ -74,6 +73,9 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
       if (!widget.isWhatsApp) {
         _startListeningForCode();
       } else {
+        // Attach to pre-flight Zero-Tap listener immediately before any async clipboard call
+        _startListeningForWhatsAppZeroTap();
+
         // Snapshot existing clipboard text on load so old stale codes
         // from previous logins or other apps are never auto-submitted.
         try {
@@ -83,28 +85,23 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
         _hasCapturedInitialClipboard = true;
 
         _ensureClipboardTimer();
-        _startListeningForWhatsAppZeroTap();
       }
     });
   }
 
-  Future<void> _startListeningForWhatsAppZeroTap() async {
+  Future<void> _startListeningForWhatsAppZeroTap({
+    bool forceRestart = false,
+  }) async {
     if (kIsWeb ||
         defaultTargetPlatform != TargetPlatform.android ||
         !widget.isWhatsApp) {
       return;
     }
     try {
-      final zeroTap = WhatsappZeroTap();
-      final isSupported = await zeroTap.isWhatsAppOtpHandshakeSupported();
-      if (!isSupported) {
-        debugPrint('WhatsApp Zero-Tap handshake not supported on this device');
-        return;
-      }
-      debugPrint('WhatsApp Zero-Tap: listening for incoming OTP...');
-      final code = await zeroTap.listenForOTP(
-        timeout: const Duration(minutes: 2),
-      );
+      final session = ref.read(pendingWhatsAppZeroTapProvider);
+      final code = await (forceRestart
+          ? session.startPreFlightListener()
+          : session.consumeOrStartListener());
       if (code != null && code.length == 6 && mounted && !_isSubmitting) {
         debugPrint('WhatsApp Zero-Tap: OTP automatically captured: $code');
         setState(() {
@@ -291,7 +288,6 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
     _startCountdown();
     _ensureClipboardTimer();
     if (widget.isWhatsApp) {
-      _startListeningForWhatsAppZeroTap();
       ref
           .read(authControllerProvider.notifier)
           .signInWithWhatsApp(context, widget.phoneNumber);
@@ -315,7 +311,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
           _otpCode = '';
         });
         _ensureClipboardTimer();
-        _startListeningForWhatsAppZeroTap();
+        _startListeningForWhatsAppZeroTap(forceRestart: true);
       }
     });
 

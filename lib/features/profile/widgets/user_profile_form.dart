@@ -87,6 +87,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
 
   // Host Location Update State
   List<AutocompletePrediction> _predictions = [];
+  int _hostLocationSearchSeq = 0;
   loc_model.UserLocation? _tempSelectedLocation;
   bool _isUpdatingLocation = false;
 
@@ -674,22 +675,43 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
       showExplorationRewardToast(context, message: 'Profile complete bonus!');
     }
 
-    // [NEW] Check for 10-field milestone
-    await points.trackProfileCompletion(uid);
+    // [NEW] Check for profile completion milestone (all 12 required fields)
+    if (profile.isComplete) {
+      await points.trackProfileCompletion(uid);
+    }
   }
 
   void _onSearchChanged(String input) async {
-    if (input.isEmpty) {
-      if (mounted) setState(() => _predictions = []);
+    final trimmed = input.trim();
+    final seq = ++_hostLocationSearchSeq;
+    if (trimmed.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _predictions = [];
+          _tempSelectedLocation = null;
+        });
+      }
       return;
     }
+    if (_tempSelectedLocation != null &&
+        trimmed != _tempSelectedLocation!.formattedAddress.trim()) {
+      setState(() => _tempSelectedLocation = null);
+    }
     final places = ref.read(googlePlacesServiceProvider);
-    final results = await places.autocomplete(input);
-    if (mounted) setState(() => _predictions = results);
+    final results = await places.autocomplete(trimmed);
+    if (mounted &&
+        seq == _hostLocationSearchSeq &&
+        _searchController.text.trim().isNotEmpty) {
+      setState(() => _predictions = results);
+    }
   }
 
   Future<void> _selectPlace(String placeId) async {
-    setState(() => _isUpdatingLocation = true);
+    _hostLocationSearchSeq++;
+    setState(() {
+      _predictions = [];
+      _isUpdatingLocation = true;
+    });
     try {
       final places = ref.read(googlePlacesServiceProvider);
       final response = await places.getPlaceDetails(placeId);
@@ -1325,7 +1347,17 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     );
   }
 
+  int _parsePastLocationYear(String until) {
+    try {
+      return DateTime.parse(until).year;
+    } catch (_) {
+      return int.tryParse(until) ?? 0;
+    }
+  }
+
   Widget _buildPastLocationsEdit() {
+    final sortedPastLocations = List<loc_model.PastLocation>.from(_pastLocations)
+      ..sort((a, b) => _parsePastLocationYear(b.until).compareTo(_parsePastLocationYear(a.until)));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1337,7 +1369,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ..._pastLocations.map((p) {
+            ...sortedPastLocations.map((p) {
               String? flag;
               if (p.location.countryCode != null) {
                 flag = country_data
@@ -1373,7 +1405,13 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Until ${p.until}',
+                            'Until ${() {
+                              try {
+                                return DateTime.parse(p.until).year.toString();
+                              } catch (_) {
+                                return p.until;
+                              }
+                            }()}',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[500],
@@ -1429,6 +1467,9 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         TextField(
           controller: _searchController,
           onChanged: _onSearchChanged,
+          autofillHints: const <String>[],
+          autocorrect: false,
+          enableSuggestions: false,
           decoration: InputDecoration(
             hintText: 'Search Host City (GPS Verified)',
             border: InputBorder.none,
@@ -1453,7 +1494,9 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             ),
           ),
         ),
-        if (_predictions.isNotEmpty)
+        if (_predictions.isNotEmpty &&
+            _searchController.text.trim().isNotEmpty &&
+            _tempSelectedLocation == null)
           Container(
             height: 200,
             decoration: BoxDecoration(

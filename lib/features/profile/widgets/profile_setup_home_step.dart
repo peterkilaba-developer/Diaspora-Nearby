@@ -12,6 +12,7 @@ class ProfileSetupHomeStep extends StatelessWidget {
   final Function(String) onSearchChanged;
   final Function(String) onSelectPlace;
   final VoidCallback onNext;
+  final VoidCallback? onBack;
 
   const ProfileSetupHomeStep({
     super.key,
@@ -22,6 +23,7 @@ class ProfileSetupHomeStep extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSelectPlace,
     required this.onNext,
+    this.onBack,
   });
 
   @override
@@ -54,16 +56,31 @@ class ProfileSetupHomeStep extends StatelessWidget {
           controller: searchController,
           focusNode: focusNode,
           textCapitalization: TextCapitalization.sentences,
+          autofillHints: const <String>[],
+          autocorrect: false,
+          enableSuggestions: false,
           decoration: InputDecoration(
             hintText: 'Search your hometown',
             prefixIcon: const Icon(LucideIcons.search),
+            suffixIcon: searchController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(LucideIcons.x, size: 18),
+                    onPressed: () {
+                      searchController.clear();
+                      onSearchChanged('');
+                    },
+                  )
+                : null,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             filled: true,
           ),
           onChanged: onSearchChanged,
         ),
 
-        if (predictions.isNotEmpty) _buildSuggestionsList(theme),
+        if (predictions.isNotEmpty &&
+            searchController.text.trim().isNotEmpty &&
+            selectedLocation == null)
+          _buildSuggestionsList(theme),
 
         if (selectedLocation != null &&
             predictions.isEmpty &&
@@ -94,6 +111,18 @@ class ProfileSetupHomeStep extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Icon(LucideIcons.arrowRight, size: 20),
               ],
+            ),
+          ),
+        ],
+
+        if (onBack != null) ...[
+          const SizedBox(height: 40),
+          TextButton.icon(
+            onPressed: onBack,
+            icon: const Icon(LucideIcons.arrowLeft, size: 18),
+            label: const Text('Back'),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

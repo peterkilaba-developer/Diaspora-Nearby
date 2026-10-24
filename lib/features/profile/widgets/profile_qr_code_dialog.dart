@@ -37,7 +37,8 @@ class ProfileQRCodeDialog extends ConsumerStatefulWidget {
 class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
   bool _isScanning = false;
   final MobileScannerController _scannerController = MobileScannerController(
-    formats: [BarcodeFormat.qrCode],
+    formats: const [BarcodeFormat.qrCode],
+    autoStart: false,
   );
   StreamSubscription<QuerySnapshot>? _qrSubscription;
   String? _lastConnectionUid;
@@ -585,53 +586,64 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
           padding: const EdgeInsets.symmetric(
             horizontal: AppTheme.pageHorizontalPadding,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 16),
-              if (_isCompletingProfile) ...[
-                const Text(
-                  'Please complete these details to enable identity verification.',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: UserProfileForm(
-                    initialProfile: _currentProfile,
-                    highlightFields: _missingFields,
-                    submitLabel: 'Save & Open QR',
-                    showUserCard: false,
-                    isFinishProfile: true,
-                    onSave: (updated, newImage) async {
-                      try {
-                        String imageUrl = updated.profileImage;
-                        if (newImage != null) {
-                          imageUrl = await ref
-                              .read(profileRepositoryProvider)
-                              .uploadProfileImage(updated.uid!, newImage);
-                        }
+          child: _isCompletingProfile
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Please complete these details to enable identity verification.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: UserProfileForm(
+                        initialProfile: _currentProfile,
+                        highlightFields: _missingFields,
+                        submitLabel: 'Save & Open QR',
+                        showUserCard: false,
+                        isFinishProfile: true,
+                        onSave: (updated, newImage) async {
+                          try {
+                            String imageUrl = updated.profileImage;
+                            if (newImage != null) {
+                              imageUrl = await ref
+                                  .read(profileRepositoryProvider)
+                                  .uploadProfileImage(updated.uid!, newImage);
+                            }
 
-                        final finalProfile = updated.copyWith(
-                          profileImage: imageUrl,
-                        );
-                        await ref
-                            .read(profileRepositoryProvider)
-                            .saveUserProfile(finalProfile.uid!, finalProfile);
+                            final finalProfile = updated.copyWith(
+                              profileImage: imageUrl,
+                            );
+                            await ref
+                                .read(profileRepositoryProvider)
+                                .saveUserProfile(
+                                  finalProfile.uid!,
+                                  finalProfile,
+                                );
 
-                        if (mounted) {
-                          setState(() {
-                            _currentProfile = finalProfile;
-                            _isCompletingProfile = false;
-                          });
-                        }
-                      } catch (e) {
-                        debugPrint('Error saving profile in QR dialog: $e');
-                        rethrow;
-                      }
-                    },
-                  ),
-                ),
-              ] else if (!_isScanning) ...[
+                            if (mounted) {
+                              setState(() {
+                                _currentProfile = finalProfile;
+                                _isCompletingProfile = false;
+                              });
+                              _refreshHandshake();
+                            }
+                          } catch (e) {
+                            debugPrint('Error saving profile in QR dialog: $e');
+                            rethrow;
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.only(top: 16, bottom: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!_isScanning) ...[
                 const Text(
                   'Show this code to a peer to verify your human identity in person.',
                   textAlign: TextAlign.center,
@@ -889,8 +901,9 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                   child: const Text('Back to My Code'),
                 ),
               ],
-            ],
-          ),
+                    ],
+                  ),
+                ),
         ),
       ),
     );

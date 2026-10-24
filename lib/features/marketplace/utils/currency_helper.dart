@@ -381,12 +381,41 @@ class CurrencyHelper {
   /// Compact formatting of a raw numeric price (no currency symbol).
   /// e.g. 2500 → "2.5K", 1500000 → "1.5M"
   static String formatCompact(double price) {
-    if (price >= 1000000) {
+    if (price >= 1000000000) {
+      return '${(price / 1000000000).toStringAsFixed(1)}B';
+    } else if (price >= 1000000) {
       return '${(price / 1000000).toStringAsFixed(1)}M';
     } else if (price >= 1000) {
       return '${(price / 1000).toStringAsFixed(price % 1000 == 0 ? 0 : 1)}K';
     }
     return price.toStringAsFixed(price == price.roundToDouble() ? 0 : 2);
+  }
+
+  /// Converts a local-currency amount to its `$DIASPORA` token equivalent
+  /// using the dynamic price floor ([dspPriceFloorUsd], fallback [_baseDspToUsd]).
+  static double localToDiasporaToken(
+    double amount,
+    String? countryCode, {
+    double dspPriceFloorUsd = _baseDspToUsd,
+  }) {
+    final usd = toUsd(amount, countryCode ?? 'US');
+    final floor = dspPriceFloorUsd > 0 ? dspPriceFloorUsd : _baseDspToUsd;
+    return usd / floor;
+  }
+
+  /// Formats a local-currency price into a compact `$DIASPORA` token string.
+  /// e.g. "85K $DIASPORA" or "1.2M $DIASPORA"
+  static String formatDiasporaTokenPrice(
+    double amount,
+    String? countryCode, {
+    double dspPriceFloorUsd = _baseDspToUsd,
+  }) {
+    final tokens = localToDiasporaToken(
+      amount,
+      countryCode,
+      dspPriceFloorUsd: dspPriceFloorUsd,
+    );
+    return '${formatCompact(tokens)} \$DIASPORA';
   }
 }
 

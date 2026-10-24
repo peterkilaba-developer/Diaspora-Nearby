@@ -28,7 +28,7 @@ messaging.onBackgroundMessage((payload) => {
         icon: '/icons/Icon-192.png',
         badge: '/icons/Icon-192.png',
         data: payload.data || {},
-        tag: payload.data?.chatId || payload.messageId || 'default',
+        tag: payload.data?.chatId ? 'chat_' + payload.data.chatId : (payload.messageId || 'default'),
         renotify: true,
     };
 

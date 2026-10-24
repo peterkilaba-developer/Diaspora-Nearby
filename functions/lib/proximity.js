@@ -122,6 +122,7 @@ exports.findNearbyUsers = functions.https.onCall(async (data, context) => {
         const pub = doc.data() || {};
         const priv = privateById.get(doc.id) || {};
         if (pub.isBanned === true) continue;
+        if (!hasUsableName(pub)) continue;
         const blockedByOther = [
             ...(priv.blockedUsers || []),
             ...(pub.blockedUsers || []),

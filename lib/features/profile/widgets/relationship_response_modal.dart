@@ -231,6 +231,7 @@ class _RelationshipResponseModalState
     if (_selectedReciprocalType == null) return;
 
     setState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final repository = ref.read(relationshipRepositoryProvider);
 
@@ -255,21 +256,21 @@ class _RelationshipResponseModalState
       if (mounted) {
         Navigator.pop(context);
         widget.onAccepted?.call();
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('Relationship confirmed!')),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   Future<void> _rejectRequest() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repository = ref.read(relationshipRepositoryProvider);
     // Show confirmation for rejection penalty
     final confirm = await showDialog<bool>(
       context: context,
@@ -293,23 +294,20 @@ class _RelationshipResponseModalState
     );
 
     if (confirm == true) {
+      if (!mounted) return;
       setState(() => _isLoading = true);
       try {
-        await ref
-            .read(relationshipRepositoryProvider)
-            .rejectRequest(widget.request);
+        await repository.rejectRequest(widget.request);
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Request rejected.')));
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Request rejected.')),
+          );
         }
       } catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+          messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
         }
       }
     }

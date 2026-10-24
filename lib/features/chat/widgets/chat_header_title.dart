@@ -19,6 +19,7 @@ class ChatHeaderTitle extends StatefulWidget {
   final Widget? customAvatarWidget;
   final Widget? titlePrefixIcon;
   final int? memberCount;
+  final String memberLabel;
   final String? eventStatus;
   final VoidCallback? onTap;
 
@@ -31,6 +32,7 @@ class ChatHeaderTitle extends StatefulWidget {
     this.customAvatarWidget,
     this.titlePrefixIcon,
     this.memberCount,
+    this.memberLabel = 'members',
     this.eventStatus,
     this.onTap,
   });
@@ -459,7 +461,7 @@ class _ChatHeaderTitleState extends State<ChatHeaderTitle> {
                       ),
                       const SizedBox(width: 4),
                       material.Text(
-                        '${widget.memberCount} members',
+                        '${widget.memberCount} ${widget.memberLabel}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           fontSize: 12,

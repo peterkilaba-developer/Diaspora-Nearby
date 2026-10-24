@@ -9,6 +9,7 @@ import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/core/providers/global_feature_provider.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/features/chat/models/chat.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 // Utils
 String getCountryName(String? code) {
@@ -24,6 +25,11 @@ final communityHierarchyProvider =
     });
 
 class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
+  // [PERF] In-memory cache of built community hierarchies by (mode, countryCode)
+  static final Map<String, ({List<HierarchyItem> items, DateTime fetchedAt})>
+  _hierarchyCache = {};
+  static const _cacheTtl = Duration(minutes: 5);
+
   @override
   Future<List<HierarchyItem>> build() async {
     final mode = ref.watch(communitiesViewModeProvider);
@@ -35,19 +41,29 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
       return [];
     }
 
-    // Fetch user profile for Home Country Code
+    // [PERF] Read user's Home Country Code from in-memory userProfileProvider
+    // or ProfileRepository cache before hitting Firestore.
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final userData = userDoc.data();
-      final userHomeCountryCode = userData != null
-          ? (userData['homeCountryCode'] as String? ??
-                userData['countryCode'] as String? ??
-                userData['homeCountry'] as String? ??
-                userData['country'] as String?)
-          : null;
+      final cachedProfile =
+          ref.watch(
+            userProfileProvider.select((p) => p.value),
+          ) ??
+          ref.read(profileRepositoryProvider).getCachedProfile(user.uid);
+      String? userHomeCountryCode = cachedProfile?.homeCountryCode;
+
+      if (userHomeCountryCode == null || userHomeCountryCode.isEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        final userData = userDoc.data();
+        userHomeCountryCode = userData != null
+            ? (userData['homeCountryCode'] as String? ??
+                  userData['countryCode'] as String? ??
+                  userData['homeCountry'] as String? ??
+                  userData['country'] as String?)
+            : null;
+      }
 
       // Search Interception
       if (searchQuery.isNotEmpty && searchQuery.length >= 2) {
@@ -58,16 +74,29 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         );
       }
 
-      // Normal View Logic
-      if (mode == ViewMode.global) {
-        return _buildGlobalHierarchy(userHomeCountryCode ?? 'US');
-      } else {
-        final effectiveCountryCode =
-            (userHomeCountryCode != null && userHomeCountryCode.isNotEmpty)
-            ? userHomeCountryCode
-            : 'US';
-        return _buildMyCommunityHierarchy(effectiveCountryCode);
+      final effectiveCountryCode =
+          (userHomeCountryCode != null && userHomeCountryCode.isNotEmpty)
+          ? userHomeCountryCode
+          : 'US';
+      final cacheKey = '${mode.name}_$effectiveCountryCode';
+      final cachedEntry = _hierarchyCache[cacheKey];
+      if (cachedEntry != null &&
+          cachedEntry.items.isNotEmpty &&
+          DateTime.now().difference(cachedEntry.fetchedAt) < _cacheTtl) {
+        return cachedEntry.items;
       }
+
+      // Normal View Logic
+      final List<HierarchyItem> built;
+      if (mode == ViewMode.global) {
+        built = await _buildGlobalHierarchy(effectiveCountryCode);
+      } else {
+        built = await _buildMyCommunityHierarchy(effectiveCountryCode);
+      }
+      if (built.isNotEmpty) {
+        _hierarchyCache[cacheKey] = (items: built, fetchedAt: DateTime.now());
+      }
+      return built;
     } catch (e) {
       rethrow;
     }
@@ -196,12 +225,21 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     final uppercaseHomeCode = userHomeCode.trim().toUpperCase();
     final lowercaseHomeCode = userHomeCode.trim().toLowerCase();
 
-    // Query A: All communities belonging to this Home Country (case-resilient + fallback)
-    var homeCountrySnapshot = await firestore
-        .collection('communities')
-        .where('homeCountryCode', isEqualTo: uppercaseHomeCode)
-        .limit(200)
-        .get();
+    // [PERF] Run Query A (homeCountryCode) and Query B (global/continent) in parallel
+    final results = await Future.wait([
+      firestore
+          .collection('communities')
+          .where('homeCountryCode', isEqualTo: uppercaseHomeCode)
+          .limit(200)
+          .get(),
+      firestore
+          .collection('communities')
+          .where('type', whereIn: ['global', 'continent'])
+          .limit(20)
+          .get(),
+    ]);
+    var homeCountrySnapshot = results[0];
+    final globalSnapshot = results[1];
 
     if (homeCountrySnapshot.docs.isEmpty &&
         uppercaseHomeCode != lowercaseHomeCode) {
@@ -218,14 +256,6 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
           .limit(100)
           .get();
     }
-
-    // Query B: Global/Home Continent structure (Pre-defined nodes)
-    // We fetch strict types here as these are usually static/admin defined
-    final globalSnapshot = await firestore
-        .collection('communities')
-        .where('type', whereIn: ['global', 'continent'])
-        .limit(20)
-        .get();
 
     // 2. Merge & In-Memory Filter
     // We want:

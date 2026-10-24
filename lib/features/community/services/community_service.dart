@@ -75,8 +75,8 @@ class CommunityService {
     }
 
     final userId = profile.uid!;
-    final homeCountryCode = profile.homeCountryCode!;
-    final hostCountryCode = profile.hostCountryCode ?? 'XX';
+    final homeCountryCode = profile.homeCountryCode!.trim().toUpperCase();
+    final hostCountryCode = (profile.hostCountryCode ?? 'XX').trim().toUpperCase();
     // [NEW] Extract User Name for Notifications
     final userName = profile.fullName;
 
@@ -212,6 +212,28 @@ class CommunityService {
     );
     communityIds.addAll(hostCommunityIds);
     chatIds.addAll(hostCommunityIds.map((id) => 'chat_$id'));
+
+    // ========================================
+    // 3.25 BILATERAL COUNTRY COMMUNITY (both directions share one room)
+    // ========================================
+    if (hostCountryCode != 'XX' && homeCountryCode != hostCountryCode) {
+      try {
+        final bilateralId = await _ensureCommunity(
+          type: 'country',
+          locationType: 'bilateral',
+          location: hostParsed,
+          userId: userId,
+          homeCountryCode: homeCountryCode,
+          hostCountryCode: hostCountryCode,
+          onFirstMember: onFirstMember,
+          userName: userName,
+        );
+        communityIds.add(bilateralId);
+        chatIds.add('chat_$bilateralId');
+      } catch (e) {
+        debugPrint('?? ensureCommunity bilateral failed: $e');
+      }
+    }
 
     // ========================================
     // 3.5 CORRIDOR CHAMBER OF COMMERCE (Organization)
@@ -352,11 +374,39 @@ class CommunityService {
       }
     }
 
+    // 5. Bilateral Country Community (if host/past location is in a different country from home)
+    if (locationType != 'home' &&
+        countryCode.isNotEmpty &&
+        countryCode != 'XX' &&
+        homeCountryCode.isNotEmpty &&
+        homeCountryCode != 'XX' &&
+        countryCode.toUpperCase() != homeCountryCode.toUpperCase()) {
+      try {
+        final bilateralId = await _ensureCommunity(
+          type: 'country',
+          locationType: 'bilateral',
+          location: location,
+          userId: userId,
+          homeCountryCode: homeCountryCode,
+          hostCountryCode: countryCode,
+          onFirstMember: onFirstMember,
+          userName: userName,
+        );
+        ids.add(bilateralId);
+      } catch (e) {
+        debugPrint('⚠️ ensureCommunity bilateral failed: $e');
+      }
+    }
+
     if (syncToUserProfile && ids.isNotEmpty) {
       try {
         await _firestore.collection('users').doc(userId).set({
           'communityMemberships': cf.FieldValue.arrayUnion(ids),
         }, cf.SetOptions(merge: true));
+        await _batchUpdateUserChatsIndex(
+          userId,
+          ids.map((id) => 'chat_$id').toList(),
+        );
       } catch (e) {
         debugPrint('⚠️ Error syncing community memberships to profile: $e');
       }
@@ -535,13 +585,14 @@ class CommunityService {
   // Storage folder deletion now handled by Cloud Function
 
   /// Batch updates userChats index for all community chats (Firestore).
+  /// Only ensures `chatId` and `isDeleted: false` without clobbering `addedAt`
+  /// or `lastRead` written by `provisionSignupCommunities` / `ensureCommunity`.
   Future<void> _batchUpdateUserChatsIndex(
     String userId,
     List<String> chatIds,
   ) async {
     if (chatIds.isEmpty) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
     final batch = _firestore.batch();
 
     for (final chatId in chatIds) {
@@ -552,8 +603,7 @@ class CommunityService {
           .doc(chatId);
       batch.set(userChatRef, {
         'chatId': chatId,
-        'lastRead': now,
-        'addedAt': now,
+        'isDeleted': false,
       }, cf.SetOptions(merge: true));
     }
 

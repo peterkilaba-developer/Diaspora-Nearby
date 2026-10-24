@@ -107,6 +107,12 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   String? _selectedCategory;
   late String _selectedType = widget.initialType ?? 'all';
   String _selectedCountryFilter = 'all';
+  bool _showSearch = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  bool get _hasInitialType =>
+      widget.initialType != null && widget.initialType != 'all';
 
   // Deep category-specific filters
   String? _filterMake;
@@ -127,7 +133,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
   String? _filterBrand;
 
   bool get _hasActiveFilters =>
-      _selectedType != 'all' ||
+      (!_hasInitialType && _selectedType != 'all') ||
       _selectedCategory != null ||
       _selectedCountryFilter != 'all' ||
       _filterMake != null ||
@@ -143,7 +149,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   int get _activeFilterCount {
     int count = 0;
-    if (_selectedType != 'all') count++;
+    if (!_hasInitialType && _selectedType != 'all') count++;
     if (_selectedCategory != null) count++;
     if (_selectedCountryFilter != 'all') count++;
     if (_filterMake != null) count++;
@@ -161,9 +167,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
 
   void _resetAllFilters() {
     setState(() {
-      _selectedType = 'all';
+      _selectedType = widget.initialType ?? 'all';
       _selectedCategory = null;
       _selectedCountryFilter = 'all';
+      _searchController.clear();
+      _searchQuery = '';
       _filterMake = null;
       _filterModel = null;
       _filterYear = null;
@@ -175,6 +183,38 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       _filterListingPurpose = null;
       _filterBrand = null;
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String get _screenTitle {
+    switch (_selectedType) {
+      case 'product':
+        return 'Products';
+      case 'service':
+        return 'Services';
+      case 'job':
+        return 'Jobs';
+      default:
+        return 'Diaspora Marketplace';
+    }
+  }
+
+  String get _searchHint {
+    switch (_selectedType) {
+      case 'product':
+        return 'Search products by name, category, or city...';
+      case 'service':
+        return 'Search services by name, category, or city...';
+      case 'job':
+        return 'Search jobs by title, category, or city...';
+      default:
+        return 'Search products, services, or jobs...';
+    }
   }
 
   @override
@@ -199,6 +239,9 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             homeCountryCode: profile?.homeCountryCode,
           ),
 
+          // Collapsible dropdown search bar for this category
+          if (_showSearch) _buildSearchPanel(theme, isDark),
+
           // Active filter pills
           if (_hasActiveFilters) _buildActiveFilters(theme, isDark),
 
@@ -207,6 +250,57 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             child: _buildListingsStream(theme, isDark, communityIds, profile),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchPanel(ThemeData theme, bool isDark) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppTheme.elevationColor(context, 1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.elevationColor(context, 2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextField(
+            controller: _searchController,
+            autofocus: true,
+            onChanged: (value) => setState(() => _searchQuery = value.trim()),
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              hintText: _searchHint,
+              hintStyle: TextStyle(fontSize: 12, color: theme.hintColor),
+              prefixIcon: const Icon(
+                LucideIcons.search,
+                size: 16,
+                color: AppTheme.accent,
+              ),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(LucideIcons.x, size: 14),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              isDense: true,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -226,7 +320,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
       ),
       titleSpacing: 8,
       title: Text(
-        'Diaspora Marketplace',
+        _screenTitle,
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -234,6 +328,24 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         ),
       ),
       actions: [
+        // Search toggle icon (expands/collapses dropdown search bar)
+        IconButton(
+          icon: Icon(
+            _showSearch ? LucideIcons.x : LucideIcons.search,
+            size: 20,
+            color: (_showSearch || _searchQuery.isNotEmpty)
+                ? AppTheme.accent
+                : null,
+          ),
+          onPressed: () => setState(() {
+            _showSearch = !_showSearch;
+            if (!_showSearch) {
+              _searchController.clear();
+              _searchQuery = '';
+            }
+          }),
+          tooltip: _showSearch ? 'Close search' : 'Search',
+        ),
         // Filter icon with badge
         Stack(
           clipBehavior: Clip.none,
@@ -311,48 +423,51 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               ),
             ),
             const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'sell_product',
-              child: Row(
-                children: [
-                  Icon(
-                    LucideIcons.packagePlus,
-                    size: 16,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('Sell Products'),
-                ],
+            if (!_hasInitialType || _selectedType == 'product')
+              PopupMenuItem(
+                value: 'sell_product',
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.packagePlus,
+                      size: 16,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Sell Products'),
+                  ],
+                ),
               ),
-            ),
-            PopupMenuItem(
-              value: 'find_clients',
-              child: Row(
-                children: [
-                  Icon(
-                    LucideIcons.users,
-                    size: 16,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('Find Clients'),
-                ],
+            if (!_hasInitialType || _selectedType == 'service')
+              PopupMenuItem(
+                value: 'find_clients',
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.users,
+                      size: 16,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Find Clients'),
+                  ],
+                ),
               ),
-            ),
-            PopupMenuItem(
-              value: 'hire_candidates',
-              child: Row(
-                children: [
-                  Icon(
-                    LucideIcons.userPlus,
-                    size: 16,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('Hire Candidates'),
-                ],
+            if (!_hasInitialType || _selectedType == 'job')
+              PopupMenuItem(
+                value: 'hire_candidates',
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.userPlus,
+                      size: 16,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Hire Candidates'),
+                  ],
+                ),
               ),
-            ),
           ],
           onSelected: (value) => _handleMenuAction(
             value,
@@ -376,7 +491,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               spacing: 6,
               runSpacing: 4,
               children: [
-                if (_selectedType != 'all')
+                if (!_hasInitialType && _selectedType != 'all')
                   _filterPill(
                     icon: _selectedType == 'product'
                         ? LucideIcons.package
@@ -657,6 +772,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               .where((l) => l.condition == _filterCondition)
               .toList();
         }
+        if (_searchQuery.isNotEmpty) {
+          final q = _searchQuery.toLowerCase();
+          listings = listings.where((l) {
+            return l.title.toLowerCase().contains(q) ||
+                l.description.toLowerCase().contains(q) ||
+                l.category.toLowerCase().contains(q) ||
+                (l.subcategory?.toLowerCase().contains(q) ?? false) ||
+                (l.sellerCity?.toLowerCase().contains(q) ?? false);
+          }).toList();
+        }
 
         if (listings.isEmpty) return _buildEmptyState(theme);
 
@@ -856,10 +981,16 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                             .value
                             ?.hostCountryCode,
                         compact: true,
+                        showToggle: false,
                         primaryStyle: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
+                        ),
+                        secondaryStyle: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white70,
                         ),
                       ),
                     ),
@@ -1261,7 +1392,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
             // ── Count temp-active filters ──
             int tempCount = 0;
 
-            if (tempType != 'all') tempCount++;
+            if (!_hasInitialType && tempType != 'all') tempCount++;
             if (tempCategory != null) tempCount++;
             if (tempMake != null) tempCount++;
             if (tempModel != null) tempCount++;
@@ -1439,7 +1570,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           if (tempCount > 0)
                             TextButton(
                               onPressed: () => setSheetState(() {
-                                tempType = 'all';
+                                tempType = widget.initialType ?? 'all';
                                 tempCategory = null;
                                 tempMake = null;
                                 tempModel = null;
@@ -1470,7 +1601,7 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                           spacing: 6,
                           runSpacing: 6,
                           children: [
-                            if (tempType != 'all')
+                            if (!_hasInitialType && tempType != 'all')
                               activeChip(
                                 tempType == 'product'
                                     ? LucideIcons.package
@@ -1590,67 +1721,50 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                       const SizedBox(height: 16),
 
                       // ═══════════════════════════════════════
-                      // ── TYPE (always visible) ──
+                      // ── TYPE (only when not opened for a specific category) ──
                       // ═══════════════════════════════════════
-                      sectionLabel('TYPE'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _sheetChip('All', 'all', tempType, isDark, (v) {
-                            setSheetState(() {
-                              tempType = v;
-                              tempCategory = null;
-                              tempMake = null;
-                              tempModel = null;
-                              tempYear = null;
-                              tempCondition = null;
-                              tempEmploymentType = null;
-                              tempWorkMode = null;
-                              tempExperienceLevel = null;
-                              tempBedrooms = null;
-                              tempListingPurpose = null;
-                              tempBrand = null;
-                            });
-                          }),
-                          _sheetChip(
-                            'Products',
-                            'product',
-                            tempType,
-                            isDark,
-                            (v) {
+                      if (!_hasInitialType) ...[
+                        sectionLabel('TYPE'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _sheetChip('All', 'all', tempType, isDark, (v) {
                               setSheetState(() {
                                 tempType = v;
                                 tempCategory = null;
                                 tempMake = null;
                                 tempModel = null;
                                 tempYear = null;
+                                tempCondition = null;
                                 tempEmploymentType = null;
                                 tempWorkMode = null;
                                 tempExperienceLevel = null;
+                                tempBedrooms = null;
+                                tempListingPurpose = null;
+                                tempBrand = null;
                               });
-                            },
-                            icon: LucideIcons.package,
-                          ),
-                          _sheetChip('Jobs', 'job', tempType, isDark, (v) {
-                            setSheetState(() {
-                              tempType = v;
-                              tempCategory = null;
-                              tempMake = null;
-                              tempModel = null;
-                              tempYear = null;
-                              tempCondition = null;
-                              tempBedrooms = null;
-                              tempListingPurpose = null;
-                              tempBrand = null;
-                            });
-                          }, icon: LucideIcons.briefcase),
-                          _sheetChip(
-                            'Services',
-                            'service',
-                            tempType,
-                            isDark,
-                            (v) {
+                            }),
+                            _sheetChip(
+                              'Products',
+                              'product',
+                              tempType,
+                              isDark,
+                              (v) {
+                                setSheetState(() {
+                                  tempType = v;
+                                  tempCategory = null;
+                                  tempMake = null;
+                                  tempModel = null;
+                                  tempYear = null;
+                                  tempEmploymentType = null;
+                                  tempWorkMode = null;
+                                  tempExperienceLevel = null;
+                                });
+                              },
+                              icon: LucideIcons.package,
+                            ),
+                            _sheetChip('Jobs', 'job', tempType, isDark, (v) {
                               setSheetState(() {
                                 tempType = v;
                                 tempCategory = null;
@@ -1661,21 +1775,40 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                                 tempBedrooms = null;
                                 tempListingPurpose = null;
                                 tempBrand = null;
-                                tempEmploymentType = null;
-                                tempWorkMode = null;
-                                tempExperienceLevel = null;
                               });
-                            },
-                            icon: LucideIcons.wrench,
-                          ),
-                        ],
-                      ),
+                            }, icon: LucideIcons.briefcase),
+                            _sheetChip(
+                              'Services',
+                              'service',
+                              tempType,
+                              isDark,
+                              (v) {
+                                setSheetState(() {
+                                  tempType = v;
+                                  tempCategory = null;
+                                  tempMake = null;
+                                  tempModel = null;
+                                  tempYear = null;
+                                  tempCondition = null;
+                                  tempBedrooms = null;
+                                  tempListingPurpose = null;
+                                  tempBrand = null;
+                                  tempEmploymentType = null;
+                                  tempWorkMode = null;
+                                  tempExperienceLevel = null;
+                                });
+                              },
+                              icon: LucideIcons.wrench,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       // ═══════════════════════════════════════
                       // ── CATEGORY (revealed once type chosen) ──
                       // ═══════════════════════════════════════
                       if (showCategory) ...[
-                        const SizedBox(height: 16),
                         sectionLabel('CATEGORY'),
                         Wrap(
                           spacing: 8,

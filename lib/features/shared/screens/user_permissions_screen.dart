@@ -10,7 +10,9 @@ import 'package:diaspora_nearby/router.dart' show invalidatePermissionCache;
 import 'package:diaspora_nearby/core/services/app_update_service.dart';
 
 class UserPermissionsScreen extends ConsumerStatefulWidget {
-  const UserPermissionsScreen({super.key});
+  final bool isReviewMode;
+
+  const UserPermissionsScreen({super.key, this.isReviewMode = false});
 
   @override
   ConsumerState<UserPermissionsScreen> createState() =>
@@ -94,11 +96,14 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           'Permission State - loc=$_locationGranted, notif=$_notificationGranted, bgLoc=$_backgroundLocationGranted, allGranted=$_allPermissionsGranted, isProcessing=$_isProcessing',
         );
 
-        // Auto-navigate as soon as all permissions are granted
-        if (_allPermissionsGranted && !_isProcessing) {
+        // Auto-navigate as soon as all permissions are granted (unless user explicitly stepped back to review)
+        if (_allPermissionsGranted && !_isProcessing && !widget.isReviewMode) {
           // Brief delay to let UI settle before navigating
           await Future.delayed(const Duration(milliseconds: 300));
-          if (mounted && _allPermissionsGranted && !_isProcessing) {
+          if (mounted &&
+              _allPermissionsGranted &&
+              !_isProcessing &&
+              !widget.isReviewMode) {
             _continue();
           }
         }
@@ -178,7 +183,11 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
       // does a fresh check and doesn't redirect back to /permissions.
       invalidatePermissionCache();
       if (mounted) {
-        context.go('/chats');
+        if (widget.isReviewMode) {
+          context.go('/profile-setup');
+        } else {
+          context.go('/chats');
+        }
       }
       // [FIX] Safety reset — if navigation fails or router redirects back,
       // re-enable the button after 2 seconds so user is never permanently stuck.

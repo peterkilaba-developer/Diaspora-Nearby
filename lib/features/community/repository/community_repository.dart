@@ -36,6 +36,10 @@ final homeContinentCommunityProvider =
 
 class CommunityRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Map<String, Community> _communityCache = {};
+
+  Community? getCachedCommunity(String communityId) =>
+      _communityCache[communityId];
 
   // ===========================================================================
   // OFFLINE-FIRST METHODS (Firestore Offline Persistence)
@@ -221,8 +225,13 @@ class CommunityRepository {
   // HYBRID METHODS (Legacy Support / Migration)
   // ===========================================================================
 
-  /// Get Community (Firestore with offline persistence)
+  /// Get Community (In-memory cache + Firestore with offline persistence)
   Future<Community?> getCommunity(String communityId) async {
+    final cached = _communityCache[communityId];
+    if (cached != null) {
+      _fetchAndSaveCommunity(communityId);
+      return cached;
+    }
     return await _fetchAndSaveCommunity(communityId);
   }
 
@@ -238,7 +247,9 @@ class CommunityRepository {
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
-        return Community.fromJson({...doc.data(), 'id': doc.id});
+        final comm = Community.fromJson({...doc.data(), 'id': doc.id});
+        _communityCache[doc.id] = comm;
+        return comm;
       }
     } catch (e) {
       debugPrint('Error getting home country community: $e');
@@ -257,11 +268,12 @@ class CommunityRepository {
           ...doc.data() as Map<String, dynamic>,
           'id': doc.id,
         });
-        // No-op: Firestore offline persistence handles caching
+        _communityCache[communityId] = community;
         return community;
       }
     } catch (e) {
       debugPrint('Error fetching community: $e');
+      return _communityCache[communityId];
     }
     return null;
   }

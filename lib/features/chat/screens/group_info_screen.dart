@@ -51,6 +51,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
   bool _isMuted = false; // [NEW] Mute State
   bool _isFamilyGroup = false; // [NEW] Family Group Detection
   bool _isImmediateFamilyGroup = false; // [NEW] Immediate vs Extended
+  bool _isListingChat = false; // [NEW] Marketplace Shop / Listing Chat
 
   // For Batch Editing
   final Set<String> _membersToRemove = {};
@@ -62,6 +63,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
     super.initState();
     _currentGroupImage = widget.groupImage;
     _nameController.text = widget.groupName;
+    _isListingChat = widget.chatId.startsWith('listing_');
     _loadGroupData();
   }
 
@@ -155,6 +157,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                 chat.metadata?['isFamilyGroupExtended'] == true;
             _isImmediateFamilyGroup =
                 chat.metadata?['isFamilyGroupImmediate'] == true;
+            _isListingChat = chat.isListingChat;
 
             _isAdmin =
                 chat.createdBy == widget.currentUserId ||
@@ -362,7 +365,13 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
         });
         _loadGroupData();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Group updated successfully')),
+          SnackBar(
+            content: Text(
+              _isListingChat
+                  ? 'Shop updated successfully'
+                  : 'Group updated successfully',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -402,8 +411,10 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
 
   Future<void> _leaveGroup() async {
     if (!await _showConfirmation(
-      'Leave Group',
-      'Are you sure you want to leave this group?',
+      _isListingChat ? 'Leave Shop' : 'Leave Group',
+      _isListingChat
+          ? 'Are you sure you want to leave this shop?'
+          : 'Are you sure you want to leave this group?',
     )) {
       return;
     }
@@ -454,7 +465,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
           icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Group Info'),
+        title: Text(_isListingChat ? 'Shop Info' : 'Group Info'),
         actions: [
           if (_isAdmin && !_isLoading && _isEditing && _isSaving)
             const Padding(
@@ -614,9 +625,11 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                   textAlign: TextAlign.center,
                                   textCapitalization:
                                       TextCapitalization.sentences,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Enter group name',
-                                    border: UnderlineInputBorder(),
+                                  decoration: InputDecoration(
+                                    hintText: _isListingChat
+                                        ? 'Enter shop name'
+                                        : 'Enter group name',
+                                    border: const UnderlineInputBorder(),
                                     contentPadding: EdgeInsets.zero,
                                   ),
                                   style: theme.textTheme.headlineSmall,
@@ -640,7 +653,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${_members.length} member${_members.length == 1 ? '' : 's'}',
+                                  _isListingChat
+                                      ? '${_members.length} shopper${_members.length == 1 ? '' : 's'}'
+                                      : '${_members.length} member${_members.length == 1 ? '' : 's'}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
@@ -666,10 +681,12 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                               maxLines: 4,
                               minLines: 3,
                               maxLength: 200,
-                              decoration: const InputDecoration(
-                                hintText: 'Add group description',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.all(12),
+                              decoration: InputDecoration(
+                                hintText: _isListingChat
+                                    ? 'Add shop description'
+                                    : 'Add group description',
+                                border: const OutlineInputBorder(),
+                                contentPadding: const EdgeInsets.all(12),
                                 labelText: 'Description',
                               ),
                               style: theme.textTheme.bodyMedium,
@@ -711,7 +728,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
-                          'MEMBERS & CONTACTS',
+                          _isListingChat
+                              ? 'SHOPPERS & CONTACTS'
+                              : 'MEMBERS & CONTACTS',
                           style: theme.textTheme.labelSmall,
                         ),
                       ),
@@ -733,7 +752,9 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                       ..._buildMembersList(
                         theme,
                         _regularMembers,
-                        'Group Members (${_regularMembers.length})',
+                        _isListingChat
+                            ? 'Shoppers (${_regularMembers.length})'
+                            : 'Group Members (${_regularMembers.length})',
                       ),
 
                       const SizedBox(height: 32),
@@ -836,13 +857,15 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                       );
                     }
 
-                    // Member View (Leave Group)
+                    // Member View (Leave Group / Leave Shop)
                     return SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _leaveGroup,
                         icon: const Icon(LucideIcons.logOut, size: 18),
-                        label: const Text('Leave Group'),
+                        label: Text(
+                          _isListingChat ? 'Leave Shop' : 'Leave Group',
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: theme.colorScheme.error,
                           side: BorderSide(color: theme.colorScheme.error),
@@ -956,32 +979,13 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                           if (isMemberAdmin) _buildAdminBadge(theme),
                           Builder(
                             builder: (context) {
-                              double? distanceKm;
                               final currentUserProfile = ref
                                   .watch(userProfileProvider)
                                   .value;
-                              if (currentUserProfile
-                                          ?.currentLocation
-                                          ?.geometry
-                                          .location !=
-                                      null &&
-                                  member.hostLocation.geometry?.location !=
-                                      null) {
-                                distanceKm = calculateDistance(
-                                  currentUserProfile!
-                                      .currentLocation!
-                                      .geometry
-                                      .location
-                                      .lat,
-                                  currentUserProfile
-                                      .currentLocation!
-                                      .geometry
-                                      .location
-                                      .lng,
-                                  member.hostLocation.geometry!.location.lat,
-                                  member.hostLocation.geometry!.location.lng,
-                                );
-                              }
+                              final distanceKm = calculateProfileDistanceKm(
+                                currentUserProfile,
+                                member,
+                              );
 
                               return UserCardView(
                                 user: member,

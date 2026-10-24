@@ -474,21 +474,24 @@ class _PeerListingDetailScreenState
                             ),
                           ),
                           const Spacer(),
-                          CurrencyPriceDisplay(
-                            amount: listing.pricePerUnit,
-                            sellerCountryCode: listing.countryCode,
-                            viewerCountryCode: ref
-                                .read(userProfileProvider)
-                                .value
-                                ?.hostCountryCode,
-                            priceSuffix: _isHotel || _isStay
-                                ? '/night'
-                                : '/day',
-                            primaryColor: AppTheme.accent,
-                            primaryStyle: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.accent,
+                          Flexible(
+                            child: CurrencyPriceDisplay(
+                              amount: listing.pricePerUnit,
+                              sellerCountryCode: listing.countryCode,
+                              viewerCountryCode: ref
+                                  .read(userProfileProvider)
+                                  .value
+                                  ?.hostCountryCode,
+                              priceSuffix: _isHotel || _isStay
+                                  ? '/night'
+                                  : '/day',
+                              showToggle: false,
+                              primaryColor: AppTheme.accent,
+                              primaryStyle: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.accent,
+                              ),
                             ),
                           ),
                         ],

@@ -11,6 +11,7 @@
 const { functions, admin, db } = require("./shared");
 const { ethers } = require("ethers");
 const { getSmartWalletInfra, SMART_WALLET_ABI } = require("./wallet");
+const { syncProfileMilestoneAndTrust } = require("./dsp");
 
 const FUND_SALT_LABEL = "treasury:emergency_fund";
 const CONTRIBUTION_USD = 100;
@@ -184,15 +185,22 @@ exports.payEmergencyFundInDiaspora = functions
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // PoCT +10 incentive
-    const trustRef = db.collection("trust_scores").doc(userId);
-    batch.set(trustRef, {
-      poct: admin.firestore.FieldValue.increment(10),
-      lastPoctAwardReason: "emergency_fund_contribution",
-      lastPoctAwardAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    // Mark contributor on trust_data & trust_scores and evaluate EmergencyFund PoH milestone (+10,000 DSP & +10 PCT)
+    for (const col of ["trust_data", "trust_scores"]) {
+      batch.set(db.collection(col).doc(userId), {
+        emergencyFundContributor: true,
+        lastPoctAwardReason: "emergency_fund_contribution",
+        lastPoctAwardAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
 
     await batch.commit();
+
+    try {
+      await syncProfileMilestoneAndTrust(userId);
+    } catch (syncErr) {
+      console.warn(`[EmergencyFund] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+    }
 
     return { success: true, txHash, amountDiaspora, treasury };
   });
@@ -509,35 +517,38 @@ exports.submitEmergencyClaim = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const requestedAmountUsd = Number(input.requestedAmountUsd || input.amountUsd || 0);
-  if (!Number.isFinite(requestedAmountUsd) || requestedAmountUsd <= 0) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Requested claim amount must be greater than $0."
-    );
-  }
+  const requestedAmountUsd = Number(input.requestedAmountUsd || input.amountUsd || 0) > 0
+    ? Number(input.requestedAmountUsd || input.amountUsd)
+    : 1000;
 
   const tier = requestedAmountUsd <= 1000
     ? "standard"
     : (requestedAmountUsd <= 50000 ? "fast_track" : "community_vote");
 
-  const claimRef = db.collection("emergency_fund_claims").doc();
+  const claimRef = input.id && typeof input.id === "string"
+    ? db.collection("emergency_fund_claims").doc(input.id)
+    : db.collection("emergency_fund_claims").doc();
   const now = admin.firestore.FieldValue.serverTimestamp();
+  const submittedDateIso = input.submittedDate || new Date().toISOString();
+  const incidentDateIso = input.incidentDate || submittedDateIso;
 
   await claimRef.set({
     id: claimRef.id,
     userId,
     claimantName: `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Member",
     claimantWallet: userData.walletAddress || null,
+    type: input.type || input.emergencyType || "medical",
     emergencyType: input.emergencyType || input.type || "General Emergency",
     description: String(input.description || "").slice(0, 3000),
     beneficiaryName: input.beneficiaryName || `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
     beneficiaryCountry: input.beneficiaryCountry || userData.homeCountry || null,
     relationship: input.relationship || "Self",
+    incidentDate: incidentDateIso,
+    submittedDate: submittedDateIso,
     requestedAmountUsd,
     payoutAmountUsd: requestedAmountUsd,
     tier,
-    status: tier === "community_vote" ? "pending_community_vote" : "pending",
+    status: tier === "community_vote" ? "pending_community_vote" : "submitted",
     requiresCommunityVote: tier === "community_vote",
     communityVoteQuorum: tier === "community_vote" ? 10 : 0,
     communityVoteApprovalThreshold: tier === "community_vote" ? 0.51 : 0,
@@ -553,4 +564,112 @@ exports.submitEmergencyClaim = functions.https.onCall(async (data, context) => {
     tier,
     requestedAmountUsd,
   };
+});
+
+/**
+ * expressEmergencyFundInterest — Records a user's interest in joining the Ubuntu Emergency Fund.
+ */
+exports.expressEmergencyFundInterest = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
+  const userId = context.auth.uid;
+  await db.collection("emergency_fund_interest").doc(userId).set({
+    userId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { success: true };
+});
+
+/**
+ * requestEmergencyProxy — Creates or updates an Emergency Fund membership proxy request.
+ */
+exports.requestEmergencyProxy = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
+  const userId = context.auth.uid;
+  const input = data || {};
+  const proxyUserId = String(input.proxyUserId || "").trim();
+  if (!proxyUserId || proxyUserId === userId) {
+    throw new functions.https.HttpsError("invalid-argument", "Valid proxyUserId is required.");
+  }
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  const membershipRef = db.collection("emergency_fund_memberships").doc(userId);
+
+  const membershipPatch = {
+    userId,
+    proxyUserId,
+    proxyStatus: "pending",
+    updatedAt: now,
+  };
+  if (input.country) membershipPatch.country = String(input.country);
+  if (input.status) membershipPatch.status = String(input.status);
+  if (input.joinedDate) membershipPatch.joinedDate = input.joinedDate;
+  if (input.annualContribution != null) membershipPatch.annualContribution = Number(input.annualContribution);
+  if (input.supportNumber) membershipPatch.supportNumber = String(input.supportNumber);
+  if (Array.isArray(input.coveredFamilyMembers)) {
+    membershipPatch.coveredFamilyMembers = input.coveredFamilyMembers.map(String);
+  }
+
+  batch.set(membershipRef, membershipPatch, { merge: true });
+
+  const requestId = `${userId}_${proxyUserId}`;
+  batch.set(db.collection("proxy_requests").doc(requestId), {
+    fromUserId: userId,
+    fromUserName: String(input.userName || "Member").slice(0, 200),
+    toUserId: proxyUserId,
+    status: "pending",
+    createdAt: now,
+  }, { merge: true });
+
+  await batch.commit();
+  return { success: true, requestId };
+});
+
+/**
+ * respondEmergencyProxy — Allows the designated proxy user to accept or reject a proxy request.
+ */
+exports.respondEmergencyProxy = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in required");
+  const proxyUserId = context.auth.uid;
+  const input = data || {};
+  const fromUserId = String(input.fromUserId || input.memberUserId || "").trim();
+  const accepted = Boolean(input.accepted);
+  if (!fromUserId) {
+    throw new functions.https.HttpsError("invalid-argument", "fromUserId is required.");
+  }
+
+  const requestId = String(input.requestId || `${fromUserId}_${proxyUserId}`).trim();
+  const reqRef = db.collection("proxy_requests").doc(requestId);
+  const membershipRef = db.collection("emergency_fund_memberships").doc(fromUserId);
+  const [reqSnap, memSnap] = await Promise.all([reqRef.get(), membershipRef.get()]);
+
+  if (reqSnap.exists && reqSnap.data().toUserId !== proxyUserId) {
+    throw new functions.https.HttpsError("permission-denied", "Only the designated proxy can respond.");
+  }
+  if (!reqSnap.exists && (!memSnap.exists || memSnap.data().proxyUserId !== proxyUserId)) {
+    throw new functions.https.HttpsError("permission-denied", "Not authorized to respond to this proxy request.");
+  }
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  if (reqSnap.exists) {
+    batch.update(reqRef, {
+      status: accepted ? "accepted" : "rejected",
+      respondedAt: now,
+    });
+  }
+
+  const memUpdate = {
+    proxyStatus: accepted ? "accepted" : "rejected",
+    updatedAt: now,
+  };
+  if (accepted && memSnap.exists && memSnap.data().status === "pending_proxy") {
+    memUpdate.status = "pending_payment";
+  } else if (!accepted) {
+    memUpdate.proxyUserId = null;
+  }
+  batch.set(membershipRef, memUpdate, { merge: true });
+
+  await batch.commit();
+  return { success: true, status: accepted ? "accepted" : "rejected" };
 });

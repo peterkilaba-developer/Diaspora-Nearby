@@ -6,6 +6,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 final homeRepositoryProvider = Provider((ref) {
   final auth = ref.watch(authRepositoryProvider);
@@ -23,7 +24,8 @@ final _dmExclusionProvider = FutureProvider<Set<String>>((ref) async {
 
   final Set<String> dmUserIds = {};
   try {
-    final chats = await chatRepo.getUserChats();
+    final cached = chatRepo.cachedChats;
+    final chats = cached.isNotEmpty ? cached : await chatRepo.getUserChats();
     for (var chat in chats) {
       if (chat.type == 'direct') {
         for (var pid in chat.participants) {
@@ -57,15 +59,48 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
     final viewMode = ref.watch(nearbyViewModeProvider);
     final isGlobal = viewMode == ViewMode.global;
 
-    // [PERF] Serve from cache if still fresh and same view mode
+    // Watch viewer's coordinates & homeCountryCode so distances/sorting update in real time
+    ref.watch(
+      userProfileProvider.select(
+        (p) => (
+          p.value?.currentLocation?.geometry.location.lat,
+          p.value?.currentLocation?.geometry.location.lng,
+          p.value?.hostLocation.geometry?.location.lat,
+          p.value?.hostLocation.geometry?.location.lng,
+          p.value?.homeCountryCode,
+        ),
+      ),
+    );
+    final viewer = ref.read(userProfileProvider).value;
+
+    // [PERF] Serve from cache if still fresh, non-empty, and same view mode,
+    // but recompute live distances and re-sort by proximity.
     final now = DateTime.now();
     if (_cachedUsers != null &&
+        _cachedUsers!.isNotEmpty &&
         _cachedViewMode == viewMode &&
         now.difference(_lastFetch) < _cacheTtl) {
       debugPrint(
         '[PERF] nearbyUsersProvider CACHE HIT (${_cachedUsers!.length} users, ${now.difference(_lastFetch).inSeconds}s old)',
       );
-      return _cachedUsers!;
+      final updated = _cachedUsers!
+          .map(
+            (u) => u.copyWith(
+              distance: calculateProfileDistanceKm(
+                viewer,
+                u,
+                fallbackDistanceKm: u.distance,
+              ),
+            ),
+          )
+          .toList()
+        ..sort((a, b) {
+          final dA = a.distance ?? double.infinity;
+          final dB = b.distance ?? double.infinity;
+          return dA.compareTo(dB);
+        });
+      _cachedUsers = updated;
+      return updated;
     }
 
     debugPrint('[PERF] nearbyUsersProvider FETCHING (isGlobal=$isGlobal)');
@@ -78,16 +113,50 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
     final users = await repo.getNearbyUsers(
       isGlobal: isGlobal,
       dmExclusionIds: dmExclusion,
-      currentUserProfile: ref.read(userProfileProvider).value,
+      currentUserProfile: viewer,
     );
 
+    final enriched = users
+        .map(
+          (u) => u.copyWith(
+            distance: calculateProfileDistanceKm(
+              viewer,
+              u,
+              fallbackDistanceKm: u.distance,
+            ),
+          ),
+        )
+        .toList()
+      ..sort((a, b) {
+        final dA = a.distance ?? double.infinity;
+        final dB = b.distance ?? double.infinity;
+        return dA.compareTo(dB);
+      });
+
     // Cache result
-    _cachedUsers = users;
+    final profileRepo = ref.read(profileRepositoryProvider);
+    for (final u in enriched) {
+      if (u.uid != null && u.uid!.isNotEmpty) {
+        profileRepo.cacheProfile(u.uid!, u);
+      }
+    }
+    _cachedUsers = enriched;
     _cachedViewMode = viewMode;
     _lastFetch = DateTime.now();
 
-    debugPrint('[PERF] nearbyUsersProvider FETCHED ${users.length} users');
-    return users;
+    debugPrint('[PERF] nearbyUsersProvider FETCHED ${enriched.length} users');
+    return enriched;
+  }
+
+  /// Background refresh if cache is older than TTL — keeps existing users
+  /// visible on screen without flashing a loading state on tab switches.
+  Future<void> refreshIfStale() async {
+    final now = DateTime.now();
+    if (_cachedUsers == null ||
+        _cachedUsers!.isEmpty ||
+        now.difference(_lastFetch) >= _cacheTtl) {
+      ref.invalidateSelf();
+    }
   }
 
   /// Force refresh — called by pull-to-refresh

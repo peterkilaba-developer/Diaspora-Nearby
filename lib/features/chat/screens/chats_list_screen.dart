@@ -174,6 +174,11 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
     }
 
     // HOME MODE (My Chats)
+    final cachedChats = ref.read(chatRepositoryProvider).cachedChats;
+    if (chatsAsync.isLoading && cachedChats.isNotEmpty) {
+      return _buildHomeChatsList(context, theme, cachedChats, searchQuery);
+    }
+
     return chatsAsync.when(
       loading: () => const SkeletonList(skeleton: ChatCardSkeleton()),
       error: (error, stack) => Center(
@@ -195,95 +200,100 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
           ],
         ),
       ),
-      data: (chats) {
-        // Pre-warm partner profiles so DM cards render with names on first paint.
-        // keepAlive() on chatPartnerProvider ensures these are fetched only once
-        // per app session, not re-fetched on every tab switch.
-        final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
-        if (currentUid != null) {
-          for (final chat in chats) {
-            if (chat.isDirect) {
-              final otherId = chat.getOtherParticipantId(currentUid);
-              if (otherId != null && otherId.isNotEmpty) {
-                ref.read(chatPartnerProvider(otherId));
-              }
-            }
-          }
-        }
-
-        final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
-        final baseChats = isGlobalUnlocked
-            ? chats
-            : chats
-                  .where(
-                    (chat) =>
-                        chat.id != 'global_community' &&
-                        chat.id != 'chat_global_community' &&
-                        chat.locationType != 'global' &&
-                        chat.type != 'global' &&
-                        !chat.name.toLowerCase().contains('global community'),
-                  )
-                  .toList();
-
-        final filteredChats =
-            (searchQuery.isEmpty
-                    ? List<Chat>.from(baseChats)
-                    : baseChats.where((chat) {
-                        final query = searchQuery.toLowerCase();
-                        final nameMatch = chat.name.toLowerCase().contains(
-                          query,
-                        );
-                        final messageMatch =
-                            chat.lastMessage?.content.toLowerCase().contains(
-                              query,
-                            ) ??
-                            false;
-                        return nameMatch || messageMatch;
-                      }).toList())
-              ..sort(ChatRepository.compareChatsByLatest);
-
-        if (filteredChats.isEmpty) {
-          return RefreshIndicator(
-            onRefresh: () async {
-              await ref.read(chatRepositoryProvider).refreshChatsFromServer();
-              await _syncCommunities();
-            },
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: _buildEmptyState(theme, chats.isEmpty),
-                ),
-              ),
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () async {
-            await _syncCommunities();
-            await ref.read(chatRepositoryProvider).refreshChatsFromServer();
-          },
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            itemCount: filteredChats.length,
-            itemBuilder: (context, index) {
-              final chat = filteredChats[index];
-              return RepaintBoundary(
-                child: ChatCard(
-                  key: ValueKey(chat.id),
-                  chat: chat,
-                  searchQuery: searchQuery.isNotEmpty ? searchQuery : null,
-                  onTap: () => context.push('/chats/${chat.id}'),
-                ),
-              );
-            },
-          ),
-        );
-      },
+      data: (chats) => _buildHomeChatsList(context, theme, chats, searchQuery),
     );
     // ... (rest of build)
+  }
+
+  Widget _buildHomeChatsList(
+    BuildContext context,
+    ThemeData theme,
+    List<Chat> chats,
+    String searchQuery,
+  ) {
+    // Pre-warm partner profiles so DM cards render with names on first paint.
+    // keepAlive() on chatPartnerProvider ensures these are fetched only once
+    // per app session, not re-fetched on every tab switch.
+    final currentUid = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUid != null) {
+      for (final chat in chats) {
+        if (chat.isDirect) {
+          final otherId = chat.getOtherParticipantId(currentUid);
+          if (otherId != null && otherId.isNotEmpty) {
+            ref.read(chatPartnerProvider(otherId));
+          }
+        }
+      }
+    }
+
+    final isGlobalUnlocked = ref.watch(isGlobalUnlockedSyncProvider);
+    final baseChats = isGlobalUnlocked
+        ? chats
+        : chats
+              .where(
+                (chat) =>
+                    chat.id != 'global_community' &&
+                    chat.id != 'chat_global_community' &&
+                    chat.locationType != 'global' &&
+                    chat.type != 'global' &&
+                    !chat.name.toLowerCase().contains('global community'),
+              )
+              .toList();
+
+    final filteredChats =
+        (searchQuery.isEmpty
+                ? List<Chat>.from(baseChats)
+                : baseChats.where((chat) {
+                    final query = searchQuery.toLowerCase();
+                    final nameMatch = chat.name.toLowerCase().contains(query);
+                    final messageMatch =
+                        chat.lastMessage?.content.toLowerCase().contains(
+                          query,
+                        ) ??
+                        false;
+                    return nameMatch || messageMatch;
+                  }).toList())
+          ..sort(ChatRepository.compareChatsByLatest);
+
+    if (filteredChats.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(chatRepositoryProvider).refreshChatsFromServer();
+          await _syncCommunities();
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: _buildEmptyState(theme, chats.isEmpty),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _syncCommunities();
+        await ref.read(chatRepositoryProvider).refreshChatsFromServer();
+      },
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        itemCount: filteredChats.length,
+        itemBuilder: (context, index) {
+          final chat = filteredChats[index];
+          return RepaintBoundary(
+            child: ChatCard(
+              key: ValueKey(chat.id),
+              chat: chat,
+              searchQuery: searchQuery.isNotEmpty ? searchQuery : null,
+              onTap: () => context.push('/chats/${chat.id}'),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildEmptyState(

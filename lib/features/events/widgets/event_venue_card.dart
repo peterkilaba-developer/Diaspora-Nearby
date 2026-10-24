@@ -128,7 +128,9 @@ class EventVenueCard extends StatelessWidget {
                     // LEFT: Distance
                     if (event.distance != null)
                       Text(
-                        '${event.distance!.round()}km Away',
+                        event.distance! < 1
+                            ? '${(event.distance! * 1000).round()}m Away'
+                            : '${event.distance!.round()}km Away',
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,

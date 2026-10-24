@@ -12,8 +12,20 @@ import 'package:diaspora_nearby/features/shared/widgets/bottom_sheet_item.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/widgets/profile_qr_code_dialog.dart';
+import 'package:diaspora_nearby/features/profile/widgets/relationship_response_modal.dart';
+import 'package:diaspora_nearby/features/marketplace/models/marketplace_listing.dart';
+import 'package:diaspora_nearby/features/marketplace/repository/marketplace_repository.dart';
+import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
+import 'package:diaspora_nearby/features/trust/widgets/trust_slider_widget.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
+
+final _shopListingMenuProvider =
+    FutureProvider.family<MarketplaceListing?, String>((ref, listingId) async {
+      if (listingId.isEmpty) return null;
+      return ref.watch(marketplaceRepositoryProvider).getListingById(listingId);
+    });
 
 class ChatMoreMenuSheet extends ConsumerWidget {
   final Chat chat;
@@ -48,6 +60,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
   final VoidCallback? onChamberOfCommerce;
   final VoidCallback? onChambersOfCommerce;
   final VoidCallback? onQRExchange;
+  final VoidCallback? onAcceptRelationshipRequest;
 
   const ChatMoreMenuSheet({
     super.key,
@@ -81,41 +94,46 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     this.onChamberOfCommerce,
     this.onChambersOfCommerce,
     this.onQRExchange,
+    this.onAcceptRelationshipRequest,
   });
 
   /// Returns true if the existing relationship is a family type
-  /// Also checks pending requests for family types
-  bool _isExistingFamily() {
-    const familyTypes = {
-      'wife',
-      'husband',
-      'daughter',
-      'son',
-      'mother',
-      'father',
-      'sister',
-      'brother',
-      'aunt',
-      'uncle',
-      'nephew',
-      'niece',
-      'cousin',
-    };
+  /// Also checks pending requests and live providers for family types
+  bool _isExistingFamily(WidgetRef ref, String currentUserId) {
     if (existingRelationship != null &&
-        familyTypes.contains(existingRelationship!.type.toLowerCase())) {
+        TrustSliderWidget.isFamilyRelationshipType(existingRelationship!.type)) {
       return true;
     }
     if (pendingSentRequest != null &&
-        familyTypes.contains(
-          pendingSentRequest!.relationshipType.toLowerCase(),
+        TrustSliderWidget.isFamilyRelationshipType(
+          pendingSentRequest!.relationshipType,
         )) {
       return true;
     }
     if (pendingIncomingRequest != null &&
-        familyTypes.contains(
-          pendingIncomingRequest!.relationshipType.toLowerCase(),
+        TrustSliderWidget.isFamilyRelationshipType(
+          pendingIncomingRequest!.relationshipType,
         )) {
       return true;
+    }
+    final otherId = chat.getOtherParticipantId(currentUserId);
+    if (currentUserId.isNotEmpty && otherId != null && otherId.isNotEmpty) {
+      final rels = ref.watch(userRelationshipsProvider(currentUserId)).value;
+      if (rels != null &&
+          rels.any(
+            (r) =>
+                r.id == otherId &&
+                r.status == 'active' &&
+                TrustSliderWidget.isFamilyRelationshipType(r.type),
+          )) {
+        return true;
+      }
+      final trustData = ref.watch(userTrustProvider(currentUserId)).value;
+      if (TrustSliderWidget.isFamilyRelationshipType(
+        trustData?.relationshipTypes[otherId],
+      )) {
+        return true;
+      }
     }
     return false;
   }
@@ -127,6 +145,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
     final currentUserId = repo.currentUserId ?? '';
     final isDirect = chat.isDirect;
     final isGroup = chat.isGroup;
+    final isListingChat = chat.isListingChat;
+    final listingId = chat.metadata?['listingId'] as String?;
     final isCommunity = chat.isCommunity;
     final isEvent = chat.isEvent;
     // Corridor chambers are auto-membership organizations — treat them as a
@@ -202,8 +222,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       title: 'Relationship',
                       subtitle: existingRelationship!.type,
                       onTap: () {
+                        final messenger = ScaffoldMessenger.maybeOf(context);
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger?.showSnackBar(
                           SnackBar(
                             content: Text(
                               'You are connected as ${existingRelationship!.type}',
@@ -220,8 +241,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       title: 'Relationship request waiting',
                       subtitle: 'Request sent to $nameToUse',
                       onTap: () {
+                        final messenger = ScaffoldMessenger.maybeOf(context);
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger?.showSnackBar(
                           const SnackBar(
                             content: Text('Request is pending acceptance'),
                           ),
@@ -236,13 +258,22 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       title: 'Accept Request',
                       subtitle: '$nameToUse sent you a request',
                       onTap: () {
+                        if (onAcceptRelationshipRequest != null) {
+                          onAcceptRelationshipRequest!();
+                          return;
+                        }
+                        final rootContext = Navigator.of(
+                          context,
+                          rootNavigator: true,
+                        ).context;
+                        final request = pendingIncomingRequest!;
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Please check your notifications to accept.',
-                            ),
-                          ),
+                        showModalBottomSheet(
+                          context: rootContext,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) =>
+                              RelationshipResponseModal(request: request),
                         );
                       },
                     )
@@ -265,26 +296,32 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     title: 'Identity QR Exchange',
                     subtitle: 'Perform in-person QR handshake with $nameToUse',
                     onTap: () async {
-                      Navigator.pop(context);
                       if (onQRExchange != null) {
+                        Navigator.pop(context);
                         onQRExchange!();
-                      } else {
-                        final user = ref
-                            .read(authRepositoryProvider)
-                            .currentUser;
-                        if (user != null) {
-                          final myProfile =
-                              ref.read(userProfileProvider).value ??
-                              await ref
-                                  .read(profileRepositoryProvider)
-                                  .getUserProfile(user.uid);
-                          if (myProfile != null && context.mounted) {
-                            showDialog(
-                              context: context,
-                              builder: (context) =>
-                                  ProfileQRCodeDialog(profile: myProfile),
-                            );
-                          }
+                        return;
+                      }
+                      // Capture root context & providers before popping the sheet,
+                      // because Navigator.pop(context) unmounts the bottom sheet's context.
+                      final rootContext = Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).context;
+                      final user = ref.read(authRepositoryProvider).currentUser;
+                      final cachedProfile = ref.read(userProfileProvider).value;
+                      final profileRepo = ref.read(profileRepositoryProvider);
+                      Navigator.pop(context);
+                      if (user != null) {
+                        final myProfile =
+                            cachedProfile ??
+                            await profileRepo.getUserProfile(user.uid);
+                        if (myProfile != null && rootContext.mounted) {
+                          showDialog(
+                            context: rootContext,
+                            useRootNavigator: true,
+                            builder: (_) =>
+                                ProfileQRCodeDialog(profile: myProfile),
+                          );
                         }
                       }
                     },
@@ -402,7 +439,7 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     subtitle: 'Create a group with $nameToUse',
                     onTap: onStartGroupChat,
                   ),
-                  if (hasAnyProfileField && !_isExistingFamily())
+                  if (hasAnyProfileField && !_isExistingFamily(ref, currentUserId))
                     hasVerifiedTarget
                         ? AppBottomSheetItem(
                             icon: LucideIcons.shieldCheck,
@@ -420,6 +457,129 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                             subtitle: 'Verify or vouch for $nameToUse',
                             onTap: onVerifyUser,
                           ),
+                ] else if (isListingChat) ...[
+                  if (listingId != null && listingId.isNotEmpty)
+                    AppBottomSheetItem(
+                      icon: LucideIcons.shoppingBag,
+                      iconColor: Colors.green.shade700,
+                      iconBgColor: Colors.green.shade50,
+                      title: 'View listing',
+                      subtitle: 'See product details, price, and photos',
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push('/marketplace/listing/$listingId');
+                      },
+                    ),
+                  if (currentUserId.isNotEmpty &&
+                      (chat.createdBy == currentUserId ||
+                          (chat.admins?.contains(currentUserId) ?? false))) ...[
+                    if (listingId != null && listingId.isNotEmpty)
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final listing = ref
+                              .watch(_shopListingMenuProvider(listingId))
+                              .value;
+                          if (listing == null) return const SizedBox.shrink();
+                          final isSold = listing.status == ListingStatus.sold;
+                          final isPaused =
+                              listing.status == ListingStatus.paused;
+                          final isJob = listing.listingType == ListingType.job;
+                          final showRelist = isSold || isPaused;
+
+                          return AppBottomSheetItem(
+                            icon: showRelist
+                                ? LucideIcons.rotateCcw
+                                : LucideIcons.checkCircle2,
+                            iconColor: showRelist
+                                ? AppTheme.accent
+                                : Colors.green.shade700,
+                            iconBgColor: showRelist
+                                ? AppTheme.accent.withValues(alpha: 0.1)
+                                : Colors.green.shade50,
+                            title: showRelist
+                                ? 'Relist item'
+                                : (isJob ? 'Mark as Filled' : 'Mark as Sold'),
+                            subtitle: showRelist
+                                ? 'Make this listing available again'
+                                : (isJob
+                                      ? 'Let applicants know this position is filled'
+                                      : 'Let shoppers know this item is sold'),
+                            onTap: () async {
+                              final messenger = ScaffoldMessenger.maybeOf(
+                                context,
+                              );
+                              Navigator.pop(context);
+                              final newStatus = showRelist
+                                  ? ListingStatus.active
+                                  : ListingStatus.sold;
+                              final statusText = showRelist
+                                  ? 'Listing is now available again'
+                                  : (isJob
+                                        ? 'Position marked as Filled'
+                                        : 'Item marked as Sold');
+                              try {
+                                await ref
+                                    .read(marketplaceRepositoryProvider)
+                                    .updateListingStatus(listingId, newStatus);
+                                ref.invalidate(
+                                  _shopListingMenuProvider(listingId),
+                                );
+                                await repo.sendTextMessage(
+                                  chat.id,
+                                  statusText,
+                                  type: 'system',
+                                  participants: chat.participants,
+                                );
+                                messenger?.showSnackBar(
+                                  SnackBar(content: Text(statusText)),
+                                );
+                              } catch (e) {
+                                debugPrint(
+                                  'Error updating shop listing status: $e',
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    AppBottomSheetItem(
+                      icon: LucideIcons.edit3,
+                      iconColor: theme.colorScheme.primary,
+                      iconBgColor: theme.colorScheme.primaryContainer,
+                      title: 'Manage shop',
+                      subtitle: 'Edit shop name, description, and shoppers',
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push(
+                          '/chats/${chat.id}/info',
+                          extra: {
+                            'name': chat.name,
+                            'image': chat.photoUrl,
+                            'type': chat.type,
+                            'initialEdit': true,
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                  AppBottomSheetItem(
+                    icon: LucideIcons.settings,
+                    iconColor: Colors.grey.shade700,
+                    iconBgColor: Colors.grey.shade100,
+                    title: 'Shop info',
+                    subtitle: 'Manage shop settings and shoppers',
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push(
+                        '/chats/${chat.id}/info',
+                        extra: {
+                          'name': chat.name,
+                          'image': chat.photoUrl,
+                          'type': chat.type,
+                        },
+                      );
+                    },
+                  ),
                 ] else if (!isCommunity && !isEvent) ...[
                   if (isGroup &&
                       currentUserId.isNotEmpty &&
@@ -647,7 +807,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     icon: LucideIcons.logOut,
                     iconColor: Colors.red.shade700,
                     iconBgColor: Colors.red.shade50,
-                    title: isGroup
+                    title: isListingChat
+                        ? 'Leave shop'
+                        : isGroup
                         ? 'Leave group'
                         : (isEvent ? 'Leave event' : 'Unfollow Organization'),
                     subtitle: 'Remove from your list',

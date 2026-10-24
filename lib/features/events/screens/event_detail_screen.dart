@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:diaspora_nearby/features/events/models/event_data.dart';
 import 'package:diaspora_nearby/features/events/repository/event_repository.dart';
 
@@ -14,6 +13,7 @@ import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/organization/repository/organization_repository.dart';
 import 'package:diaspora_nearby/features/events/widgets/share_event_dialog.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_venue_card.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
@@ -49,7 +49,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final theme = Theme.of(context);
 
     final asyncEvent = ref.watch(eventDetailsProvider(widget.eventId));
-    final event = asyncEvent.value ?? widget.event;
+    final cachedEvent = ref
+        .read(eventRepositoryProvider)
+        .getCachedEvent(widget.eventId);
+    final event = asyncEvent.value ?? widget.event ?? cachedEvent;
 
     if (event == null) {
       if (asyncEvent.isLoading) {
@@ -696,24 +699,17 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       // [NEW] 16px padding
                       const SizedBox(height: 16),
 
-                      // [NEW] Calculate distance for details page
-                      FutureBuilder<Position?>(
-                        future:
-                            Geolocator.getLastKnownPosition(), // Use fast last known
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData &&
-                              event.distance == null &&
-                              event.latitude != null &&
-                              event.longitude != null) {
-                            event.distance =
-                                Geolocator.distanceBetween(
-                                  snapshot.data!.latitude,
-                                  snapshot.data!.longitude,
-                                  event.latitude!,
-                                  event.longitude!,
-                                ) /
-                                1000;
-                          }
+                      // Calculate distance in real time for details page
+                      Builder(
+                        builder: (context) {
+                          final viewer = ref.watch(userProfileProvider).value;
+                          final livePos = ref.watch(liveUserPositionProvider).value;
+                          event.distance = calculateEventDistanceKm(
+                            event,
+                            viewer: viewer,
+                            livePosition: livePos,
+                            fallbackDistanceKm: event.distance,
+                          );
 
                           return EventVenueCard(
                             event: event,
@@ -998,23 +994,54 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             return;
                           }
 
+                          final prevAttendees = List<String>.from(
+                            event.attendees ?? const [],
+                          );
+
+                          // [PERF] Apply optimistic RSVP update immediately
+                          setState(() {
+                            _isRsvpLoading = false;
+                            if (isAttending) {
+                              event.attendees = prevAttendees
+                                  .where((id) => id != uid)
+                                  .toList();
+                              event.attendeeCount = event.attendees!.length;
+                            } else {
+                              event.attendees = <String>{
+                                ...prevAttendees,
+                                uid,
+                              }.toList();
+                              event.attendeeCount = event.attendees!.length;
+                            }
+                          });
+
                           if (isAttending) {
                             await repo.leaveEvent(event.id, uid);
                           } else {
                             await repo.joinEvent(event.id, uid);
                           }
 
-                          // Force refresh and WAIT for new data
-                          debugPrint('RSVP: Refreshing data...');
-                          final _ = await ref.refresh(
-                            eventDetailsProvider(event.id).future,
-                          );
-                          debugPrint('RSVP: Data refreshed.');
-
                           if (mounted) setState(() => _isRsvpLoading = false);
                         } catch (e) {
                           debugPrint('RSVP Error: $e');
-                          if (mounted) setState(() => _isRsvpLoading = false);
+                          if (mounted) {
+                            setState(() {
+                              _isRsvpLoading = false;
+                              // Revert optimistic update on error
+                              if (isAttending) {
+                                event.attendees = <String>{
+                                  ...?event.attendees,
+                                  currentUserId,
+                                }.toList();
+                              } else {
+                                event.attendees = event.attendees
+                                    ?.where((id) => id != currentUserId)
+                                    .toList();
+                              }
+                              event.attendeeCount =
+                                  event.attendees?.length ?? 0;
+                            });
+                          }
                           if (context.mounted) {
                             ScaffoldMessenger.of(
                               context,

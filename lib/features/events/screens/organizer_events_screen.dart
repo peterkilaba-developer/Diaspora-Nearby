@@ -42,8 +42,24 @@ class OrganizerEventsList extends ConsumerWidget {
           return const Center(child: Text('You have not created any events.'));
         }
 
-        // Sort by startDate descending (most recent first)
-        myEvents.sort((a, b) => b.startDate.compareTo(a.startDate));
+        // Sort upcoming events first (soonest first), then expired events (most recent first)
+        final now = DateTime.now();
+        myEvents.sort((a, b) {
+          final aExpired = EventRepository.isEventExpired(a, now);
+          final bExpired = EventRepository.isEventExpired(b, now);
+          if (aExpired != bExpired) {
+            return aExpired ? 1 : -1;
+          }
+          if (!aExpired) {
+            final dateCmp = a.startDate.compareTo(b.startDate);
+            if (dateCmp != 0) return dateCmp;
+            return a.startTime.compareTo(b.startTime);
+          } else {
+            final dateCmp = b.startDate.compareTo(a.startDate);
+            if (dateCmp != 0) return dateCmp;
+            return b.startTime.compareTo(a.startTime);
+          }
+        });
 
         return ListView.separated(
           padding: padding.add(

@@ -257,13 +257,29 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final homeFlag = _getCountryFlag(widget.user.homeCountryCode);
-    final hostFlag = _getCountryFlag(widget.user.hostCountryCode);
+    // Watch live Firestore profile for this user when a UID is present,
+    // falling back to widget.user while the stream initializes.
+    final liveTarget = (widget.user.uid != null && widget.user.uid!.isNotEmpty)
+        ? (ref.watch(userProfileByIdProvider(widget.user.uid!)).value ??
+              widget.user)
+        : widget.user;
+    final effectiveUser = liveTarget.currentLocation == null &&
+            widget.user.currentLocation != null
+        ? liveTarget.copyWith(
+            currentLocation: widget.user.currentLocation,
+            distance: widget.user.distance,
+          )
+        : liveTarget.copyWith(
+            distance: liveTarget.distance ?? widget.user.distance,
+          );
+
+    final homeFlag = _getCountryFlag(effectiveUser.homeCountryCode);
+    final hostFlag = _getCountryFlag(effectiveUser.hostCountryCode);
 
     // Bottom bar flag - priority: currentLocation country -> hostLocation country
     String bottomFlag = '';
-    if (widget.user.currentLocation?.countryCode != null) {
-      bottomFlag = _getCountryFlag(widget.user.currentLocation!.countryCode);
+    if (effectiveUser.currentLocation?.countryCode != null) {
+      bottomFlag = _getCountryFlag(effectiveUser.currentLocation!.countryCode);
     }
     if (bottomFlag.isEmpty) {
       bottomFlag = hostFlag;
@@ -271,47 +287,29 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
 
     // Local status logic
     final isLocal =
-        widget.user.homeCountryCode != null &&
-        widget.user.hostCountryCode != null &&
-        widget.user.homeCountryCode == widget.user.hostCountryCode;
+        effectiveUser.homeCountryCode != null &&
+        effectiveUser.hostCountryCode != null &&
+        effectiveUser.homeCountryCode == effectiveUser.hostCountryCode;
 
-    // Calculate distance and proximity. `null` is a real state — viewer
-    // has no location, or target's coords are missing — distinct from "0 km".
-    // When no caller-supplied distance is provided (e.g. profile-page
-    // connection cards), fall back to computing it locally from the viewer's
-    // profile so the bottom bar shows km + proximity instead of "Unknown / —".
-    double? distance = widget.distanceKm ?? widget.user.distance;
-    if (distance == null) {
-      final viewer = ref.watch(userProfileProvider).value;
-      final myLat =
-          viewer?.currentLocation?.geometry.location.lat ??
-          viewer?.hostLocation.geometry?.location.lat;
-      final myLng =
-          viewer?.currentLocation?.geometry.location.lng ??
-          viewer?.hostLocation.geometry?.location.lng;
-      final theirLat =
-          widget.user.currentLocation?.geometry.location.lat ??
-          widget.user.hostLocation.geometry?.location.lat;
-      final theirLng =
-          widget.user.currentLocation?.geometry.location.lng ??
-          widget.user.hostLocation.geometry?.location.lng;
-      if (myLat != null &&
-          myLng != null &&
-          theirLat != null &&
-          theirLng != null) {
-        distance = calculateDistance(myLat, myLng, theirLat, theirLng);
-      }
-    }
+    // Calculate distance and proximity in real time relative to the logged-in
+    // viewer's live coordinates (falling back to caller-supplied distanceKm or
+    // server-computed user.distance when coordinates are unavailable).
+    final viewer = ref.watch(userProfileProvider).value;
+    final double? distance = calculateProfileDistanceKm(
+      viewer,
+      effectiveUser,
+      fallbackDistanceKm: widget.distanceKm ?? effectiveUser.distance,
+    );
     final proximityLevel = _getProximityLevel(distance);
     final proximityColor = _getProximityColor(proximityLevel, isDark, theme);
     final (distanceValue, distanceUnit) = _formatDistanceMetric(distance);
 
     // Format current city display
     String? currentCityDisplay;
-    final city = widget.user.currentLocation?.city;
+    final city = effectiveUser.currentLocation?.city;
     if (city != null && city.isNotEmpty) {
-      final state = widget.user.currentLocation?.state;
-      final countryCode = widget.user.currentLocation?.countryCode;
+      final state = effectiveUser.currentLocation?.state;
+      final countryCode = effectiveUser.currentLocation?.countryCode;
 
       if (countryCode != null &&
           country_data.hasStateLevelHierarchyFromData(countryCode) &&
@@ -322,8 +320,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
       } else {
         currentCityDisplay = city;
       }
-    } else if (widget.user.hostLocation.formattedAddress.isNotEmpty) {
-      final loc = widget.user.hostLocation;
+    } else if (effectiveUser.hostLocation.formattedAddress.isNotEmpty) {
+      final loc = effectiveUser.hostLocation;
       if (loc.city != null && loc.city!.isNotEmpty) {
         final state = loc.state;
         if (state != null && state.isNotEmpty) {
@@ -333,7 +331,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
         }
       } else {
         currentCityDisplay = formatFullAddress(
-          widget.user.hostLocation.formattedAddress,
+          effectiveUser.hostLocation.formattedAddress,
         ).split(',').first;
       }
     }
@@ -766,12 +764,9 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
           if (widget.showCurrentLocation)
             GestureDetector(
               onTap: () {
-                if (widget.user.currentLocation != null) {
-                  final lat =
-                      widget.user.currentLocation!.geometry.location.lat;
-                  final lng =
-                      widget.user.currentLocation!.geometry.location.lng;
-                  _launchMaps(lat, lng);
+                final targetCoords = extractProfileCoords(effectiveUser);
+                if (targetCoords != null) {
+                  _launchMaps(targetCoords.$1, targetCoords.$2);
                 }
               },
               child: Container(
@@ -823,7 +818,7 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                 // currentLocation != null, which hid the
                                 // fallback for connections who haven't opened
                                 // the app since location tracking shipped.
-                                if (widget.user.showCurrentLocationName !=
+                                if (effectiveUser.showCurrentLocationName !=
                                         false &&
                                     currentCityDisplay != null) ...[
                                   const SizedBox(width: 8),

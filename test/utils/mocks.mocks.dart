@@ -286,9 +286,16 @@ class MockProfileRepository extends _i1.Mock implements _i8.ProfileRepository {
   );
 
   @override
-  _i5.Future<_i9.ProfileData?> getUserProfile(String? uid) =>
+  _i5.Future<_i9.ProfileData?> getUserProfile(
+    String? uid, {
+    bool? forceServer = false,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getUserProfile, [uid]),
+            Invocation.method(
+              #getUserProfile,
+              [uid],
+              {#forceServer: forceServer},
+            ),
             returnValue: _i5.Future<_i9.ProfileData?>.value(),
           )
           as _i5.Future<_i9.ProfileData?>);

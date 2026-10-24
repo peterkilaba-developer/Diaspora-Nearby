@@ -5,6 +5,7 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/trust/repository/trust_repository.dart';
 import 'package:diaspora_nearby/features/shared/utils/country_utils.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -15,6 +16,7 @@ class RelationshipSelectionModal extends ConsumerStatefulWidget {
   final String otherUserName;
   final String? otherUserPhoto;
   final bool includeFriend;
+  final bool includeFamily;
   final Function(String type)? onSelected;
 
   const RelationshipSelectionModal({
@@ -23,6 +25,7 @@ class RelationshipSelectionModal extends ConsumerStatefulWidget {
     required this.otherUserName,
     this.otherUserPhoto,
     this.includeFriend = true,
+    this.includeFamily = true,
     this.onSelected,
   });
 
@@ -33,6 +36,13 @@ class RelationshipSelectionModal extends ConsumerStatefulWidget {
 
 class _RelationshipSelectionModalState
     extends ConsumerState<RelationshipSelectionModal> {
+  late final AuthRepository _authRepo;
+  late final ProfileRepository _profileRepo;
+  late final TrustRepository _trustRepo;
+  late final RelationshipRepository _relationshipRepo;
+  late final ChatRepository _chatRepo;
+  ScaffoldMessengerState? _messenger;
+
   final Map<String, List<String>> _relationships = {
     'Immediate Family (Emergency Fund Eligible)': [
       'Wife',
@@ -64,6 +74,22 @@ class _RelationshipSelectionModalState
     'niece',
     'cousin',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _authRepo = ref.read(authRepositoryProvider);
+    _profileRepo = ref.read(profileRepositoryProvider);
+    _trustRepo = ref.read(trustRepositoryProvider);
+    _relationshipRepo = ref.read(relationshipRepositoryProvider);
+    _chatRepo = ref.read(chatRepositoryProvider);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -122,32 +148,33 @@ class _RelationshipSelectionModalState
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    for (var entry in _relationships.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppTheme.pageHorizontalPadding,
-                          8,
-                          AppTheme.pageHorizontalPadding,
-                          8,
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              entry.key,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
+                    if (widget.includeFamily)
+                      for (var entry in _relationships.entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppTheme.pageHorizontalPadding,
+                            8,
+                            AppTheme.pageHorizontalPadding,
+                            8,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                entry.key,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      ...entry.value.map(
-                        (rel) => _buildItem(context, rel, theme),
-                      ),
-                    ],
+                        ...entry.value.map(
+                          (rel) => _buildItem(context, rel, theme),
+                        ),
+                      ],
                     if (widget.includeFriend) ...[
-                      const Divider(height: 32),
+                      if (widget.includeFamily) const Divider(height: 32),
                       _buildItem(context, 'Friend', theme, isSpecial: true),
                       const SizedBox(height: 4),
                       _buildItem(
@@ -226,7 +253,7 @@ class _RelationshipSelectionModalState
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
-                builder: (context) => ChatConfirmationSheet(
+                builder: (sheetContext) => ChatConfirmationSheet(
                   title: 'Confirm Relationship',
                   message:
                       'Send a request to ${widget.otherUserName} to add them as your $rel?',
@@ -235,8 +262,10 @@ class _RelationshipSelectionModalState
                   icon: LucideIcons.heartHandshake,
                   isDestructive: false,
                   onAction: () {
-                    Navigator.pop(context); // Close sheet
-                    _saveRelationship(rel);
+                    // Read all providers and pop RelationshipSelectionModal BEFORE
+                    // popping the confirmation sheet, or pop confirmation sheet first
+                    // while reading providers immediately.
+                    _saveRelationship(rel, sheetContext: sheetContext);
                   },
                 ),
               );
@@ -247,42 +276,75 @@ class _RelationshipSelectionModalState
     );
   }
 
-  Future<void> _saveRelationship(String type) async {
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _saveRelationship(
+    String type, {
+    BuildContext? sheetContext,
+  }) async {
+    final messenger =
+        _messenger ?? (mounted ? ScaffoldMessenger.maybeOf(context) : null);
     try {
-      final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
-      if (currentUserId == null) return;
-
-      if (mounted) {
-        Navigator.pop(context); // Close sheet
+      final currentUserId = _authRepo.currentUser?.uid;
+      if (currentUserId == null) {
+        if (sheetContext != null && sheetContext.mounted) {
+          Navigator.pop(sheetContext);
+        }
+        return;
       }
-      messenger.showSnackBar(
+
+      final otherUserId = widget.otherUserId;
+      final otherUserName = widget.otherUserName;
+      final otherUserPhoto = widget.otherUserPhoto;
+
+      if (sheetContext != null && sheetContext.mounted) {
+        Navigator.pop(sheetContext); // Close ChatConfirmationSheet
+      }
+      if (mounted) {
+        Navigator.pop(context); // Close RelationshipSelectionModal
+      }
+      messenger?.showSnackBar(
         const SnackBar(content: Text('Sending relationship request...')),
       );
 
-      final currentUserProfile = await ref
-          .read(profileRepositoryProvider)
-          .getUserProfile(currentUserId);
+      final currentUserProfile = await _profileRepo.getUserProfile(
+        currentUserId,
+      );
+
+      // Enforce Circle of Trust prerequisite: Bilateral dialogue in Direct Chat
+      final hasDialogue = await _chatRepo.hasBilateralDialogue(
+        currentUserId,
+        otherUserId,
+      );
+      if (!hasDialogue) {
+        messenger?.hideCurrentSnackBar();
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A mutual direct chat is required before requesting a relationship. '
+              'Both users must send at least one message.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
       // [COI] Block family requests when either party has verified or vouched
       if (_familyTypes.contains(type.toLowerCase())) {
-        final trustRepo = ref.read(trustRepositoryProvider);
-
         // Check both directions: A→B and B→A
-        final hasVerifiedThem = await trustRepo.hasVerifiedUser(
+        final hasVerifiedThem = await _trustRepo.hasVerifiedUser(
           currentUserId,
-          widget.otherUserId,
+          otherUserId,
         );
-        final theyVerifiedMe = await trustRepo.hasVerifiedUser(
-          widget.otherUserId,
+        final theyVerifiedMe = await _trustRepo.hasVerifiedUser(
+          otherUserId,
           currentUserId,
         );
-        final hasVouchedThem = await trustRepo.hasVouched(
+        final hasVouchedThem = await _trustRepo.hasVouched(
           currentUserId,
-          widget.otherUserId,
+          otherUserId,
         );
-        final theyVouchedMe = await trustRepo.hasVouched(
-          widget.otherUserId,
+        final theyVouchedMe = await _trustRepo.hasVouched(
+          otherUserId,
           currentUserId,
         );
 
@@ -290,8 +352,8 @@ class _RelationshipSelectionModalState
             theyVerifiedMe ||
             hasVouchedThem ||
             theyVouchedMe) {
-          messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
+          messenger?.hideCurrentSnackBar();
+          messenger?.showSnackBar(
             const SnackBar(
               content: Text(
                 'Cannot add as family — a verification or vouch already '
@@ -306,15 +368,14 @@ class _RelationshipSelectionModalState
 
       // [NEW] Validate Single Parent/Spouse Rule
       if (['Father', 'Mother', 'Wife', 'Husband'].contains(type)) {
-        final existingRelationships = await ref
-            .read(relationshipRepositoryProvider)
+        final existingRelationships = await _relationshipRepo
             .getRelationshipsList(currentUserId);
         final hasParent = existingRelationships.any(
           (r) => r.type == type && r.status == 'active',
         );
         if (hasParent) {
-          messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
+          messenger?.hideCurrentSnackBar();
+          messenger?.showSnackBar(
             SnackBar(
               content: Text('You can only have one active $type.'),
               backgroundColor: Colors.red,
@@ -336,21 +397,19 @@ class _RelationshipSelectionModalState
           ? composedName
           : (fullName != null && fullName.isNotEmpty ? fullName : 'User');
 
-      await ref
-          .read(relationshipRepositoryProvider)
-          .sendRelationshipRequest(
-            fromUserId: currentUserId,
-            fromUserName: senderName,
-            fromUserFlag: flag,
-            fromUserPhoto: currentUserProfile?.profileImage,
-            toUserId: widget.otherUserId,
-            toUserName: widget.otherUserName,
-            toUserPhoto: widget.otherUserPhoto,
-            relationshipType: type,
-          );
+      await _relationshipRepo.sendRelationshipRequest(
+        fromUserId: currentUserId,
+        fromUserName: senderName,
+        fromUserFlag: flag,
+        fromUserPhoto: currentUserProfile?.profileImage,
+        toUserId: otherUserId,
+        toUserName: otherUserName,
+        toUserPhoto: otherUserPhoto,
+        relationshipType: type,
+      );
 
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
         const SnackBar(content: Text('Relationship request sent')),
       );
     } catch (e) {
@@ -362,8 +421,8 @@ class _RelationshipSelectionModalState
       } else if (msg.startsWith('Exception: ')) {
         msg = msg.substring('Exception: '.length);
       }
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(SnackBar(content: Text(msg)));
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 }

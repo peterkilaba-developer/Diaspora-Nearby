@@ -47,58 +47,97 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       data: (users) {
         if (users.isEmpty) {
           if (isGlobal) {
-            return const Center(child: Text('No global users found.'));
+            return RefreshIndicator(
+              onRefresh: () => ref.read(nearbyUsersProvider.notifier).refresh(),
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: const Center(child: Text('No global users found.')),
+                  ),
+                ),
+              ),
+            );
           }
 
           // Local empty state
           final homeCountry =
               userProfileAsync.value?.homeCountry ?? 'your home country';
 
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    LucideIcons.mapPinOff,
-                    size: 48,
-                    color: Colors.grey.shade400,
+          return RefreshIndicator(
+            onRefresh: () => ref.read(nearbyUsersProvider.notifier).refresh(),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'There is no other community member from $homeCountry nearby..',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Congratulations on being the first in this location!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (ref.watch(isGlobalUnlockedSyncProvider)) ...[
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () {
-                        ref.read(nearbyViewModeProvider.notifier).setGlobal();
-                      },
-                      icon: const Icon(LucideIcons.globe),
-                      label: const Text('Switch to Global View'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.accent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppTheme.pageHorizontalPadding,
-                          vertical: 12,
-                        ),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.mapPinOff,
+                            size: 48,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'There is no other community member from $homeCountry nearby..',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Congratulations on being the first in this location!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: () => ref
+                                .read(nearbyUsersProvider.notifier)
+                                .refresh(),
+                            icon: const Icon(LucideIcons.refreshCw, size: 16),
+                            label: const Text('Refresh'),
+                          ),
+                          if (ref.watch(isGlobalUnlockedSyncProvider)) ...[
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: () {
+                                ref
+                                    .read(nearbyViewModeProvider.notifier)
+                                    .setGlobal();
+                              },
+                              icon: const Icon(LucideIcons.globe),
+                              label: const Text('Switch to Global View'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.accent,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppTheme.pageHorizontalPadding,
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
           );

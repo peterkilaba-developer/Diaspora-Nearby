@@ -6,6 +6,10 @@ const {
   stableHash,
   consumeRateLimit,
 } = require("./security");
+const {
+  syncProfileMilestoneAndTrust,
+  distributeUbuntuMatchingSupply,
+} = require("./dsp");
 
 const RELATIONSHIP_TYPES = new Map([
   "wife", "husband", "daughter", "son", "mother", "father", "sister",
@@ -170,6 +174,60 @@ async function assertNoBlock(transaction, firstUserId, secondUserId) {
   }
 }
 
+function computeRelationshipTrustPatch(relsDocs, extraEntry, removedPeerId, now) {
+  const familyIds = new Set();
+  const friendIds = new Set();
+  const relationshipTypes = {};
+  for (const doc of relsDocs) {
+    const peerId = doc.id;
+    if (peerId === removedPeerId) continue;
+    if (extraEntry && peerId === extraEntry.peerId) continue;
+    const data = doc.data() || {};
+    if (data.status !== "active") continue;
+    const rawType = String(data.type || "").trim();
+    const t = rawType.toLowerCase();
+    if (rawType) {
+      relationshipTypes[peerId] = rawType;
+    }
+    if (FAMILY_TYPES.has(t)) {
+      familyIds.add(peerId);
+    } else {
+      friendIds.add(peerId);
+    }
+  }
+  if (extraEntry && extraEntry.peerId && extraEntry.type) {
+    const rawType = String(extraEntry.type).trim();
+    const t = rawType.toLowerCase();
+    if (rawType) {
+      relationshipTypes[extraEntry.peerId] = rawType;
+    }
+    if (FAMILY_TYPES.has(t)) {
+      familyIds.add(extraEntry.peerId);
+    } else {
+      friendIds.add(extraEntry.peerId);
+    }
+  }
+  for (const fid of familyIds) {
+    friendIds.delete(fid);
+  }
+  const familyList = Array.from(familyIds);
+  const friendList = Array.from(friendIds);
+  return {
+    uniqueFamilyCount: familyList.length,
+    uniqueFriendCount: friendList.length,
+    genesisFamilyIds: familyList.slice(0, 10),
+    genesisFriendIds: friendList.slice(0, 10),
+    relationshipTypes,
+    lastUpdated: now,
+  };
+}
+
+function writeRelationshipTrustProjection(transaction, uid, patch) {
+  const payload = {uid, ...patch};
+  transaction.set(db.collection("trust_data").doc(uid), payload, {merge: true});
+  transaction.set(db.collection("trust_scores").doc(uid), payload, {merge: true});
+}
+
 exports.sendRelationshipRequest = functions.https.onCall(async (data, context) => {
   requireAppCheck(context);
   const fromUserId = requireAuth(context);
@@ -190,10 +248,14 @@ exports.sendRelationshipRequest = functions.https.onCall(async (data, context) =
     );
   }
   const [fromMsgs, toMsgs] = await Promise.all([
-    candidateChatRef.collection("messages").where("senderId", "==", fromUserId).limit(1).get(),
-    candidateChatRef.collection("messages").where("senderId", "==", toUserId).limit(1).get(),
+    candidateChatRef.collection("messages").where("senderId", "==", fromUserId).limit(20).get(),
+    candidateChatRef.collection("messages").where("senderId", "==", toUserId).limit(20).get(),
   ]);
-  if (fromMsgs.empty || toMsgs.empty) {
+  const hasActiveMessage = (snap) => snap.docs.some((doc) => {
+    const d = doc.data() || {};
+    return d.deletedForEveryone !== true && d.isDeleted !== true;
+  });
+  if (!hasActiveMessage(fromMsgs) || !hasActiveMessage(toMsgs)) {
     throw new functions.https.HttpsError(
         "failed-precondition",
         "A mutual direct chat is required before requesting a relationship. Both users must send at least one message.",
@@ -325,14 +387,25 @@ exports.respondRelationshipRequest = functions.https.onCall(async (data, context
     const responderRelationshipRef = relationshipRef(responderId, fromUserId);
     const reverseRequestRef = requestRef(responderId, fromUserId);
     const pairRef = directPairRef(fromUserId, responderId);
+    const fromRelsSnapPromise = transaction.get(
+        db.collection("users").doc(fromUserId).collection("relationships")
+            .where("status", "==", "active").limit(200),
+    );
+    const responderRelsSnapPromise = transaction.get(
+        db.collection("users").doc(responderId).collection("relationships")
+            .where("status", "==", "active").limit(200),
+    );
     const [fromProfile, responderProfile, oldFromRelationship,
-      oldResponderRelationship, reverseRequest, pairSnapshot] = await Promise.all([
+      oldResponderRelationship, reverseRequest, pairSnapshot,
+      fromRelsSnap, responderRelsSnap] = await Promise.all([
       transaction.get(fromProfileRef),
       transaction.get(responderProfileRef),
       transaction.get(fromRelationshipRef),
       transaction.get(responderRelationshipRef),
       transaction.get(reverseRequestRef),
       transaction.get(pairRef),
+      fromRelsSnapPromise,
+      responderRelsSnapPromise,
     ]);
     await assertNoBlock(transaction, fromUserId, responderId);
     if (!fromProfile.exists || !responderProfile.exists) {
@@ -403,6 +476,26 @@ exports.respondRelationshipRequest = functions.https.onCall(async (data, context
       createdAt: now,
       status: "active",
     });
+    writeRelationshipTrustProjection(
+        transaction,
+        fromUserId,
+        computeRelationshipTrustPatch(
+            fromRelsSnap.docs,
+            {peerId: responderId, type: requestedType},
+            null,
+            now,
+        ),
+    );
+    writeRelationshipTrustProjection(
+        transaction,
+        responderId,
+        computeRelationshipTrustPatch(
+            responderRelsSnap.docs,
+            {peerId: fromUserId, type: reciprocal},
+            null,
+            now,
+        ),
+    );
     const users = [fromUserId, responderId].sort();
     writeDirectChat(transaction, chatRef, users, fromUserId, chatSnapshot.exists);
     transaction.set(pairRef, {chatId: chatRef.id, users, updatedAt: now});
@@ -421,6 +514,75 @@ exports.respondRelationshipRequest = functions.https.onCall(async (data, context
       });
     }
   });
+
+  if (decision === "accepted") {
+    const fromUserId = initialRequest.data().fromUserId;
+    const requestedType = relationshipType(initialRequest.data().relationshipType);
+    try {
+      const rewardBatch = db.batch();
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const pairKey = [fromUserId, responderId].sort().join(":");
+      const rewardDocRef = db.collection("relationship_rewards").doc(stableHash(pairKey));
+      const rewardSnap = await rewardDocRef.get();
+      if (!rewardSnap.exists) {
+        rewardBatch.set(rewardDocRef, {
+          users: [fromUserId, responderId].sort(),
+          fromUserId,
+          responderId,
+          requestedType,
+          reciprocalType: reciprocal,
+          awardedAt: now,
+        });
+
+        for (const [uid, relType, peerId] of [
+          [fromUserId, requestedType, responderId],
+          [responderId, reciprocal, fromUserId],
+        ]) {
+          const isFamily = FAMILY_TYPES.has(String(relType || "").toLowerCase());
+          const action = isFamily ? "family_connection" : "friend_connection";
+          const points = 1000;
+          const upRef = db.collection("user_points").doc(uid);
+          rewardBatch.set(
+              upRef,
+              {
+                userId: uid,
+                totalPoints: admin.firestore.FieldValue.increment(points),
+                availablePoints: admin.firestore.FieldValue.increment(points),
+                ...(isFamily ? {familyConnectionCount: admin.firestore.FieldValue.increment(1)} : {}),
+                lastUpdated: now,
+                lifetimeEarnings: {
+                  [action]: admin.firestore.FieldValue.increment(points),
+                },
+              },
+              {merge: true},
+          );
+          rewardBatch.set(db.collection("points_transactions").doc(), {
+            userId: uid,
+            type: "earn",
+            action,
+            points,
+            amount: points,
+            timestamp: now,
+            metadata: {peerId, relationshipType: relType},
+          });
+          await distributeUbuntuMatchingSupply(rewardBatch, uid, points, now, `${action}_match`);
+        }
+        await rewardBatch.commit();
+      }
+    } catch (rewardErr) {
+      console.warn(`[respondRelationshipRequest] Connection reward warning: ${rewardErr.message}`);
+    }
+
+    try {
+      await Promise.all([
+        syncProfileMilestoneAndTrust(fromUserId),
+        syncProfileMilestoneAndTrust(responderId),
+      ]);
+    } catch (syncErr) {
+      console.warn(`[respondRelationshipRequest] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+    }
+  }
+
   return {success: true, status: decision, chatId: resultChatId};
 });
 
@@ -509,8 +671,17 @@ exports.setUserBlocked = functions.https.onCall(async (data, context) => {
     const peerRelationship = relationshipRef(otherUserId, userId);
     const outgoingRequest = requestRef(userId, otherUserId);
     const incomingRequest = requestRef(otherUserId, userId);
+    const ownRelsSnapPromise = blocked ? transaction.get(
+        db.collection("users").doc(userId).collection("relationships")
+            .where("status", "==", "active").limit(200),
+    ) : Promise.resolve({docs: []});
+    const peerRelsSnapPromise = blocked ? transaction.get(
+        db.collection("users").doc(otherUserId).collection("relationships")
+            .where("status", "==", "active").limit(200),
+    ) : Promise.resolve({docs: []});
     const [targetProfile, blockSnapshot, trustSnapshot, ownRelationshipSnapshot,
-      peerRelationshipSnapshot, outgoingSnapshot, incomingSnapshot] = await Promise.all([
+      peerRelationshipSnapshot, outgoingSnapshot, incomingSnapshot,
+      ownRelsSnap, peerRelsSnap] = await Promise.all([
       transaction.get(db.collection("users").doc(otherUserId)),
       transaction.get(ref),
       transaction.get(trustRef),
@@ -518,6 +689,8 @@ exports.setUserBlocked = functions.https.onCall(async (data, context) => {
       transaction.get(peerRelationship),
       transaction.get(outgoingRequest),
       transaction.get(incomingRequest),
+      ownRelsSnapPromise,
+      peerRelsSnapPromise,
     ]);
     if (!targetProfile.exists) {
       throw new functions.https.HttpsError("not-found", "User not found.");
@@ -543,7 +716,11 @@ exports.setUserBlocked = functions.https.onCall(async (data, context) => {
         blockedUsers: admin.firestore.FieldValue.arrayUnion(otherUserId),
         updatedAt: now,
       }, {merge: true});
-      transaction.set(trustRef, {blockedByCount: currentCount + 1, lastUpdated: now}, {merge: true});
+      transaction.set(trustRef, {
+        uid: otherUserId,
+        blockedByCount: currentCount + 1,
+        lastUpdated: now,
+      }, {merge: true});
       transaction.delete(ownRelationship);
       transaction.delete(peerRelationship);
       relationshipSlots.forEach((slot, index) => {
@@ -553,6 +730,18 @@ exports.setUserBlocked = functions.https.onCall(async (data, context) => {
           transaction.delete(slot);
         }
       });
+      if (ownRelationshipSnapshot.exists || peerRelationshipSnapshot.exists) {
+        writeRelationshipTrustProjection(
+            transaction,
+            userId,
+            computeRelationshipTrustPatch(ownRelsSnap.docs, null, otherUserId, now),
+        );
+        writeRelationshipTrustProjection(
+            transaction,
+            otherUserId,
+            computeRelationshipTrustPatch(peerRelsSnap.docs, null, userId, now),
+        );
+      }
       for (const [requestSnapshot, pendingRequestRef] of [
         [outgoingSnapshot, outgoingRequest], [incomingSnapshot, incomingRequest],
       ]) {
@@ -567,11 +756,20 @@ exports.setUserBlocked = functions.https.onCall(async (data, context) => {
         updatedAt: now,
       }, {merge: true});
       transaction.set(trustRef, {
+        uid: otherUserId,
         blockedByCount: Math.max(0, currentCount - 1),
         lastUpdated: now,
       }, {merge: true});
     }
   });
+  try {
+    await Promise.all([
+      syncProfileMilestoneAndTrust(userId),
+      syncProfileMilestoneAndTrust(otherUserId),
+    ]);
+  } catch (syncErr) {
+    console.warn(`[setUserBlocked] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+  }
   return {success: true, blocked};
 });
 
@@ -586,14 +784,26 @@ exports.removeRelationship = functions.https.onCall(async (data, context) => {
   await db.runTransaction(async (transaction) => {
     const ownRef = relationshipRef(userId, otherUserId);
     const peerRef = relationshipRef(otherUserId, userId);
-    const [own, peer] = await Promise.all([
-      transaction.get(ownRef), transaction.get(peerRef),
+    const ownRelsSnapPromise = transaction.get(
+        db.collection("users").doc(userId).collection("relationships")
+            .where("status", "==", "active").limit(200),
+    );
+    const peerRelsSnapPromise = transaction.get(
+        db.collection("users").doc(otherUserId).collection("relationships")
+            .where("status", "==", "active").limit(200),
+    );
+    const [own, peer, ownRelsSnap, peerRelsSnap] = await Promise.all([
+      transaction.get(ownRef),
+      transaction.get(peerRef),
+      ownRelsSnapPromise,
+      peerRelsSnapPromise,
     ]);
     const slots = [
       own.exists ? slotRef(userId, own.data().type) : null,
       peer.exists ? slotRef(otherUserId, peer.data().type) : null,
     ].filter(Boolean);
     const slotSnapshots = await Promise.all(slots.map((slot) => transaction.get(slot)));
+    const now = admin.firestore.FieldValue.serverTimestamp();
     transaction.delete(ownRef);
     transaction.delete(peerRef);
     slots.forEach((slot, index) => {
@@ -602,7 +812,25 @@ exports.removeRelationship = functions.https.onCall(async (data, context) => {
         transaction.delete(slot);
       }
     });
+    writeRelationshipTrustProjection(
+        transaction,
+        userId,
+        computeRelationshipTrustPatch(ownRelsSnap.docs, null, otherUserId, now),
+    );
+    writeRelationshipTrustProjection(
+        transaction,
+        otherUserId,
+        computeRelationshipTrustPatch(peerRelsSnap.docs, null, userId, now),
+    );
   });
+  try {
+    await Promise.all([
+      syncProfileMilestoneAndTrust(userId),
+      syncProfileMilestoneAndTrust(otherUserId),
+    ]);
+  } catch (syncErr) {
+    console.warn(`[removeRelationship] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+  }
   return {success: true};
 });
 

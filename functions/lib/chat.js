@@ -9,6 +9,10 @@ const {
   consumeRateLimit,
   stableHash,
 } = require("./security");
+const {
+  syncProfileMilestoneAndTrust,
+  distributeUbuntuMatchingSupply,
+} = require("./dsp");
 
 const MAX_CHAT_PARTICIPANTS = 500;
 
@@ -103,6 +107,24 @@ async function runBounded(values, worker, concurrency = 25) {
   }
 }
 
+function formatMessageNotificationBody(message) {
+  let body = message.content;
+  if (message.type === "image") body = "📷 sent a photo";
+  if (message.type === "video") body = "🎥 sent a video";
+  if (message.type === "audio") body = "🎤 sent a voice message";
+  if (message.type === "audio_file") body = "🎵 sent an audio file";
+  if (message.type === "location") body = "📍 sent a location";
+  if (message.type === "document") body = "📄 sent a document";
+  if (message.type === "dsp_transfer") {
+    body = message.content ? `🪙 ${message.content}` : "🪙 sent $DIASPORA";
+  }
+  if (message.type === "money-transfer") {
+    body = message.content ? `💸 ${message.content}` : "💸 sent a remittance";
+  }
+  if (!body || !String(body).trim()) body = "Sent a message";
+  return String(body).trim().slice(0, 500);
+}
+
 async function deliverMessageIndex(chatId, messageId, message, participants) {
   const typeLabels = {
     image: "Photo",
@@ -122,6 +144,9 @@ async function deliverMessageIndex(chatId, messageId, message, participants) {
     rawContent = `${String(message.senderName).trim()} ${rawContent}`;
   }
   const preview = rawContent.slice(0, 2000);
+  const notificationLine = formatMessageNotificationBody(message);
+  const deliveryState = {};
+
   await runBounded(participants, async (recipientId) => {
     if (!validUid(recipientId)) return;
     const ref = db.collection("users").doc(recipientId)
@@ -129,8 +154,41 @@ async function deliverMessageIndex(chatId, messageId, message, participants) {
     await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
       const existing = snapshot.exists ? snapshot.data() : {};
-      if (existing.lastDeliveredMessageId === messageId) return;
+      if (existing.lastDeliveredMessageId === messageId) {
+        if (recipientId !== message.senderId) {
+          deliveryState[recipientId] = {
+            unreadCount: Number(existing.unreadCount || 1),
+            unreadNotificationLines:
+              Array.isArray(existing.unreadNotificationLines) &&
+              existing.unreadNotificationLines.length > 0
+                ? existing.unreadNotificationLines
+                : [notificationLine],
+          };
+        }
+        return;
+      }
       const isSender = recipientId === message.senderId;
+      let nextUnread = 0;
+      let nextLines = [];
+      if (!isSender) {
+        const prevUnread = Number(existing.unreadCount || 0);
+        nextUnread = prevUnread + 1;
+        const prevLines = prevUnread > 0 && Array.isArray(existing.unreadNotificationLines)
+          ? existing.unreadNotificationLines
+              .filter((line) => typeof line === "string" && line.trim().length > 0)
+              .map((line) => line.trim())
+          : (prevUnread > 0 &&
+              existing.lastMessage &&
+              typeof existing.lastMessage.content === "string" &&
+              existing.lastMessage.content.trim().length > 0
+              ? [existing.lastMessage.content.trim().slice(0, 500)]
+              : []);
+        nextLines = [...prevLines, notificationLine].slice(-7);
+        deliveryState[recipientId] = {
+          unreadCount: nextUnread,
+          unreadNotificationLines: nextLines,
+        };
+      }
       transaction.set(ref, {
         chatId,
         lastMessage: {
@@ -146,11 +204,14 @@ async function deliverMessageIndex(chatId, messageId, message, participants) {
         updatedAt: message.timestamp || Date.now(),
         isDeleted: false,
         ...(!isSender && {
-          unreadCount: Number(existing.unreadCount || 0) + 1,
+          unreadCount: nextUnread,
+          unreadNotificationLines: nextLines,
         }),
       }, { merge: true });
     });
   });
+
+  return deliveryState;
 }
 
 /** Synchronize trusted per-user chat indexes from the canonical chat doc. */
@@ -354,11 +415,15 @@ exports.createChat = functions.https.onCall(async (data, context) => {
       photoUrl: canonicalPhoto,
       description: null,
     });
+    chatData.lastMessage.content = "Shop created";
     chatData.isPublic = true;
     chatData.metadata = {
       isListingChat: true,
       listingId,
       listingType: String(listingData.listingType || "marketplace").slice(0, 100),
+      ...(typeof data.sellerRole === "string" && data.sellerRole.trim()
+        ? { sellerRole: data.sellerRole.trim().slice(0, 50) }
+        : {}),
     };
     addCallerToExisting = true;
   } else if (mode === "event") {
@@ -506,6 +571,10 @@ exports.createChat = functions.https.onCall(async (data, context) => {
     } else if (mode === "organization") {
       transaction.set(db.collection("organizations").doc(data.organizationId), {
         chatId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(db.collection("users").doc(uid), {
+        organizationMemberships: admin.firestore.FieldValue.arrayUnion(data.organizationId),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     } else if (mode === "community") {
@@ -1054,6 +1123,7 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
   }
   const challengeRef = db.collection("event_checkin_challenges").doc(stableHash(token));
   const eventRef = db.collection("events").doc(eventId);
+  let hostUid = null;
   await db.runTransaction(async (transaction) => {
     const challenge = await transaction.get(challengeRef);
     const event = await transaction.get(eventRef);
@@ -1067,6 +1137,7 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError("failed-precondition", "This check-in has expired.");
     }
     const eventData = event.data();
+    hostUid = eventData.creatorId || eventData.createdBy || null;
     const attendees = Array.isArray(eventData.attendees) ? eventData.attendees : [];
     if (!attendees.includes(uid) && eventData.createdBy !== uid && eventData.creatorId !== uid) {
       throw new functions.https.HttpsError("permission-denied", "RSVP before checking in.");
@@ -1089,9 +1160,61 @@ exports.completeEventCheckIn = functions.https.onCall(async (data, context) => {
     });
     transaction.set(db.collection("trust_data").doc(uid), {
       verifiedCheckInCount: admin.firestore.FieldValue.increment(1),
+      attendedEventsCount: admin.firestore.FieldValue.increment(1),
+      lastUpdated: now,
+    }, { merge: true });
+    transaction.set(db.collection("trust_scores").doc(uid), {
+      verifiedCheckInCount: admin.firestore.FieldValue.increment(1),
+      attendedEventsCount: admin.firestore.FieldValue.increment(1),
       lastUpdated: now,
     }, { merge: true });
   });
+
+  // Award 1,000 DSP to attendee (event_attendance) and 1,000 DSP to host (event_hosting_per_attendee)
+  try {
+    const rewardBatch = db.batch();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const REWARD = 1000;
+    const targets = [[uid, "event_attendance"]];
+    if (hostUid && validUid(hostUid) && hostUid !== uid) {
+      targets.push([hostUid, "event_hosting_per_attendee"]);
+    }
+    for (const [targetUid, action] of targets) {
+      rewardBatch.set(
+        db.collection("user_points").doc(targetUid),
+        {
+          userId: targetUid,
+          totalPoints: admin.firestore.FieldValue.increment(REWARD),
+          availablePoints: admin.firestore.FieldValue.increment(REWARD),
+          lastUpdated: now,
+          lifetimeEarnings: {
+            [action]: admin.firestore.FieldValue.increment(REWARD),
+          },
+        },
+        { merge: true }
+      );
+      rewardBatch.set(db.collection("points_transactions").doc(), {
+        userId: targetUid,
+        type: "earn",
+        action,
+        points: REWARD,
+        amount: REWARD,
+        timestamp: now,
+        metadata: { eventId, attendeeUid: uid, hostUid },
+      });
+      await distributeUbuntuMatchingSupply(rewardBatch, targetUid, REWARD, now, `${action}_match`);
+    }
+    await rewardBatch.commit();
+  } catch (rewardErr) {
+    console.warn(`[completeEventCheckIn] Reward warning: ${rewardErr.message}`);
+  }
+
+  try {
+    await syncProfileMilestoneAndTrust(uid);
+  } catch (syncErr) {
+    console.warn(`[completeEventCheckIn] syncProfileMilestoneAndTrust warning: ${syncErr.message}`);
+  }
+
   return { success: true };
 });
 
@@ -1298,12 +1421,20 @@ exports.reactToMessage = functions.https.onCall(async (data, context) => {
 
   if (!remove && validUid(messageSenderId) && messageSenderId !== callerUid) {
     const caller = await db.collection("users").doc(callerUid).get();
+    const chatTag = `chat_${chatId}`;
     await sendPushToUser(messageSenderId, {
       title: displayReactionSender(caller.exists ? caller.data() : null),
       body: `Reacted ${emoji} to your message`,
       type: "chat_reaction",
       targetUserId: callerUid,
-      additionalData: { chatId },
+      androidCollapseKey: chatTag,
+      androidTag: chatTag,
+      apnsThreadId: chatTag,
+      apnsCollapseId: chatTag,
+      additionalData: {
+        chatId,
+        senderId: callerUid,
+      },
     });
   }
   return { success: true };
@@ -1370,7 +1501,7 @@ exports.onDirectMessageCreated = functions.firestore
       return null;
     }
 
-    await deliverMessageIndex(
+    const deliveryState = await deliverMessageIndex(
       chatId,
       context.params.messageId,
       message,
@@ -1425,6 +1556,9 @@ exports.onDirectMessageCreated = functions.firestore
       chatId.startsWith('past_') ||
       chatId === 'global_community';
 
+    const singleBody = formatMessageNotificationBody(message);
+    const chatTag = `chat_${chatId}`;
+
     const promises = recipients.map(async (recipientId) => {
       const mentions = Array.isArray(message.mentions) ? message.mentions : [];
       const isMentioned = mentions.includes(recipientId);
@@ -1473,27 +1607,38 @@ exports.onDirectMessageCreated = functions.firestore
       if (isMentioned) {
         title = `📢 Mentioned by ${message.senderName || "someone"}`;
       }
-      let body = message.content;
 
-      if (message.type === 'image') body = "📷 sent a photo";
-      if (message.type === 'video') body = "🎥 sent a video";
-      if (message.type === 'audio') body = "🎤 sent a voice message";
-      if (message.type === 'audio_file') body = "🎵 sent an audio file";
-      if (message.type === 'location') body = "📍 sent a location";
-      if (message.type === 'document') body = "📄 sent a document";
-      if (message.type === 'dsp_transfer') body = message.content ? `🪙 ${message.content}` : "🪙 sent $DIASPORA";
-      if (message.type === 'money-transfer') body = message.content ? `💸 ${message.content}` : "💸 sent a remittance";
-
-      // Ensure we don't crash if body is empty
-      if (!body) body = "Sent a message";
+      const recipientState = (deliveryState && deliveryState[recipientId]) || {
+        unreadCount: 1,
+        unreadNotificationLines: [singleBody],
+      };
+      const unreadLines =
+        Array.isArray(recipientState.unreadNotificationLines) &&
+        recipientState.unreadNotificationLines.length > 0
+          ? recipientState.unreadNotificationLines
+          : [singleBody];
+      const combinedBody = unreadLines.join("\n");
 
       await sendPushToUser(recipientId, {
         title: title,
-        body: body,
+        body: combinedBody,
         type: "chat_message",
         targetUserId: senderId, // Open chat with sender
         city: "", // Not relevant for chat
-        additionalData: { chatId: chatId }
+        androidCollapseKey: chatTag,
+        androidTag: chatTag,
+        apnsThreadId: chatTag,
+        apnsCollapseId: chatTag,
+        additionalData: {
+          chatId: chatId,
+          messageId: String(context.params.messageId),
+          senderId: String(senderId),
+          senderName: String(message.senderName || ""),
+          messageType: String(message.type || "text"),
+          content: String(singleBody),
+          unreadLines: JSON.stringify(unreadLines),
+          unreadCount: String(recipientState.unreadCount || unreadLines.length),
+        },
       });
     });
 

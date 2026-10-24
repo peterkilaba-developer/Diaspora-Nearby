@@ -120,9 +120,11 @@ class ChatCard extends ConsumerWidget {
     WidgetRef ref,
     LastMessage? lastMessage,
   ) {
-    // 1. Check for typing status
-    final typingAsync = ref.watch(typingIndicatorsProvider(chat.id));
-    final typingUsers = typingAsync.value ?? [];
+    // 1. Check for typing status (Direct chats only in list to avoid opening
+    // 50+ subcollection listeners across community/event/org chats).
+    final typingUsers = chat.isDirect
+        ? (ref.watch(typingIndicatorsProvider(chat.id)).value ?? const <String>[])
+        : const <String>[];
 
     if (typingUsers.isNotEmpty) {
       if (typingUsers.length == 1 && !chat.isDirect) {
@@ -219,7 +221,9 @@ class ChatCard extends ConsumerWidget {
       final senderName = lastMessage.senderName.trim();
       var content = lastMessage.content.trim();
       if (content == 'Group created') {
-        if (chat.isEvent) {
+        if (chat.isListingChat) {
+          content = 'Shop created';
+        } else if (chat.isEvent) {
           content = 'Event created';
         } else if (chat.isOrganization) {
           content = 'Organization created';
@@ -427,6 +431,9 @@ class ChatCard extends ConsumerWidget {
   }
 
   IconData _getChatTypeIcon() {
+    if (chat.isListingChat) {
+      return LucideIcons.shoppingCart;
+    }
     switch (chat.type) {
       case 'community':
         return LucideIcons.users;
@@ -466,68 +473,61 @@ class ChatCard extends ConsumerWidget {
     // For direct chats, show profile image with location flag
     if (chat.isDirect) {
       final currentUserId = ref.watch(authStateProvider).value?.uid;
-      final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
-      final userProfileAsync = ref.watch(
-        chatPartnerProvider(otherUserId ?? ''),
-      );
+      final otherUserId = chat.getOtherParticipantId(currentUserId ?? '') ?? '';
+      final cachedPartner = otherUserId.isNotEmpty
+          ? ref.read(profileRepositoryProvider).getCachedProfile(otherUserId)
+          : null;
+      final userProfileAsync = ref.watch(chatPartnerProvider(otherUserId));
+      final resolvedProfile = userProfileAsync.value ?? cachedPartner;
 
-      return userProfileAsync.when(
-        data: (profile) {
-          // Profile photo or initials
-          final photoUrl = profile?.profileImage;
-          final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
+      if (resolvedProfile != null || !userProfileAsync.isLoading) {
+        final photoUrl = resolvedProfile?.profileImage;
+        final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
 
-          return CircleAvatar(
-            radius: 28,
-            backgroundColor: Colors.transparent,
-            backgroundImage: hasPhoto
-                ? CachedNetworkImageProvider(photoUrl)
-                : null,
-            child: !hasPhoto
-                ? (profile?.occupation ==
-                          'Organization' // Check if Org for fallback icon
-                      ? Icon(
-                          LucideIcons.building2,
+        return CircleAvatar(
+          radius: 28,
+          backgroundColor: Colors.transparent,
+          backgroundImage: hasPhoto
+              ? CachedNetworkImageProvider(photoUrl)
+              : null,
+          child: !hasPhoto
+              ? (resolvedProfile?.occupation == 'Organization'
+                    ? Icon(
+                        LucideIcons.building2,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      )
+                    : Text(
+                        chat.name.isNotEmpty ? chat.name[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onPrimaryContainer,
-                        )
-                      : Text(
-                          chat.name.isNotEmpty
-                              ? chat.name[0].toUpperCase()
-                              : '?',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onPrimaryContainer,
-                          ),
-                        ))
-                : null,
-          );
-        },
-        loading: () => CircleAvatar(
-          radius: 28,
-          backgroundColor: Colors.transparent,
-          child: Icon(
-            LucideIcons.user,
-            size: 24,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-        ),
-        error: (_, _) => CircleAvatar(
-          radius: 28,
-          backgroundColor: Colors.transparent,
-          child: Icon(
-            LucideIcons.user,
-            size: 24,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
+                        ),
+                      ))
+              : null,
+        );
+      }
+
+      return CircleAvatar(
+        radius: 28,
+        backgroundColor: Colors.transparent,
+        child: Icon(
+          LucideIcons.user,
+          size: 24,
+          color: theme.colorScheme.onPrimaryContainer,
         ),
       );
     }
 
     // [NEW] Community Avatars using parity utility
     if (chat.isCommunity) {
+      final viewerHomeCountryCode = ref
+          .watch(userProfileProvider)
+          .value
+          ?.homeCountryCode;
       return CommunityChatUtils.getCommunityAvatar(
         chat: chat,
+        viewerHomeCountryCode: viewerHomeCountryCode,
         size: 56,
         context: context,
       );
@@ -632,23 +632,42 @@ class ChatCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final lastMessageAsync = ref.watch(chatLastMessageStreamProvider(chat.id));
-    final lastMessage = lastMessageAsync.value ?? chat.lastMessage;
+    // [PERF] Only open a separate chat-doc listener for community chats where
+    // userChats may not receive every fan-out update. Standard DMs, groups,
+    // events, and orgs already receive live lastMessage updates via userChats.
+    final lastMessage = chat.isCommunity
+        ? (ref.watch(chatLastMessageStreamProvider(chat.id)).value ??
+              chat.lastMessage)
+        : chat.lastMessage;
     final hasUnread = chat.unreadCount > 0;
 
     // Get display name (for DM chats, gets the other participant's name)
     // Get display name
     String displayName = chat.name;
     if (chat.isCommunity) {
-      displayName = CommunityChatUtils.generateCommunityName(chat);
+      final viewerHomeCountryCode = ref
+          .watch(userProfileProvider)
+          .value
+          ?.homeCountryCode;
+      displayName = CommunityChatUtils.generateCommunityName(
+        chat,
+        viewerHomeCountryCode: viewerHomeCountryCode,
+      );
     } else if (chat.isDirect) {
       final currentUserId = ref.watch(authStateProvider).value?.uid;
-      final otherUserId = chat.getOtherParticipantId(currentUserId ?? '');
-      final partnerAsync = ref.watch(chatPartnerProvider(otherUserId ?? ''));
+      final otherUserId = chat.getOtherParticipantId(currentUserId ?? '') ?? '';
+      final cachedPartner = otherUserId.isNotEmpty
+          ? ref.read(profileRepositoryProvider).getCachedProfile(otherUserId)
+          : null;
+      final partnerAsync = ref.watch(chatPartnerProvider(otherUserId));
+      final resolvedPartner = partnerAsync.value ?? cachedPartner;
 
-      if (partnerAsync.hasValue && partnerAsync.value != null) {
-        final p = partnerAsync.value!;
-        displayName = '${p.firstName} ${p.lastName}'.trim();
+      if (resolvedPartner != null) {
+        final fullName =
+            '${resolvedPartner.firstName} ${resolvedPartner.lastName}'.trim();
+        if (fullName.isNotEmpty) {
+          displayName = fullName;
+        }
       }
     }
 
@@ -866,17 +885,31 @@ class ChatCard extends ConsumerWidget {
                                       color: Colors.blue,
                                     ),
                                   ),
+                                if (chat.isCommunity &&
+                                    CommunityChatUtils.isBilateral(chat: chat))
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 6.0),
+                                    child: Icon(
+                                      LucideIcons.heartHandshake,
+                                      size: 16,
+                                      color: AppTheme.accent,
+                                    ),
+                                  ),
                                 if (chat.isGroup)
                                   Padding(
                                     padding: const EdgeInsets.only(right: 6.0),
                                     child: Icon(
-                                      _isFamilyGroup
+                                      chat.isListingChat
+                                          ? LucideIcons.shoppingCart
+                                          : _isFamilyGroup
                                           ? (_isImmediateFamilyGroup
                                                 ? LucideIcons.heartHandshake
                                                 : LucideIcons.trees)
                                           : LucideIcons.users,
                                       size: 16,
-                                      color: _isFamilyGroup
+                                      color: chat.isListingChat
+                                          ? Colors.green.shade700
+                                          : _isFamilyGroup
                                           ? (_isImmediateFamilyGroup
                                                 ? Colors.blue.shade600
                                                 : Colors.teal.shade600)

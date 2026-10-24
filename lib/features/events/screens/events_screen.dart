@@ -10,6 +10,7 @@ import 'package:diaspora_nearby/features/events/repository/event_repository.dart
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/discovery/providers/global_search_provider.dart';
 import 'package:diaspora_nearby/core/providers/view_mode_provider.dart';
+import 'package:diaspora_nearby/core/utils/location_utils.dart';
 import 'package:diaspora_nearby/features/events/widgets/event_card.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart'; // [NEW]
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart'; // [NEW]
@@ -48,6 +49,14 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
       if (permission == LocationPermission.deniedForever) {
         return;
+      }
+
+      // [PERF] Use last known position first so distances render immediately
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && mounted) {
+        setState(() {
+          _currentPosition = lastKnown;
+        });
       }
 
       final position = await Geolocator.getCurrentPosition();
@@ -109,6 +118,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           );
 
           // Filter Logic
+          final livePos = ref.watch(liveUserPositionProvider).value ?? _currentPosition;
           final filteredEvents = allEvents.where((event) {
             // 1. Creator or RSVP'd attendee always sees the event
             if (event.creatorId == user.uid ||
@@ -134,6 +144,26 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 event.description.toLowerCase().contains(query) ||
                 event.location.toLowerCase().contains(query);
           }).toList();
+
+          for (final event in filteredEvents) {
+            event.distance = calculateEventDistanceKm(
+              event,
+              viewer: userProfile,
+              livePosition: livePos,
+              fallbackDistanceKm: event.distance,
+            );
+          }
+
+          // Sort upcoming events by soonest start date/time first, then by closest distance
+          filteredEvents.sort((a, b) {
+            final dateCmp = a.startDate.compareTo(b.startDate);
+            if (dateCmp != 0) return dateCmp;
+            final timeCmp = a.startTime.compareTo(b.startTime);
+            if (timeCmp != 0) return timeCmp;
+            final dA = a.distance ?? double.infinity;
+            final dB = b.distance ?? double.infinity;
+            return dA.compareTo(dB);
+          });
 
           if (filteredEvents.isEmpty) {
             return Center(
@@ -188,8 +218,18 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                     context.push('/events/edit/${event.id}', extra: event);
                   },
                   onInterestToggle: () async {
+                    final shouldAdd = !isInterested;
+                    // [PERF] Apply optimistic interest update immediately on frame 0
+                    setState(() {
+                      final current = <String>{...?event.interested};
+                      if (shouldAdd) {
+                        current.add(user.uid);
+                      } else {
+                        current.remove(user.uid);
+                      }
+                      event.interested = current.toList();
+                    });
                     try {
-                      final shouldAdd = !isInterested;
                       await eventRepo.toggleInterest(
                         event.id,
                         user.uid,
@@ -214,9 +254,19 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               }
                             });
                       }
-
-                      setState(() {});
                     } catch (e) {
+                      // Revert optimistic update on failure
+                      if (mounted) {
+                        setState(() {
+                          final current = <String>{...?event.interested};
+                          if (shouldAdd) {
+                            current.remove(user.uid);
+                          } else {
+                            current.add(user.uid);
+                          }
+                          event.interested = current.toList();
+                        });
+                      }
                       if (context.mounted) {
                         ScaffoldMessenger.of(
                           context,

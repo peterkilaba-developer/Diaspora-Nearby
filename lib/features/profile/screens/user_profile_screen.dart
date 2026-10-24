@@ -11,6 +11,8 @@ import 'package:diaspora_nearby/features/profile/repository/profile_repository.d
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/shared/models/location.dart';
 import 'package:diaspora_nearby/features/community/services/community_service.dart';
+import 'package:diaspora_nearby/features/community/viewmodels/community_hierarchy_viewmodel.dart';
+import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart';
@@ -85,7 +87,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       }
     });
 
-    _refreshProfile();
+    // [PERF] Seed profile synchronously from memory cache so the screen renders
+    // on frame 0 without a full-screen loading spinner.
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    final cachedProfile =
+        (currentUserId == widget.userId
+            ? ref.read(userProfileProvider).value
+            : null) ??
+        ref.read(profileRepositoryProvider).getCachedProfile(widget.userId);
+    if (cachedProfile != null) {
+      _profile = cachedProfile;
+      _isLoadingProfile = false;
+    }
+
+    _refreshProfile(showLoading: _profile == null);
     _checkLocationPermission();
     _handleIncomingAction();
     _refreshTrustData();
@@ -160,7 +175,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('In-Person Connection Verified! 100 DSP Earned.'),
+            content: Text('In-Person Connection Verified! 1,000 DSP Earned.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -229,7 +244,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   /// while we fetch in the background (used after save to avoid flashing a
   /// loading spinner and to prevent timeout errors from overwriting the
   /// already-known good profile).
-  Future<void> _refreshProfile({bool showLoading = true}) async {
+  Future<void> _refreshProfile({
+    bool showLoading = true,
+    bool forceServer = false,
+  }) async {
     if (showLoading) {
       setState(() {
         _isLoadingProfile = true;
@@ -239,11 +257,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
     try {
       debugPrint(
-        '🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading)',
+        '🔍 [ProfileScreen] _refreshProfile called for userId="${widget.userId}" (showLoading=$showLoading, forceServer=$forceServer)',
       );
       final profile = await ref
           .read(profileRepositoryProvider)
-          .getUserProfile(widget.userId);
+          .getUserProfile(widget.userId, forceServer: forceServer);
       debugPrint(
         '🔍 [ProfileScreen] _refreshProfile result → '
         'firstName="${profile?.firstName}", lastName="${profile?.lastName}", '
@@ -375,12 +393,32 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         profileToSave = updatedProfile.copyWith(profileImage: url);
       }
 
-      // 2. Logic to sync communities if Host Location Changed
-      if (profileToSave.hostLocation.placeId !=
+      final bool hostChanged =
+          profileToSave.hostLocation.placeId !=
               currentProfile.hostLocation.placeId ||
           profileToSave.hostLocation.formattedAddress !=
-              currentProfile.hostLocation.formattedAddress) {
-        // 1. Archive Old Location to Past Locations
+              currentProfile.hostLocation.formattedAddress;
+
+      // Snapshot existing past placeIds and formatted addresses BEFORE archiving old host
+      final existingPastPlaceIds =
+          currentProfile.pastLocations
+              ?.map((pl) => pl.location.placeId.trim())
+              .where((id) => id.isNotEmpty)
+              .toSet() ??
+          <String>{};
+      final existingPastAddresses =
+          currentProfile.pastLocations
+              ?.map((pl) => pl.location.formattedAddress.trim().toLowerCase())
+              .where((addr) => addr.isNotEmpty)
+              .toSet() ??
+          <String>{};
+      final oldHostPlaceId = currentProfile.hostLocation.placeId.trim();
+      final oldHostAddress = currentProfile.hostLocation.formattedAddress
+          .trim()
+          .toLowerCase();
+
+      // If Host Location Changed, archive Old Location to Past Locations first
+      if (hostChanged) {
         final oldLoc = currentProfile.hostLocation;
         final pastLoc = PastLocation(
           location: oldLoc,
@@ -390,77 +428,139 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         final List<PastLocation> updatedPastList = List.from(
           profileToSave.pastLocations ?? [],
         );
-        updatedPastList.add(pastLoc);
+        final alreadyInPast = updatedPastList.any(
+          (pl) =>
+              (oldHostPlaceId.isNotEmpty &&
+                  pl.location.placeId.trim() == oldHostPlaceId) ||
+              (oldHostAddress.isNotEmpty &&
+                  pl.location.formattedAddress.trim().toLowerCase() ==
+                      oldHostAddress),
+        );
+        if (!alreadyInPast) {
+          updatedPastList.add(pastLoc);
+        }
 
-        // Update the profile object so step 3 (below) picks it up for community sync
         profileToSave = profileToSave.copyWith(pastLocations: updatedPastList);
+      }
 
-        // 2. Logic to sync communities for New Host Location
+      // 2. Save profile to Firestore FIRST so Cloud Functions (provisionSignupCommunities,
+      // ensureCommunity, ensureSignupChamber) read the updated name, hostLocation,
+      // and hostCountryCode from users/{uid}.
+      debugPrint('UserProfileScreen: Saving profile...');
+      await ref
+          .read(profileRepositoryProvider)
+          .saveUserProfile(user.uid, profileToSave);
+
+      final Set<String> joinedCommunityIds = {
+        ...?currentProfile.communityMemberships,
+        ...?profileToSave.communityMemberships,
+      };
+      bool communitiesUpdated = false;
+
+      // 3. Sync communities for New Host Location if Host Location Changed
+      if (hostChanged) {
         try {
-          // [UPDATED] Do NOT remove user from old Host communities.
+          // Do NOT remove user from old Host communities.
           // Per requirements: "User should never be removed from community... maintain membership."
-
-          // CRITICAL: Use the robust "New User" logic to create/join communities and sync chats.
-          // This handles Global, Home, and Host hierarchies appropriately.
-          await ref
+          final hostCommIds = await ref
               .read(communityServiceProvider)
               .createCommunitiesAndChats(
                 profileToSave,
                 onFirstMember: onFirstMember,
               );
+          if (hostCommIds.isNotEmpty) {
+            joinedCommunityIds.addAll(hostCommIds);
+            communitiesUpdated = true;
+          }
         } catch (e) {
           debugPrint('Error syncing host communities: $e');
         }
       }
 
+      // 4. Sync communities for newly added "Also lived in" (past) locations
       if (profileToSave.pastLocations != null) {
         try {
-          // Only sync communities for past locations that are NEW to this save.
-          // Running ensureCommunitiesForLocationHierarchy for every existing
-          // past location on every save causes O(n) sequential CF round-trips.
-          final existingPastPlaceIds =
-              currentProfile.pastLocations
-                  ?.map((pl) => pl.location.placeId)
-                  .toSet() ??
-              {};
-
           final commService = ref.read(communityServiceProvider);
-          for (final pl in profileToSave.pastLocations!) {
-            final pid = pl.location.placeId;
-            if (pid.isNotEmpty && existingPastPlaceIds.contains(pid)) continue;
-            if (pl.location.city == null) continue; // Skip incomplete locations
+          final homeCode =
+              (profileToSave.homeCountryCode ??
+                      currentProfile.homeCountryCode ??
+                      profileToSave.homeLocation.countryCode ??
+                      'XX')
+                  .trim()
+                  .toUpperCase();
 
-            // Ensure robust parsing before sync (Standard New User Method)
+          for (final pl in profileToSave.pastLocations!) {
+            if (pl.location.city == null || pl.location.city!.trim().isEmpty) {
+              continue; // Skip incomplete locations
+            }
+
+            final pid = pl.location.placeId.trim();
+            final addr = pl.location.formattedAddress.trim().toLowerCase();
+
             final locationParsed = LocationParsed(
               city: pl.location.city,
               state: pl.location.state,
               country: pl.location.country ?? '',
-              countryCode: pl.location.countryCode ?? 'XX',
-              placeId: pl.location.placeId, // [NEW] Pass Place ID
+              countryCode: (pl.location.countryCode ?? 'XX')
+                  .trim()
+                  .toUpperCase(),
+              placeId: pl.location.placeId,
             );
 
-            // [CORRECTION] Treat past locations as Host locations (same community ID)
-            // This ensures users join the standard Host community for that location.
-            await commService.ensureCommunitiesForLocationHierarchy(
-              location: locationParsed,
+            // Compute expected city community ID to check if user is already a member
+            final expectedCityCommId = generateCommunityId(
               locationType: 'host',
-              userId: user.uid,
-              homeCountryCode: currentProfile.homeCountryCode ?? 'XX',
-              // The "host country" context for this hierarchy is the location's own country
-              hostCountryCode: locationParsed.countryCode,
-              syncToUserProfile: true, // Auto-sync to profile memberships
-              onFirstMember: onFirstMember,
+              type: 'city',
+              location: locationParsed,
+              homeCountryCode: homeCode,
             );
+
+            final wasAlreadyInPast =
+                (pid.isNotEmpty && existingPastPlaceIds.contains(pid)) ||
+                (addr.isNotEmpty && existingPastAddresses.contains(addr));
+            final isJustArchivedOldHost =
+                hostChanged &&
+                ((pid.isNotEmpty && pid == oldHostPlaceId) ||
+                    (addr.isNotEmpty && addr == oldHostAddress));
+
+            // Only skip if it was already in pastLocations (or is the just-archived old host)
+            // AND the user is already a member of its city community.
+            if ((wasAlreadyInPast || isJustArchivedOldHost) &&
+                joinedCommunityIds.contains(expectedCityCommId)) {
+              continue;
+            }
+
+            // Treat past locations as Host locations (same community ID)
+            // so users join the standard Host community & chat for that location.
+            final pastCommIds = await commService
+                .ensureCommunitiesForLocationHierarchy(
+                  location: locationParsed,
+                  locationType: 'host',
+                  userId: user.uid,
+                  homeCountryCode: homeCode,
+                  hostCountryCode: locationParsed.countryCode,
+                  syncToUserProfile: true,
+                  onFirstMember: onFirstMember,
+                  userName: profileToSave.fullName,
+                );
+            if (pastCommIds.isNotEmpty) {
+              joinedCommunityIds.addAll(pastCommIds);
+              communitiesUpdated = true;
+            }
           }
         } catch (e) {
           debugPrint('Error syncing past location communities: $e');
         }
       }
 
-      debugPrint('UserProfileScreen: Saving profile...'); // [DEBUG]
-      await ref
-          .read(profileRepositoryProvider)
-          .saveUserProfile(user.uid, profileToSave);
+      if (communitiesUpdated) {
+        profileToSave = profileToSave.copyWith(
+          communityMemberships: joinedCommunityIds.toList(),
+        );
+        ref.read(profileRepositoryProvider).invalidateProfileCache(user.uid);
+        ref.invalidate(communityHierarchyProvider);
+        await ref.read(chatRepositoryProvider).refreshChatsFromServer();
+      }
 
       // [NEW] Update Trust Score (Fire and forget or await)
       // Await is better here so user sees immediate feedback if we show trust score on profile
@@ -470,11 +570,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       // Run both checks in parallel so they don't compound save latency.
       try {
         final pointsService = ref.read(pointsServiceProvider);
-        final hostChanged =
-            profileToSave.hostLocation.placeId !=
-                currentProfile.hostLocation.placeId ||
-            profileToSave.hostLocation.formattedAddress !=
-                currentProfile.hostLocation.formattedAddress;
 
         final dspFutures = <Future<void>>[];
         if (hostChanged) {
@@ -500,6 +595,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
         ref.read(userProfileProvider.notifier).updateProfile(profileToSave);
         _refreshProfile(
           showLoading: false,
+          forceServer: true,
         ); // [FIX] Don't show loading spinner or error on post-save refresh
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -693,37 +789,14 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                       final currentUserProfile = ref
                           .watch(userProfileProvider)
                           .value;
-                      if (_profile?.currentLocation != null &&
-                          currentUserProfile?.currentLocation != null) {
-                        try {
-                          return Geolocator.distanceBetween(
-                                currentUserProfile!
-                                    .currentLocation!
-                                    .geometry
-                                    .location
-                                    .lat,
-                                currentUserProfile
-                                    .currentLocation!
-                                    .geometry
-                                    .location
-                                    .lng,
-                                _profile!
-                                    .currentLocation!
-                                    .geometry
-                                    .location
-                                    .lat,
-                                _profile!
-                                    .currentLocation!
-                                    .geometry
-                                    .location
-                                    .lng,
-                              ) /
-                              1000.0;
-                        } catch (e) {
-                          debugPrint('Error calculating distance: $e');
-                        }
-                      }
-                      return null;
+                      final liveTargetProfile =
+                          ref.watch(userProfileByIdProvider(widget.userId)).value ??
+                          _profile;
+                      return calculateProfileDistanceKm(
+                        currentUserProfile,
+                        liveTargetProfile,
+                        fallbackDistanceKm: widget.initialDistance,
+                      );
                     }(),
                     onRefresh: _refreshProfile,
                   ),

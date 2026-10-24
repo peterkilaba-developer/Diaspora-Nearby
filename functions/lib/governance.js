@@ -40,6 +40,63 @@ function validId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(value);
 }
 
+const ROLE_DISPLAY_NAMES = {
+  president: "President",
+  treasurer: "Treasurer",
+  secretary: "Secretary",
+  council_member: "Council Member",
+};
+
+const ROLE_EMOJIS = {
+  president: "👑",
+  treasurer: "💰",
+  secretary: "📋",
+  council_member: "🏛️",
+};
+
+async function postGovernanceSystemMessage(communityId, content, metadata, senderName = "🗳️ Voice of Diaspora") {
+  if (!validId(communityId)) return;
+  try {
+    const communitySnap = await db.collection("communities").doc(communityId).get();
+    if (!communitySnap.exists) return;
+    const communityData = communitySnap.data() || {};
+    if (Number(communityData.memberCount || 0) < 4) return;
+    const chatId = typeof communityData.chatId === "string" && communityData.chatId
+      ? communityData.chatId
+      : `community_${communityId}`;
+    const chatRef = db.collection("chats").doc(chatId);
+    const chatSnap = await chatRef.get();
+    if (!chatSnap.exists) return;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const msgRef = chatRef.collection("messages").doc();
+    await msgRef.set({
+      id: msgRef.id,
+      chatId,
+      senderId: "system",
+      senderName,
+      content,
+      type: "system",
+      timestamp: now,
+      readBy: ["system"],
+      reactions: {},
+      metadata: metadata || {},
+    });
+    await chatRef.set({
+      lastMessage: {
+        id: msgRef.id,
+        senderId: "system",
+        senderName,
+        content,
+        type: "system",
+        timestamp: now,
+      },
+      updatedAt: now,
+    }, {merge: true});
+  } catch (err) {
+    console.warn(`[governance] System announcement warning for ${communityId}: ${err.message}`);
+  }
+}
+
 /**
  * Registers the authenticated, qualified user for a council role.
  */
@@ -66,6 +123,7 @@ exports.nominateForGovernanceRole = functions.https.onCall(
       }
 
       const unitRef = db.collection("governance").doc(unitId);
+      let communityIdForAnnouncement = null;
       await db.runTransaction(async (transaction) => {
         const unitSnap = await transaction.get(unitRef);
         if (!unitSnap.exists) {
@@ -76,6 +134,7 @@ exports.nominateForGovernanceRole = functions.https.onCall(
         }
 
         const unit = unitSnap.data();
+        communityIdForAnnouncement = unit.communityId || null;
         const candidates = {...(unit.roleCandidates || {})};
         const alreadyRunning = Object.values(candidates)
             .some((ids) => Array.isArray(ids) && ids.includes(userId));
@@ -98,6 +157,22 @@ exports.nominateForGovernanceRole = functions.https.onCall(
         }
         transaction.update(unitRef, updates);
       });
+
+      if (communityIdForAnnouncement) {
+        const roleName = ROLE_DISPLAY_NAMES[role] || role;
+        const roleEmoji = ROLE_EMOJIS[role] || "🏛️";
+        await postGovernanceSystemMessage(
+          communityIdForAnnouncement,
+          `${roleEmoji} A community member has announced their candidacy for ${roleName}! Open Voice of Diaspora to cast your vote: Yay, Nay, or Abstain`,
+          {
+            systemType: "election_announcement",
+            candidateId: userId,
+            role,
+            unitId,
+          },
+          "🗳️ Voice of Diaspora"
+        );
+      }
 
       return {success: true};
     },
@@ -300,6 +375,23 @@ exports.evaluateGovernanceVote = functions.https.onCall(
           transaction.update(communityRef, {admins});
         }
       });
+
+      if (communityId && removals.length > 0) {
+        for (const rem of removals) {
+          const roleName = ROLE_DISPLAY_NAMES[rem.role] || rem.role;
+          await postGovernanceSystemMessage(
+            communityId,
+            `A ${roleName} has been removed from council by community vote. The role is now open for candidates.`,
+            {
+              systemType: "election_vote_out",
+              removedUserId: rem.userId,
+              role: rem.role,
+              unitId,
+            },
+            "Voice of Diaspora"
+          );
+        }
+      }
 
       return {promoted, removedMembers: removals, tally};
     },

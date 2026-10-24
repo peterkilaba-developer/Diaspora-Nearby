@@ -28,6 +28,7 @@ class AddPastLocationDialog extends StatefulWidget {
 class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
   final _searchController = TextEditingController();
   List<AutocompletePrediction> _predictions = [];
+  int _searchSeq = 0;
   loc_model.UserLocation? _selectedLocation;
   String? _selectedYear;
   bool _isLoading = false;
@@ -39,16 +40,33 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
   }
 
   void _onSearchChanged(String v) async {
-    if (v.isEmpty) {
-      setState(() => _predictions = []);
+    final trimmed = v.trim();
+    final seq = ++_searchSeq;
+    if (trimmed.isEmpty) {
+      setState(() {
+        _predictions = [];
+        _selectedLocation = null;
+      });
       return;
     }
-    final res = await widget.placesService.autocomplete(v);
-    if (mounted) setState(() => _predictions = res);
+    if (_selectedLocation != null &&
+        trimmed != _selectedLocation!.formattedAddress.trim()) {
+      setState(() => _selectedLocation = null);
+    }
+    final res = await widget.placesService.autocomplete(trimmed);
+    if (mounted &&
+        seq == _searchSeq &&
+        _searchController.text.trim().isNotEmpty) {
+      setState(() => _predictions = res);
+    }
   }
 
   Future<void> _selectPlace(String id) async {
-    setState(() => _isLoading = true);
+    _searchSeq++;
+    setState(() {
+      _predictions = [];
+      _isLoading = true;
+    });
     try {
       final res = await widget.placesService.getPlaceDetails(id);
       if (res?.place != null && mounted) {
@@ -125,6 +143,9 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 textCapitalization: TextCapitalization.sentences,
+                autofillHints: const <String>[],
+                autocorrect: false,
+                enableSuggestions: false,
                 decoration: InputDecoration(
                   labelText: 'City/Location',
                   hintText: 'Search city...',
@@ -144,7 +165,9 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
                       : null,
                 ),
               ),
-              if (_predictions.isNotEmpty)
+              if (_predictions.isNotEmpty &&
+                  _searchController.text.trim().isNotEmpty &&
+                  _selectedLocation == null)
                 Container(
                   constraints: const BoxConstraints(maxHeight: 150),
                   margin: const EdgeInsets.only(top: 8),

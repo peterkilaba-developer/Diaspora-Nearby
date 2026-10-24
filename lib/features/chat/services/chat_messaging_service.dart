@@ -9,10 +9,14 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../models/message.dart';
 
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 
 // Provider definition
 final chatMessagingServiceProvider = Provider<ChatMessagingService>((ref) {
-  return ChatMessagingService(pointsService: ref.read(pointsServiceProvider));
+  return ChatMessagingService(
+    pointsService: ref.read(pointsServiceProvider),
+    ref: ref,
+  );
 });
 
 class ChatMessagingService {
@@ -23,6 +27,7 @@ class ChatMessagingService {
   // economic rewards remain disabled.
   // ignore: unused_field
   final PointsService _pointsService;
+  final Ref? _ref;
 
   // [FIX] Cache sender profile to avoid fetching on every message
   Map<String, dynamic>? _cachedSenderData;
@@ -34,10 +39,12 @@ class ChatMessagingService {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     required PointsService pointsService,
+    Ref? ref,
   }) : _storage = storage ?? FirebaseStorage.instance,
        _firestore = firestore ?? FirebaseFirestore.instance,
        _auth = auth ?? FirebaseAuth.instance,
-       _pointsService = pointsService;
+       _pointsService = pointsService,
+       _ref = ref;
 
   String? get currentUserId => _auth.currentUser?.uid;
 
@@ -53,6 +60,26 @@ class ChatMessagingService {
         (now - _cachedSenderTimestamp) < 300000) {
       return _cachedSenderData;
     }
+
+    // [PERF] Try reading from in-memory userProfileProvider or ProfileRepository
+    // cache before hitting Firestore network.
+    try {
+      final profile =
+          _ref?.read(userProfileProvider).value ??
+          _ref?.read(profileRepositoryProvider).getCachedProfile(uid);
+      if (profile != null && profile.firstName.isNotEmpty) {
+        _cachedSenderData = {
+          'firstName': profile.firstName,
+          'lastName': profile.lastName,
+          'profileImage': profile.profileImage,
+          'hostCountryCode': profile.hostCountryCode,
+          'homeCountryCode': profile.homeCountryCode,
+        };
+        _cachedSenderUid = uid;
+        _cachedSenderTimestamp = now;
+        return _cachedSenderData;
+      }
+    } catch (_) {}
 
     final userDoc = await _firestore.collection('users').doc(uid).get();
     _cachedSenderData = userDoc.data();

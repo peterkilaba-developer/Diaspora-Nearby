@@ -330,9 +330,27 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
               size: 48,
               context: context,
             ),
-            title: Text(
-              item.name,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            title: Row(
+              children: [
+                if (CommunityChatUtils.isBilateral(
+                  id: item.id,
+                  locationType: item.locationType,
+                )) ...[
+                  const Icon(
+                    LucideIcons.heartHandshake,
+                    size: 16,
+                    color: AppTheme.accent,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    item.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
             subtitle: Row(
               children: [
@@ -481,12 +499,20 @@ class _HierarchyItemWidgetState extends ConsumerState<HierarchyItemWidget> {
   }
 
   Widget _buildAvatar(HierarchyItem item, {double size = 40}) {
+    final viewerHomeCountryCode = ref
+        .watch(userProfileProvider)
+        .value
+        ?.homeCountryCode;
     // Use CommunityChatUtils for consistent avatar rendering!
     return CommunityChatUtils.getCommunityAvatar(
       context: context,
       type: item.type,
       locationType: item.locationType,
+      homeCountryCode: item.homeCountryCode,
+      hostCountryCode: item.hostCountryCode,
+      viewerHomeCountryCode: viewerHomeCountryCode,
       flag: item.flag,
+      communityId: item.id,
       profileImage: item.profileImage?.value,
       size: size,
     );

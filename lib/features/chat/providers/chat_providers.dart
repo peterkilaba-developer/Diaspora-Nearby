@@ -12,6 +12,7 @@ final communityDetailsProvider = FutureProvider.family<Community?, String>((
   ref,
   communityId,
 ) {
+  ref.keepAlive();
   return ref.read(communityRepositoryProvider).getCommunity(communityId);
 });
 
@@ -20,6 +21,7 @@ final messagesStreamProvider = StreamProvider.family<List<Message>, String>((
   ref,
   chatId,
 ) {
+  ref.keepAlive();
   final chatRepo = ref.watch(chatRepositoryProvider);
   final userProfileAsync = ref.watch(userProfileProvider);
 
@@ -34,6 +36,7 @@ final messagesStreamProvider = StreamProvider.family<List<Message>, String>((
 
 /// Provider for single chat
 final chatProvider = FutureProvider.family<Chat?, String>((ref, chatId) async {
+  ref.keepAlive();
   final chatRepo = ref.watch(chatRepositoryProvider);
   return chatRepo.getChat(chatId);
 });
@@ -43,8 +46,9 @@ final chatDisplayNameProvider = FutureProvider.family<String, String>((
   ref,
   chatId,
 ) async {
+  ref.keepAlive();
   final chatRepo = ref.watch(chatRepositoryProvider);
-  final chat = await chatRepo.getChat(chatId);
+  final chat = chatRepo.getCachedChat(chatId) ?? await chatRepo.getChat(chatId);
   if (chat == null) return 'Chat';
   return chatRepo.getDisplayNameForChat(chat);
 });
@@ -52,6 +56,7 @@ final chatDisplayNameProvider = FutureProvider.family<String, String>((
 /// Provider for other user's profile in direct chats
 final chatScreenUserProfileProvider = FutureProvider.family<ProfileData?, Chat>(
   (ref, chat) async {
+    ref.keepAlive();
     if (!chat.isDirect) return null;
 
     // Get the other participant's ID
@@ -66,6 +71,7 @@ final chatScreenUserProfileProvider = FutureProvider.family<ProfileData?, Chat>(
     if (otherUserId.isEmpty) return null;
 
     final profileRepo = ref.watch(profileRepositoryProvider);
-    return profileRepo.getUserProfile(otherUserId);
+    return profileRepo.getCachedProfile(otherUserId) ??
+        await profileRepo.getUserProfile(otherUserId);
   },
 );

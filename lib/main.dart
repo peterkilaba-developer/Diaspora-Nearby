@@ -112,17 +112,66 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         const settings = InitializationSettings(android: androidSettings);
         await flutterLocalNotificationsPlugin.initialize(settings: settings);
 
+        final chatId = data['chatId']?.toString();
+        final senderId = data['senderId']?.toString();
+        final containerKey =
+            (chatId != null && chatId.trim().isNotEmpty)
+            ? chatId.trim()
+            : ((senderId != null && senderId.trim().isNotEmpty)
+                  ? senderId.trim()
+                  : null);
+
+        final notificationId = containerKey != null
+            ? PushNotificationService.chatNotificationId(containerKey)
+            : message.hashCode;
+        final notificationTag = containerKey != null
+            ? 'chat_$containerKey'
+            : null;
+
+        StyleInformation? styleInfo;
+        final rawUnreadLines = data['unreadLines'];
+        if (rawUnreadLines != null) {
+          try {
+            final decoded = rawUnreadLines is String
+                ? jsonDecode(rawUnreadLines)
+                : rawUnreadLines;
+            if (decoded is List && decoded.isNotEmpty) {
+              final lines = decoded
+                  .map((e) => e?.toString().trim() ?? '')
+                  .where((e) => e.isNotEmpty)
+                  .toList();
+              if (lines.isNotEmpty) {
+                body = lines.join('\n');
+                final senderPerson = Person(name: title, key: containerKey);
+                styleInfo = MessagingStyleInformation(
+                  senderPerson,
+                  conversationTitle: lines.length > 1
+                      ? '$title (${lines.length} messages)'
+                      : null,
+                  groupConversation: false,
+                  messages: lines
+                      .map((line) => Message(line, DateTime.now(), senderPerson))
+                      .toList(),
+                );
+              }
+            }
+          } catch (_) {}
+        }
+
         await flutterLocalNotificationsPlugin.show(
-          id: message.hashCode,
+          id: notificationId,
           title: title,
           body: body,
-          notificationDetails: const NotificationDetails(
+          notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               'high_importance_channel',
               'High Importance Notifications',
               icon: '@mipmap/ic_launcher',
               priority: Priority.high,
               importance: Importance.max,
+              tag: notificationTag,
+              groupKey: notificationTag,
+              styleInformation: styleInfo,
             ),
           ),
           payload: jsonEncode(message.data),
@@ -185,6 +234,7 @@ class _BootstrapHostState extends State<_BootstrapHost> {
   }
 
   Future<ProviderContainer> _initialize() async {
+    final prefsFuture = SharedPreferences.getInstance();
     await AppBootstrap.init();
 
     // Stripe settings do not hold the application route.
@@ -203,7 +253,7 @@ class _BootstrapHostState extends State<_BootstrapHost> {
       debugPrint('▶ Stripe init skipped: $error');
     }
 
-    final preferences = await SharedPreferences.getInstance();
+    final preferences = await prefsFuture;
     final container = ProviderContainer(
       overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
     );

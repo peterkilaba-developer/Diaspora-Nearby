@@ -55,3 +55,8 @@
 -keep class com.google.mlkit.** { *; }
 -keep class com.google.android.gms.internal.mlkit_vision_** { *; }
 -dontwarn com.google.mlkit.**
+
+
+# WhatsApp Zero-Tap OTP SDK
+-keep class com.dashtoon.whatsapp_zero_tap.** { *; }
+-keep class com.whatsapp.otp.** { *; }

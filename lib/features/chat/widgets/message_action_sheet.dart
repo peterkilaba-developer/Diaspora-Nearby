@@ -8,6 +8,8 @@ import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/chat/screens/forward_chat_selection_screen.dart';
 import 'package:diaspora_nearby/features/shared/widgets/bottom_sheet_item.dart';
 import 'package:diaspora_nearby/features/trust/widgets/trust_slider_widget.dart';
+import 'package:diaspora_nearby/features/profile/repository/relationship_repository.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 /// Bottom sheet for message actions (Reactions, Reply, Forward, etc.)
 class ChatMessageActionSheet extends ConsumerWidget {
@@ -91,11 +93,36 @@ class ChatMessageActionSheet extends ConsumerWidget {
                 child: Builder(
                   builder: (context) {
                     final theme = Theme.of(context);
+                    final isFamilySender =
+                        !isOwn &&
+                        currentUserId != null &&
+                        ((ref
+                                    .watch(
+                                      userRelationshipsProvider(currentUserId!),
+                                    )
+                                    .value
+                                    ?.any(
+                                      (r) =>
+                                          r.id == message.senderId &&
+                                          r.status == 'active' &&
+                                          TrustSliderWidget.isFamilyRelationshipType(
+                                            r.type,
+                                          ),
+                                    ) ??
+                                false) ||
+                            TrustSliderWidget.isFamilyRelationshipType(
+                              ref
+                                  .watch(userTrustProvider(currentUserId!))
+                                  .value
+                                  ?.relationshipTypes[message.senderId],
+                            ));
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Inline Trust Slider — visible immediately for other users' messages
-                        if (!isOwn && currentUserId != null) ...[
+                        // Inline Trust Slider — visible immediately for non-family other users' messages
+                        if (!isOwn &&
+                            currentUserId != null &&
+                            !isFamilySender) ...[
                           Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
