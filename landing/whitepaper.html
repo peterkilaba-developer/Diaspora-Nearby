@@ -42,7 +42,7 @@
     <link rel="stylesheet" href="styles.css?v=20261012d">
     <style>
         html,body{overflow-x:hidden;}
-        .wp-toc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 32px;margin-bottom:40px;}
+        .wp-toc{background:var(--surface);border: none;border-radius:var(--radius-lg);padding:24px 32px;margin-bottom:40px;}
         .wp-toc h3{font-size:14px;text-transform:uppercase;letter-spacing:0.06em;color:var(--fg-muted);margin-bottom:12px;}
         .wp-toc ol{padding-left:20px;columns:2;column-gap:32px;}
         .wp-toc li{font-size:14px;margin-bottom:8px;break-inside:avoid;}
@@ -65,18 +65,18 @@
 
         .wp-body{max-width:860px;margin:0 auto;padding:0 24px 60px;}
 
-        .highlight-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px 24px;margin:16px 0;}
-        .highlight-box.orange-border{border-left:3px solid var(--orange);}
-        .highlight-box.sage-border{border-left:3px solid var(--sage);}
+        .highlight-box{background:var(--surface);border: none;border-radius:var(--radius-sm);padding:20px 24px;margin:16px 0;}
+        .highlight-box.orange-border{border-left: none;}
+        .highlight-box.sage-border{border-left: none;}
         .highlight-box p{margin:0;}
         .highlight-box strong{color:var(--fg);}
 
-        .wp-formula{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 20px;text-align:center;font-family:'Inter',monospace;font-size:18px;font-weight:700;color:var(--orange);margin:16px 0;word-break:break-word;overflow-wrap:break-word;}
+        .wp-formula{background:var(--surface);border: none;border-radius:var(--radius-sm);padding:16px 20px;text-align:center;font-family:'Inter',monospace;font-size:18px;font-weight:700;color:var(--orange);margin:16px 0;word-break:break-word;overflow-wrap:break-word;}
         @media(max-width:640px){.wp-formula{font-size:13px;padding:12px 14px;}}
 
         .wp-epoch-table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:14px;}
-        .wp-epoch-table th{background:var(--surface);color:var(--fg);font-weight:700;text-align:left;padding:12px 16px;border-bottom:2px solid var(--border-strong);}
-        .wp-epoch-table td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--fg-muted);}
+        .wp-epoch-table th{background:var(--surface);color:var(--fg);font-weight:700;text-align:left;padding:12px 16px;border-bottom: none;}
+        .wp-epoch-table td{padding:12px 16px;border-bottom: none;color:var(--fg-muted);}
         .wp-epoch-table tr.active-row{background:rgba(229,147,58,0.08);}
         .wp-epoch-table tr.active-row td{color:var(--fg);}
         @media(max-width:640px){.wp-epoch-table{font-size:12px;}.wp-epoch-table th,.wp-epoch-table td{padding:8px 10px;}}
@@ -87,13 +87,13 @@
         .wp-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0;}
         @media(max-width:640px){.wp-grid-2{grid-template-columns:1fr;}.wp-toc ol{columns:1;}}
 
-        .wp-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;text-align:center;}
+        .wp-stat-card{background:var(--surface);border: none;border-radius:var(--radius-sm);padding:20px;text-align:center;}
         .wp-stat-card .value{font-size:24px;font-weight:800;color:var(--orange);}
         .wp-stat-card .label{font-size:12px;color:var(--fg-muted);margin-top:4px;}
 
         .wp-epoch-table{width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;}
-        .wp-epoch-table th{text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);border-bottom:2px solid var(--border);font-weight:600;}
-        .wp-epoch-table td{padding:10px 12px;border-bottom:1px solid var(--border);}
+        .wp-epoch-table th{text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);border-bottom: none;font-weight:600;}
+        .wp-epoch-table td{padding:10px 12px;border-bottom: none;}
         .wp-epoch-table tr:last-child td{border-bottom:none;}
         .wp-epoch-table .active-row{background:rgba(103,150,110,0.08);}
 
@@ -389,17 +389,17 @@
             </p>
 
             <div class="wp-grid-2" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
-                <div class="wp-stat-card" style="text-align: left; border: 1px solid rgba(239, 108, 0, 0.25);">
+                <div class="wp-stat-card" style="text-align: left; border: none;">
                     <div style="font-weight: 700; color: var(--orange); margin-bottom: 6px;"><i data-lucide="lock" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> 1. TGE (Generation)</div>
                     <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>1 per Epoch:</strong> The smart contract pre-mints and locks that epoch's fixed supply on Ethereum Base Blockchain, guaranteeing 100% cryptographic backing before distribution starts.</p>
                 </div>
-                <div class="wp-stat-card" style="text-align: left; border: 1px solid rgba(78, 124, 110, 0.25);">
+                <div class="wp-stat-card" style="text-align: left; border: none;">
                     <div style="font-weight: 700; color: var(--sage); margin-bottom: 6px;"><i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> 2. TDE (Distribution)</div>
-                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>10 Releases per Epoch:</strong> Every 10% milestone of distributed DSP triggers a decile release, converting off-chain DSP to on-chain $DIASPORA based on your PCT trust score and seeding DEX liquidity.</p>
+                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>10 Releases per Epoch:</strong> Every 10% milestone of distributed DSP triggers a decile release, converting off-chain DSP to on-chain $DIASPORA based on your PCT trust score while carrying over any unconverted DSP into the next milestone as you build trust.</p>
                 </div>
-                <div class="wp-stat-card" style="text-align: left; border: 1px solid rgba(100, 149, 237, 0.25);">
+                <div class="wp-stat-card" style="text-align: left; border: none;">
                     <div style="font-weight: 700; color: cornflowerblue; margin-bottom: 6px;"><i data-lucide="refresh-cw" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px;"></i> 3. The Great Reset</div>
-                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>Epoch Completion:</strong> Reaching 100% of an epoch's DSP resets off-chain DSP to 0 while members keep all on-chain $DIASPORA and PCT scores, unlocking the next 10x epoch tier.</p>
+                    <p style="font-size: 13px; color: var(--fg-muted); margin: 0; line-height: 1.5;"><strong>Epoch Completion (TDE 10):</strong> Reaching 100% of an epoch's DSP resets any remaining unconverted off-chain DSP to 0 (and burns it on-chain) while members keep all on-chain $DIASPORA and PCT scores, unlocking the next 10x epoch tier.</p>
                 </div>
             </div>
 
@@ -468,16 +468,48 @@
                 <div class="contract-row">
                     <span class="contract-label">Token (Proxy)</span>
                     <span class="contract-value">
-                        <a href="https://basescan.org/address/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener">
+                        <a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener">
                             0x55d7e7d006938A15082752225ED44Fd130B87735
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Token (Implementation)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0x0578bBdc97087365bA4D974bb82bB98AddAac0EA#code" target="_blank" rel="noopener">
+                            0x0578bBdc97087365bA4D974bb82bB98AddAac0EA
                         </a>
                     </span>
                 </div>
                 <div class="contract-row">
                     <span class="contract-label">TGE Controller (Proxy)</span>
                     <span class="contract-value">
-                        <a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED" target="_blank" rel="noopener">
-                            0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED
+                        <a href="https://basescan.org/address/0xb6C049D47A2FaE5413c331760C22E715D0bF4d45" target="_blank" rel="noopener">
+                            0xb6C049D47A2FaE5413c331760C22E715D0bF4d45
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">TGE Controller (Implementation)</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xbf97a76983ec824c591874275a175ae3514557a2#code" target="_blank" rel="noopener">
+                            0xbf97a76983ec824c591874275a175ae3514557a2
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Smart Wallet Factory</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0x9cF797cf332595c00410fc4ee9FdEe5C59501945#code" target="_blank" rel="noopener">
+                            0x9cF797cf332595c00410fc4ee9FdEe5C59501945
+                        </a>
+                    </span>
+                </div>
+                <div class="contract-row">
+                    <span class="contract-label">Deployer / Contract Creator</span>
+                    <span class="contract-value">
+                        <a href="https://basescan.org/address/0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6" target="_blank" rel="noopener">
+                            0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6
                         </a>
                     </span>
                 </div>
@@ -501,6 +533,9 @@
                     <span class="contract-label">Standard</span>
                     <span class="contract-value neutral">ERC-20 + ERC-20Permit · UUPS Proxy</span>
                 </div>
+            </div>
+            <div class="highlight-box orange-border" style="margin-top:16px;">
+                <p><strong>Canonical Contract &amp; Migration Notice:</strong> <code>0x55d7e7d006938A15082752225ED44Fd130B87735</code> is the sole canonical, active <code>$DIASPORA</code> ERC-20 token contract on Base Mainnet (deployed by <code>0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6</code>). Earlier launch/test deployments (<code>0x453f81D3a4Bb142AE34C53798BE35e7600D1b25c</code>, <code>0x22e37662801ba7bE67Df7A593a5ad616C1DBb30B</code>, and orphan controller <code>0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED</code>) are permanently deprecated and superseded.</p>
             </div>
         </div>
 
@@ -571,9 +606,10 @@
 
             <h3>How to Verify</h3>
             <ul>
-                <li><a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color:var(--orange);">View Token on Basescan</a> — verify supply, holders, transfers</li>
-                <li><a href="https://basescan.org/address/0xa3F092357655C0Bc5fb2Ba4B61f25c5422F59FED" target="_blank" rel="noopener" style="color:var(--orange);">View TGE Controller on Basescan</a> — verify minting and locking events</li>
-                <li>All contract source code is verified and readable on Basescan</li>
+                <li><a href="https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735" target="_blank" rel="noopener" style="color:var(--orange);">View Token on Basescan (0x55d7e7d006938A15082752225ED44Fd130B87735)</a> — verify supply, holders, transfers</li>
+                <li><a href="https://basescan.org/address/0xb6C049D47A2FaE5413c331760C22E715D0bF4d45" target="_blank" rel="noopener" style="color:var(--orange);">View TGE Controller on Basescan (0xb6C049D47A2FaE5413c331760C22E715D0bF4d45)</a> — verify minting and locking events</li>
+                <li><a href="https://basescan.org/address/0x9cF797cf332595c00410fc4ee9FdEe5C59501945#code" target="_blank" rel="noopener" style="color:var(--orange);">View Smart Wallet Factory on Basescan (0x9cF797cf332595c00410fc4ee9FdEe5C59501945)</a> — verify deterministic smart wallet deployment</li>
+                <li>All proxy and implementation contract source code is verified and readable on Basescan</li>
             </ul>
         </div>
 
@@ -655,12 +691,26 @@
                         <h3 style="color:var(--fg);margin-top:0;">Peter Swai</h3>
                         <span class="role">Founder &amp; Architect — The 25-Year Diaspora Journey &amp; The Return Home</span>
                         <p class="bio">Full-stack &amp; blockchain architect. Moved from Tanzania to the US in 1998, traversing San Francisco, Santa Monica, Iowa, Washington D.C., and Phoenix. Returning home to Tanzania after 25+ years in the US, Peter engineered Diaspora Nearby to empower both newcomers arriving abroad and diaspora members preparing their triumphant return home.</p>
-                        <a href="https://www.linkedin.com/in/peter-swai" target="_blank" rel="noopener">
-                            <i data-lucide="linkedin" style="width:12px;height:12px"></i> LinkedIn
-                        </a>
-                        <a href="https://github.com/peterkilaba-developer" target="_blank" rel="noopener" style="margin-left:12px;">
-                            <i data-lucide="github" style="width:12px;height:12px"></i> GitHub
-                        </a>
+                        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;">
+                            <a href="https://www.linkedin.com/in/peter-swai" target="_blank" rel="noopener">
+                                <i data-lucide="linkedin" style="width:12px;height:12px"></i> LinkedIn (Founder)
+                            </a>
+                            <a href="https://www.linkedin.com/company/diaspora-nearby/" target="_blank" rel="noopener">
+                                <i data-lucide="building-2" style="width:12px;height:12px"></i> LinkedIn (Company)
+                            </a>
+                            <a href="https://x.com/PeterkilabaSwai" target="_blank" rel="noopener">
+                                <i data-lucide="twitter" style="width:12px;height:12px"></i> X (@PeterkilabaSwai)
+                            </a>
+                            <a href="https://github.com/peterkilaba-developer/Diaspora-Nearby" target="_blank" rel="noopener">
+                                <i data-lucide="github" style="width:12px;height:12px"></i> GitHub Repo
+                            </a>
+                            <a href="mailto:peterkilaba@diasporanearby.com">
+                                <i data-lucide="mail" style="width:12px;height:12px"></i> peterkilaba@diasporanearby.com
+                            </a>
+                            <a href="mailto:founder@diasporanearby.com">
+                                <i data-lucide="mail" style="width:12px;height:12px"></i> founder@diasporanearby.com
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -721,11 +771,19 @@
                     </ul>
                 </div>
                 <div class="footer-links">
-                    <h4>Legal</h4>
+                    <h4>Legal &amp; Social</h4>
                     <ul>
                         <li><a href="/privacy-policy">Privacy Policy</a></li>
                         <li><a href="/terms-of-service">Terms of Service</a></li>
-                        <li><a href="mailto:support@diasporanearby.com">Support</a></li>
+                        <li><a href="/child-safety">Child Safety Standards</a></li>
+                        <li><a href="https://x.com/PeterkilabaSwai" target="_blank" rel="noopener">X (Twitter)</a></li>
+                        <li><a href="https://www.linkedin.com/company/diaspora-nearby/" target="_blank" rel="noopener">LinkedIn</a></li>
+                        <li><a href="https://github.com/peterkilaba-developer/Diaspora-Nearby" target="_blank" rel="noopener">GitHub</a></li>
+                        <li><a href="https://www.facebook.com/455143491012634" target="_blank" rel="noopener">Facebook</a></li>
+                        <li><a href="https://www.instagram.com/diasporanearby" target="_blank" rel="noopener">Instagram</a></li>
+                        <li><a href="mailto:peterkilaba@diasporanearby.com">peterkilaba@diasporanearby.com</a></li>
+                        <li><a href="mailto:founder@diasporanearby.com">founder@diasporanearby.com</a></li>
+                        <li><a href="mailto:support@diasporanearby.com">support@diasporanearby.com</a></li>
                     </ul>
                 </div>
             </div>

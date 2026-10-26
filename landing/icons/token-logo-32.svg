@@ -1,3 +1,27 @@
-<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'>
-  <image width='32' height='32' xlink:href='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAPoAAAD6AG1e1JrAAADUUlEQVR4nO2WTYgcRRTHf8luEtRcFNaDSNSEILIeggiKIIhRoxJzCYsXA8ZviBdRUCPLKKhEzaqLm+l61d2z80Euo0eTi0oQQRT34iWeFUVBLxIhuuz0X6qmZ+0ogjOT3YPsg6Krut6r9/l/VbBBGzQGSWwKY/0VwybV2By/lfnaK66xOY4uE3Fd51AYcd5lQjNMhP21U07fS+VMFSe4QW1OqcMpLTCtOlfGvTIiF1f5TOmxsUOeozLmCuMZpTwoYybOHW8Xxkta4JqqzPjKa31vlHKvjEUZ9xTzbPsH3xkm5blTnlwJ91dlx1fu2d8z6lpge1jH8Bs/a5E9cnwi4/iAX8al8tRlHBjLCJXwOp+zsxe8CkVW53Y5jsrxapGxIk+jaPKDGnyhOvtU5/Iou8B2GZmMXdWzhjOgW+Y9ZVbGfXFuzCrhfJGzIuMXJXwjx5dynFUHyXNWnulS7m6lvDxSFDSo9pQrlPOmamwd7IX8y/hNnlfkOCzPe/FrzKiFlPFRaewWZRzXPFPVM4fLfc4tavDc6v86BwvHaTn+kLGkFj8p5WkZn8rxhIz5aESb60r5Z2XcNlQUVOZLxos947sVz8OrewGGOftl/C5PU44lneCwUh5QzskIxzYqOtxa8h+S51ulvFA9+7+F37FXRkspj1UMOFgkdGQsK+Fzeb6PvSDjKS3SKBzPx1rIuDmmy/N4PMOxd6g0aBCFjBu1yOzqf8+0HA+FFBRGRwlfqY6T8bGMu+T5TDnnQu1E/gY1NcuiHBYJCi31LS5TzpxO9uFVeK5Wwh3yLEeYJTyqhGNyHFHKh/oAyVGL8jlTynhHc1wy0kWlAQw9R1asnwalvBtyLMc5GT1Z/P4qRyHHj6EGBl1SxpNhVM8aOgL0DwqdLVfG9cVptinjqojxJstqcqBo8bVaZCXvltLoPTK8un34jnxV669WPF14OoMmE1PhaavJLnlel/HIqkyDmyJCEnbH9bgPFg2MaLBbDhehZuy4IEqhTefsVBpxP6+Ea6uyY5MGRnTZGqAoxxul58d6YW68FtehH5xh8qIq//trKM6X+rkuunT0Pu0L8h/41vKdqBDuWull/wbcVyqeHKnaR6VqZa/Lg/Rfo7GeXm/Q/5L+BJvgLEBoqHJ7AAAAAElFTkSuQmCC'/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <g fill="#FF9A00">
+    <!-- Outer Compass Ring -->
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M16 7.75C11.5472 7.75 7.9375 11.3597 7.9375 15.8125C7.9375 20.2653 11.5472 23.875 16 23.875C20.4528 23.875 24.0625 20.2653 24.0625 15.8125C24.0625 11.3597 20.4528 7.75 16 7.75ZM16 8.375C11.8924 8.375 8.5625 11.7049 8.5625 15.8125C8.5625 19.9201 11.8924 23.25 16 23.25C20.1076 23.25 23.4375 19.9201 23.4375 15.8125C23.4375 11.7049 20.1076 8.375 16 8.375Z"/>
+    <!-- 4 Compass Ticks (Top, Bottom, Left, Right) -->
+    <rect x="15.5" y="6.375" width="1" height="1.875"/>
+    <rect x="15.5" y="23.375" width="1" height="2"/>
+    <rect x="6.375" y="15.25" width="1.875" height="1.125"/>
+    <rect x="23.625" y="15.25" width="1.875" height="1.125"/>
+    <!-- Top & Bottom Currency Pillar Bars -->
+    <rect x="13.875" y="10" width="1.25" height="1.625"/>
+    <rect x="16.25" y="10" width="1.25" height="1.625"/>
+    <rect x="13.875" y="19.875" width="1.25" height="1.625"/>
+    <rect x="16.25" y="19.875" width="1.25" height="1.625"/>
+    <!-- Outer 'D' Serifs & Horizontal Crossbars -->
+    <rect x="11.5" y="11.5" width="2" height="1.25"/>
+    <rect x="11.5" y="18.75" width="2" height="1.25"/>
+    <rect x="11.5" y="14.375" width="4" height="0.875"/>
+    <rect x="11.5" y="16.25" width="4" height="0.875"/>
+    <!-- Outer 'D' Stem & Bowl -->
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M13 11.5H16.8C19.35 11.5 21.125 13.25 21.125 15.75C21.125 18.25 19.35 20 16.8 20H13V11.5ZM14.5 12.75V18.75H16.6C18.35 18.75 19.5 17.55 19.5 15.75C19.5 13.95 18.35 12.75 16.6 12.75H14.5Z"/>
+    <!-- Inner 'D' Stem, Bowl & Crossbars -->
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M15 13.5H16.5C17.85 13.5 18.625 14.4 18.625 15.8125C18.625 17.225 17.85 18.125 16.5 18.125H15V13.5ZM16 14.25V17.375H16.4C17.2 17.375 17.625 16.775 17.625 15.8125C17.625 14.85 17.2 14.25 16.4 14.25H16Z"/>
+    <rect x="15.75" y="15.125" width="0.95" height="0.5"/>
+    <rect x="15.75" y="16" width="0.95" height="0.5"/>
+  </g>
 </svg>

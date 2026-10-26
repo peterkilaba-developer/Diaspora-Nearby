@@ -19,7 +19,29 @@ Diaspora Nearby is a Flutter and Firebase application built for anyone positione
 - Riverpod
 - Firebase Auth, Firestore, Realtime Database, Cloud Functions, Cloud Storage
 - GoRouter
-- Hardhat and Solidity for blockchain contracts
+- Hardhat and Solidity for blockchain contracts (Ethereum Base Mainnet — Chain ID `8453`)
+
+## $DIASPORA Token & On-Chain Contracts (Base Mainnet)
+
+- **Token Name / Symbol / Decimals**: `Diaspora` / `DIASPORA` / `18`
+- **Token Proxy (Canonical ERC-20)**: [`0x55d7e7d006938A15082752225ED44Fd130B87735`](https://basescan.org/token/0x55d7e7d006938A15082752225ED44Fd130B87735)
+- **Token Implementation**: [`0x0578bBdc97087365bA4D974bb82bB98AddAac0EA`](https://basescan.org/address/0x0578bBdc97087365bA4D974bb82bB98AddAac0EA#code)
+- **TGE Controller Proxy**: [`0xb6C049D47A2FaE5413c331760C22E715D0bF4d45`](https://basescan.org/address/0xb6C049D47A2FaE5413c331760C22E715D0bF4d45)
+- **TGE Controller Implementation**: [`0xbf97a76983ec824c591874275a175ae3514557a2`](https://basescan.org/address/0xbf97a76983ec824c591874275a175ae3514557a2#code)
+- **Smart Wallet Factory**: [`0x9cF797cf332595c00410fc4ee9FdEe5C59501945`](https://basescan.org/address/0x9cF797cf332595c00410fc4ee9FdEe5C59501945#code)
+- **Contract Creator / Deployer**: [`0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6`](https://basescan.org/address/0xeef49F2a10f0EF143Cd8c710e013285F137F4dE6)
+
+### Official Ecosystem & Team Links
+
+- **Official Website**: [https://diasporanearby.com](https://diasporanearby.com)
+- **Whitepaper & Technical Specification**: [https://diasporanearby.com/whitepaper](https://diasporanearby.com/whitepaper)
+- **Liquidity Treasury**: [https://diasporanearby.com/liquidity_treasury](https://diasporanearby.com/liquidity_treasury)
+- **Token Icon (32x32 Vector SVG)**: [https://diasporanearby.com/icons/token-logo-32.svg](https://diasporanearby.com/icons/token-logo-32.svg)
+- **Founder & Architect**: Peter Swai ([LinkedIn](https://www.linkedin.com/in/peter-swai) · [X / Twitter](https://x.com/PeterkilabaSwai) · `peterkilaba@diasporanearby.com` · `founder@diasporanearby.com`)
+- **Company LinkedIn**: [https://www.linkedin.com/company/diaspora-nearby/](https://www.linkedin.com/company/diaspora-nearby/)
+- **Facebook**: [https://www.facebook.com/455143491012634](https://www.facebook.com/455143491012634)
+- **Instagram**: [https://www.instagram.com/diasporanearby](https://www.instagram.com/diasporanearby)
+- **Support Email**: `support@diasporanearby.com`
 
 ## Getting Started
 
