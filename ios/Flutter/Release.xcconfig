@@ -1,3 +1,9 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release-production.xcconfig"
 #include "Generated.xcconfig"
 #include? "Secrets.xcconfig"
+
+APP_DISPLAY_NAME=Diaspora Nearby
+APP_ENV=production
+FLUTTER_TARGET=lib/main_production.dart
+APP_BUNDLE_ID=com.diasporanearby.diasporaFlutter

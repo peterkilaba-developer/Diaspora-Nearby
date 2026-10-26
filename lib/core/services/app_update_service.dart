@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -173,60 +174,67 @@ class AppUpdateService {
       await showDialog<void>(
         context: context,
         barrierDismissible: !forceUpdate,
-        builder: (dialogContext) => PopScope(
-          canPop: !forceUpdate,
-          child: AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.system_update, color: Color(0xFF2E7D32)),
-                SizedBox(width: 10),
-                Expanded(child: Text('Update Available')),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Version $latestVersion${latestBuild != null ? " (Build $latestBuild)" : ""} is ready.',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+        builder: (dialogContext) => BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: PopScope(
+            canPop: !forceUpdate,
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.system_update, color: Color(0xFF2E7D32)),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Update Available')),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Version $latestVersion${latestBuild != null ? " (Build $latestBuild)" : ""} is ready.',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(releaseNotes),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (latestBuild != null) {
+                      _dismissedBuildNumber = latestBuild;
+                      unawaited(
+                        prefs.setInt(_dismissedBuildPrefKey, latestBuild),
+                      );
+                    }
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text('Later'),
                 ),
-                const SizedBox(height: 8),
-                Text(releaseNotes),
+                FilledButton(
+                  onPressed: () {
+                    if (latestBuild != null) {
+                      _dismissedBuildNumber = latestBuild;
+                      unawaited(
+                        prefs.setInt(_dismissedBuildPrefKey, latestBuild),
+                      );
+                    }
+                    Navigator.of(dialogContext).pop();
+                    unawaited(
+                      _launchUpdateUrl(
+                        storeUrl,
+                        fallbackUrl: isIOS ? _iosTestFlightUrl : null,
+                      ),
+                    );
+                  },
+                  child: const Text('Update Now'),
+                ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  if (latestBuild != null) {
-                    _dismissedBuildNumber = latestBuild;
-                    unawaited(
-                      prefs.setInt(_dismissedBuildPrefKey, latestBuild),
-                    );
-                  }
-                  Navigator.of(dialogContext).pop();
-                },
-                child: const Text('Later'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (latestBuild != null) {
-                    _dismissedBuildNumber = latestBuild;
-                    unawaited(
-                      prefs.setInt(_dismissedBuildPrefKey, latestBuild),
-                    );
-                  }
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _launchUpdateUrl(
-                      storeUrl,
-                      fallbackUrl: isIOS ? _iosTestFlightUrl : null,
-                    ),
-                  );
-                },
-                child: const Text('Update Now'),
-              ),
-            ],
           ),
         ),
       );

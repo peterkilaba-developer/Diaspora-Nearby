@@ -200,19 +200,21 @@ jobs:
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
-          BUILD_NUMBER=$((20 + ${{ github.run_number }}))
+          BUILD_NUMBER=$((25 + ${{ github.run_number }}))
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
           echo "Building version code: $BUILD_NUMBER"
           flutter build appbundle --release \
             --flavor production \
             -t lib/main_production.dart \
             --target-platform android-arm,android-arm64 \
+            --build-name=1.2.7 \
             --build-number=$BUILD_NUMBER \
             --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
           flutter build apk --release \
             --flavor production \
             -t lib/main_production.dart \
             --target-platform android-arm,android-arm64 \
+            --build-name=1.2.7 \
             --build-number=$BUILD_NUMBER \
             --dart-define=GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
           df -h
@@ -230,11 +232,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="v1.2.6-build.${{ env.BUILD_NUMBER }}"
+          TAG_NAME="v1.2.7-build.${{ env.BUILD_NUMBER }}"
           gh release create "$TAG_NAME" \
             build/app/outputs/flutter-apk/app-production-release.apk \
             build/app/outputs/bundle/productionRelease/app-production-release.aab \
-            --title "Diaspora Nearby v1.2.6 (Build ${{ env.BUILD_NUMBER }})" \
+            --title "Diaspora Nearby v1.2.7 (Build ${{ env.BUILD_NUMBER }})" \
             --notes "Automated production release (Build ${{ env.BUILD_NUMBER }}, commit ${{ github.sha }})." \
             --latest || true
           gh release upload latest \
@@ -267,21 +269,21 @@ jobs:
           node -e '
             const admin = require("./functions/node_modules/firebase-admin");
             admin.initializeApp({ projectId: "diaspora-nearby-a3dac" });
-            const buildNum = Number(process.env.BUILD_NUMBER || 25);
+            const buildNum = Number(process.env.BUILD_NUMBER || 45);
             admin.firestore().doc("system_stats/app_version").set({
-              latestVersion: "1.2.6",
-              androidVersion: "1.2.6",
-              iosVersion: "1.2.6",
+              latestVersion: "1.2.7",
+              androidVersion: "1.2.7",
+              iosVersion: "1.2.7",
               latestBuildNumber: buildNum,
               androidBuildNumber: buildNum,
               androidMinBuildNumber: 25,
-              iosBuildNumber: 26,
+              iosBuildNumber: buildNum,
               iosMinBuildNumber: 25,
               forceUpdate: false,
               androidUpdateUrl: "https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby",
               androidApkUrl: admin.firestore.FieldValue.delete(),
               iosUpdateUrl: "https://testflight.apple.com/join/vB3XzPKg",
-              releaseNotes: "Chat timestamp ordering & pull-to-refresh fixes, event chat header calendar icon & manage event options, and Play Store Open Testing update.",
+              releaseNotes: "Multi-language localization selector, borderless UI refinements, and diaspora community updates.",
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true }).then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(0); });
           ' || true

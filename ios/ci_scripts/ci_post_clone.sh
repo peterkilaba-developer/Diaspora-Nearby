@@ -77,9 +77,9 @@ fi
 
 # 6. Generate iOS plugin symlinks, build number, and CocoaPods configuration for production scheme
 MAPS_KEY="${GOOGLE_MAPS_API_KEY:-AIzaSyAj0oAGYEX5osyDa_2Pn828clvv72UhEF8}"
-IOS_BUILD_NUMBER=$((20 + ${CI_BUILD_NUMBER:-5}))
+IOS_BUILD_NUMBER=$((45 + ${CI_BUILD_NUMBER:-1}))
 echo "Configuring iOS production build number: $IOS_BUILD_NUMBER"
-flutter build ios --config-only --flavor production -t lib/main_production.dart --release --build-number="$IOS_BUILD_NUMBER" --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
+flutter build ios --config-only --flavor production -t lib/main_production.dart --release --build-name="1.2.7" --build-number="$IOS_BUILD_NUMBER" --dart-define="GOOGLE_MAPS_API_KEY=$MAPS_KEY"
 
 # 7. Ensure FunctionsStreamHandler.swift in cloud_functions is patched cleanly
 for fn_file in $(find "$HOME/.pub-cache" "ios/.symlinks" -name "FunctionsStreamHandler.swift" 2>/dev/null); do
