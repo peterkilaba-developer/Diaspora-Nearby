@@ -360,12 +360,7 @@ class _UserPermissionsScreenState extends ConsumerState<UserPermissionsScreen>
           child: Container(
             padding: const EdgeInsets.all(AppTheme.pageHorizontalPadding),
             decoration: AppTheme.cardDecoration(context).copyWith(
-              border: Border.all(
-                color: isGranted
-                    ? Theme.of(context).primaryColor
-                    : Colors.grey.shade300,
-                width: isGranted ? 2 : 1,
-              ),
+              border: const Border(),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.05),

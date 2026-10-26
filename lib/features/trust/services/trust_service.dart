@@ -480,9 +480,16 @@ class TrustService {
           milestones.add('EmergencyFund');
           await _ref
               .read(pointsRepositoryProvider)
-              .markExplorationActionCompleted(userId, 'economy_emergency_fund');
+              .markExplorationActionCompleted(
+                userId,
+                'milestone_emergency_fund',
+              );
         }
       }
+    } else {
+      milestones.remove('EmergencyFund');
+      milestones.remove('UbuntuEmergencyFund');
+      ledger.remove('EmergencyFund_dsp_awarded');
     }
 
     // --- Seniority Milestone ---

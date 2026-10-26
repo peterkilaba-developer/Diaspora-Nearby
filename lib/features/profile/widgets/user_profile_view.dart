@@ -34,6 +34,8 @@ import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
 
 import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
 import 'package:diaspora_nearby/features/trust/models/trust_data.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
+import 'package:diaspora_nearby/features/settings/widgets/language_selector_sheet.dart';
 
 class UserProfileView extends ConsumerWidget {
   final ProfileData profile;
@@ -71,7 +73,6 @@ class UserProfileView extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppTheme.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.error.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
@@ -116,14 +117,25 @@ class UserProfileView extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: Text(AppLocalizations.tr(ref, 'Profile')),
         actions: [
-          if (isSelf)
+          if (isSelf) ...[
             TextButton.icon(
               onPressed: onEdit,
               icon: const Icon(LucideIcons.edit, size: 16),
-              label: const Text('Edit'),
+              label: Text(AppLocalizations.tr(ref, 'Edit')),
             ),
+            IconButton(
+              onPressed: () => showLanguageSelectorSheet(context, ref),
+              icon: const Icon(LucideIcons.languages, size: 20),
+              tooltip: AppLocalizations.tr(ref, 'App Language'),
+            ),
+            IconButton(
+              onPressed: () => context.push('/settings'),
+              icon: const Icon(LucideIcons.settings, size: 20),
+              tooltip: AppLocalizations.tr(ref, 'Settings'),
+            ),
+          ],
           IconButton(
             onPressed: () async {
               if (isSelf) {
@@ -1547,7 +1559,11 @@ class UserProfileView extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final sortedPastLocations = List.of(profile.pastLocations!)
-      ..sort((a, b) => _parsePastLocationYear(b.until).compareTo(_parsePastLocationYear(a.until)));
+      ..sort(
+        (a, b) => _parsePastLocationYear(
+          b.until,
+        ).compareTo(_parsePastLocationYear(a.until)),
+      );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1709,9 +1725,6 @@ class UserProfileView extends ConsumerWidget {
                       ? Colors.green.shade900
                       : Colors.green.shade100,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.3),
-                  ),
                 ),
                 child: Text(
                   'Verified Business',
@@ -2213,9 +2226,7 @@ class UserProfileView extends ConsumerWidget {
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.orange,
                                   disabledForegroundColor: Colors.orange,
-                                  side: BorderSide(
-                                    color: Colors.orange.withValues(alpha: 0.4),
-                                  ),
+                                  side: BorderSide.none,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
@@ -2234,11 +2245,7 @@ class UserProfileView extends ConsumerWidget {
                                 label: const Text('Cancel'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: theme.colorScheme.error,
-                                  side: BorderSide(
-                                    color: theme.colorScheme.error.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ),
+                                  side: BorderSide.none,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
@@ -2455,11 +2462,7 @@ class UserProfileView extends ConsumerWidget {
                                 label: const Text('Decline'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: theme.colorScheme.error,
-                                  side: BorderSide(
-                                    color: theme.colorScheme.error.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ),
+                                  side: BorderSide.none,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 8,
                                   ),
@@ -2558,9 +2561,6 @@ class UserProfileView extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: Colors.amber.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.amber.withValues(alpha: 0.4),
-                            ),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3633,8 +3633,7 @@ class UserProfileView extends ConsumerWidget {
             icon,
             size: 20,
             color:
-                iconColor ??
-                theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                iconColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -4377,8 +4376,7 @@ class _MilestoneContactsSheetState
 
       final contactIds = <String>{};
       for (final chat in chats) {
-        final isDirect =
-            chat.type == 'direct' || chat.id.startsWith('direct_');
+        final isDirect = chat.type == 'direct' || chat.id.startsWith('direct_');
         final hasMessages =
             chat.lastMessage != null &&
             (chat.lastMessage!.timestamp > 0 ||

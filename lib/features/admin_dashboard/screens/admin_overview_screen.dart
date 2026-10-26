@@ -77,7 +77,6 @@ class AdminOverviewScreen extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: AppTheme.elevationColor(context, 1), // Level 1 card
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
               ),
               child: const Center(
                 child: Column(
@@ -120,7 +119,6 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),

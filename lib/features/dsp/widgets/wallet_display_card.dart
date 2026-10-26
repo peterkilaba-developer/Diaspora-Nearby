@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 
-/// Reusable wallet/treasury display card used in Points System and Crypto screens.
+/// Reusable wallet/treasury display card used in the DSP Points System screen.
 ///
 /// Displays a treasury with title, icon, allocation percentage, DSP balance,
-/// estimated $DIASPORA payout, efficiency, and TGE information.
+/// role description, efficiency, and TGE information.
 class WalletDisplayCard extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -50,9 +49,7 @@ class WalletDisplayCard extends StatelessWidget {
     final subTextColor = isDark ? Colors.white54 : Colors.black54;
 
     final double eff = efficiency ?? 1.0;
-    final payout = points * eff;
-    final payoutStr =
-        '${NumberFormat('#,###').format(payout.round())} \$DIASPORA';
+    final dspStr = _formatPoints(points);
 
     return Container(
       padding: AppTheme.cardPaddingEdgeInsets,
@@ -98,7 +95,7 @@ class WalletDisplayCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  payoutLabel ?? 'ESTIMATED \$DIASPORA PAYOUT',
+                  payoutLabel ?? 'ACCUMULATED DSP BALANCE',
                   style: TextStyle(
                     fontSize: 8,
                     fontWeight: FontWeight.bold,
@@ -111,12 +108,12 @@ class WalletDisplayCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      payoutStr,
+                      dspStr,
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.warning,
+                        color: AppTheme.accent,
                       ),
                     ),
                   ],
@@ -138,19 +135,30 @@ class WalletDisplayCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              if (trustScore != null || tgeEvent != null)
+              if (epochLabel != null && epochLabel!.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    epochLabel!,
+                    style: TextStyle(
+                      color: subTextColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              else if (trustScore != null || tgeEvent != null)
                 Expanded(
                   child: RichText(
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     text: TextSpan(
-                      style: TextSpan(
-                        style: TextStyle(
-                          color: subTextColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ).style,
+                      style: TextStyle(
+                        color: subTextColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                       children: [
                         if (trustScore != null) ...[
                           const TextSpan(text: 'Efficiency: '),
@@ -171,34 +179,39 @@ class WalletDisplayCard extends StatelessWidget {
                     ),
                   ),
                 )
-              else if (epochLabel != null)
+              else
                 Expanded(
                   child: Text(
-                    epochLabel!,
+                    'Treasury balance',
+                    style: TextStyle(color: subTextColor, fontSize: 11),
+                  ),
+                ),
+              if (epochLabel != null &&
+                  epochLabel!.isNotEmpty &&
+                  (trustScore != null || tgeEvent != null)) ...[
+                const SizedBox(width: 8),
+                RichText(
+                  text: TextSpan(
                     style: TextStyle(
                       color: subTextColor,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    children: [
+                      if (trustScore != null)
+                        TextSpan(
+                          text: '${(eff * 100).toInt()}%',
+                          style: TextStyle(
+                            color: EpochService.getEfficiencyColor(trustScore!),
+                          ),
+                        ),
+                      if (trustScore != null && tgeEvent != null)
+                        const TextSpan(text: ' • '),
+                      if (tgeEvent != null) TextSpan(text: 'TDE $tgeEvent/10'),
+                    ],
                   ),
-                )
-              else
-                Text(
-                  'Treasury balance',
-                  style: TextStyle(color: subTextColor, fontSize: 11),
                 ),
-              const SizedBox(width: 8),
-              Text(
-                _formatPoints(points),
-                style: const TextStyle(
-                  color: AppTheme.accent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                ),
-              ),
+              ],
             ],
           ),
         ],

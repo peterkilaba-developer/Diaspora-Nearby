@@ -39,8 +39,9 @@ Before executing a TGE, the following system-wide actions occur:
    - **Eligible Users**: Users who have completed the base Proof of Humanity milestones with positive DSP balance.
    - **Communities**: Community treasury balances.
    - **System Wallets**: Founders & Core Team, Liquidity Treasury, and Burn addresses.
-3. **Distribution**: Users claim their allocation via individual pull claims ("Claim $DIASPORA" button) using cryptographic on-chain verification (Merkle pull claim). $DIASPORA is released adjusted by the user's PCT efficiency: scores 0-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%. Unconverted amounts are automatically burned to `0x000...dEaD`.
-4. **Cleanup**: All claimed off-chain DSP balances are reset to **0** for the next cycle.
+3. **Distribution & Rolling Carry-Over (TDE 1–9)**: $DIASPORA is released adjusted by the user's PCT efficiency: scores 0-10 convert at 0%; scores 11-90 convert at the exact PCT percentage; scores 91-100 convert at 100%. During TDE 1 through TDE 9, only the converted DSP is deducted and any unconverted DSP carries over into the next TDE milestone.
+4. **The Great Reset (TDE 10 Cleanup)**: At TDE 10 (100% of the epoch's DSP target), after the final conversion, any remaining unconverted off-chain DSP is reset to **0** and burned on-chain to `0x000...dEaD` for the next 10x epoch.
+
 
 ## 5. Economic Governance: 10-Epoch Scaling
 The protocol scales through 10 Epochs. Each Epoch represents a 10x increase in the distributed-DSP supply target. Population targets are retained as informational network-growth benchmarks.

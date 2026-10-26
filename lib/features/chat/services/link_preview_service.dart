@@ -801,14 +801,19 @@ class LinkPreviewService {
         imageUrl.contains('tiktok-logo/logo.png');
   }
 
-  static String? _cleanImageUrl(String? rawImageUrl, {required String baseUrl}) {
+  static String? _cleanImageUrl(
+    String? rawImageUrl, {
+    required String baseUrl,
+  }) {
     if (rawImageUrl == null) return null;
     final unescaped = _unescapeHtmlEntities(rawImageUrl).trim();
     if (unescaped.isEmpty || unescaped.toLowerCase() == 'null') return null;
 
     // Reject base64 data URIs (such as Instagram's splash icon) and broken assets
     if (unescaped.startsWith('data:')) return null;
-    if (unescaped.contains('any_link_preview/blob/master/lib/assets/giphy.gif')) {
+    if (unescaped.contains(
+      'any_link_preview/blob/master/lib/assets/giphy.gif',
+    )) {
       return null;
     }
 
@@ -825,9 +830,9 @@ class LinkPreviewService {
 
   static String? _cleanText(String? raw) {
     if (raw == null) return null;
-    final unescaped = _unescapeHtmlEntities(raw)
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final unescaped = _unescapeHtmlEntities(
+      raw,
+    ).replaceAll(RegExp(r'\s+'), ' ').trim();
     if (unescaped.isEmpty || unescaped.toLowerCase() == 'null') return null;
     return unescaped;
   }
@@ -852,32 +857,26 @@ class LinkPreviewService {
         .replaceAll('&middot;', '·');
 
     // Hex numeric entities: &#x2022;
-    result = result.replaceAllMapped(
-      RegExp(r'&#x([0-9a-fA-F]+);'),
-      (match) {
-        final code = int.tryParse(match.group(1)!, radix: 16);
-        if (code == null) return match.group(0)!;
-        try {
-          return String.fromCharCode(code);
-        } catch (_) {
-          return match.group(0)!;
-        }
-      },
-    );
+    result = result.replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (match) {
+      final code = int.tryParse(match.group(1)!, radix: 16);
+      if (code == null) return match.group(0)!;
+      try {
+        return String.fromCharCode(code);
+      } catch (_) {
+        return match.group(0)!;
+      }
+    });
 
     // Decimal numeric entities: &#064;
-    result = result.replaceAllMapped(
-      RegExp(r'&#(\d+);'),
-      (match) {
-        final code = int.tryParse(match.group(1)!);
-        if (code == null) return match.group(0)!;
-        try {
-          return String.fromCharCode(code);
-        } catch (_) {
-          return match.group(0)!;
-        }
-      },
-    );
+    result = result.replaceAllMapped(RegExp(r'&#(\d+);'), (match) {
+      final code = int.tryParse(match.group(1)!);
+      if (code == null) return match.group(0)!;
+      try {
+        return String.fromCharCode(code);
+      } catch (_) {
+        return match.group(0)!;
+      }
+    });
 
     return result;
   }

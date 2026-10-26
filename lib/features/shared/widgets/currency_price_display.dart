@@ -4,23 +4,14 @@ import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.da
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 
 /// A reusable widget that displays a price in:
-/// 1. The seller/lister's local currency
-/// 2. The buyer/viewer's host-country currency (when different from seller's)
+/// 1. The seller/lister's local currency (or buyer/viewer's host currency when [preferViewerPrimary] is true)
+/// 2. The converted local/host currency
 /// 3. The `$DIASPORA` token equivalent based on the live dynamic price floor
 ///
 /// When [showToggle] is true, tapping cycles through Seller currency →
 /// Buyer currency (if different) → `$DIASPORA` token.
-/// When [showToggle] is false, all applicable prices are displayed together.
-///
-/// Usage:
-/// ```dart
-/// CurrencyPriceDisplay(
-///   amount: listing.priceAmount,
-///   sellerCountryCode: listing.sellerCountryCode ?? listing.countryCode,
-///   viewerCountryCode: profile.hostCountryCode,
-///   priceSuffix: '/night',  // optional
-/// )
-/// ```
+/// When [showToggle] is false, all applicable prices are displayed stacked
+/// on separate lines so none are truncated.
 class CurrencyPriceDisplay extends ConsumerStatefulWidget {
   const CurrencyPriceDisplay({
     super.key,
@@ -33,6 +24,8 @@ class CurrencyPriceDisplay extends ConsumerStatefulWidget {
     this.primaryColor,
     this.showToggle = true,
     this.compact = false,
+    this.preferViewerPrimary = false,
+    this.crossAxisAlignment = CrossAxisAlignment.start,
   });
 
   /// The raw price amount (in the seller's local currency).
@@ -63,6 +56,13 @@ class CurrencyPriceDisplay extends ConsumerStatefulWidget {
   /// If true, uses a more compact layout for list cards.
   final bool compact;
 
+  /// If true, shows the viewer/guest host currency as the primary price
+  /// and the seller/location local currency as the secondary fiat price.
+  final bool preferViewerPrimary;
+
+  /// Horizontal alignment of the stacked column when [showToggle] is false.
+  final CrossAxisAlignment crossAxisAlignment;
+
   @override
   ConsumerState<CurrencyPriceDisplay> createState() =>
       _CurrencyPriceDisplayState();
@@ -86,11 +86,19 @@ class _CurrencyPriceDisplayState extends ConsumerState<CurrencyPriceDisplay> {
     final valuation = ref.watch(dspValuationProvider);
     final suffix = widget.priceSuffix ?? '';
 
-    final primaryText =
+    final sellerFiatRaw =
         '${CurrencyHelper.formatLocalPrice(widget.amount, widget.sellerCountryCode)}$suffix';
+    final viewerFiatRaw = widget.viewerCountryCode != null
+        ? '${CurrencyHelper.formatConvertedPrice(widget.amount, widget.sellerCountryCode, widget.viewerCountryCode)}$suffix'
+        : sellerFiatRaw;
 
-    final convertedText =
-        '≈ ${CurrencyHelper.formatConvertedPrice(widget.amount, widget.sellerCountryCode, widget.viewerCountryCode)}$suffix';
+    final useViewerFirst =
+        widget.preferViewerPrimary && widget.viewerCountryCode != null;
+
+    final primaryText = useViewerFirst ? viewerFiatRaw : sellerFiatRaw;
+    final convertedText = useViewerFirst
+        ? '≈ $sellerFiatRaw'
+        : '≈ $viewerFiatRaw';
 
     final tokenText =
         '≈ ${CurrencyHelper.formatDiasporaTokenPrice(widget.amount, widget.sellerCountryCode, dspPriceFloorUsd: valuation.impliedValueUsd)}$suffix';
@@ -106,8 +114,8 @@ class _CurrencyPriceDisplayState extends ConsumerState<CurrencyPriceDisplay> {
       fontSize: widget.compact ? 11 : 12,
       fontWeight: FontWeight.w500,
       color: isDark
-          ? Colors.white.withValues(alpha: 0.5)
-          : Colors.black.withValues(alpha: 0.45),
+          ? Colors.white.withValues(alpha: 0.6)
+          : Colors.black.withValues(alpha: 0.55),
     );
 
     final modes = _sameCurrency
@@ -119,7 +127,8 @@ class _CurrencyPriceDisplayState extends ConsumerState<CurrencyPriceDisplay> {
     // Toggle mode – tap to cycle Seller → Buyer → $DIASPORA
     if (widget.showToggle) {
       return GestureDetector(
-        onTap: () => setState(() => _modeIndex = (_modeIndex + 1) % modes.length),
+        onTap: () =>
+            setState(() => _modeIndex = (_modeIndex + 1) % modes.length),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -148,14 +157,12 @@ class _CurrencyPriceDisplayState extends ConsumerState<CurrencyPriceDisplay> {
       );
     }
 
-    // Stacked mode – show Seller currency, Buyer currency, and $DIASPORA token
-    final subParts = <String>[
-      if (!_sameCurrency) convertedText,
-      tokenText,
-    ];
+    // Stacked mode – show primary currency, converted currency, and $DIASPORA
+    // each on its own line so all three prices are fully visible.
+    final subParts = <String>[if (!_sameCurrency) convertedText, tokenText];
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: widget.crossAxisAlignment,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -164,13 +171,15 @@ class _CurrencyPriceDisplayState extends ConsumerState<CurrencyPriceDisplay> {
           overflow: TextOverflow.ellipsis,
           style: widget.primaryStyle ?? defaultPrimary,
         ),
-        SizedBox(height: widget.compact ? 1 : 2),
-        Text(
-          subParts.join('  ·  '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: widget.secondaryStyle ?? defaultSecondary,
-        ),
+        for (final part in subParts) ...[
+          SizedBox(height: widget.compact ? 1 : 2),
+          Text(
+            part,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: widget.secondaryStyle ?? defaultSecondary,
+          ),
+        ],
       ],
     );
   }

@@ -218,7 +218,6 @@ class _BereavementAnnouncementModalState
                     decoration: BoxDecoration(
                       color: Colors.amber.shade50,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.shade200),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,7 +314,6 @@ class _BereavementAnnouncementModalState
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
               borderRadius: BorderRadius.circular(8),
               color: theme.cardColor, // [FIX] Theme aware
             ),

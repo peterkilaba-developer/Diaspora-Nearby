@@ -178,7 +178,6 @@ class _OverviewTab extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.orange.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1390,9 +1389,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                         alpha: 0.3,
                       ),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDeceased ? Colors.grey.shade300 : Colors.transparent,
-                ),
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(
@@ -1690,7 +1686,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                 decoration: BoxDecoration(
                   color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.shade200),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1722,7 +1717,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                           label: const Text('Decline'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red),
+                            side: BorderSide.none,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1837,7 +1832,6 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1947,7 +1941,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
                   label: const Text('Search Community Members'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.amber.shade900,
-                    side: BorderSide(color: Colors.amber.shade400),
+                    side: BorderSide.none,
                   ),
                 ),
               ),
@@ -1999,7 +1993,7 @@ class _SupportTabState extends ConsumerState<_SupportTab> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.dividerColor),
+        side: BorderSide.none,
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -3157,9 +3151,7 @@ class _DiasporaPaymentCardState extends ConsumerState<_DiasporaPaymentCard> {
             label: const Text('Buy \$DIASPORA on Aerodrome DEX'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(42),
-              side: BorderSide(
-                color: theme.colorScheme.primary.withValues(alpha: 0.5),
-              ),
+              side: BorderSide.none,
             ),
           ),
           const SizedBox(height: 8),
@@ -3323,7 +3315,6 @@ class _InterestHeartButton extends ConsumerWidget {
         return Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.shade300),
             color: interested ? Colors.grey.shade200 : Colors.transparent,
           ),
           child: IconButton(

@@ -139,7 +139,6 @@ class _OrganizationManagementScreenState
                           decoration: BoxDecoration(
                             color: Colors.red.shade50,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red.shade200),
                           ),
                           child: Column(
                             children: [
@@ -360,11 +359,6 @@ class _OrganizationManagementScreenState
                             ? Colors.green.withValues(alpha: 0.1)
                             : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: (org['status'] == 'active')
-                              ? Colors.green
-                              : Colors.orange,
-                        ),
                       ),
                       child: Text(
                         (org['status'] == 'active') ? 'Active' : 'Pending',

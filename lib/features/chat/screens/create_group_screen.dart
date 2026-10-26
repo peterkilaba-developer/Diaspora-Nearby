@@ -353,10 +353,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary,
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: theme.scaffoldBackgroundColor,
-                                    width: 2,
-                                  ),
                                 ),
                                 child: const Icon(
                                   LucideIcons.camera,
@@ -435,7 +431,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                         color: theme.colorScheme.surfaceContainerHighest
                             .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: theme.dividerColor),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,12 +553,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                                         vertical: 4,
                                       ), // Match card margin
                                       decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: theme
-                                              .colorScheme
-                                              .primary, // [FIX] Use theme primary
-                                          width: 2,
-                                        ),
+                                        color: const Color(0x14888888),
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
@@ -584,10 +574,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
             top: false,
             child: Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.scaffoldBackgroundColor,
-                border: Border(top: BorderSide(color: theme.dividerColor)),
-              ),
+              decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
               child: Row(
                 children: [
                   Expanded(

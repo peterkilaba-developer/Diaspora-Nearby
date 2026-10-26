@@ -161,7 +161,6 @@ class _OrganizationChatPreviewState
         Container(
           height: 300,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
             borderRadius: BorderRadius.circular(12),
             color: Colors.grey.withValues(alpha: 0.05),
           ),

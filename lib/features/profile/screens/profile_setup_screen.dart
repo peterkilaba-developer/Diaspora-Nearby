@@ -244,7 +244,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         setState(() => _homeLocation = null);
       }
       _homeSearchDebounce = Timer(const Duration(milliseconds: 250), () async {
-        if (!mounted || _currentStep != SetupStep.home || seq != _homeSearchSeq) {
+        if (!mounted ||
+            _currentStep != SetupStep.home ||
+            seq != _homeSearchSeq) {
           return;
         }
         final places = ref.read(googlePlacesServiceProvider);
@@ -274,7 +276,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         setState(() => _hostLocation = null);
       }
       _hostSearchDebounce = Timer(const Duration(milliseconds: 250), () async {
-        if (!mounted || _currentStep != SetupStep.host || seq != _hostSearchSeq) {
+        if (!mounted ||
+            _currentStep != SetupStep.host ||
+            seq != _hostSearchSeq) {
           return;
         }
         final places = ref.read(googlePlacesServiceProvider);
@@ -576,7 +580,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       try {
         final existingUrl = await storageRef.getDownloadURL();
         if (existingUrl.isNotEmpty) {
-          debugPrint('📸 Recovered previously uploaded profile image: $existingUrl');
+          debugPrint(
+            '📸 Recovered previously uploaded profile image: $existingUrl',
+          );
           return existingUrl;
         }
       } catch (_) {}

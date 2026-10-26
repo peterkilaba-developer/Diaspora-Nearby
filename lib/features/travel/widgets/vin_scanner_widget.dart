@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -33,7 +34,10 @@ Future<VinScanResult?> showVinScanner(BuildContext context) {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _VinScannerSheet(),
+    builder: (_) => BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: const _VinScannerSheet(),
+    ),
   );
 }
 
@@ -316,10 +320,7 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                           width: 280,
                           height: _mode == 0 ? 80 : 50,
                           decoration: BoxDecoration(
-                            border: Border.all(
-                              color: AppTheme.accent,
-                              width: 2,
-                            ),
+                            color: const Color(0x14888888),
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
@@ -400,9 +401,7 @@ class _VinScannerSheetState extends State<_VinScannerSheet> {
                         style: TextStyle(color: AppTheme.accent, fontSize: 13),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: AppTheme.accent.withValues(alpha: 0.4),
-                        ),
+                        side: BorderSide.none,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),

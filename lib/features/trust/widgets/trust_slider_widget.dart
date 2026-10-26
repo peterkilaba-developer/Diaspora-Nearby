@@ -262,7 +262,12 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
 
       if (mounted) {
         if (isStakeConfirm) {
-          AppSnackbar.success(context, 'Full trust staked! 1,000 DSP locked.');
+          AppSnackbar.success(
+            context,
+            _isNoTrust
+                ? 'No trust staked! 1,000 DSP locked.'
+                : 'Full trust staked! 1,000 DSP locked.',
+          );
         } else {
           AppSnackbar.success(context, 'Trust rating updated');
         }
@@ -453,9 +458,6 @@ class _TrustSliderWidgetState extends ConsumerState<TrustSliderWidget>
                         ? color.withValues(alpha: 0.15)
                         : color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
-                    border: isStaked
-                        ? Border.all(color: color, width: 1.5)
-                        : null,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

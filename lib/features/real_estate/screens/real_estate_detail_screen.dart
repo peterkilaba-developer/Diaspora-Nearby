@@ -424,10 +424,6 @@ class _RealEstateDetailScreenState
       decoration: BoxDecoration(
         color: AppTheme.accent.withValues(alpha: isDark ? 0.12 : 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.accent.withValues(alpha: 0.2),
-          width: 1,
-        ),
       ),
       child: Row(
         children: [

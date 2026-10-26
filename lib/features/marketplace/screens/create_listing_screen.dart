@@ -1300,7 +1300,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
             ? Colors.white.withValues(alpha: 0.06)
             : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1635,9 +1634,6 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                 ],
               ),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.25),
-              ),
             ),
             child: Row(
               children: [
@@ -3051,9 +3047,7 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
                   onPressed: () => setState(() => _currentStep--),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurface,
-                    side: BorderSide(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
-                    ),
+                    side: BorderSide.none,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

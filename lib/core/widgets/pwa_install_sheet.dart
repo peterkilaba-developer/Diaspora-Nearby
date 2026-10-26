@@ -371,9 +371,6 @@ class PwaInstallSheet extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
-            ),
           ),
           child: Row(
             children: [
@@ -505,9 +502,6 @@ class _InstructionStep extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.12),
-        ),
       ),
       child: Row(
         children: [

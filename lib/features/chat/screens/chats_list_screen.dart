@@ -242,17 +242,15 @@ class _ChatsListScreenState extends ConsumerState<ChatsListScreen> {
 
     final filteredChats =
         (searchQuery.isEmpty
-                ? List<Chat>.from(baseChats)
-                : baseChats.where((chat) {
-                    final query = searchQuery.toLowerCase();
-                    final nameMatch = chat.name.toLowerCase().contains(query);
-                    final messageMatch =
-                        chat.lastMessage?.content.toLowerCase().contains(
-                          query,
-                        ) ??
-                        false;
-                    return nameMatch || messageMatch;
-                  }).toList())
+              ? List<Chat>.from(baseChats)
+              : baseChats.where((chat) {
+                  final query = searchQuery.toLowerCase();
+                  final nameMatch = chat.name.toLowerCase().contains(query);
+                  final messageMatch =
+                      chat.lastMessage?.content.toLowerCase().contains(query) ??
+                      false;
+                  return nameMatch || messageMatch;
+                }).toList())
           ..sort(ChatRepository.compareChatsByLatest);
 
     if (filteredChats.isEmpty) {

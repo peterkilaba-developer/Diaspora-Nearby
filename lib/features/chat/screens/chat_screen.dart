@@ -2304,7 +2304,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         try {
           event =
               ref.read(eventDetailsProvider(effectiveEventId)).value ??
-              await ref.read(eventRepositoryProvider).getEvent(effectiveEventId);
+              await ref
+                  .read(eventRepositoryProvider)
+                  .getEvent(effectiveEventId);
         } catch (e) {
           debugPrint('Error fetching event for more menu: $e');
         }
@@ -3510,10 +3512,7 @@ class _ChamberFollowerGate extends ConsumerWidget {
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              border: Border(top: BorderSide(color: theme.dividerColor)),
-            ),
+            decoration: BoxDecoration(color: theme.colorScheme.surface),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

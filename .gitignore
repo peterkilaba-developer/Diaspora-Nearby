@@ -171,3 +171,8 @@ app_deploy/
 
 # Local debug log
 log.txt
+
+# Local outreach browser session & state
+.outreach-profile/
+scripts/.outreach-state.json
+scripts/outreach-extracted-*.json

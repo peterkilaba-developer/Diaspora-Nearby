@@ -387,6 +387,17 @@ exports.verifyWhatsAppOtp = functions.runWith({
       userRecord = await admin.auth().createUser({ phoneNumber });
     }
     const token = await admin.auth().createCustomToken(userRecord.uid);
+    db.collection("outreach_leads")
+        .doc(stableHash(`lead:${phoneNumber}`))
+        .set(
+            {
+              status: "converted",
+              uid: userRecord.uid,
+              convertedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+        )
+        .catch(() => undefined);
     return { success: true, token };
   } catch (error) {
     console.error("Firebase token issuance failed", error);
@@ -400,9 +411,12 @@ exports.verifyWhatsAppOtp = functions.runWith({
 /**
  * WhatsApp Cloud API Webhook
  * - GET: Responds to Meta verification challenge (hub.challenge)
- * - POST: Logs delivery statuses (sent, delivered, failed) and error codes
+ * - POST: Logs delivery statuses (sent, delivered, failed) and processes
+ *         incoming 2-way interactive outreach messages via outreach_bot.js
  */
-exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
+exports.whatsappWebhook = functions.runWith({
+  secrets: ["WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"],
+}).https.onRequest(async (req, res) => {
   if (req.method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -427,6 +441,7 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
       console.log("[WhatsApp Webhook Event]:", JSON.stringify(body));
 
       if (body && body.entry) {
+        const outreachBot = require("./outreach_bot");
         for (const entry of body.entry) {
           if (entry.changes) {
             for (const change of entry.changes) {
@@ -442,6 +457,9 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
                     );
                   }
                 }
+              }
+              if (value && Array.isArray(value.messages) && value.messages.length > 0) {
+                await outreachBot.handleIncomingWhatsAppMessages(value);
               }
             }
           }

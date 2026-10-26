@@ -1,6 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
-/// Model representing a single flight offer from Amadeus API.
+/// Model representing a single flight offer from Amadeus / Live Flight API.
 class FlightOffer {
   final String id;
   final String source;
@@ -10,6 +10,7 @@ class FlightOffer {
   final List<FlightItinerary> itineraries;
   final List<TravelerPricing> travelerPricings;
   final String? validatingAirline;
+  final String? validatingAirlineName;
   final bool instantTicketingRequired;
   final Map<String, dynamic>? rawJson;
 
@@ -22,6 +23,7 @@ class FlightOffer {
     required this.itineraries,
     required this.travelerPricings,
     this.validatingAirline,
+    this.validatingAirlineName,
     this.instantTicketingRequired = false,
     this.rawJson,
   });
@@ -42,6 +44,7 @@ class FlightOffer {
       validatingAirline: json['validatingAirlineCodes']?.isNotEmpty == true
           ? json['validatingAirlineCodes'][0]
           : null,
+      validatingAirlineName: json['validatingAirlineName'] as String?,
       instantTicketingRequired: json['instantTicketingRequired'] ?? false,
       rawJson: json,
     );
@@ -109,7 +112,9 @@ class FlightSegment {
   final String departureAt;
   final String arrivalAt;
   final String carrierCode;
+  final String? carrierName;
   final String flightNumber;
+  final String? aircraft;
   final String duration;
   final int numberOfStops;
 
@@ -119,7 +124,9 @@ class FlightSegment {
     required this.departureAt,
     required this.arrivalAt,
     required this.carrierCode,
+    this.carrierName,
     required this.flightNumber,
+    this.aircraft,
     required this.duration,
     required this.numberOfStops,
   });
@@ -131,7 +138,9 @@ class FlightSegment {
       departureAt: json['departure']?['at'] ?? '',
       arrivalAt: json['arrival']?['at'] ?? '',
       carrierCode: json['carrierCode'] ?? '',
+      carrierName: json['carrierName'] as String?,
       flightNumber: json['number'] ?? '',
+      aircraft: json['aircraft'] as String?,
       duration: json['duration'] ?? '',
       numberOfStops: json['numberOfStops'] ?? 0,
     );
@@ -177,6 +186,12 @@ class HotelListEntry {
   final double? latitude;
   final double? longitude;
   final String? countryCode;
+  final String? streetAddress;
+  final double? rating;
+  final int? starRating;
+  final int? userRatingsTotal;
+  final int? priceLevel;
+  final List<String> photos;
 
   HotelListEntry({
     required this.hotelId,
@@ -186,6 +201,12 @@ class HotelListEntry {
     this.latitude,
     this.longitude,
     this.countryCode,
+    this.streetAddress,
+    this.rating,
+    this.starRating,
+    this.userRatingsTotal,
+    this.priceLevel,
+    this.photos = const [],
   });
 
   factory HotelListEntry.fromJson(Map<String, dynamic> json) {
@@ -197,7 +218,32 @@ class HotelListEntry {
       latitude: (json['geoCode']?['latitude'] as num?)?.toDouble(),
       longitude: (json['geoCode']?['longitude'] as num?)?.toDouble(),
       countryCode: json['address']?['countryCode'],
+      streetAddress: json['address']?['street'] as String?,
+      rating: (json['rating'] as num?)?.toDouble(),
+      starRating: (json['starRating'] as num?)?.toInt(),
+      userRatingsTotal: (json['userRatingsTotal'] as num?)?.toInt(),
+      priceLevel: (json['priceLevel'] as num?)?.toInt(),
+      photos: (json['photos'] as List? ?? []).map((e) => e.toString()).toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'hotelId': hotelId,
+      'name': name,
+      'chainCode': chainCode,
+      'iataCode': iataCode,
+      'rating': rating,
+      'starRating': starRating,
+      'userRatingsTotal': userRatingsTotal,
+      'priceLevel': priceLevel,
+      'photos': photos,
+      'address': {
+        'street': streetAddress ?? '',
+        'countryCode': countryCode ?? '',
+      },
+      'geoCode': {'latitude': latitude, 'longitude': longitude},
+    };
   }
 }
 
@@ -209,6 +255,12 @@ class HotelOfferResult {
   final String? chainCode;
   final double? latitude;
   final double? longitude;
+  final double? rating;
+  final int? starRating;
+  final int? userRatingsTotal;
+  final String? address;
+  final String? countryCode;
+  final List<String> photos;
   final bool available;
   final List<RoomOffer> offers;
 
@@ -219,12 +271,19 @@ class HotelOfferResult {
     this.chainCode,
     this.latitude,
     this.longitude,
+    this.rating,
+    this.starRating,
+    this.userRatingsTotal,
+    this.address,
+    this.countryCode,
+    this.photos = const [],
     this.available = false,
     this.offers = const [],
   });
 
   factory HotelOfferResult.fromJson(Map<String, dynamic> json) {
     final hotel = json['hotel'] as Map<String, dynamic>? ?? {};
+    final rawCc = hotel['countryCode']?.toString().trim();
     return HotelOfferResult(
       type: json['type'] ?? 'hotel-offers',
       hotelId: hotel['hotelId'] ?? '',
@@ -232,6 +291,14 @@ class HotelOfferResult {
       chainCode: hotel['chainCode'],
       latitude: (hotel['latitude'] as num?)?.toDouble(),
       longitude: (hotel['longitude'] as num?)?.toDouble(),
+      rating: (hotel['rating'] as num?)?.toDouble(),
+      starRating: (hotel['starRating'] as num?)?.toInt(),
+      userRatingsTotal: (hotel['userRatingsTotal'] as num?)?.toInt(),
+      address: hotel['address'] as String?,
+      countryCode: (rawCc != null && rawCc.isNotEmpty) ? rawCc : null,
+      photos: (hotel['photos'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       available: json['available'] == true,
       offers: (json['offers'] as List? ?? [])
           .map((o) => RoomOffer.fromJson(o))
@@ -387,7 +454,7 @@ class RoomOffer {
 // AMADEUS SERVICE (Cloud Function Proxy)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Service for interacting with the Amadeus Self-Service API via a
+/// Service for interacting with the Travel API via a
 /// server-side Cloud Function proxy. API credentials never touch the client.
 class AmadeusService {
   /// Recursively converts all nested maps from `Map<Object?, Object?>` to
@@ -571,13 +638,15 @@ class AmadeusService {
   Future<List<HotelListEntry>> searchHotelsByGeocode({
     required double latitude,
     required double longitude,
-    int radius = 5,
+    int radius = 35,
     int maxResults = 20,
+    String? query,
   }) async {
     final data = await _call('searchHotelsByGeocode', {
       'latitude': latitude,
       'longitude': longitude,
       'radius': radius,
+      if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
     });
 
     final hotels = (data['data'] as List? ?? [])
@@ -589,7 +658,7 @@ class AmadeusService {
 
   /// Step 2: Get pricing & room offers for specific hotel IDs.
   ///
-  /// [hotelIds] — List of Amadeus hotel IDs (from searchHotelsByCity)
+  /// [hotelIds] — List of hotel IDs (from searchHotelsByCity / searchHotelsByGeocode)
   /// [checkInDate] — Check-in date in YYYY-MM-DD format
   /// [checkOutDate] — Check-out date in YYYY-MM-DD format
   /// [adults] — Number of adult guests (default 1)
@@ -601,6 +670,7 @@ class AmadeusService {
     int adults = 1,
     int rooms = 1,
     String currencyCode = 'USD',
+    List<HotelListEntry>? hotelEntries,
   }) async {
     // API accepts up to ~50 hotel IDs at a time
     final ids = hotelIds.take(50).toList();
@@ -612,14 +682,14 @@ class AmadeusService {
       'adults': adults,
       'rooms': rooms,
       'currencyCode': currencyCode,
+      if (hotelEntries != null)
+        'hotels': hotelEntries.take(50).map((h) => h.toJson()).toList(),
     });
 
     final results = (data['data'] as List? ?? [])
         .map((h) => HotelOfferResult.fromJson(Map<String, dynamic>.from(h)))
         .where((h) => h.available && h.offers.isNotEmpty)
         .toList();
-    // Sort by cheapest first
-    results.sort((a, b) => a.cheapestPrice.compareTo(b.cheapestPrice));
     return results;
   }
 
@@ -648,6 +718,7 @@ class AmadeusService {
     final hotelIds = hotelList.map((h) => h.hotelId).toList();
     final offers = await getHotelOffers(
       hotelIds: hotelIds,
+      hotelEntries: hotelList,
       checkInDate: checkInDate,
       checkOutDate: checkOutDate,
       adults: adults,
@@ -668,9 +739,10 @@ class AmadeusService {
     required String checkOutDate,
     int adults = 1,
     int rooms = 1,
-    int radius = 5,
+    int radius = 35,
     int maxResults = 15,
     String currencyCode = 'USD',
+    String? query,
   }) async {
     // Step 1 — list hotels by geocode
     final hotelList = await searchHotelsByGeocode(
@@ -678,6 +750,7 @@ class AmadeusService {
       longitude: longitude,
       radius: radius,
       maxResults: maxResults * 2,
+      query: query,
     );
 
     if (hotelList.isEmpty) return [];
@@ -686,6 +759,7 @@ class AmadeusService {
     final hotelIds = hotelList.map((h) => h.hotelId).toList();
     final offers = await getHotelOffers(
       hotelIds: hotelIds,
+      hotelEntries: hotelList,
       checkInDate: checkInDate,
       checkOutDate: checkOutDate,
       adults: adults,

@@ -276,7 +276,7 @@ exports.onCommunityWrite = functions
         ? existingGovData.averagePoCT
         : (existingGovData.averagePct !== undefined
             ? existingGovData.averagePct
-            : (newData.averagePoCT !== undefined ? newData.averagePoCT : 0));
+            : (newData.averagePoCT !== undefined ? newData.averagePoCT : 100));
 
       await govRef.set({
         id: govId,

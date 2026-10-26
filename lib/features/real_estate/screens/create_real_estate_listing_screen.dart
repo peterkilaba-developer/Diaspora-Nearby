@@ -612,9 +612,7 @@ class _CreateRealEstateListingScreenState
                           label: const Text('Redo GPS Survey'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppTheme.accent,
-                            side: BorderSide(
-                              color: AppTheme.accent.withValues(alpha: 0.4),
-                            ),
+                            side: BorderSide.none,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -638,9 +636,6 @@ class _CreateRealEstateListingScreenState
                     decoration: BoxDecoration(
                       color: AppTheme.elevationColor(context, 1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppTheme.accent.withValues(alpha: 0.3),
-                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -735,11 +730,6 @@ class _CreateRealEstateListingScreenState
                     decoration: BoxDecoration(
                       color: AppTheme.elevationColor(context, 1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.1,
-                        ),
-                      ),
                     ),
                     child: Row(
                       children: [
@@ -902,12 +892,6 @@ class _CreateRealEstateListingScreenState
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppTheme.accent.withValues(alpha: 0.5)
-                        : Colors.transparent,
-                    width: 1.5,
-                  ),
                 ),
                 child: Column(
                   children: [
@@ -1271,10 +1255,6 @@ class _CreateRealEstateListingScreenState
         decoration: BoxDecoration(
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppTheme.accent.withValues(alpha: 0.4),
-            style: BorderStyle.solid,
-          ),
         ),
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1333,7 +1313,6 @@ class _CreateRealEstateListingScreenState
         decoration: BoxDecoration(
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -1499,11 +1478,6 @@ class _CreateRealEstateListingScreenState
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   t,
@@ -1560,11 +1534,6 @@ class _CreateRealEstateListingScreenState
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   a,
@@ -1719,7 +1688,6 @@ class _CreateRealEstateListingScreenState
             ],
           ),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -1795,7 +1763,6 @@ class _CreateRealEstateListingScreenState
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2112,9 +2079,6 @@ class _CreateRealEstateListingScreenState
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2180,12 +2144,6 @@ class _CreateRealEstateListingScreenState
               ? AppTheme.accent.withValues(alpha: 0.15)
               : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : theme.colorScheme.onSurface.withValues(alpha: 0.15),
-            width: selected ? 1.5 : 1,
-          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

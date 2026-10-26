@@ -602,7 +602,9 @@ exports.requestEmergencyProxy = functions.https.onCall(async (data, context) => 
     updatedAt: now,
   };
   if (input.country) membershipPatch.country = String(input.country);
-  if (input.status) membershipPatch.status = String(input.status);
+  if (input.status && String(input.status) !== "active") {
+    membershipPatch.status = String(input.status);
+  }
   if (input.joinedDate) membershipPatch.joinedDate = input.joinedDate;
   if (input.annualContribution != null) membershipPatch.annualContribution = Number(input.annualContribution);
   if (input.supportNumber) membershipPatch.supportNumber = String(input.supportNumber);

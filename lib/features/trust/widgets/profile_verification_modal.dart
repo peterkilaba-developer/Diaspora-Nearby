@@ -318,7 +318,6 @@ class _ProfileVerificationModalState
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         children: [
@@ -382,7 +381,6 @@ class _ProfileVerificationModalState
         decoration: BoxDecoration(
           color: AppTheme.success.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.success),
         ),
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -414,9 +412,6 @@ class _ProfileVerificationModalState
               decoration: BoxDecoration(
                 color: state == false ? AppTheme.error : theme.cardColor,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: state == false ? AppTheme.error : theme.dividerColor,
-                ),
               ),
               child: Icon(
                 Icons.close,
@@ -449,7 +444,7 @@ class _ProfileVerificationModalState
                 // So neutral is basically "ignore".
                 // Let's style it clearly.
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.dividerColor),
+                border: const Border(),
               ),
               child: Icon(
                 LucideIcons.minus,
@@ -470,9 +465,6 @@ class _ProfileVerificationModalState
               decoration: BoxDecoration(
                 color: state == true ? AppTheme.success : theme.cardColor,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: state == true ? AppTheme.success : theme.dividerColor,
-                ),
               ),
               child: Icon(
                 Icons.check,

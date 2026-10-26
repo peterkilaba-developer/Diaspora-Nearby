@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -921,11 +922,7 @@ class _CreateCarListingScreenState
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        side: BorderSide(
-                          color: sel
-                              ? AppTheme.accent.withValues(alpha: 0.3)
-                              : Colors.transparent,
-                        ),
+                        side: BorderSide.none,
                       );
                     }).toList(),
                   ),
@@ -960,9 +957,6 @@ class _CreateCarListingScreenState
                 ],
               ),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppTheme.accent.withValues(alpha: 0.25),
-              ),
             ),
             child: Row(
               children: [
@@ -1098,12 +1092,7 @@ class _CreateCarListingScreenState
         top: 12,
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
-      decoration: BoxDecoration(
-        color: AppTheme.elevationColor(context, 1),
-        border: Border(
-          top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1)),
-        ),
-      ),
+      decoration: BoxDecoration(color: AppTheme.elevationColor(context, 1)),
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton(
@@ -1272,88 +1261,99 @@ class _CreateCarListingScreenState
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppTheme.elevationColor(context, 3),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            final query = controller.text.toLowerCase();
-            final filtered = items
-                .where((i) => i.toLowerCase().contains(query))
-                .toList();
-            return DraggableScrollableSheet(
-              initialChildSize: 0.6,
-              maxChildSize: 0.85,
-              minChildSize: 0.3,
-              expand: false,
-              builder: (_, scrollCtrl) => Column(
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Theme.of(ctx).hintColor.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: StatefulBuilder(
+            builder: (ctx, setSheetState) {
+              final query = controller.text.toLowerCase();
+              final filtered = items
+                  .where((i) => i.toLowerCase().contains(query))
+                  .toList();
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.elevationColor(context, 3),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: TextField(
-                      controller: controller,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: 'Search $title...',
-                        prefixIcon: const Icon(LucideIcons.search, size: 18),
-                        filled: true,
-                        fillColor: AppTheme.elevationColor(ctx, 1),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                ),
+                child: DraggableScrollableSheet(
+                  initialChildSize: 0.6,
+                  maxChildSize: 0.85,
+                  minChildSize: 0.3,
+                  expand: false,
+                  builder: (_, scrollCtrl) => Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(ctx).hintColor.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      onChanged: (_) => setSheetState(() {}),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollCtrl,
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) {
-                        final item = filtered[i];
-                        final sel = item == current;
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                            item,
-                            style: TextStyle(
-                              fontWeight: sel
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                              color: sel ? AppTheme.accent : null,
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: TextField(
+                          controller: controller,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Search $title...',
+                            prefixIcon: const Icon(
+                              LucideIcons.search,
+                              size: 18,
+                            ),
+                            filled: true,
+                            fillColor: AppTheme.elevationColor(ctx, 1),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
                             ),
                           ),
-                          trailing: sel
-                              ? const Icon(
-                                  LucideIcons.check,
-                                  size: 16,
-                                  color: AppTheme.accent,
-                                )
-                              : null,
-                          onTap: () {
-                            onSelected(item);
-                            Navigator.pop(ctx);
+                          onChanged: (_) => setSheetState(() {}),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollCtrl,
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            final item = filtered[i];
+                            final sel = item == current;
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                item,
+                                style: TextStyle(
+                                  fontWeight: sel
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: sel ? AppTheme.accent : null,
+                                ),
+                              ),
+                              trailing: sel
+                                  ? const Icon(
+                                      LucideIcons.check,
+                                      size: 16,
+                                      color: AppTheme.accent,
+                                    )
+                                  : null,
+                              onTap: () {
+                                onSelected(item);
+                                Navigator.pop(ctx);
+                              },
+                            );
                           },
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -1424,7 +1424,6 @@ class _CreateCarListingScreenState
             ? Colors.white.withValues(alpha: 0.06)
             : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

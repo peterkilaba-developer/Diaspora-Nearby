@@ -441,6 +441,30 @@ async function generateDiasporaContent(options = {}) {
 
   const platform = (options.platform || "x").toLowerCase(); // "x", "linkedin", "facebook", "instagram"
   const topic = options.topic || "diaspora_discovery_connection_and_dual_identity_wealth";
+  const corridor = options.corridor || (topic.includes("[TZ_ABROAD]") ? "tz_abroad" : topic.includes("[EXPAT_IN_TZ]") ? "expat_in_tz" : "global");
+  const lang = options.lang || (corridor === "tz_abroad" ? "sw" : "en");
+
+  const corridorGuidance =
+    corridor === "tz_abroad"
+      ? `
+TARGET AUDIENCE & LANGUAGE REQUIREMENT (COHORT A — TANZANIANS LIVING OUTSIDE TANZANIA):
+- Write MOSTLY IN KISWAHILI (warm, authentic Tanzanian Kiswahili addressing "Watanzania waishio nje ya Tanzania / Ughaibuni / Diaspora" in the US, UK, UAE/Dubai, South Africa, Kenya, Canada, Europe, and China), keeping technical product terms like "Diaspora Nearby", "$DIASPORA", "Base Blockchain", and "1:1 Ubuntu Match".
+- Highlight how Tanzanians abroad can discover nearby Watanzania in their host city (Houston, Washington DC, London, Dubai, Johannesburg, Nairobi), organize their city chamber, and build collective wealth for both their host city and their home region in Tanzania (Dar es Salaam, Arusha, Kilimanjaro/Moshi, Mwanza, Zanzibar, Dodoma, Mbeya).
+- On Facebook and Instagram, end with a Kiswahili Comment-to-DM hook: "Andika mji ulipo kwenye comment (mfano: HOUSTON, LONDON, DUBAI, NAIROBI) au comment 'TZ' tukutumie link ya kujiunga moja kwa moja kwenye DM! 👉 https://diasporanearby.com/invite"
+`
+      : corridor === "expat_in_tz"
+      ? `
+TARGET AUDIENCE & LANGUAGE REQUIREMENT (COHORT B — NON-TANZANIANS / EXPATS LIVING INSIDE TANZANIA):
+- Target international expats, diplomats, professionals, regional diaspora, and digital nomads who are NOT from Tanzania but live inside Tanzania (Dar es Salaam — Masaki/Oysterbay/Upanga/Mikocheni, Arusha — UN/EAC/NGOs, and Zanzibar — Stone Town/Paje/Nungwi).
+- Language: ${
+          lang && lang !== "en"
+            ? `Write in ${lang.toUpperCase()} paired with clear English so speakers of that native language in Tanzania feel immediately at home.`
+            : "Write in warm, inclusive International English (and optionally weave in multicultural greetings like Bienvenue / 欢迎 / नमस्ते / مرحباً / Willkommen / Karibu)."
+        }
+- Emphasize discovering compatriots from your home country living nearby in Tanzania, building verified local trust, organizing your nationality's chamber in Tanzania, and earning $DIASPORA on Base Blockchain with a 1:1 Ubuntu Community Match.
+- On Facebook and Instagram, end with a Comment-to-DM hook: "Living in Dar es Salaam, Arusha, or Zanzibar? Comment your Home Country + City below and we'll DM your Founding Member invite link! 👉 https://diasporanearby.com/invite"
+`
+      : "";
 
   const platformInstructions = {
     x: `
@@ -486,6 +510,7 @@ CRITICAL GUARDRAILS & TERMINOLOGY RULES:
 2. OFFICIAL TOKEN HASHTAG: Always include the official token hashtag #$DIASPORA in the hashtag block of every post.
 3. BASE BLOCKCHAIN TERMINOLOGY: Whenever you refer to Base, ALWAYS write "Base Blockchain" (never standalone "Base" or "Base L2") so readers clearly understand what Base is.
 
+${corridorGuidance}
 ${platformInstructions[platform] || platformInstructions.linkedin}`;
 
   // 1. Try Gemini
@@ -525,35 +550,89 @@ ${platformInstructions[platform] || platformInstructions.linkedin}`;
 
   // 2. Fallback to NVIDIA API if configured
   if (nvidiaKey) {
-    const res = await axios.post(
-      "https://integrate.api.nvidia.com/v1/chat/completions",
-      {
-        model: "meta/llama-3.1-70b-instruct",
-        messages: [
-          { role: "system", content: systemInstructions },
-          { role: "user", content: `Write a ${platform} post on: "${topic}". Always use "Base Blockchain". Start directly:` },
-        ],
-        temperature: 0.7,
-        max_tokens: 800,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${nvidiaKey}`,
-          "Content-Type": "application/json",
+    try {
+      const res = await axios.post(
+        "https://integrate.api.nvidia.com/v1/chat/completions",
+        {
+          model: "meta/llama-3.3-70b-instruct",
+          messages: [
+            { role: "system", content: systemInstructions },
+            { role: "user", content: `Write a ${platform} post on: "${topic}". Always use "Base Blockchain". Start directly:` },
+          ],
+          temperature: 0.7,
+          max_tokens: 800,
         },
+        {
+          headers: {
+            Authorization: `Bearer ${nvidiaKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      let text = res.data?.choices?.[0]?.message?.content?.trim() || "";
+      text = text.replace(/^(here\s+is|here's)[^\n:]*[:\n]\s*/i, "");
+      text = text.replace(/^["']/, "").replace(/["']$/, "").trim();
+      text = enforceBaseBlockchainTerminology(text);
+      if (platform === "x" && text.length > 280) {
+        text = text.substring(0, 275) + "...";
       }
-    );
-    let text = res.data?.choices?.[0]?.message?.content?.trim() || "";
-    text = text.replace(/^(here\s+is|here's)[^\n:]*[:\n]\s*/i, "");
-    text = text.replace(/^["']/, "").replace(/["']$/, "").trim();
-    text = enforceBaseBlockchainTerminology(text);
-    if (platform === "x" && text.length > 280) {
-      text = text.substring(0, 275) + "...";
+      if (text) return text;
+    } catch (nErr) {
+      console.warn("⚠️ NVIDIA generation fallback warning, using curated corridor copy bank:", nErr.message);
     }
-    return text;
   }
 
-  throw new Error("Content generation failed: no operational AI key.");
+  // 3. Zero-Failure Curated Corridor Copy Bank (Kiswahili TZ Abroad / Expat in TZ / Global)
+  return buildCuratedCorridorCopy({ platform, corridor, lang });
+}
+
+function buildCuratedCorridorCopy({ platform = "facebook", corridor = "global", lang = "en" }) {
+  const idx = Math.floor(Date.now() / (1000 * 60 * 10)) % 3;
+
+  if (corridor === "tz_abroad") {
+    const xPool = [
+      "🇹🇿 Watanzania waishio nje ya Tanzania! Gundua Watanzania walio karibu nawe mji uliopo na ujenge utajiri wa pamoja (1:1 Ubuntu Match) kupitia $DIASPORA kwenye Base Blockchain 👉 https://diasporanearby.com/invite #DiasporaNearby #BaseBlockchain #$DIASPORA",
+      "🇹🇿 Popote ulipo ughaibuni (US, UK, Dubai, SA, Kenya, Canada) — ungana na Watanzania wenzako kwenye Diaspora Nearby na ujenge hazina ya mji wako na nyumbani TZ kupitia $DIASPORA kwenye Base Blockchain! 👉 https://diasporanearby.com/invite #$DIASPORA",
+      "🇹🇿 Kutoka Dar, Arusha, Moshi na Mwanza hadi Houston, London na Dubai: Jiunge na chemba ya Watanzania mji uliopo kwenye Diaspora Nearby na upate $DIASPORA kwenye Base Blockchain! 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+    ];
+    const longSw = [
+      "🇹🇿 Habari Watanzania wenzangu waishio nje ya Tanzania (Diaspora / Ughaibuni)!\n\nPopote ulipo — Marekani (Houston, DC/DMV, Dallas), Uingereza (London, Reading, Birmingham), Dubai/UAE, Afrika Kusini, Kenya, Canada, Ulaya au China — Diaspora Nearby imejengwa maalum kutuunganisha:\n\n1️⃣ Gundua Watanzania Karibu Nawe: Fahamu Watanzania walio mji mmoja au mtaa mmoja na wewe.\n2️⃣ Ungana kwa Uaminifu: Jenga Proof of Community Trust (PCT) kwenye Base Blockchain.\n3️⃣ Jenga Chemba za Miji na Mikoa ya TZ: Unganisha mji unaoishi sasa na mkoa uliotoka nyumbani Tanzania.\n4️⃣ 1:1 Ubuntu Match: Kila tokeni ya $DIASPORA unayopata kwenye Epoch 1 inazalisha kiasi sawa (1:1) kwenye hazina ya mji wako wa ughaibuni na hazina ya nyumbani Tanzania!\n\n💬 Andika mji ulipo kwenye comment (mfano: HOUSTON, LONDON, DUBAI, NAIROBI) au comment 'TZ' tukutumie link ya kujiunga moja kwa moja kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #WatanzaniaUghaibuni #FindYourPeople #BaseBlockchain #$DIASPORA",
+      "🇹🇿 Nyumbani ni nyumbani hata ukiwa ughaibuni! 🌍\n\nKwa miaka mingi Watanzania waishio nje ya nchi tumekuwa tukitafutana kwenye magrupu yaliyotawanyika. Sasa kupitia Diaspora Nearby, kila Mtanzania nje ya Tanzania anaweza:\n• Kuwafahamu Watanzania walio karibu naye katika mji anaoishi\n• Kujiunga na Chemba rasmi ya Watanzania wa mji wake pamoja na mkoa wake wa nyumbani (Dar es Salaam, Arusha, Kilimanjaro, Mwanza, Zanzibar, Mbeya, Dodoma)\n• Kupata tokeni za $DIASPORA kwenye Base Blockchain (Epoch 1) zenye 1:1 Ubuntu Community Match kwa ajili ya mji wako na nyumbani Tanzania.\n\n💬 Comment mji ulipo au 'TZ' hapa chini tukutumie kodi yako ya waanzilishi kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #TanzaniaDiaspora #BaseBlockchain #$DIASPORA #Ubuntu",
+      "🇹🇿 Kutoka Tanzania kwenda Ughaibuni — bila kupoteza mizizi wala umiliki wa kiuchumi!\n\nDiaspora Nearby inawaunganisha Watanzania waishio nje ya Tanzania kwenye mtandao wa kuaminiana (Proof of Community Trust) na kuwapa umiliki wa moja kwa moja kupitia $DIASPORA kwenye Base Blockchain.\n\nKila unapoungana na Mtanzania mwenzako mji uliopo, unajenga utajiri wako binafsi na pia hazina ya 1:1 Ubuntu Match kwa mji wako wa ughaibuni na mkoa wako wa Tanzania.\n\n💬 Andika 'TZ' au jina la mji wako kwenye comment tukutumie link kwenye DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA",
+    ];
+    return platform === "x" ? xPool[idx] : longSw[idx];
+  }
+
+  if (corridor === "expat_in_tz") {
+    if (lang === "fr") {
+      return platform === "x"
+        ? "🇫🇷🌍 Vous vivez en Tanzanie (Dar, Arusha, Zanzibar) ? Retrouvez vos compatriotes à proximité et gagnez des $DIASPORA sur Base Blockchain (1:1 Ubuntu Match) 👉 https://diasporanearby.com/invite #DiasporaNearby #BaseBlockchain #$DIASPORA"
+        : "🇫🇷🌍 Appel à la communauté francophone et aux expatriés vivant en Tanzanie (Dar es Salaam, Arusha, Zanzibar) !\n\nAvec Diaspora Nearby, vous pouvez :\n1️⃣ Découvrir vos compatriotes vivant à proximité dans votre ville ou quartier.\n2️⃣ Bâtir un réseau de confiance vérifié (Proof of Community Trust sur Base Blockchain).\n3️⃣ Organiser la chambre locale de votre nationalité en Tanzanie.\n4️⃣ Gagner des jetons $DIASPORA sur Base Blockchain en Epoch 1 avec un abondement 1:1 Ubuntu Match pour votre communauté.\n\n💬 Commentez votre pays d'origine + votre ville (ex: DAR, ARUSHA, ZANZIBAR) et nous vous enverrons votre lien d'invitation en DM !\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInTanzania #BaseBlockchain #$DIASPORA";
+    }
+    const xExpat = [
+      "🌍 Living in Dar es Salaam, Arusha, or Zanzibar from abroad? Discover compatriots from your home country nearby and earn $DIASPORA on Base Blockchain (1:1 Ubuntu Match) 👉 https://diasporanearby.com/invite #DiasporaNearby #BaseBlockchain #$DIASPORA",
+      "🌍➡️🇹🇿 Expats & international community in Tanzania! Find people from your home country in Dar, Arusha & Zanzibar, join your nationality chamber, and earn $DIASPORA on Base Blockchain 👉 https://diasporanearby.com/invite #DiasporaNearby #$DIASPORA",
+      "🌍 From Masaki & Oysterbay in Dar to Arusha & Zanzibar: Never land alone in Tanzania. Connect with compatriots nearby & build 1:1 matched community wealth on Base Blockchain 👉 https://diasporanearby.com/invite #BaseBlockchain #$DIASPORA",
+    ];
+    const longExpat = [
+      "🌍➡️🇹🇿 Living in Dar es Salaam, Arusha, or Zanzibar from abroad?\n\nWhether you are a regional expat (from Kenya, South Africa, Uganda, DRC, Nigeria), an international professional, diplomat, or digital nomad (from the UK, US, India, China, EU, or Middle East) — Diaspora Nearby connects your Dual Geographic Identity in Tanzania:\n\n1️⃣ Nearby Compatriot Discovery: Instantly find verified people from your home country in Masaki, Oysterbay, Upanga, Arusha, or Zanzibar.\n2️⃣ High-Trust Peer Network: Build Proof of Community Trust (PCT) on Base Blockchain.\n3️⃣ Nationality & City Chambers: Join or lead your home country's official community hub inside Tanzania.\n4️⃣ 1:1 Ubuntu Wealth Match: Every $DIASPORA token you earn in Epoch 1 on Base Blockchain mints an equal 1:1 reserve for both your Tanzania host hub and your home country treasury.\n\n💬 Comment your Home Country + City below (e.g., 'KENYA - DAR' or 'UK - ARUSHA') and we'll DM your Founding Member invite link!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInTanzania #DarEsSalaam #Arusha #Zanzibar #BaseBlockchain #$DIASPORA",
+      "🌍 Quick Roll Call for the International & Expat Community in Tanzania (Dar · Arusha · Zanzibar)! 🇹🇿\n\nBienvenue · 欢迎 · नमस्ते · مرحباً · Willkommen · Karibu!\n\nWe are organizing verified nationality & city chambers across Dar es Salaam, Arusha, and Zanzibar on Diaspora Nearby so whenever someone from your home country arrives in Tanzania, they immediately have a trusted community nearby — while earning $DIASPORA on Base Blockchain with a 1:1 Ubuntu Community Match.\n\n💬 Drop your Home Country + City in the comments to receive your Founding Member invite in your DM!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity",
+      "🌍➡️🇹🇿 Never land alone in Tanzania.\n\nMoving to or working in Dar es Salaam, Arusha, or Zanzibar is transformative when you can immediately discover compatriots from home right in your neighborhood. Diaspora Nearby unites expats and diaspora communities into structured city chambers backed by $DIASPORA on Base Blockchain.\n\n💬 Comment 'DAR', 'ARUSHA', or 'ZANZIBAR' below and we'll DM your direct invite link!\n👉 https://diasporanearby.com/invite\n\n#DiasporaNearby #ExpatsInDar #Arusha #Zanzibar #BaseBlockchain #$DIASPORA",
+    ];
+    return platform === "x" ? xExpat[idx] : longExpat[idx];
+  }
+
+  const xGlobal = [
+    "🌍 Discover verified compatriots nearby in any city, organize your local diaspora chamber, and build collective wealth across your Dual Geographic Identity via $DIASPORA on Base Blockchain 👉 https://diasporanearby.com #DiasporaNearby #BaseBlockchain #$DIASPORA",
+    "🌍 Never land alone in a new city. Diaspora Nearby connects you with compatriots nearby and matches every Epoch 1 $DIASPORA reward 1:1 on Base Blockchain for your host and home communities 👉 https://diasporanearby.com #FindYourPeople #$DIASPORA",
+    "🌍 From scattered individuals to organized diaspora chambers: Connect with your people nearby and mint 1:1 matched community wealth via $DIASPORA on Base Blockchain 👉 https://diasporanearby.com #DiasporaNearby #BaseBlockchain #$DIASPORA",
+  ];
+  const longGlobal = [
+    "🌍 Never land alone in a new city.\n\nDiaspora Nearby is built for everyone living between a Home Country and a Host Country (Dual Geographic Identity) — empowering you to discover compatriots nearby, build Proof of Community Trust (PCT), organize local diaspora chambers, and earn $DIASPORA on Base Blockchain with a 1:1 Ubuntu Community Match.\n\n👉 Join Epoch 1 today: https://diasporanearby.com\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #DualIdentity",
+    "🌍 Turning cross-border community trust into sovereign retained wealth.\n\nEvery verified connection and community action on Diaspora Nearby in Epoch 1 earns $DIASPORA on Base Blockchain while minting a 1:1 Ubuntu Community Match directly into both your host city and homeland community treasuries.\n\n👉 Explore https://diasporanearby.com\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA #Ubuntu",
+    "🌍 From scattered individuals to organized communities.\n\nDiscover compatriots nearby, join your city and national diaspora chambers, and co-own the network via $DIASPORA on Base Blockchain.\n\n👉 https://diasporanearby.com\n\n#DiasporaNearby #FindYourPeople #BaseBlockchain #$DIASPORA",
+  ];
+  return platform === "x" ? xGlobal[idx] : longGlobal[idx];
 }
 
 // ── Cloud Functions (HTTPS & Scheduled) ──
@@ -796,7 +875,12 @@ exports.forceDiasporaSocialCron = functions
   .runWith({ timeoutSeconds: 300, memory: "512MB" })
   .https.onRequest(async (req, res) => {
     try {
-      const result = await executeDailySocialPublication();
+      const overrides = {
+        corridor: req.body?.corridor || req.query?.corridor || null,
+        lang: req.body?.lang || req.query?.lang || null,
+        topic: req.body?.topic || req.query?.topic || null,
+      };
+      const result = await executeDailySocialPublication(overrides);
       res.json({ success: true, message: "Diaspora social publication executed!", result });
     } catch (err) {
       console.error("forceDiasporaSocialCron error:", err.message);
@@ -805,23 +889,37 @@ exports.forceDiasporaSocialCron = functions
   });
 
 // Helper that executes the automated publication flow
-async function executeDailySocialPublication() {
+async function executeDailySocialPublication(overrides = {}) {
   await ensureSocialConfigEnv();
 
   const topics = [
+    "[TZ_ABROAD] Watanzania waishio nje ya Tanzania (Marekani, UK, Dubai, Afrika Kusini, Kenya, Canada): Gundua Watanzania walio karibu nawe mji uliopo na jenga utajiri wa pamoja (1:1 Ubuntu Match) kupitia $DIASPORA kwenye Base Blockchain",
+    "[TZ_ABROAD] Kutoka Dar, Arusha, Moshi na Mwanza hadi Houston, London na Dubai: Jinsi Diaspora Nearby inavyowaunganisha Watanzania ughaibuni katika chemba za miji na kujenga hazina ya nyumbani kupitia $DIASPORA kwenye Base Blockchain",
+    "[EXPAT_IN_TZ] Living in Dar es Salaam, Arusha, or Zanzibar from abroad? Discover compatriots from your home country nearby, organize your nationality chamber in Tanzania, and earn $DIASPORA on Base Blockchain",
+    "[EXPAT_IN_TZ] From Masaki & Oysterbay in Dar to Arusha & Zanzibar: How international expats, diplomats, and diaspora in Tanzania find their people and build 1:1 matched community wealth via $DIASPORA on Base Blockchain",
     "Discovery & Connection: How real-time proximity alerts help diaspora members find and connect with compatriots in any city worldwide",
     "Never landing alone: Discovering and connecting with verified diaspora peers when arriving in a new host city",
     "Organizing Diaspora Communities: How local town, city, and national community hubs unite scattered compatriots into a structured network",
     "Dual Geographic Identity & Collective Wealth: Creating wealth for both your host city and your homeland community via $DIASPORA on Base Blockchain",
-    "The $DIASPORA Token on Base Blockchain: How everyday diaspora discovery, connection, and community organization mint co-owned wealth in Epoch 1",
     "1:1 Ubuntu Community Match: Why every $DIASPORA you earn on Base Blockchain mints equal treasury reserves for your dual geographic identity locations",
-    "Web2 vs Web3 Diaspora Organization: Why Diaspora Nearby gives organized communities co-ownership via $DIASPORA on Base Blockchain",
     "Proof of Community Trust (PCT): How authentic peer connections and community vouching on Base Blockchain build portable trust and wealth",
-    "Dual Geographic Identity: Seamlessly belonging to, organizing, and building wealth across both your home country and host country",
-    "From scattered individuals to organized communities: How discovering compatriots nearby builds lasting wealth for both home and host locations",
   ];
 
-  const selectedTopic = topics[Math.floor(Math.random() * topics.length)];
+  const selectedTopic =
+    overrides.topic ||
+    (overrides.corridor === "tz_abroad"
+      ? topics[0]
+      : overrides.corridor === "expat_in_tz"
+      ? topics[2]
+      : topics[Math.floor(Math.random() * topics.length)]);
+  const corridor =
+    overrides.corridor ||
+    (selectedTopic.includes("[TZ_ABROAD]")
+      ? "tz_abroad"
+      : selectedTopic.includes("[EXPAT_IN_TZ]")
+      ? "expat_in_tz"
+      : "global");
+  const lang = overrides.lang || (corridor === "tz_abroad" ? "sw" : "en");
 
   // Check if Unified API (Ayrshare) is available for 6-platform broadcast
   if (process.env.AYRSHARE_API_KEY) {
@@ -834,7 +932,7 @@ async function executeDailySocialPublication() {
         post: pack.textCopy.x + "\n\n" + pack.textCopy.linkedIn.slice(0, 300) + "...\n\n👉 Join: https://diasporanearby.com",
         videoTitle: pack.shortVideoStoryboard.title,
       });
-      return { topic: selectedTopic, type: "unified_broadcast", result: broadcastRes };
+      return { topic: selectedTopic, corridor, lang, type: "unified_broadcast", result: broadcastRes };
     } catch (unifiedErr) {
       console.warn("⚠️ Unified broadcast failed, falling back to direct native publishers:", unifiedErr.message);
     }
@@ -843,7 +941,7 @@ async function executeDailySocialPublication() {
   // ── 1. Native Direct Post to X (Twitter) ──
   let xResult = null;
   try {
-    const xContent = await generateDiasporaContent({ platform: "x", topic: selectedTopic });
+    const xContent = await generateDiasporaContent({ platform: "x", topic: selectedTopic, corridor, lang });
     xResult = await postTweet(xContent);
     console.log(`✅ [Free Native] X post published: ${xResult.tweetUrl}`);
   } catch (xErr) {
@@ -854,7 +952,7 @@ async function executeDailySocialPublication() {
   // ── 2. Native Direct Post to LinkedIn ──
   let linkedInResult = null;
   try {
-    const linkedInContent = await generateDiasporaContent({ platform: "linkedin", topic: selectedTopic });
+    const linkedInContent = await generateDiasporaContent({ platform: "linkedin", topic: selectedTopic, corridor, lang });
     linkedInResult = await postToLinkedIn(linkedInContent, { postToOrg: true });
     console.log(`✅ [Free Native] LinkedIn post published: ${linkedInResult.postUrl}`);
   } catch (liErr) {
@@ -868,7 +966,7 @@ async function executeDailySocialPublication() {
   const rotatingCardUrl = metaPublisher.getRotatingVisualCardUrl(selectedTopic);
   if (process.env.META_PAGE_ACCESS_TOKEN) {
     try {
-      const fbMessage = await generateDiasporaContent({ platform: "facebook", topic: selectedTopic });
+      const fbMessage = await generateDiasporaContent({ platform: "facebook", topic: selectedTopic, corridor, lang });
       facebookResult = await metaPublisher.postPhotoToFacebookPage({
         imageUrl: rotatingCardUrl,
         caption: fbMessage,
@@ -881,6 +979,8 @@ async function executeDailySocialPublication() {
         imageUrl: rotatingCardUrl,
         text: fbMessage,
         topic: selectedTopic,
+        corridor,
+        lang,
         postedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } catch (fbErr) {
@@ -895,7 +995,7 @@ async function executeDailySocialPublication() {
   let instagramResult = null;
   if (process.env.META_PAGE_ACCESS_TOKEN) {
     try {
-      const igCaption = await generateDiasporaContent({ platform: "instagram", topic: selectedTopic });
+      const igCaption = await generateDiasporaContent({ platform: "instagram", topic: selectedTopic, corridor, lang });
       const igImageUrl = rotatingCardUrl;
       instagramResult = await metaPublisher.postPhotoToInstagram({
         imageUrl: igImageUrl,

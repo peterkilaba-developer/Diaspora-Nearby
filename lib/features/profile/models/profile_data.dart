@@ -272,10 +272,11 @@ class ProfileData {
           json['currentCountryCode'] as String? ??
           json['hostCountryCode'] as String? ??
           hostLoc['country_code'] as String?;
-      final summary = [city, state, country]
-          .whereType<String>()
-          .where((p) => p.trim().isNotEmpty)
-          .join(', ');
+      final summary = [
+        city,
+        state,
+        country,
+      ].whereType<String>().where((p) => p.trim().isNotEmpty).join(', ');
       json['currentLocation'] = <String, dynamic>{
         'formatted_address': summary,
         'place_id': '',

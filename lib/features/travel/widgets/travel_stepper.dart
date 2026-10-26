@@ -114,11 +114,6 @@ class _StepperButton extends StatelessWidget {
               ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: enabled
-                ? AppTheme.accent.withValues(alpha: 0.3)
-                : Theme.of(context).hintColor.withValues(alpha: 0.2),
-          ),
         ),
         child: Icon(
           icon,

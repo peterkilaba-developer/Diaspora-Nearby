@@ -50,11 +50,7 @@ class FakeUploadTask extends Fake implements UploadTask {
 
 class FakeWriteBatch extends Fake implements WriteBatch {
   @override
-  void set<T>(
-    DocumentReference<T> document,
-    T data, [
-    SetOptions? options,
-  ]) {}
+  void set<T>(DocumentReference<T> document, T data, [SetOptions? options]) {}
 
   @override
   Future<void> commit() async {}

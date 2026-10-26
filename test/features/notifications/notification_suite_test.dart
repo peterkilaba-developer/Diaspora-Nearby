@@ -1,5 +1,6 @@
 // ignore_for_file: subtype_of_sealed_class, must_be_immutable
 
+import 'dart:convert';
 import 'dart:ui' show AppLifecycleState;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diaspora_nearby/core/services/proximity_service.dart';
@@ -622,6 +623,159 @@ void main() {
           partnerUserId: 'user_kwame',
         );
         expect(pushService.getBufferedChatMessages(chatId), isEmpty);
+      },
+    );
+  });
+
+  group('Trust Slider Stake Notification Tests', () {
+    late FakeLocalNotifications localNotifications;
+    late PushNotificationService pushService;
+
+    setUp(() {
+      localNotifications = FakeLocalNotifications();
+      pushService = PushNotificationService(
+        null,
+        localNotifications: localNotifications,
+        firestore: fakeFirestore,
+      );
+    });
+
+    test(
+      'trust stake NotificationType variants serialize and parse camelCase + snake_case cleanly',
+      () {
+        final now = DateTime.now();
+        final variants = <NotificationType, String>{
+          NotificationType.trustFullTrustReceived: 'trust_full_trust_received',
+          NotificationType.trustNoTrustReceived: 'trust_no_trust_received',
+          NotificationType.trustStakeConsensusAgree:
+              'trust_stake_consensus_agree',
+          NotificationType.trustStakeConsensusDisagree:
+              'trust_stake_consensus_disagree',
+        };
+
+        for (final entry in variants.entries) {
+          final item = NotificationItem(
+            id: 'notif_${entry.key.name}',
+            type: entry.key,
+            title: 'Trust Alert',
+            body: 'Body text',
+            payload: {'fromUserId': 'staker_123', 'toUserId': 'target_456'},
+            createdAt: now,
+          );
+
+          final map = item.toMap();
+          expect(map['type'], entry.key.name);
+          final roundTrip = NotificationItem.fromMap(item.id, map);
+          expect(roundTrip.type, entry.key);
+          expect(roundTrip.payload['fromUserId'], 'staker_123');
+
+          final fromSnake = NotificationItem.fromMap(item.id, {
+            ...map,
+            'type': entry.value,
+          });
+          expect(fromSnake.type, entry.key);
+        }
+      },
+    );
+
+    test(
+      'all trust stake push types link directly to the staker profile (/profile/<fromUserId>)',
+      () {
+        const stakerId = 'staker_kwame_99';
+        const pushTypes = <String>[
+          'trust_full_trust_received',
+          'trust_no_trust_received',
+          'trust_stake_consensus_agree',
+          'trust_stake_consensus_disagree',
+        ];
+
+        for (final type in pushTypes) {
+          expect(
+            PushNotificationService.resolveTargetRouteForData({
+              'type': type,
+              'fromUserId': stakerId,
+              'toUserId': 'staked_user_1',
+            }),
+            '/profile/$stakerId',
+          );
+
+          // Also works when FCM payload sets `userId` via `targetUserId`
+          expect(
+            PushNotificationService.resolveTargetRouteForData({
+              'type': type,
+              'userId': stakerId,
+            }),
+            '/profile/$stakerId',
+          );
+        }
+      },
+    );
+
+    test(
+      'foreground trust stake notifications display for staked user and stakers on both ends with staker profile payload',
+      () async {
+        const stakerId = 'staker_ama_01';
+        const stakedUserId = 'member_kofi_02';
+
+        // 1. Staked user receives Full Trust notification
+        await pushService.handleIncomingMessage(
+          messageId: 'stake_evt_1',
+          notificationTitle: 'Full Trust Staked on You',
+          notificationBody:
+              'Ama Mensah staked 1,000 DSP on Full Trust for you. Tap to view their profile.',
+          data: {
+            'id': 'trust_stake_full_trust_1',
+            'type': 'trust_full_trust_received',
+            'fromUserId': stakerId,
+            'toUserId': stakedUserId,
+            'userId': stakerId,
+            'stakeSide': 'full_trust',
+          },
+        );
+
+        // 2. Agreeing staker receives +100 DSP consensus notification
+        await pushService.handleIncomingMessage(
+          messageId: 'stake_evt_2',
+          notificationTitle: 'Full Trust Consensus (+100 DSP)',
+          notificationBody:
+              'Ama Mensah also staked Full Trust on Kofi Boateng. You earned +100 DSP consensus reward!',
+          data: {
+            'id': 'trust_consensus_agree_1',
+            'type': 'trust_stake_consensus_agree',
+            'fromUserId': stakerId,
+            'toUserId': stakedUserId,
+            'userId': stakerId,
+            'stakeSide': 'full_trust',
+          },
+        );
+
+        // 3. Opposing staker receives -100 DSP slash notification
+        await pushService.handleIncomingMessage(
+          messageId: 'stake_evt_3',
+          notificationTitle: 'Opposing Full Trust Stake (-100 DSP)',
+          notificationBody:
+              'Ama Mensah staked Full Trust on Kofi Boateng against your No Trust stake (-100 DSP; 900 DSP remaining).',
+          data: {
+            'id': 'trust_consensus_disagree_1',
+            'type': 'trust_stake_consensus_disagree',
+            'fromUserId': stakerId,
+            'toUserId': stakedUserId,
+            'userId': stakerId,
+            'stakeSide': 'full_trust',
+          },
+        );
+
+        expect(localNotifications.shownCalls, hasLength(3));
+
+        for (final call in localNotifications.shownCalls) {
+          expect(call.payload, isNotNull);
+          final decoded = jsonDecode(call.payload!) as Map<String, dynamic>;
+          expect(decoded['fromUserId'], stakerId);
+          expect(
+            PushNotificationService.resolveTargetRouteForData(decoded),
+            '/profile/$stakerId',
+          );
+        }
       },
     );
   });

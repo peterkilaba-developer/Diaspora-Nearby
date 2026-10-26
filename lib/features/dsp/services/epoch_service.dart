@@ -62,6 +62,40 @@ class EpochService {
     return currentDspBalance * efficiency;
   }
 
+  /// Calculates the unconverted DSP that carries over to the next TDE milestone.
+  /// During TDE 1-9, unconverted DSP is kept in availablePoints so users can
+  /// increase their PCT score and convert it in subsequent TDEs.
+  /// At TDE 10 (The Great Reset), carried-over DSP is 0 (remaining DSP resets).
+  double calculateCarriedOverDsp({
+    required int tdeNumber,
+    required double currentDspBalance,
+    required int trustScore,
+  }) {
+    if (currentDspBalance <= 0 || tdeNumber >= 10) return 0.0;
+    final converted = calculateTGESwap(
+      epochNumber: 1,
+      currentDspBalance: currentDspBalance,
+      trustScore: trustScore,
+    );
+    return currentDspBalance - converted;
+  }
+
+  /// Calculates the unconverted DSP that is reset/burned at TDE 10 (The Great Reset).
+  /// During TDE 1-9, 0 DSP is burned (unconverted balance carries over).
+  double calculateGreatResetBurn({
+    required int tdeNumber,
+    required double currentDspBalance,
+    required int trustScore,
+  }) {
+    if (currentDspBalance <= 0 || tdeNumber < 10) return 0.0;
+    final converted = calculateTGESwap(
+      epochNumber: 1,
+      currentDspBalance: currentDspBalance,
+      trustScore: trustScore,
+    );
+    return currentDspBalance - converted;
+  }
+
   /// [NEW] Public Helper for Efficiency Calculation
   /// Supports both int and double inputs for Trust Score
   double calculateEfficiency(num trustScore) {

@@ -118,7 +118,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           );
 
           // Filter Logic
-          final livePos = ref.watch(liveUserPositionProvider).value ?? _currentPosition;
+          final livePos =
+              ref.watch(liveUserPositionProvider).value ?? _currentPosition;
           final filteredEvents = allEvents.where((event) {
             // 1. Creator or RSVP'd attendee always sees the event
             if (event.creatorId == user.uid ||

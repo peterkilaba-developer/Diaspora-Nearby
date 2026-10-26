@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -57,20 +58,29 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
   Future<void> _deleteListing(PeerListing listing) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Listing'),
-        content: Text('Delete "${listing.title}"? This cannot be undone.'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          title: const Text('Delete Listing'),
+          content: Text('Delete "${listing.title}"? This cannot be undone.'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: TextStyle(color: Colors.red.shade400)),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Delete',
+                style: TextStyle(color: Colors.red.shade400),
+              ),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -101,59 +111,67 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      backgroundColor: AppTheme.elevationColor(context, 3),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'What would you like to list?',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.elevationColor(context, 3),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'What would you like to list?',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _typeOption(
+                      theme,
+                      icon: LucideIcons.home,
+                      title: 'Stay / Property',
+                      subtitle: 'List an apartment, house, room, or villa',
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _navigateToCreate('stay');
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _typeOption(
+                      theme,
+                      icon: LucideIcons.car,
+                      title: 'Car Rental',
+                      subtitle: 'List your car for others to rent',
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _navigateToCreate('car');
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _typeOption(
+                      theme,
+                      icon: LucideIcons.hotel,
+                      title: 'Hotel',
+                      subtitle: 'List your independent hotel or lodge',
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _navigateToCreate('hotel');
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                _typeOption(
-                  theme,
-                  icon: LucideIcons.home,
-                  title: 'Stay / Property',
-                  subtitle: 'List an apartment, house, room, or villa',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _navigateToCreate('stay');
-                  },
-                ),
-                const SizedBox(height: 12),
-                _typeOption(
-                  theme,
-                  icon: LucideIcons.car,
-                  title: 'Car Rental',
-                  subtitle: 'List your car for others to rent',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _navigateToCreate('car');
-                  },
-                ),
-                const SizedBox(height: 12),
-                _typeOption(
-                  theme,
-                  icon: LucideIcons.hotel,
-                  title: 'Hotel',
-                  subtitle: 'List your independent hotel or lodge',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _navigateToCreate('hotel');
-                  },
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -340,7 +358,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
               label: const Text('Create Your First Listing'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.accent,
-                side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.4)),
+                side: BorderSide.none,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 12,

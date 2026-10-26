@@ -156,10 +156,6 @@ class _HostingRequestMessageContentState
             AppTheme.accent.withValues(alpha: 0.15),
           ],
         ),
-        border: Border.all(
-          color: AppTheme.accent.withValues(alpha: 0.3),
-          width: 1,
-        ),
         boxShadow: [
           BoxShadow(
             color: AppTheme.accent.withValues(alpha: 0.08),
@@ -451,9 +447,6 @@ class _HostingRequestMessageContentState
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.3),
-                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -530,9 +523,6 @@ class _HostingRequestMessageContentState
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: AppTheme.accent.withValues(alpha: 0.2),
-                  ),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,

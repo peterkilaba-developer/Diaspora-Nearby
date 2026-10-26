@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/features/chat/utils/community_chat_utils.dart';
 import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
 
 /// Detail screen for a treasury card — shows Diaspora Direct Investments
@@ -116,7 +117,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -199,11 +199,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
               ? Colors.white.withValues(alpha: 0.05)
               : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? Colors.grey.withValues(alpha: 0.2)
-                : Colors.grey.shade200,
-          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,11 +245,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.grey.withValues(alpha: 0.15)
-              : Colors.grey.shade200,
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,7 +303,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +327,7 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'If the local Town DDI Treasury does not have enough funds to cover an approved loan, the protocol automatically cascades upward to draw the shortfall from the State Reserve Treasury, Country DDI Treasury, and Continent Reserve Treasury.',
+                  'If the local Town DDI Treasury does not have enough funds to cover an approved loan, the protocol automatically cascades upward to draw the shortfall from the State Reserve Treasury, Country DDI Treasury, and Global Reserve.',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
@@ -355,49 +344,45 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
 
   // ── System Reserve Info ─────────────────────────────────────────────────
   Widget _buildSystemReserveInfo(BuildContext context, bool isDark) {
-    final String cardTitle;
+    final String cardTitle = CommunityChatUtils.generateTreasuryCategoryTitle(
+      unitId: unitId,
+    );
     final String cardSubtitle;
     final IconData iconData;
     final String boxTitle;
     final String boxText;
 
     if (unitId == 'founders') {
-      cardTitle = 'Founders & Core Team';
       cardSubtitle = 'Core Maintenance Allocation (10%)';
       iconData = LucideIcons.users;
       boxTitle = 'Core Allocation & Vesting';
       boxText =
           'This treasury holds the 10% \$DIASPORA allocation dedicated to founders, core developers, and ongoing protocol maintenance. Funds are subject to vesting schedules to ensure long-term alignment with the community.';
     } else if (unitId == 'liquidity') {
-      cardTitle = 'Liquidity Treasury';
       cardSubtitle = 'DEX Liquidity & Market Access';
       iconData = LucideIcons.droplets;
       boxTitle = 'Market Liquidity Provision';
       boxText =
           'This treasury provides initial and ongoing liquidity for decentralized exchanges (DEXs), enabling seamless trading, token swaps, and price stability across the ecosystem.';
     } else if (unitId == 'burn') {
-      cardTitle = 'Natural Burn Pool';
       cardSubtitle = 'Protocol Deflationary Sink';
       iconData = LucideIcons.flame;
       boxTitle = 'Automated Deflationary Mechanism';
       boxText =
           'This wallet serves as an un-spendable deflationary sink (0x...dEaD). Tokens sent here or generated via protocol burn mechanisms are permanently removed from circulating supply to support token scarcity.';
     } else if (unitId == 'global_community') {
-      cardTitle = 'Global Reserve';
       cardSubtitle = 'Zero-Fee Activities & Community Operations';
       iconData = LucideIcons.globe;
       boxTitle = 'Global Reserve Operations';
       boxText =
           'The Global Reserve enables all free activities across the platform. It absorbs network transfer costs, subsidizes remittance fees paid to legacy money transfer companies (so users send value for free while legacy rails still get paid), funds community operations, supports Chambers of Commerce, and pays salaries for elected Community Council officers.';
     } else if (unitId?.contains('continent') == true) {
-      cardTitle = 'Continental Treasury';
-      cardSubtitle = '100% Sovereign Bond Allocation & Platform Revenue';
+      cardSubtitle = 'Funding Sovereign Bond Engine';
       iconData = LucideIcons.landmark;
       boxTitle = 'Sovereign Bond Engine & Institutional Alignment';
       boxText =
-          'Continental Treasuries operate on a 100% Sovereign Bond Allocation: 100% of continental funds purchase sovereign government bonds and Treasury Bills (allocated pro-rata by member contributions, e.g., Tanzania’s contribution buys Bank of Tanzania bonds; host continent funds buy US Treasuries). 100% of coupon yields fund Diaspora Nearby platform operations (engineering, infrastructure, security), while transforming central banks into national integration partners.';
+          'Sovereign Bond Treasuries operate on a 100% Sovereign Bond Allocation: 100% of continental funds purchase sovereign government bonds and Treasury Bills (allocated pro-rata by member contributions, e.g., Tanzania’s contribution buys Bank of Tanzania bonds; host continent funds buy US Treasuries). 100% of coupon yields fund Diaspora Nearby platform operations (engineering, infrastructure, security), while transforming central banks into national integration partners.';
     } else {
-      cardTitle = 'Reserve Treasury';
       cardSubtitle = 'Liquidity & Upward Loan Cascading Backstop';
       iconData = LucideIcons.shield;
       boxTitle = 'Liquidity Backstop Function';
@@ -411,11 +396,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.grey.withValues(alpha: 0.15)
-              : Colors.grey.shade200,
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +447,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: Colors.blueGrey.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.blueGrey.withValues(alpha: 0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,11 +494,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.grey.withValues(alpha: 0.15)
-              : Colors.grey.shade200,
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -650,7 +624,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
         decoration: BoxDecoration(
           color: Colors.orange.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.15)),
         ),
         child: const Row(
           children: [
@@ -726,11 +699,6 @@ class DdiTreasuryDetailScreen extends ConsumerWidget {
               ? Colors.white.withValues(alpha: 0.05)
               : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? Colors.grey.withValues(alpha: 0.15)
-                : Colors.grey.shade200,
-          ),
         ),
         child: Row(
           children: [

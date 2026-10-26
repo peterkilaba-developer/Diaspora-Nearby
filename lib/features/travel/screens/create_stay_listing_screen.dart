@@ -266,11 +266,7 @@ class _CreateStayListingScreenState
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 13,
                   ),
-                  side: BorderSide(
-                    color: selected
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
+                  side: BorderSide.none,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -453,11 +449,7 @@ class _CreateStayListingScreenState
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  side: BorderSide(
-                    color: selected
-                        ? AppTheme.accent.withValues(alpha: 0.3)
-                        : Colors.transparent,
-                  ),
+                  side: BorderSide.none,
                 );
               }).toList(),
             ),

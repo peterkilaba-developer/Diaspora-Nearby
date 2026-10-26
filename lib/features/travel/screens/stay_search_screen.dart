@@ -232,7 +232,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -529,11 +528,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   t,
@@ -631,11 +625,6 @@ class _StaySearchScreenState extends ConsumerState<StaySearchScreen> {
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   a,

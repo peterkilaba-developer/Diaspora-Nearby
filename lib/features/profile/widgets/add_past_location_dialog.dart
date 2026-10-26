@@ -172,7 +172,7 @@ class _AddPastLocationDialogState extends State<AddPastLocationDialog> {
                   constraints: const BoxConstraints(maxHeight: 150),
                   margin: const EdgeInsets.only(top: 8),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
+                    color: const Color(0x14888888),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: ListView(

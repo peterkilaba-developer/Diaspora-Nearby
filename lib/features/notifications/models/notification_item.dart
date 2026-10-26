@@ -104,8 +104,17 @@ enum NotificationType {
   /// A peer vouched for the user
   trustPeerVouched,
 
-  /// A peer gave the user full trust (staked 100 DSP)
+  /// A peer gave the user full trust (staked 1,000 DSP)
   trustFullTrustReceived,
+
+  /// A peer gave the user no trust (staked 1,000 DSP)
+  trustNoTrustReceived,
+
+  /// Another staker agreed with the user's staked trust rating (+100 DSP consensus)
+  trustStakeConsensusAgree,
+
+  /// Another staker opposed the user's staked trust rating (-100 DSP slash)
+  trustStakeConsensusDisagree,
 
   /// User reached a PCT milestone (10, 100, 1K, etc.)
   trustMilestone,
@@ -234,6 +243,16 @@ class NotificationItem {
 
   static NotificationType _parseType(String? value) {
     if (value == null) return NotificationType.system;
+    switch (value) {
+      case 'trust_full_trust_received':
+        return NotificationType.trustFullTrustReceived;
+      case 'trust_no_trust_received':
+        return NotificationType.trustNoTrustReceived;
+      case 'trust_stake_consensus_agree':
+        return NotificationType.trustStakeConsensusAgree;
+      case 'trust_stake_consensus_disagree':
+        return NotificationType.trustStakeConsensusDisagree;
+    }
     return NotificationType.values.firstWhere(
       (e) => e.name == value,
       orElse: () => NotificationType.system,

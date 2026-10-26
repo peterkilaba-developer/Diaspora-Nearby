@@ -7,6 +7,10 @@ class TdeDistributionRecord {
   final double efficiency;
   final DateTime date;
   final String? txHash; // On-chain transaction hash for Basescan
+  final double
+  carriedOverDsp; // Unconverted DSP carried over to next TDE (TDE 1-9)
+  final double burnedDsp; // Unconverted DSP burned at TDE 10 (The Great Reset)
+  final bool isGreatReset; // True for TDE 10 (epoch completion reset)
 
   TdeDistributionRecord({
     required this.epoch,
@@ -15,16 +19,26 @@ class TdeDistributionRecord {
     required this.efficiency,
     required this.date,
     this.txHash,
+    this.carriedOverDsp = 0.0,
+    this.burnedDsp = 0.0,
+    this.isGreatReset = false,
   });
 
   factory TdeDistributionRecord.fromMap(Map<String, dynamic> map) {
     return TdeDistributionRecord(
       epoch: (map['epoch'] as num? ?? 0).toInt(),
-      tdeNumber: (map['tdeNumber'] as num? ?? 0).toInt(),
+      tdeNumber: map['tdeNumber'] != null
+          ? (map['tdeNumber'] as num).toInt()
+          : (map['tgeNumber'] != null
+                ? (map['tgeNumber'] as num).toInt() + 1
+                : 0),
       amount: (map['amount'] as num? ?? 0).toDouble(),
       efficiency: (map['efficiency'] as num? ?? 0).toDouble(),
       date: _parseDateTime(map['date']) ?? DateTime.now(),
       txHash: map['txHash'] as String?,
+      carriedOverDsp: (map['carriedOverDsp'] as num? ?? 0).toDouble(),
+      burnedDsp: (map['burnedDsp'] as num? ?? 0).toDouble(),
+      isGreatReset: map['isGreatReset'] as bool? ?? false,
     );
   }
 
@@ -43,6 +57,9 @@ class TdeDistributionRecord {
       'efficiency': efficiency,
       'date': date.toIso8601String(),
       if (txHash != null) 'txHash': txHash,
+      'carriedOverDsp': carriedOverDsp,
+      'burnedDsp': burnedDsp,
+      'isGreatReset': isGreatReset,
     };
   }
 }
@@ -133,7 +150,7 @@ class UserPoints {
           ) ??
           {},
       tdeHistory:
-          (map['tdeHistory'] as List<dynamic>?)
+          ((map['tdeHistory'] ?? map['tgeHistory']) as List<dynamic>?)
               ?.map(
                 (e) => TdeDistributionRecord.fromMap(e as Map<String, dynamic>),
               )

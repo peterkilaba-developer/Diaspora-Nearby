@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,10 +36,13 @@ class _TravelerData {
   final passportC = TextEditingController();
   final passportExpiryC = TextEditingController();
   final nationalityC = TextEditingController(text: 'US');
-  // Address fields (primary traveler only)
+  // Address fields (primary traveler only — flexible & host-country-aware)
   final addressLineC = TextEditingController();
   final cityC = TextEditingController();
+  final stateC = TextEditingController();
   final postalCodeC = TextEditingController();
+  String addressCountryCode = 'US';
+  country_data.Country? selectedAddressCountry;
   String gender = 'MALE';
   String dobApi = '';
   String passportExpiryApi = '';
@@ -55,6 +59,7 @@ class _TravelerData {
     nationalityC.dispose();
     addressLineC.dispose();
     cityC.dispose();
+    stateC.dispose();
     postalCodeC.dispose();
   }
 }
@@ -130,6 +135,27 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       t.selectedCountry = country_data.getCountryByCode(code);
     }
 
+    // Residential / Host Country address prefill
+    final hostCode =
+        (profile.hostCountryCode ??
+                profile.hostLocation.countryCode ??
+                profile.homeCountryCode ??
+                'US')
+            .toUpperCase();
+    t.addressCountryCode = hostCode;
+    t.selectedAddressCountry = country_data.getCountryByCode(hostCode);
+    if (profile.hostLocation.city != null &&
+        profile.hostLocation.city!.isNotEmpty) {
+      t.cityC.text = profile.hostLocation.city!;
+    }
+    if (profile.hostLocation.state != null &&
+        profile.hostLocation.state!.isNotEmpty) {
+      t.stateC.text = profile.hostLocation.state!;
+    }
+    if (profile.hostLocation.formattedAddress.isNotEmpty) {
+      t.addressLineC.text = profile.hostLocation.formattedAddress;
+    }
+
     // Pre-fill card holder name
     if (profile.firstName.isNotEmpty && profile.lastName.isNotEmpty) {
       _cardHolderController.text = '${profile.firstName} ${profile.lastName}'
@@ -159,6 +185,26 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
         return 'Review & Book';
       default:
         return 'Book Flight';
+    }
+  }
+
+  String _postalLabelForCountry(String countryCode) {
+    switch (countryCode.toUpperCase()) {
+      case 'US':
+        return 'ZIP Code';
+      case 'GB':
+      case 'AU':
+      case 'NZ':
+      case 'ZA':
+        return 'Postcode';
+      case 'CA':
+        return 'Postal Code';
+      case 'IN':
+        return 'PIN Code';
+      case 'IE':
+        return 'Eircode';
+      default:
+        return 'Postal Code / P.O. Box (optional)';
     }
   }
 
@@ -198,10 +244,8 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
 
   // ── Step 1 → 2 ──
   Future<void> _goToReview() async {
-    if (!_paymentFormKey.currentState!.validate()) return;
-
-    if (widget.offer.rawJson == null) {
-      setState(() => _errorMessage = 'Flight data unavailable for pricing.');
+    if (_bookingEnabled &&
+        !(_paymentFormKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -211,21 +255,40 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     });
 
     try {
-      final amadeus = ref.read(amadeusServiceProvider);
-      final confirmedJson = await amadeus.confirmFlightPrice(
-        widget.offer.rawJson!,
-      );
-      final confirmedOffer = FlightOffer.fromJson(confirmedJson);
+      if (widget.offer.rawJson != null) {
+        final amadeus = ref.read(amadeusServiceProvider);
+        final confirmedJson = await amadeus.confirmFlightPrice(
+          widget.offer.rawJson!,
+        );
+        final confirmedOffer = FlightOffer.fromJson(confirmedJson);
 
-      if (mounted) {
+        if (mounted) {
+          setState(() {
+            _confirmedOfferJson = confirmedJson;
+            _confirmedOffer = confirmedOffer;
+            _isProcessing = false;
+            _currentStep = 2;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _confirmedOffer = widget.offer;
+            _isProcessing = false;
+            _currentStep = 2;
+          });
+        }
+      }
+    } on AmadeusException catch (e) {
+      if (!_bookingEnabled && mounted) {
         setState(() {
-          _confirmedOfferJson = confirmedJson;
-          _confirmedOffer = confirmedOffer;
+          _confirmedOfferJson = widget.offer.rawJson;
+          _confirmedOffer = widget.offer;
           _isProcessing = false;
           _currentStep = 2;
         });
+        return;
       }
-    } on AmadeusException catch (e) {
       if (mounted) {
         setState(() {
           _isProcessing = false;
@@ -234,6 +297,15 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       }
     } catch (e, s) {
       debugPrint('✈️ [FlightBooking] confirmPrice error: $e\n$s');
+      if (!_bookingEnabled && mounted) {
+        setState(() {
+          _confirmedOfferJson = widget.offer.rawJson;
+          _confirmedOffer = widget.offer;
+          _isProcessing = false;
+          _currentStep = 2;
+        });
+        return;
+      }
       if (mounted) {
         setState(() {
           _isProcessing = false;
@@ -245,6 +317,11 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
 
   // ── Step 2: Book ──
   Future<void> _createBooking() async {
+    if (!_bookingEnabled) {
+      await _showBookingComingSoonDialog();
+      return;
+    }
+
     if (_confirmedOfferJson == null) return;
 
     setState(() {
@@ -297,7 +374,9 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       final primary = _travelers.first;
       final primaryDialCode =
           primary.selectedCountry?.dialCode.replaceAll('+', '') ?? '1';
-      final primaryNat = primary.nationalityC.text.trim().toUpperCase();
+      final primaryAddressCountry = primary.addressCountryCode.isNotEmpty
+          ? primary.addressCountryCode
+          : primary.nationalityC.text.trim().toUpperCase();
       final contact = {
         'addresseeName': {
           'firstName': primary.firstNameC.text.trim().toUpperCase(),
@@ -319,15 +398,17 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
           'lines': [
             primary.addressLineC.text.trim().isNotEmpty
                 ? primary.addressLineC.text.trim()
+                : primary.cityC.text.trim().isNotEmpty
+                ? primary.cityC.text.trim()
                 : '123 Main Street',
           ],
           'postalCode': primary.postalCodeC.text.trim().isNotEmpty
               ? primary.postalCodeC.text.trim()
-              : '10001',
+              : '00000',
           'cityName': primary.cityC.text.trim().isNotEmpty
               ? primary.cityC.text.trim().toUpperCase()
-              : 'NEW YORK',
-          'countryCode': primaryNat,
+              : 'CITY',
+          'countryCode': primaryAddressCountry,
         },
       };
 
@@ -390,6 +471,143 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     }
   }
 
+  Future<void> _showBookingComingSoonDialog() async {
+    final theme = Theme.of(context);
+    final offer = _confirmedOffer ?? widget.offer;
+    final primary = _travelers.first;
+    final passengerName = primary.firstNameC.text.trim().isNotEmpty
+        ? '${primary.firstNameC.text.trim()} ${primary.lastNameC.text.trim()}${_travelers.length > 1 ? ' +${_travelers.length - 1}' : ''}'
+        : '${_travelers.length} Traveler${_travelers.length > 1 ? 's' : ''}';
+    final airlineLabel = (offer.validatingAirlineName ?? '').isNotEmpty
+        ? offer.validatingAirlineName!
+        : offer.validatingAirline;
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (dialogContext) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          backgroundColor: AppTheme.elevationColor(context, 1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.accent.withValues(alpha: 0.14),
+                  ),
+                  child: const Icon(
+                    LucideIcons.plane,
+                    color: AppTheme.accent,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'COMING SOON',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.accent,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Booking Coming Soon',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Live flight search and pricing are active! Direct in-app ticket issuance is launching soon — you have not been charged.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                    height: 1.45,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.elevationColor(context, 2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      _reviewRow(
+                        theme,
+                        LucideIcons.planeTakeoff,
+                        '${offer.routeSummary} · $airlineLabel',
+                      ),
+                      _reviewRow(theme, LucideIcons.users, passengerName),
+                      _reviewRow(
+                        theme,
+                        LucideIcons.tag,
+                        '\$${offer.totalPrice.toStringAsFixed(2)} ${offer.currency}',
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickDateOfBirth(int travelerIndex) async {
     final now = DateTime.now();
     final date = await SmartDatePicker.show(
@@ -435,22 +653,58 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      backgroundColor: Colors.transparent,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: CountryPickerSheet(
+            selectedCountry: t.selectedCountry,
+            showDialCode: false,
+            onCountrySelected: (country) {
+              Navigator.pop(context);
+              setState(() {
+                t.selectedCountry = country;
+                t.nationalityC.text = country.code.toUpperCase();
+              });
+            },
+          ),
+        ),
       ),
-      builder: (_) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.85,
-        child: CountryPickerSheet(
-          selectedCountry: t.selectedCountry,
-          showDialCode: false,
-          onCountrySelected: (country) {
-            Navigator.pop(context);
-            setState(() {
-              t.selectedCountry = country;
-              t.nationalityC.text = country.code.toUpperCase();
-            });
-          },
+    );
+  }
+
+  void _pickAddressCountry(int travelerIndex) {
+    final t = _travelers[travelerIndex];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      backgroundColor: Colors.transparent,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: CountryPickerSheet(
+            selectedCountry: t.selectedAddressCountry,
+            showDialCode: false,
+            onCountrySelected: (country) {
+              Navigator.pop(context);
+              setState(() {
+                t.selectedAddressCountry = country;
+                t.addressCountryCode = country.code.toUpperCase();
+              });
+            },
+          ),
         ),
       ),
     );
@@ -460,41 +714,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final offer = _confirmedOffer ?? widget.offer;
-
-    if (!_bookingEnabled) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Flight booking')),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    LucideIcons.shieldAlert,
-                    size: 48,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Secure booking is not available yet',
-                    style: theme.textTheme.titleLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Flight search remains available. Ticket purchase will be enabled only after the live fulfillment and PCI-reviewed payment flow is configured.',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
 
     return Scaffold(
       backgroundColor: AppTheme.elevationColor(context, 0),
@@ -590,9 +809,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
               color: isActive
                   ? AppTheme.accent
                   : AppTheme.elevationColor(context, 2),
-              border: isCurrent
-                  ? Border.all(color: AppTheme.accent, width: 2)
-                  : null,
             ),
             child: Center(
               child: isActive && !isCurrent
@@ -724,7 +940,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -853,11 +1068,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
               ? AppTheme.accent.withValues(alpha: 0.1)
               : theme.colorScheme.onSurface.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: enabled
-                ? AppTheme.accent.withValues(alpha: 0.3)
-                : theme.colorScheme.onSurface.withValues(alpha: 0.08),
-          ),
         ),
         child: Icon(
           icon,
@@ -885,14 +1095,20 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
 
+    final addrCountryCode = t.addressCountryCode.isNotEmpty
+        ? t.addressCountryCode
+        : 'US';
+    final hasState = country_data.hasStateLevelHierarchyFromData(
+      addrCountryCode,
+    );
+    final stateTerm = country_data.getStateTerminology(addrCountryCode);
+    final postalLabel = _postalLabelForCountry(addrCountryCode);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(_radius),
-        border: isExpanded
-            ? Border.all(color: AppTheme.accent.withValues(alpha: 0.3))
-            : null,
       ),
       child: Column(
         children: [
@@ -1095,13 +1311,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                                 alpha: 0.6,
                               );
                             }),
-                            side: WidgetStateProperty.all(
-                              BorderSide(
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.1,
-                                ),
-                              ),
-                            ),
+                            side: WidgetStateProperty.all(BorderSide.none),
                             visualDensity: VisualDensity.compact,
                           ),
                         ),
@@ -1262,17 +1472,60 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                         (v?.trim().isEmpty ?? true) ? 'Required' : null,
                   ),
 
-                  // Address fields — only for primary traveler
+                  // Address fields — only for primary traveler (host-country-aware & flexible)
                   if (isPrimary) ...[
                     const SizedBox(height: 16),
-                    _sectionHeader(theme, 'ADDRESS'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _sectionHeader(theme, 'RESIDENTIAL ADDRESS'),
+                        GestureDetector(
+                          onTap: () => _pickAddressCountry(index),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.elevationColor(context, 2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  t.selectedAddressCountry?.flag ?? '🌍',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  t.selectedAddressCountry?.name ??
+                                      addrCountryCode,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.accent,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  LucideIcons.chevronDown,
+                                  size: 12,
+                                  color: AppTheme.accent,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
 
                     TextFormField(
                       controller: t.addressLineC,
                       textCapitalization: TextCapitalization.words,
                       decoration: inputDecoration.copyWith(
-                        hintText: 'Street Address *',
+                        hintText: 'Street Address / Area / Landmark',
                         prefixIcon: Icon(
                           LucideIcons.mapPin,
                           size: 18,
@@ -1282,8 +1535,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                         ),
                       ),
                       style: const TextStyle(fontSize: 13),
-                      validator: (v) =>
-                          (v?.trim().isEmpty ?? true) ? 'Required' : null,
                     ),
                     const SizedBox(height: 10),
 
@@ -1294,26 +1545,37 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
                             controller: t.cityC,
                             textCapitalization: TextCapitalization.words,
                             decoration: inputDecoration.copyWith(
-                              hintText: 'City *',
+                              hintText: 'City / Town *',
                             ),
                             style: const TextStyle(fontSize: 13),
                             validator: (v) =>
                                 (v?.trim().isEmpty ?? true) ? 'Required' : null,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 120,
-                          child: TextFormField(
-                            controller: t.postalCodeC,
-                            textCapitalization: TextCapitalization.characters,
-                            decoration: inputDecoration.copyWith(
-                              hintText: 'Postal Code',
+                        if (hasState) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextFormField(
+                              controller: t.stateC,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: inputDecoration.copyWith(
+                                hintText: stateTerm,
+                              ),
+                              style: const TextStyle(fontSize: 13),
                             ),
-                            style: const TextStyle(fontSize: 13),
                           ),
-                        ),
+                        ],
                       ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    TextFormField(
+                      controller: t.postalCodeC,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: inputDecoration.copyWith(
+                        hintText: postalLabel,
+                      ),
+                      style: const TextStyle(fontSize: 13),
                     ),
                   ],
                 ],
@@ -1329,6 +1591,74 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   Widget _buildPaymentForm(ThemeData theme) {
+    if (!_bookingEnabled) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(theme, 'PAYMENT METHOD'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.elevationColor(context, 1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    LucideIcons.creditCard,
+                    color: AppTheme.accent,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Direct Airline Checkout',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'No payment details required right now. Continue to review your live fare and passenger details.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildContinueButton(
+            onPressed: _isProcessing ? null : _goToReview,
+            label: _isProcessing ? 'Confirming Price...' : 'Continue to Review',
+            icon: _isProcessing ? null : LucideIcons.arrowRight,
+            isLoading: _isProcessing,
+          ),
+        ],
+      );
+    }
+
     final inputDecoration = InputDecoration(
       filled: true,
       fillColor: AppTheme.elevationColor(context, 2),
@@ -1574,18 +1904,33 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             color: AppTheme.elevationColor(context, 1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Column(
-            children: [
-              _reviewRow(theme, LucideIcons.creditCard, maskedCard),
-              _reviewRow(theme, LucideIcons.user, _cardHolderController.text),
-              _reviewRow(
-                theme,
-                LucideIcons.calendar,
-                'Exp: ${_cardExpiryController.text}',
-                isLast: true,
-              ),
-            ],
-          ),
+          child: _bookingEnabled
+              ? Column(
+                  children: [
+                    _reviewRow(theme, LucideIcons.creditCard, maskedCard),
+                    _reviewRow(
+                      theme,
+                      LucideIcons.user,
+                      _cardHolderController.text,
+                    ),
+                    _reviewRow(
+                      theme,
+                      LucideIcons.calendar,
+                      'Exp: ${_cardExpiryController.text}',
+                      isLast: true,
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _reviewRow(
+                      theme,
+                      LucideIcons.creditCard,
+                      'Direct Airline Checkout',
+                      isLast: true,
+                    ),
+                  ],
+                ),
         ),
         const SizedBox(height: 12),
 
@@ -1668,7 +2013,6 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             decoration: BoxDecoration(
               color: Colors.amber.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
@@ -1747,7 +2091,7 @@ class _FlightBookingScreenState extends ConsumerState<FlightBookingScreen> {
             label: Text(
               _isProcessing
                   ? 'Booking...'
-                  : 'Confirm & Pay \$${(_confirmedOffer ?? widget.offer).totalPrice.toStringAsFixed(2)}',
+                  : 'Confirm & Book \$${(_confirmedOffer ?? widget.offer).totalPrice.toStringAsFixed(2)}',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
           ),

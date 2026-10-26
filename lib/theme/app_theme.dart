@@ -165,7 +165,10 @@ class AppTheme {
       scaffoldBackgroundColor: _lightBackground,
       canvasColor: _lightBackground,
       cardColor: _lightSurface, // Level 1 — cards
-      dialogTheme: const DialogThemeData(backgroundColor: elevationLight3),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: elevationLight3,
+        insetPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+      ),
       disabledColor: _lightForeground.withAlpha(76),
       hintColor: _lightForeground.withAlpha(128),
       shadowColor: Colors.transparent, // No shadows
@@ -283,7 +286,11 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: accent,
+          backgroundColor: accent.withAlpha(25),
           side: BorderSide.none, // No border
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(standardBorderRadius),
+          ),
         ),
       ),
 
@@ -343,8 +350,8 @@ class AppTheme {
           return Colors.transparent;
         }),
         todayForegroundColor: WidgetStateProperty.all(accent),
-        todayBackgroundColor: WidgetStateProperty.all(Colors.transparent),
-        todayBorder: const BorderSide(color: accent, width: 1.5),
+        todayBackgroundColor: WidgetStateProperty.all(accent.withAlpha(38)),
+        todayBorder: BorderSide.none,
         yearForegroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return Colors.white;
           return _lightForeground;
@@ -368,7 +375,10 @@ class AppTheme {
       scaffoldBackgroundColor: _darkBackground,
       canvasColor: _darkBackground,
       cardColor: elevationDark1, // Level 1 — cards
-      dialogTheme: const DialogThemeData(backgroundColor: elevationDark3),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: elevationDark3,
+        insetPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+      ),
       disabledColor: _darkForeground.withAlpha(76),
       hintColor: _darkForeground.withAlpha(128),
       shadowColor: Colors.transparent, // No shadows
@@ -486,7 +496,11 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: accent,
+          backgroundColor: accent.withAlpha(25),
           side: BorderSide.none, // No border
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(standardBorderRadius),
+          ),
         ),
       ),
 
@@ -543,8 +557,8 @@ class AppTheme {
           return Colors.transparent;
         }),
         todayForegroundColor: WidgetStateProperty.all(accent),
-        todayBackgroundColor: WidgetStateProperty.all(Colors.transparent),
-        todayBorder: const BorderSide(color: accent, width: 1.5),
+        todayBackgroundColor: WidgetStateProperty.all(accent.withAlpha(38)),
+        todayBorder: BorderSide.none,
         yearForegroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return Colors.white;
           return _darkForeground;

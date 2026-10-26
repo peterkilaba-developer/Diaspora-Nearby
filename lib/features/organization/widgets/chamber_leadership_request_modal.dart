@@ -233,7 +233,6 @@ class _ChamberLeadershipRequestModalState
                   decoration: BoxDecoration(
                     color: AppTheme.error.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.error),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,12 +308,6 @@ class _ChamberLeadershipRequestModalState
                     alpha: 0.3,
                   ),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? AppTheme.accent
-                  : theme.dividerColor.withValues(alpha: 0.5),
-              width: selected ? 2 : 1,
-            ),
           ),
           child: Row(
             children: [

@@ -142,7 +142,6 @@ class _AirlinePortalScreenState extends ConsumerState<AirlinePortalScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.accent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: AppTheme.accent),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

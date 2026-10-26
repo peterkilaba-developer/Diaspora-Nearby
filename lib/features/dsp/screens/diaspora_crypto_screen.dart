@@ -28,6 +28,8 @@ import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
 import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
+import 'package:diaspora_nearby/features/dsp/models/user_points.dart';
+import 'package:diaspora_nearby/features/trust/services/trust_service.dart';
 
 class DiasporaCryptoScreen extends ConsumerStatefulWidget {
   const DiasporaCryptoScreen({super.key});
@@ -214,6 +216,14 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
             children: [
               _buildHero(country),
               const SizedBox(height: 24),
+              // Personal $DIASPORA TDE Distribution Schedule
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.pageHorizontalPadding,
+                ),
+                child: _buildTokenEpochDetailCard(context, userId),
+              ),
+              const SizedBox(height: 24),
               // Token Transactions
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -236,11 +246,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
-                          color: AppTheme.accent.withValues(alpha: 0.08),
+                          color: AppTheme.accent.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppTheme.accent.withValues(alpha: 0.2),
-                          ),
                         ),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -370,21 +377,28 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                     children: [
                       const Text(
                         'Current Floor Price',
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white54, fontSize: 12),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '1 DSP = ${valuation.formattedImpliedValue}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -1,
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '1 \$DIASPORA = ${valuation.formattedImpliedValue}',
+                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         'Projected: \$${projectedPrice.toStringAsFixed(4)}',
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.orange,
                           fontSize: 14,
@@ -423,18 +437,18 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              // DSP Volume
+              // $DIASPORA Supply
               Expanded(
                 child: supplyAsync.when(
                   data: (supply) => _buildStatCard(
-                    'DSP Supply',
+                    '\$DIASPORA Cap',
                     NumberFormat.compact().format(supply),
                     LucideIcons.coins,
                   ),
                   loading: () =>
-                      _buildStatCard('DSP Supply', '—', LucideIcons.coins),
+                      _buildStatCard('\$DIASPORA Cap', '—', LucideIcons.coins),
                   error: (_, _) =>
-                      _buildStatCard('DSP Supply', '—', LucideIcons.coins),
+                      _buildStatCard('\$DIASPORA Cap', '—', LucideIcons.coins),
                 ),
               ),
               const SizedBox(width: 8),
@@ -512,11 +526,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
-                          color: AppTheme.accent.withValues(alpha: 0.08),
+                          color: AppTheme.accent.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppTheme.accent.withValues(alpha: 0.2),
-                          ),
                         ),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -697,7 +708,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   TableRow(
                     children: [
                       _buildMatrixHeader('CORRIDOR'),
-                      _buildMatrixHeader('GDP (DSP)', center: true),
+                      _buildMatrixHeader('GDP (\$DIASPORA)', center: true),
                       _buildMatrixHeader('TX COUNT', alignRight: true),
                     ],
                   ),
@@ -806,20 +817,35 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
     return Consumer(
       builder: (context, ref, child) {
         final globalSupplyAsync = ref.watch(globalSupplyProvider);
+        final globalMembers = ref.watch(globalMemberCountProvider).value ?? 0;
         return globalSupplyAsync.when(
           data: (totalMinted) {
-            const double target = 1000000;
-            final double progress = (totalMinted / target).clamp(0.0, 1.0);
+            final epochService = ref.read(epochServiceProvider);
+            final epoch = epochService.getCurrentCommunityEpoch(
+              totalMinted,
+              globalMembers,
+            );
+            final prevEpoch = epochService.getPreviousCommunityEpoch(
+              epoch.level,
+            );
+            final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
+            final double target = epoch.dspTarget.toDouble();
+            final double progress =
+                ((totalMinted - prevDspTarget) / (target - prevDspTarget))
+                    .clamp(0.0, 1.0);
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               padding: const EdgeInsets.all(16),
               decoration: AppTheme.cardDecoration(context),
               child: Column(
                 children: [
-                  _buildSectionHeader('THE GREAT RESET', 'Race to Epoch 1'),
+                  _buildSectionHeader(
+                    'THE GREAT RESET',
+                    'Race to Epoch ${epoch.level}',
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    '${NumberFormat('#,###').format(totalMinted)} / 1,000,000 DSP',
+                    '${NumberFormat('#,###').format(totalMinted)} / ${NumberFormat('#,###').format(epoch.dspTarget)} \$DIASPORA',
                     style: const TextStyle(
                       fontSize: 16,
                       color: AppTheme.accent,
@@ -838,7 +864,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Upon reaching 1 Million DSP + 10 Members, Epoch 1 (The Great Reset) completes. Complete 10 unique in-person Identity QR exchanges to qualify for your first TDE — every TDE after that is automatic.',
+                    'During TDE 1–9, your PCT converts DSP into on-chain \$DIASPORA while any unconverted DSP carries over as you build trust. At TDE 10 (100% of the epoch target), The Great Reset completes — resetting any remaining unconverted DSP to 0 and unlocking the next 10x epoch.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -1072,35 +1098,29 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
           const SizedBox(height: 12),
           ...homePool.map((community) {
-            final String unitId = community.id.contains('_')
-                ? community.id.substring(community.id.indexOf('_') + 1)
-                : community.id;
-
-            String defaultTitle;
-            String tributeLabel;
-
-            if (community.type == 'city' || community.type == 'town') {
-              defaultTitle = '${community.name} DDI Treasury';
-              tributeLabel =
-                  'Local community business loans (up to \$1M) · 10% Ubuntu community match';
-            } else if (community.type == 'state' ||
-                community.type == 'province') {
-              defaultTitle = '${community.name} Reserve Treasury';
-              tributeLabel =
-                  'State liquidity reserve & loan backstop · 10% Ubuntu community match';
-            } else if (community.type == 'country') {
-              defaultTitle = '${community.name} DDI Treasury';
-              tributeLabel =
-                  'Large-scale sovereign investments (\$1M+) · 10% Ubuntu community match';
-            } else if (community.type == 'continent') {
-              defaultTitle = '${community.name} Reserve Treasury';
-              tributeLabel =
-                  'Regional liquidity reserve & loan backstop · 10% Ubuntu community match';
-            } else {
-              defaultTitle = '${community.name} Treasury';
-              tributeLabel =
-                  'Diaspora Direct Investments & community wealth · 10% Ubuntu community match';
-            }
+            final String unitId =
+                CommunityChatUtils.getCanonicalGovernanceUnitId(community.id);
+            final String effectiveType = CommunityChatUtils.inferCommunityType(
+              type: community.type,
+              id: community.id,
+              unitId: unitId,
+            );
+            final String defaultTitle =
+                CommunityChatUtils.generateTreasuryTitle(
+                  name: community.name,
+                  type: effectiveType,
+                  locationType: community.locationType ?? 'home',
+                  id: community.id,
+                  unitId: unitId,
+                  homeCountryCode: community.homeCountryCode,
+                  hostCountryCode: community.hostCountryCode,
+                );
+            final String tributeLabel =
+                CommunityChatUtils.generateTreasurySubtitle(
+                  type: effectiveType,
+                  id: community.id,
+                  unitId: unitId,
+                );
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -1109,11 +1129,11 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 communityId: community.id,
                 defaultTitle: defaultTitle,
                 subtitle: tributeLabel,
-                icon: community.type == 'continent'
+                icon: effectiveType == 'continent'
                     ? LucideIcons.map
-                    : (community.type == 'country'
+                    : (effectiveType == 'country'
                           ? LucideIcons.flag
-                          : community.type == 'state'
+                          : effectiveType == 'state'
                           ? LucideIcons.landmark
                           : LucideIcons.home),
                 governanceType: 'Leader Multi-sig',
@@ -1136,35 +1156,29 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ),
           const SizedBox(height: 12),
           ...hostPool.map((community) {
-            final String unitId = community.id.contains('_')
-                ? community.id.substring(community.id.indexOf('_') + 1)
-                : community.id;
-
-            String defaultTitle;
-            String tributeLabel;
-
-            if (community.type == 'city' || community.type == 'town') {
-              defaultTitle = '${community.name} DDI Treasury';
-              tributeLabel =
-                  'Local community business loans (up to \$1M) · 10% Ubuntu community match';
-            } else if (community.type == 'state' ||
-                community.type == 'province') {
-              defaultTitle = '${community.name} Reserve Treasury';
-              tributeLabel =
-                  'State liquidity reserve & loan backstop · 10% Ubuntu community match';
-            } else if (community.type == 'country') {
-              defaultTitle = '${community.name} DDI Treasury';
-              tributeLabel =
-                  'Large-scale sovereign investments (\$1M+) · 10% Ubuntu community match';
-            } else if (community.type == 'continent') {
-              defaultTitle = '${community.name} Reserve Treasury';
-              tributeLabel =
-                  'Regional liquidity reserve & loan backstop · 10% Ubuntu community match';
-            } else {
-              defaultTitle = '${community.name} Treasury';
-              tributeLabel =
-                  'Diaspora Direct Investments & community wealth · 10% Ubuntu community match';
-            }
+            final String unitId =
+                CommunityChatUtils.getCanonicalGovernanceUnitId(community.id);
+            final String effectiveType = CommunityChatUtils.inferCommunityType(
+              type: community.type,
+              id: community.id,
+              unitId: unitId,
+            );
+            final String defaultTitle =
+                CommunityChatUtils.generateTreasuryTitle(
+                  name: community.name,
+                  type: effectiveType,
+                  locationType: community.locationType ?? 'host',
+                  id: community.id,
+                  unitId: unitId,
+                  homeCountryCode: community.homeCountryCode,
+                  hostCountryCode: community.hostCountryCode,
+                );
+            final String tributeLabel =
+                CommunityChatUtils.generateTreasurySubtitle(
+                  type: effectiveType,
+                  id: community.id,
+                  unitId: unitId,
+                );
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -1173,9 +1187,9 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                 communityId: community.id,
                 defaultTitle: defaultTitle,
                 subtitle: tributeLabel,
-                icon: community.type == 'city'
+                icon: effectiveType == 'city'
                     ? LucideIcons.mapPin
-                    : (community.type == 'state'
+                    : (effectiveType == 'state'
                           ? LucideIcons.landmark
                           : LucideIcons.map),
                 governanceType: 'Leader Multi-sig',
@@ -1373,9 +1387,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1553,7 +1566,7 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
                   color: Colors.black,
                 ),
                 label: const Text(
-                  'Swap / Sell \$DIASPORA on Aerodrome',
+                  'Swap / Sell on Aerodrome',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -1576,9 +1589,8 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.08),
+                color: Colors.orange.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1632,6 +1644,524 @@ class _DiasporaCryptoScreenState extends ConsumerState<DiasporaCryptoScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTokenEpochDetailCard(BuildContext context, String userId) {
+    if (userId.isEmpty) return const SizedBox.shrink();
+
+    final globalSupplyAsync = ref.watch(globalSupplyProvider);
+    final globalMembersAsync = ref.watch(globalMemberCountProvider);
+    final epochService = ref.watch(epochServiceProvider);
+    final userPointsAsync = ref.watch(userPointsProvider(userId));
+    final trustDataAsync = ref.watch(userTrustProvider(userId));
+
+    final displayPoints =
+        userPointsAsync.value ??
+        UserPoints(
+          userId: userId,
+          totalPoints: 0,
+          availablePoints: 0,
+          currentStreak: 0,
+          dailyMessageCount: 0,
+          dailyShareCount: 0,
+          lastUpdated: DateTime.now(),
+          lastActivityDate: DateTime.now(),
+          dailyCommunitiesMessaged: const [],
+          completedExplorationActions: const [],
+          lifetimeEarnings: const {},
+          homeCountryCode: null,
+          signupDate: DateTime.now(),
+          tdeHistory: const [],
+        );
+
+    final trustData = trustDataAsync.value;
+    final double effectiveTrustScore =
+        trustData?.trustScore ?? (displayPoints.trustScore?.toDouble() ?? 0.0);
+    final int effectiveQrCount =
+        trustData?.uniqueQrCount ?? displayPoints.qrConnectionCount;
+
+    return globalSupplyAsync.when(
+      data: (supply) {
+        return globalMembersAsync.when(
+          data: (members) {
+            final epoch = epochService.getCurrentCommunityEpoch(
+              supply,
+              members,
+            );
+
+            // Personal $DIASPORA distributed to logged-in user in this Epoch
+            final epochHistory = displayPoints.tdeHistory
+                .where((e) => e.epoch == epoch.level)
+                .toList();
+            final double userDistributed = epochHistory.fold(
+              0.0,
+              (acc, e) => acc + e.amount,
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: _buildSectionHeader(
+                        'TDE Schedule',
+                        'TOKEN DISTRIBUTION SCHEDULE',
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${NumberFormat.compact().format(userDistributed)} \$DIASPORA',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.warning,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: AppTheme.cardPaddingEdgeInsets,
+                  decoration: AppTheme.cardDecoration(context),
+                  child: _buildTokenTdeMilestones(
+                    context,
+                    epoch,
+                    supply,
+                    members,
+                    displayPoints,
+                    epochService,
+                    effectiveQrCount,
+                    effectiveTrustScore,
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildTokenTdeMilestones(
+    BuildContext context,
+    CommunityEpochDefinition epoch,
+    int currentSupply,
+    int currentMembers,
+    UserPoints userPoints,
+    EpochService epochService,
+    int uniqueQrCount,
+    double trustScore,
+  ) {
+    final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
+    final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
+    final int prevMemberTarget = prevEpoch?.memberTarget ?? 0;
+
+    final int dspRange = epoch.dspTarget - prevDspTarget;
+    final int memberRange = epoch.memberTarget - prevMemberTarget;
+
+    final int stepSize = (dspRange / 10).round();
+    final int memberStepSize = (memberRange / 10).round();
+    final int effectiveMemberStep = memberStepSize > 0 ? memberStepSize : 1;
+
+    return Column(
+      children: List.generate(10, (index) {
+        final tdeNumber = index + 1;
+
+        final stepStart = prevDspTarget + (index * stepSize);
+        final stepTarget = prevDspTarget + ((index + 1) * stepSize);
+
+        final memberStart = prevMemberTarget + (index * effectiveMemberStep);
+        final memberTarget =
+            prevMemberTarget + ((index + 1) * effectiveMemberStep);
+
+        // Logged-in user's personal $DIASPORA distribution record for this TDE
+        final record = userPoints.tdeHistory.firstWhere(
+          (e) => e.epoch == epoch.level && e.tdeNumber == tdeNumber,
+          orElse: () => TdeDistributionRecord(
+            epoch: -1,
+            tdeNumber: -1,
+            amount: 0,
+            efficiency: 0,
+            date: DateTime.now(),
+          ),
+        );
+
+        final bool isSupplyMet = currentSupply >= stepTarget;
+        final bool isCompleted = isSupplyMet;
+        final bool isActive = !isCompleted && currentSupply >= stepStart;
+
+        double supplyProgress = 0.0;
+        double memberProgress = 0.0;
+
+        if (isActive) {
+          supplyProgress = ((currentSupply - stepStart) / stepSize).clamp(
+            0.0,
+            1.0,
+          );
+          memberProgress =
+              ((currentMembers - memberStart) / effectiveMemberStep).clamp(
+                0.0,
+                1.0,
+              );
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: AppTheme.elementSpacing),
+          padding: EdgeInsets.symmetric(
+            horizontal: isActive ? AppTheme.cardHorizontalPadding : 0,
+            vertical: AppTheme.cardVerticalPadding,
+          ),
+          decoration: isActive
+              ? AppTheme.cardDecoration(
+                  context,
+                ).copyWith(color: AppTheme.accent.withValues(alpha: 0.03))
+              : const BoxDecoration(),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'TDE $tdeNumber',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isCompleted
+                                    ? Colors.grey.withValues(alpha: 0.5)
+                                    : (isActive
+                                          ? Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.color
+                                          : Colors.grey),
+                              ),
+                            ),
+                            if (isActive)
+                              Text(
+                                '${(supplyProgress * 100).toInt()}% • ${(memberProgress * 100).toInt()}%',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isActive
+                                      ? AppTheme.accent
+                                      : Colors.grey.withValues(alpha: 0.5),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            else if (isCompleted)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${NumberFormat.compact().format(record.amount)} \$DIASPORA',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.warning.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  if (record.amount > 0)
+                                    Text(
+                                      '${(record.efficiency * 100).toInt()}%',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.grey.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                          ],
+                        ),
+                        if (isActive) ...[
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: supplyProgress,
+                              minHeight: 4,
+                              backgroundColor: Colors.grey.withValues(
+                                alpha: 0.1,
+                              ),
+                              color: AppTheme.accent,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: memberProgress,
+                              minHeight: 4,
+                              backgroundColor: Colors.grey.withValues(
+                                alpha: 0.1,
+                              ),
+                              color: Colors.blue,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${NumberFormat.compact().format(currentSupply)} / ${NumberFormat.compact().format(stepTarget)} Target',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: AppTheme.accent,
+                                ),
+                              ),
+                              Text(
+                                '${NumberFormat.compact().format(currentMembers)} / ${NumberFormat.compact().format(memberTarget)} Users',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.cardDecoration(context).color,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'YOUR STATUS',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Builder(
+                                  builder: (context) {
+                                    final currentTrust =
+                                        (trustScore > 0
+                                                ? trustScore
+                                                : (userPoints.trustScore ?? 0))
+                                            .round();
+                                    final trustColor =
+                                        EpochService.getEfficiencyColor(
+                                          currentTrust,
+                                        );
+
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Trust Score',
+                                          style: TextStyle(fontSize: 10),
+                                        ),
+                                        Text(
+                                          '$currentTrust PCT',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: trustColor,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                Builder(
+                                  builder: (context) {
+                                    final isPostFirstTge =
+                                        userPoints.firstTgeReceivedAt != null ||
+                                        userPoints.tdeHistory.isNotEmpty;
+                                    final qrMet =
+                                        isPostFirstTge || uniqueQrCount >= 10;
+                                    final label = isPostFirstTge
+                                        ? 'Auto-included'
+                                        : '$uniqueQrCount / 10';
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'QR Exchanges',
+                                          style: TextStyle(fontSize: 10),
+                                        ),
+                                        Text(
+                                          label,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: qrMet
+                                                ? Colors.green
+                                                : Colors.orange,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                Builder(
+                                  builder: (context) {
+                                    double efficiency = 0.0;
+                                    final trust =
+                                        (trustScore > 0
+                                                ? trustScore
+                                                : (userPoints.trustScore ?? 0))
+                                            .round();
+                                    if (trust > 0) {
+                                      efficiency = epochService
+                                          .calculateEfficiency(trust);
+                                      if (efficiency > 1.0) efficiency = 1.0;
+                                    }
+
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Efficiency',
+                                          style: TextStyle(fontSize: 10),
+                                        ),
+                                        Text(
+                                          '${(efficiency * 100).toInt()}%',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color:
+                                                EpochService.getEfficiencyColor(
+                                                  trust,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                Builder(
+                                  builder: (context) {
+                                    final isPostFirstTge =
+                                        userPoints.firstTgeReceivedAt != null ||
+                                        userPoints.tdeHistory.isNotEmpty;
+                                    final qrMet =
+                                        isPostFirstTge || uniqueQrCount >= 10;
+                                    final currentBalance =
+                                        userPoints.availablePoints;
+                                    double efficiency = 0.0;
+                                    final trust =
+                                        (trustScore > 0
+                                                ? trustScore
+                                                : (userPoints.trustScore ?? 0))
+                                            .round();
+                                    if (trust > 0) {
+                                      efficiency = epochService
+                                          .calculateEfficiency(trust);
+                                      if (efficiency > 1.0) efficiency = 1.0;
+                                    }
+                                    final double payout =
+                                        currentBalance * efficiency;
+                                    final valuation = ref.watch(
+                                      dspValuationProvider,
+                                    );
+                                    final usdEst = valuation.formatBalance(
+                                      payout.round(),
+                                    );
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Estimated Payout',
+                                          style: TextStyle(fontSize: 10),
+                                        ),
+                                        if (!qrMet)
+                                          const Text(
+                                            '— complete QR gate first',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.grey,
+                                            ),
+                                          )
+                                        else
+                                          Text.rich(
+                                            TextSpan(
+                                              children: [
+                                                TextSpan(
+                                                  text:
+                                                      '${NumberFormat('#,###').format(payout.round())} \$DIASPORA ',
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppTheme.warning,
+                                                  ),
+                                                ),
+                                                TextSpan(
+                                                  text: '($usdEst)',
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Color(0xFF38BDF8),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else if (isCompleted) ...[
+                          const Text(
+                            'Distributed',
+                            style: TextStyle(fontSize: 10, color: Colors.green),
+                          ),
+                        ] else
+                          Text(
+                            'Unlocks at ${NumberFormat.compact().format(stepStart)} epoch target',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 
@@ -2141,12 +2671,6 @@ class _GovernanceUnitCard extends ConsumerWidget {
       error: (_, _) =>
           firestoreBalance > 0 ? firestoreBalance.toInt().toString() : '0',
     );
-    // Show DSP label when using Firestore fallback (no on-chain balance available)
-    final bool hasOnChain =
-        batchAsync.value?.balances[unitId] != null &&
-        batchAsync.value!.balances[unitId] != '0';
-    final bool showingDsp =
-        !hasOnChain && walletAddr.isEmpty && firestoreBalance > 0;
     final bool isSystemReserve =
         unitId == 'founders' ||
         unitId == 'liquidity' ||
@@ -2164,36 +2688,26 @@ class _GovernanceUnitCard extends ConsumerWidget {
 
     return communityAsync.when(
       data: (community) {
-        final cleanName = community?.name
-            .replaceAll('Community', '')
-            .replaceAll('Treasury', '')
-            .replaceAll('DDI', '')
-            .replaceAll('Reserve', '')
-            .trim();
+        final effectiveType = CommunityChatUtils.inferCommunityType(
+          type: community?.type,
+          id: community?.id ?? communityId,
+          unitId: unitId,
+        );
         final bool isCommunityReserve =
-            community?.type == 'state' ||
-            community?.type == 'province' ||
-            community?.type == 'continent';
-        final String title;
-
-        if (unitId == 'global_community') {
-          title = defaultTitle;
-        } else if (cleanName != null && cleanName.isNotEmpty) {
-          if (community?.type == 'city' || community?.type == 'town') {
-            title = '$cleanName DDI Treasury';
-          } else if (community?.type == 'state' ||
-              community?.type == 'province') {
-            title = '$cleanName Reserve Treasury';
-          } else if (community?.type == 'country') {
-            title = '$cleanName DDI Treasury';
-          } else if (community?.type == 'continent') {
-            title = '$cleanName Reserve Treasury';
-          } else {
-            title = defaultTitle;
-          }
-        } else {
-          title = defaultTitle;
-        }
+            effectiveType == 'state' || effectiveType == 'continent';
+        final String title = (unitId == 'global_community' || isSystemReserve)
+            ? defaultTitle
+            : (community != null
+                  ? CommunityChatUtils.generateTreasuryTitle(
+                      name: community.name,
+                      type: effectiveType,
+                      locationType: community.locationType,
+                      id: community.id,
+                      unitId: unitId,
+                      homeCountryCode: community.homeCountryCode,
+                      hostCountryCode: community.hostCountryCode,
+                    )
+                  : defaultTitle);
 
         return GestureDetector(
           onTap: () => Navigator.push(
@@ -2279,9 +2793,7 @@ class _GovernanceUnitCard extends ConsumerWidget {
                                     TextSpan(
                                       children: [
                                         TextSpan(
-                                          text: showingDsp
-                                              ? '$balance DSP '
-                                              : '$balance \$DIASPORA ',
+                                          text: '$balance \$DIASPORA ',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13,

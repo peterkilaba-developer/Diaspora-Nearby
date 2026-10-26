@@ -100,9 +100,7 @@ class _ForwardChatSelectionScreenState
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: greenColor.withValues(alpha: 0.5),
-                  ), // Subtle focus
+                  borderSide: BorderSide.none, // Subtle focus
                 ),
                 filled: true,
                 fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
@@ -122,12 +120,12 @@ class _ForwardChatSelectionScreenState
             data: (chats) {
               final filteredChats =
                   (_searchQuery.isEmpty
-                          ? List.of(chats)
-                          : chats.where((chat) {
-                              return chat.name.toLowerCase().contains(
-                                _searchQuery.toLowerCase(),
-                              );
-                            }).toList())
+                        ? List.of(chats)
+                        : chats.where((chat) {
+                            return chat.name.toLowerCase().contains(
+                              _searchQuery.toLowerCase(),
+                            );
+                          }).toList())
                     ..sort(ChatRepository.compareChatsByLatest);
 
               if (filteredChats.isEmpty) {
@@ -182,7 +180,6 @@ class _ForwardChatSelectionScreenState
                                 borderRadius: BorderRadius.circular(
                                   12,
                                 ), // Match typical card radius
-                                border: Border.all(color: greenColor, width: 2),
                               ),
                             ),
                           ),
@@ -200,14 +197,6 @@ class _ForwardChatSelectionScreenState
                               color: isSelected
                                   ? greenColor
                                   : Colors.transparent,
-                              border: Border.all(
-                                color: isSelected
-                                    ? greenColor
-                                    : theme.colorScheme.outline.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                width: 2,
-                              ),
                             ),
                             child: isSelected
                                 ? const Icon(

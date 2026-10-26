@@ -35,11 +35,6 @@ class DSPTransferMessageContent extends StatelessWidget {
             ? colorScheme.primaryContainer.withValues(alpha: 0.9)
             : colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOwn
-              ? colorScheme.primary.withValues(alpha: 0.3)
-              : colorScheme.outline.withValues(alpha: 0.1),
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),

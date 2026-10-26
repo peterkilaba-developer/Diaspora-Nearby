@@ -314,7 +314,9 @@ class EmergencyFundService {
           'userName': userName,
           'proxyUserId': proxyUserId,
         });
-    debugPrint('✅ [EmergencyFund] Proxy request created: ${userId}_$proxyUserId');
+    debugPrint(
+      '✅ [EmergencyFund] Proxy request created: ${userId}_$proxyUserId',
+    );
   }
 
   // Proxy user responds to the request (accept or reject)
@@ -438,13 +440,32 @@ class EmergencyFundService {
     }
   }
 
-  /// Checks whether a user has already staked their DSP promissory.
+  /// Checks whether a user has completed an active contribution to the Ubuntu Emergency Fund.
   Future<bool> hasStaked(String userId) async {
+    final memDoc = await _firestore
+        .collection('emergency_fund_memberships')
+        .doc(userId)
+        .get();
+    if (memDoc.exists) {
+      final data = memDoc.data() ?? const <String, dynamic>{};
+      final hasPaymentProof =
+          (data['paymentTxHash'] as String?)?.isNotEmpty == true ||
+          (data['paymentId'] as String?)?.isNotEmpty == true;
+      if (data['status'] == 'active' && hasPaymentProof) {
+        return true;
+      }
+    }
+
     final doc = await _firestore
         .collection('emergency_fund_stakers')
         .doc(userId)
         .get();
-    return doc.exists;
+    if (!doc.exists) return false;
+    final stakerData = doc.data() ?? const <String, dynamic>{};
+    final hasTxProof =
+        (stakerData['paymentTxHash'] as String?)?.isNotEmpty == true ||
+        (stakerData['paymentId'] as String?)?.isNotEmpty == true;
+    return stakerData['status'] == 'contributed' && hasTxProof;
   }
 
   /// Returns the total number of users who have staked.

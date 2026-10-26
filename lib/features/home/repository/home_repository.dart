@@ -83,22 +83,23 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
       debugPrint(
         '[PERF] nearbyUsersProvider CACHE HIT (${_cachedUsers!.length} users, ${now.difference(_lastFetch).inSeconds}s old)',
       );
-      final updated = _cachedUsers!
-          .map(
-            (u) => u.copyWith(
-              distance: calculateProfileDistanceKm(
-                viewer,
-                u,
-                fallbackDistanceKm: u.distance,
-              ),
-            ),
-          )
-          .toList()
-        ..sort((a, b) {
-          final dA = a.distance ?? double.infinity;
-          final dB = b.distance ?? double.infinity;
-          return dA.compareTo(dB);
-        });
+      final updated =
+          _cachedUsers!
+              .map(
+                (u) => u.copyWith(
+                  distance: calculateProfileDistanceKm(
+                    viewer,
+                    u,
+                    fallbackDistanceKm: u.distance,
+                  ),
+                ),
+              )
+              .toList()
+            ..sort((a, b) {
+              final dA = a.distance ?? double.infinity;
+              final dB = b.distance ?? double.infinity;
+              return dA.compareTo(dB);
+            });
       _cachedUsers = updated;
       return updated;
     }
@@ -116,22 +117,23 @@ class NearbyUsersNotifier extends AsyncNotifier<List<ProfileData>> {
       currentUserProfile: viewer,
     );
 
-    final enriched = users
-        .map(
-          (u) => u.copyWith(
-            distance: calculateProfileDistanceKm(
-              viewer,
-              u,
-              fallbackDistanceKm: u.distance,
-            ),
-          ),
-        )
-        .toList()
-      ..sort((a, b) {
-        final dA = a.distance ?? double.infinity;
-        final dB = b.distance ?? double.infinity;
-        return dA.compareTo(dB);
-      });
+    final enriched =
+        users
+            .map(
+              (u) => u.copyWith(
+                distance: calculateProfileDistanceKm(
+                  viewer,
+                  u,
+                  fallbackDistanceKm: u.distance,
+                ),
+              ),
+            )
+            .toList()
+          ..sort((a, b) {
+            final dA = a.distance ?? double.infinity;
+            final dB = b.distance ?? double.infinity;
+            return dA.compareTo(dB);
+          });
 
     // Cache result
     final profileRepo = ref.read(profileRepositoryProvider);

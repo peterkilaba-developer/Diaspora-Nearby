@@ -703,7 +703,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       Builder(
                         builder: (context) {
                           final viewer = ref.watch(userProfileProvider).value;
-                          final livePos = ref.watch(liveUserPositionProvider).value;
+                          final livePos = ref
+                              .watch(liveUserPositionProvider)
+                              .value;
                           event.distance = calculateEventDistanceKm(
                             event,
                             viewer: viewer,
@@ -1043,9 +1045,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             });
                           }
                           if (context.mounted) {
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')),
+                            );
                           }
                         }
                       },
@@ -1077,7 +1079,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             : (isFull ? LucideIcons.ban : LucideIcons.ticket),
                       ),
                 label: Text(
-                  isAttending ? 'Going' : (isFull ? 'Sold Out' : 'Attend Event'),
+                  isAttending
+                      ? 'Going'
+                      : (isFull ? 'Sold Out' : 'Attend Event'),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),

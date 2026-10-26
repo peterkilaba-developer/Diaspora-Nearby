@@ -11,6 +11,7 @@ import 'package:diaspora_nearby/features/shared/models/location.dart'
 import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/core/services/google_places_service.dart';
 import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
+import 'package:diaspora_nearby/core/data/world_languages.dart';
 import 'package:diaspora_nearby/core/utils/location_utils.dart' as loc_utils;
 import 'package:diaspora_nearby/features/shared/widgets/multi_select_dialog.dart';
 import 'package:diaspora_nearby/features/shared/widgets/user_card.dart';
@@ -185,68 +186,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
     'Veterinarian',
     'Other',
   ];
-  static const List<String> _languageOptions = [
-    'Afrikaans',
-    'Amharic',
-    'Arabic',
-    'Bengali',
-    'Bulgarian',
-    'Burmese',
-    'Chinese (Cantonese)',
-    'Chinese (Mandarin)',
-    'Croatian',
-    'Czech',
-    'Danish',
-    'Dutch',
-    'English',
-    'Farsi / Persian',
-    'Filipino / Tagalog',
-    'Finnish',
-    'French',
-    'German',
-    'Greek',
-    'Hausa',
-    'Hebrew',
-    'Hindi',
-    'Hungarian',
-    'Igbo',
-    'Indonesian',
-    'Italian',
-    'Japanese',
-    'Javanese',
-    'Kannada',
-    'Korean',
-    'Malay',
-    'Marathi',
-    'Nepali',
-    'Norwegian',
-    'Oromo',
-    'Pashto',
-    'Polish',
-    'Portuguese',
-    'Punjabi',
-    'Romanian',
-    'Russian',
-    'Serbian',
-    'Shona',
-    'Sinhala',
-    'Somali',
-    'Spanish',
-    'Swahili',
-    'Swedish',
-    'Tamil',
-    'Telugu',
-    'Thai',
-    'Tigrinya',
-    'Turkish',
-    'Ukrainian',
-    'Urdu',
-    'Vietnamese',
-    'Wolof',
-    'Yoruba',
-    'Zulu',
-    'Other',
-  ];
+  static List<String> get _languageOptions => allProfileLanguageOptionNames;
   static const List<String> _servicesOptions = [
     'Airport Pickup',
     'Business Partnership',
@@ -1140,12 +1080,9 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             children: [
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
+                  color: Color(0x14888888),
                   shape: BoxShape.circle,
-                  border:
-                      widget.highlightFields?.contains('Profile Photo') == true
-                      ? Border.all(color: Colors.red, width: 2)
-                      : null,
                 ),
                 child: CircleAvatar(
                   radius: 50,
@@ -1234,13 +1171,13 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         enabledBorder: isHighlighted
             ? OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                borderSide: BorderSide.none,
               )
             : InputBorder.none,
         focusedBorder: InputBorder.none,
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.red, width: 1.5),
+          borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -1278,13 +1215,13 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
         enabledBorder: isHighlighted
             ? OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                borderSide: BorderSide.none,
               )
             : InputBorder.none,
         focusedBorder: InputBorder.none,
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.red, width: 1.5),
+          borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -1311,7 +1248,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
           decoration: isHighlighted
               ? AppTheme.innerDecoration(
                   context,
-                ).copyWith(border: Border.all(color: Colors.red, width: 1.5))
+                ).copyWith(border: const Border())
               : AppTheme.innerDecoration(context),
           child: DropdownButtonFormField<String>(
             initialValue: _selectedYearsInHost.isNotEmpty
@@ -1334,7 +1271,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
               focusedBorder: InputBorder.none,
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
@@ -1356,8 +1293,12 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
   }
 
   Widget _buildPastLocationsEdit() {
-    final sortedPastLocations = List<loc_model.PastLocation>.from(_pastLocations)
-      ..sort((a, b) => _parsePastLocationYear(b.until).compareTo(_parsePastLocationYear(a.until)));
+    final sortedPastLocations =
+        List<loc_model.PastLocation>.from(_pastLocations)..sort(
+          (a, b) => _parsePastLocationYear(
+            b.until,
+          ).compareTo(_parsePastLocationYear(a.until)),
+        );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1478,7 +1419,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             errorBorder: _activeHighlights.contains('Host Town')
                 ? OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                    borderSide: BorderSide.none,
                   )
                 : InputBorder.none,
             suffixIcon: _isUpdatingLocation
@@ -1499,9 +1440,7 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
             _tempSelectedLocation == null)
           Container(
             height: 200,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-            ),
+            decoration: const BoxDecoration(color: Color(0x14888888)),
             child: ListView.builder(
               itemCount: _predictions.length,
               itemBuilder: (context, index) => ListTile(
@@ -1545,9 +1484,9 @@ class UserProfileFormState extends ConsumerState<UserProfileForm> {
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: AppTheme.innerDecoration(context).copyWith(
-              border: isHighlighted ? Border.all(color: Colors.red) : null,
-            ),
+            decoration: AppTheme.innerDecoration(
+              context,
+            ).copyWith(border: isHighlighted ? const Border() : null),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

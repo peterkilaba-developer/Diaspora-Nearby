@@ -83,17 +83,17 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         ref.invalidate(joinedEventsProvider(user.uid));
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Event deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Event deleted')));
         context.go('/events');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete event: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to delete event: $e')));
       }
     }
   }
@@ -1089,11 +1089,6 @@ class _CreateEventFormState extends ConsumerState<_CreateEventForm> {
                                 context,
                               ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _isPublished
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.transparent,
-                        ),
                       ),
                       child: SwitchListTile(
                         title: Text(
@@ -1720,14 +1715,15 @@ class _JoinedEventsList extends ConsumerWidget {
         }
 
         final now = DateTime.now();
-        final events = (snapshot.data ?? [])
-            .where((e) => !EventRepository.isEventExpired(e, now))
-            .toList()
-          ..sort((a, b) {
-            final dateCmp = a.startDate.compareTo(b.startDate);
-            if (dateCmp != 0) return dateCmp;
-            return a.startTime.compareTo(b.startTime);
-          });
+        final events =
+            (snapshot.data ?? [])
+                .where((e) => !EventRepository.isEventExpired(e, now))
+                .toList()
+              ..sort((a, b) {
+                final dateCmp = a.startDate.compareTo(b.startDate);
+                if (dateCmp != 0) return dateCmp;
+                return a.startTime.compareTo(b.startTime);
+              });
         if (events.isEmpty) {
           return const Center(
             child: Text('You have no upcoming joined events.'),

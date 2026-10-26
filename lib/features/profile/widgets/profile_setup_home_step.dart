@@ -90,7 +90,7 @@ class ProfileSetupHomeStep extends StatelessWidget {
             onPressed: onNext,
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.green,
-              side: const BorderSide(color: Colors.green, width: 2),
+              side: BorderSide.none,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

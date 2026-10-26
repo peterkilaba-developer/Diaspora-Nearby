@@ -1,14 +1,17 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
+import 'package:diaspora_nearby/features/shared/widgets/country_picker_sheet.dart';
 import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
-import 'package:diaspora_nearby/features/shared/widgets/currency_price_display.dart';
 import 'package:diaspora_nearby/features/travel/widgets/smart_date_picker.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_stepper.dart';
 import 'package:diaspora_nearby/features/travel/screens/create_hotel_listing_screen.dart';
@@ -38,6 +41,15 @@ class _PeerListingDetailScreenState
   bool _isBooking = false;
   final _notesC = TextEditingController();
 
+  // ── Guest flexible / host-country address controllers ──
+  final _guestAddressC = TextEditingController();
+  final _guestCityC = TextEditingController();
+  final _guestStateC = TextEditingController();
+  final _guestPostalC = TextEditingController();
+  String _guestAddressCountryCode = 'US';
+  country_data.Country? _guestAddressCountry;
+  bool _guestAddressExpanded = false;
+
   // ── Owner dashboard state ──
   List<PeerBooking>? _ownerBookings;
   bool _dashboardLoading = true;
@@ -64,6 +76,8 @@ class _PeerListingDetailScreenState
   @override
   void initState() {
     super.initState();
+    _prefillHotelDates();
+    _prefillGuestAddressFromProfile();
     // Track view & check saved state
     _recordView();
     _checkSavedState();
@@ -73,11 +87,91 @@ class _PeerListingDetailScreenState
     });
   }
 
+  void _prefillHotelDates() {
+    if (!_isHotel) return;
+    final checkInRaw = widget.listing.checkInTime;
+    final checkOutRaw = widget.listing.checkOutTime;
+    if (checkInRaw != null && checkInRaw.contains('-')) {
+      _startDate = DateTime.tryParse(checkInRaw);
+    }
+    if (checkOutRaw != null && checkOutRaw.contains('-')) {
+      _endDate = DateTime.tryParse(checkOutRaw);
+    }
+    if (_startDate != null &&
+        (_endDate == null || !_endDate!.isAfter(_startDate!))) {
+      _endDate = _startDate!.add(const Duration(days: 1));
+    }
+  }
+
+  void _prefillGuestAddressFromProfile() {
+    final profile = ref.read(userProfileProvider).value;
+    if (profile == null) return;
+    final hostCode =
+        (profile.hostCountryCode ??
+                profile.hostLocation.countryCode ??
+                profile.homeCountryCode ??
+                'US')
+            .toUpperCase();
+    _guestAddressCountryCode = hostCode;
+    _guestAddressCountry = country_data.getCountryByCode(hostCode);
+    _guestCityC.text = profile.hostLocation.city ?? '';
+    _guestStateC.text = profile.hostLocation.state ?? '';
+    if (profile.hostLocation.formattedAddress.isNotEmpty) {
+      _guestAddressC.text = profile.hostLocation.formattedAddress;
+    }
+  }
+
   @override
   void dispose() {
     _imagePageController.dispose();
     _notesC.dispose();
+    _guestAddressC.dispose();
+    _guestCityC.dispose();
+    _guestStateC.dispose();
+    _guestPostalC.dispose();
     super.dispose();
+  }
+
+  /// Resolves the 2-letter ISO country code of the hotel/listing location.
+  String _resolvedListingCountryCode(PeerListing listing) {
+    if (listing.countryCode != null &&
+        listing.countryCode!.trim().length == 2) {
+      return listing.countryCode!.trim().toUpperCase();
+    }
+    final candidates = <String>[
+      if (listing.country != null) listing.country!,
+      if (listing.address != null) listing.address!,
+      listing.locationLabel,
+    ];
+    for (final raw in candidates) {
+      final lower = raw.trim().toLowerCase();
+      if (lower.isEmpty) continue;
+      for (final c in country_data.countries) {
+        if (lower == c.name.toLowerCase() ||
+            lower.endsWith(c.name.toLowerCase()) ||
+            lower.contains(c.name.toLowerCase())) {
+          return c.code.toUpperCase();
+        }
+      }
+    }
+    final homeCc = ref.read(userProfileProvider).value?.homeCountryCode;
+    if (homeCc != null && homeCc.trim().length == 2) {
+      return homeCc.trim().toUpperCase();
+    }
+    return 'US';
+  }
+
+  /// Resolves the base country code in which [listing.pricePerUnit] is stored.
+  String _baseCurrencyCountryCode(
+    PeerListing listing,
+    String hotelLocationCountryCode,
+  ) {
+    if (_isApiHotel &&
+        listing.currency.toUpperCase() == 'USD' &&
+        hotelLocationCountryCode != 'US') {
+      return 'US';
+    }
+    return hotelLocationCountryCode;
   }
 
   /// Record a view for this listing.
@@ -149,7 +243,7 @@ class _PeerListingDetailScreenState
   Future<void> _pickStartDate() async {
     final date = await SmartDatePicker.show(
       context: context,
-      title: _isStay ? 'Check-in Date' : 'Pick-up Date',
+      title: (_isStay || _isHotel) ? 'Check-in Date' : 'Pick-up Date',
       initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
@@ -170,7 +264,7 @@ class _PeerListingDetailScreenState
         DateTime.now().add(const Duration(days: 1));
     final date = await SmartDatePicker.show(
       context: context,
-      title: _isStay ? 'Check-out Date' : 'Drop-off Date',
+      title: (_isStay || _isHotel) ? 'Check-out Date' : 'Drop-off Date',
       initialDate: _endDate ?? first,
       firstDate: first,
       lastDate: DateTime.now().add(const Duration(days: 365)),
@@ -178,6 +272,67 @@ class _PeerListingDetailScreenState
     if (date != null && mounted) {
       setState(() => _endDate = date);
     }
+  }
+
+  void _pickGuestAddressCountry() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      backgroundColor: Colors.transparent,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: CountryPickerSheet(
+            selectedCountry: _guestAddressCountry,
+            showDialCode: false,
+            onCountrySelected: (country) {
+              Navigator.pop(context);
+              setState(() {
+                _guestAddressCountry = country;
+                _guestAddressCountryCode = country.code.toUpperCase();
+              });
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _postalLabelForCountry(String countryCode) {
+    switch (countryCode.toUpperCase()) {
+      case 'US':
+        return 'ZIP Code';
+      case 'GB':
+      case 'AU':
+      case 'NZ':
+      case 'ZA':
+        return 'Postcode';
+      case 'CA':
+        return 'Postal Code';
+      case 'IN':
+        return 'PIN Code';
+      case 'IE':
+        return 'Eircode';
+      default:
+        return 'Postal Code / P.O. Box (optional)';
+    }
+  }
+
+  String _composeGuestAddressSummary() {
+    final parts = <String>[
+      _guestAddressC.text.trim(),
+      _guestCityC.text.trim(),
+      _guestStateC.text.trim(),
+      _guestPostalC.text.trim(),
+      _guestAddressCountry?.name ?? _guestAddressCountryCode,
+    ].where((s) => s.isNotEmpty).toList();
+    return parts.join(', ');
   }
 
   Future<void> _book() async {
@@ -188,6 +343,11 @@ class _PeerListingDetailScreenState
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
+
+    if (_isHotel) {
+      await _showHotelBookingComingSoonDialog();
       return;
     }
 
@@ -208,6 +368,11 @@ class _PeerListingDetailScreenState
       }
 
       final repo = ref.read(peerListingRepositoryProvider);
+      final combinedNotes = <String>[
+        if (_notesC.text.trim().isNotEmpty) _notesC.text.trim(),
+        if (_composeGuestAddressSummary().isNotEmpty)
+          'Guest Address: ${_composeGuestAddressSummary()}',
+      ].join('\n');
 
       final booking = PeerBooking(
         id: '',
@@ -223,7 +388,7 @@ class _PeerListingDetailScreenState
         endDate: _endDate!,
         guests: _guests,
         totalPrice: _totalPrice,
-        notes: _notesC.text.trim().isEmpty ? null : _notesC.text.trim(),
+        notes: combinedNotes.isEmpty ? null : combinedNotes,
       );
 
       await repo.createBooking(booking);
@@ -245,113 +410,390 @@ class _PeerListingDetailScreenState
     }
   }
 
+  Future<void> _showHotelBookingComingSoonDialog() async {
+    final theme = Theme.of(context);
+    final profile = ref.read(userProfileProvider).value;
+    final valuation = ref.read(dspValuationProvider);
+    final guestCountryCode = (profile?.hostCountryCode ?? 'US').toUpperCase();
+    final hotelCountryCode = _resolvedListingCountryCode(widget.listing);
+    final baseCountryCode = _baseCurrencyCountryCode(
+      widget.listing,
+      hotelCountryCode,
+    );
+
+    final guestTotal = CurrencyHelper.convertCurrency(
+      _totalPrice,
+      baseCountryCode,
+      guestCountryCode,
+    );
+    final localTotal = CurrencyHelper.convertCurrency(
+      _totalPrice,
+      baseCountryCode,
+      hotelCountryCode,
+    );
+    final guestTotalFormatted =
+        '${CurrencyHelper.currencySymbol(guestCountryCode)} ${CurrencyHelper.formatFiatAmount(guestTotal)}';
+    final localTotalFormatted =
+        '${CurrencyHelper.currencySymbol(hotelCountryCode)} ${CurrencyHelper.formatFiatAmount(localTotal)}';
+    final diasporaTotalFormatted = CurrencyHelper.formatDiasporaTokenPrice(
+      localTotal,
+      hotelCountryCode,
+      dspPriceFloorUsd: valuation.impliedValueUsd,
+    );
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (dialogContext) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+          backgroundColor: AppTheme.elevationColor(context, 1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.accent.withValues(alpha: 0.14),
+                  ),
+                  child: const Icon(
+                    LucideIcons.hotel,
+                    color: AppTheme.accent,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'COMING SOON',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.accent,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Booking Coming Soon',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Live hotel discovery and room rates are active! Direct in-app hotel reservations are launching soon — you have not been charged.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                    height: 1.45,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.elevationColor(context, 2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      _dialogSummaryRow(
+                        theme,
+                        LucideIcons.building2,
+                        widget.listing.title,
+                      ),
+                      if (_startDate != null && _endDate != null)
+                        _dialogSummaryRow(
+                          theme,
+                          LucideIcons.calendar,
+                          '${_formatDate(_startDate!)} → ${_formatDate(_endDate!)} · $_days night${_days > 1 ? 's' : ''}',
+                        ),
+                      _dialogSummaryRow(
+                        theme,
+                        LucideIcons.users,
+                        '$_guests guest${_guests > 1 ? 's' : ''}',
+                      ),
+                      _dialogSummaryRow(
+                        theme,
+                        LucideIcons.tag,
+                        '$guestTotalFormatted  ·  ≈ $localTotalFormatted  ·  ≈ $diasporaTotalFormatted',
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dialogSummaryRow(
+    ThemeData theme,
+    IconData icon,
+    String text, {
+    bool isLast = false,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              icon,
+              size: 14,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showBookingConfirmation() {
     showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (ctx) {
         final theme = Theme.of(ctx);
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          backgroundColor: AppTheme.elevationColor(context, 3),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: AppTheme.elevationColor(context, 3),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    LucideIcons.checkCircle,
+                    color: Colors.green,
+                    size: 32,
+                  ),
                 ),
-                child: const Icon(
-                  LucideIcons.checkCircle,
-                  color: Colors.green,
-                  size: 32,
+                const SizedBox(height: 16),
+                Text(
+                  'Booking Request Sent!',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Booking Request Sent!',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+                const SizedBox(height: 8),
+                Text(
+                  'Your request has been sent to ${widget.listing.ownerName}. You\'ll be notified once they confirm.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Your request has been sent to ${widget.listing.ownerName}. You\'ll be notified once they confirm.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppTheme.elevationColor(context, 2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      CurrencyHelper.formatLocalPrice(
-                        _totalPrice,
-                        widget.listing.countryCode,
-                      ),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.accent,
-                      ),
-                    ),
-                    Text(
-                      ' for $_days ${_isStay ? 'night' : 'day'}${_days > 1 ? 's' : ''}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.5,
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.elevationColor(context, 2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        CurrencyHelper.formatLocalPrice(
+                          _totalPrice,
+                          widget.listing.countryCode,
+                        ),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.accent,
                         ),
                       ),
+                      Text(
+                        ' for $_days ${(_isStay || _isHotel) ? 'night' : 'day'}${_days > 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
           ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Done',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
         );
       },
+    );
+  }
+
+  /// Builds the 3-tier price display block for the detail screen header:
+  /// 1. Guest Host Currency (primary)
+  /// 2. Hotel/Listing Location Local Fiat
+  /// 3. $DIASPORA token equivalent
+  Widget _buildThreePriceHeaderBlock(ThemeData theme, PeerListing listing) {
+    final profile = ref.watch(userProfileProvider).value;
+    final valuation = ref.watch(dspValuationProvider);
+    final suffix = (_isHotel || _isStay) ? '/night' : '/day';
+
+    final guestCountryCode = (profile?.hostCountryCode ?? 'US').toUpperCase();
+    final hotelCountryCode = _resolvedListingCountryCode(listing);
+    final baseCountryCode = _baseCurrencyCountryCode(listing, hotelCountryCode);
+
+    final guestAmount = CurrencyHelper.convertCurrency(
+      listing.pricePerUnit,
+      baseCountryCode,
+      guestCountryCode,
+    );
+    final localFiatAmount = CurrencyHelper.convertCurrency(
+      listing.pricePerUnit,
+      baseCountryCode,
+      hotelCountryCode,
+    );
+
+    final guestFormatted =
+        '${CurrencyHelper.currencySymbol(guestCountryCode)} ${CurrencyHelper.formatFiatAmount(guestAmount)}$suffix';
+    final localFormatted =
+        '≈ ${CurrencyHelper.currencySymbol(hotelCountryCode)} ${CurrencyHelper.formatFiatAmount(localFiatAmount)}$suffix';
+    final diasporaFormatted =
+        '≈ ${CurrencyHelper.formatDiasporaTokenPrice(localFiatAmount, hotelCountryCode, dspPriceFloorUsd: valuation.impliedValueUsd)}$suffix';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1. Guest Host Currency (Primary)
+        Text(
+          guestFormatted,
+          textAlign: TextAlign.end,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.accent,
+          ),
+        ),
+        const SizedBox(height: 3),
+        // 2. Hotel Location Local Fiat
+        Text(
+          localFormatted,
+          textAlign: TextAlign.end,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+          ),
+        ),
+        const SizedBox(height: 2),
+        // 3. Diaspora Token
+        Text(
+          diasporaFormatted,
+          textAlign: TextAlign.end,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.accent.withValues(alpha: 0.85),
+          ),
+        ),
+      ],
     );
   }
 
@@ -423,14 +865,15 @@ class _PeerListingDetailScreenState
                 Container(
                   decoration: AppTheme.cardDecoration(context),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
+                    horizontal: 12,
                     vertical: 16,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Type badge
+                      // Type badge + 3-price block
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -473,26 +916,9 @@ class _PeerListingDetailScreenState
                               ],
                             ),
                           ),
-                          const Spacer(),
-                          Flexible(
-                            child: CurrencyPriceDisplay(
-                              amount: listing.pricePerUnit,
-                              sellerCountryCode: listing.countryCode,
-                              viewerCountryCode: ref
-                                  .read(userProfileProvider)
-                                  .value
-                                  ?.hostCountryCode,
-                              priceSuffix: _isHotel || _isStay
-                                  ? '/night'
-                                  : '/day',
-                              showToggle: false,
-                              primaryColor: AppTheme.accent,
-                              primaryStyle: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.accent,
-                              ),
-                            ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildThreePriceHeaderBlock(theme, listing),
                           ),
                         ],
                       ),
@@ -506,8 +932,6 @@ class _PeerListingDetailScreenState
                         ),
                       ),
                       // Subtitle — shown for stays & cars only.
-                      // Hotels skip this because the same info (stars, category,
-                      // rooms, guests) is already in the Hotel Details card below.
                       if (!_isHotel && listing.subtitleLabel.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
@@ -858,9 +1282,7 @@ class _PeerListingDetailScreenState
                   Expanded(child: _sectionLabel(theme, 'Recent Bookings')),
                   if (bookings.isNotEmpty)
                     GestureDetector(
-                      onTap: () {
-                        // TODO: navigate to full bookings list
-                      },
+                      onTap: () {},
                       child: Text(
                         'View All',
                         style: TextStyle(
@@ -1000,7 +1422,6 @@ class _PeerListingDetailScreenState
           decoration: BoxDecoration(
             color: c.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: c.withValues(alpha: 0.15)),
           ),
           child: Column(
             children: [
@@ -1110,7 +1531,6 @@ class _PeerListingDetailScreenState
       ),
     );
     if (result == true && mounted) {
-      // Reload the listing after edit
       Navigator.pop(context, true);
     }
   }
@@ -1156,6 +1576,46 @@ class _PeerListingDetailScreenState
   // ─── Guest Booking Section ────────────────────────────────────────
 
   Widget _buildGuestBookingSection(ThemeData theme, PeerListing listing) {
+    final profile = ref.watch(userProfileProvider).value;
+    final valuation = ref.watch(dspValuationProvider);
+    final guestCountryCode = (profile?.hostCountryCode ?? 'US').toUpperCase();
+    final hotelCountryCode = _resolvedListingCountryCode(listing);
+    final baseCountryCode = _baseCurrencyCountryCode(listing, hotelCountryCode);
+
+    final unitGuestAmount = CurrencyHelper.convertCurrency(
+      listing.pricePerUnit,
+      baseCountryCode,
+      guestCountryCode,
+    );
+    final totalGuestAmount = CurrencyHelper.convertCurrency(
+      _totalPrice,
+      baseCountryCode,
+      guestCountryCode,
+    );
+    final totalLocalAmount = CurrencyHelper.convertCurrency(
+      _totalPrice,
+      baseCountryCode,
+      hotelCountryCode,
+    );
+    final suffix = (_isStay || _isHotel) ? '/night' : '/day';
+
+    final hasState = country_data.hasStateLevelHierarchyFromData(
+      _guestAddressCountryCode,
+    );
+    final stateTerm = country_data.getStateTerminology(
+      _guestAddressCountryCode,
+    );
+    final postalLabel = _postalLabelForCountry(_guestAddressCountryCode);
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: AppTheme.elevationColor(context, 2),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
+
     return Container(
       decoration: AppTheme.cardDecoration(context),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
@@ -1217,6 +1677,192 @@ class _PeerListingDetailScreenState
             ),
           if (_isStay || _isHotel) const SizedBox(height: 12),
 
+          // Flexible Host-Country Guest Address Section
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.elevationColor(context, 2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: () => setState(
+                    () => _guestAddressExpanded = !_guestAddressExpanded,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          LucideIcons.mapPin,
+                          size: 16,
+                          color: AppTheme.accent,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Guest Address (${_guestAddressCountry?.flag ?? ''} ${_guestAddressCountry?.name ?? _guestAddressCountryCode})',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _composeGuestAddressSummary().isNotEmpty
+                                    ? _composeGuestAddressSummary()
+                                    : 'Tap to enter your address',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          _guestAddressExpanded
+                              ? LucideIcons.chevronUp
+                              : LucideIcons.chevronDown,
+                          size: 16,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_guestAddressExpanded)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Column(
+                      children: [
+                        // Country selector
+                        InkWell(
+                          onTap: _pickGuestAddressCountry,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.elevationColor(context, 1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  _guestAddressCountry?.flag ?? '🌍',
+                                  style: const TextStyle(fontSize: 18),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _guestAddressCountry?.name ??
+                                        _guestAddressCountryCode,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  'Change Country',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.accent.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _guestAddressC,
+                          textCapitalization: TextCapitalization.words,
+                          onChanged: (_) => setState(() {}),
+                          decoration: inputDecoration.copyWith(
+                            fillColor: AppTheme.elevationColor(context, 1),
+                            hintText:
+                                'Street Address / Area / Landmark (flexible)',
+                          ),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _guestCityC,
+                                textCapitalization: TextCapitalization.words,
+                                onChanged: (_) => setState(() {}),
+                                decoration: inputDecoration.copyWith(
+                                  fillColor: AppTheme.elevationColor(
+                                    context,
+                                    1,
+                                  ),
+                                  hintText: 'City / Town',
+                                ),
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            if (hasState) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _guestStateC,
+                                  textCapitalization: TextCapitalization.words,
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: inputDecoration.copyWith(
+                                    fillColor: AppTheme.elevationColor(
+                                      context,
+                                      1,
+                                    ),
+                                    hintText: stateTerm,
+                                  ),
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _guestPostalC,
+                          textCapitalization: TextCapitalization.characters,
+                          onChanged: (_) => setState(() {}),
+                          decoration: inputDecoration.copyWith(
+                            fillColor: AppTheme.elevationColor(context, 1),
+                            hintText: postalLabel,
+                          ),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // Notes
           TextFormField(
             controller: _notesC,
@@ -1235,7 +1881,7 @@ class _PeerListingDetailScreenState
           ),
           const SizedBox(height: 16),
 
-          // Price summary
+          // Price summary (shows all 3 currencies: Guest Host, Location Local Fiat, and Diaspora)
           if (_days > 0) ...[
             Container(
               padding: const EdgeInsets.all(14),
@@ -1244,21 +1890,37 @@ class _PeerListingDetailScreenState
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   _priceRow(
                     theme,
-                    listing.priceLabel,
-                    '× $_days ${_isStay ? 'night' : 'day'}${_days > 1 ? 's' : ''}',
+                    '${CurrencyHelper.currencySymbol(guestCountryCode)} ${CurrencyHelper.formatFiatAmount(unitGuestAmount)}$suffix',
+                    '× $_days ${(_isStay || _isHotel) ? 'night' : 'day'}${_days > 1 ? 's' : ''}',
                   ),
                   const Divider(height: 16),
                   _priceRow(
                     theme,
                     'Total',
-                    CurrencyHelper.formatLocalPrice(
-                      _totalPrice,
-                      listing.countryCode,
-                    ),
+                    '${CurrencyHelper.currencySymbol(guestCountryCode)} ${CurrencyHelper.formatFiatAmount(totalGuestAmount)}',
                     isBold: true,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '≈ ${CurrencyHelper.currencySymbol(hotelCountryCode)} ${CurrencyHelper.formatFiatAmount(totalLocalAmount)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '≈ ${CurrencyHelper.formatDiasporaTokenPrice(totalLocalAmount, hotelCountryCode, dspPriceFloorUsd: valuation.impliedValueUsd)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.accent.withValues(alpha: 0.85),
+                    ),
                   ),
                 ],
               ),
@@ -1404,8 +2066,6 @@ class _PeerListingDetailScreenState
     );
   }
 
-  // Guest stepper now uses shared TravelStepper widget
-
   // ─── Amenities / Features section ─────────────────────────────────
 
   Widget _buildAmenitiesSection(ThemeData theme, PeerListing listing) {
@@ -1483,7 +2143,6 @@ class _PeerListingDetailScreenState
 
   Widget _buildHeroCarousel(ThemeData theme, PeerListing listing) {
     if (listing.photos.isEmpty) {
-      // Stylish placeholder when no photos
       return Container(
         color: AppTheme.elevationColor(context, 2),
         child: Center(
@@ -1517,7 +2176,6 @@ class _PeerListingDetailScreenState
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Photo PageView
         PageView.builder(
           controller: _imagePageController,
           itemCount: listing.photos.length,
@@ -1547,7 +2205,6 @@ class _PeerListingDetailScreenState
             ),
           ),
         ),
-        // Bottom gradient for readability
         Positioned(
           bottom: 0,
           left: 0,
@@ -1566,7 +2223,6 @@ class _PeerListingDetailScreenState
             ),
           ),
         ),
-        // Page indicator dots
         if (listing.photos.length > 1)
           Positioned(
             bottom: 16,
@@ -1591,7 +2247,6 @@ class _PeerListingDetailScreenState
               ),
             ),
           ),
-        // Photo counter badge (top-right, below the status bar area)
         if (listing.photos.length > 1)
           Positioned(
             bottom: 16,
@@ -1630,8 +2285,6 @@ class _PeerListingDetailScreenState
   // ─── Hotel details card ──────────────────────────────────────────
 
   Widget _buildHotelDetails(ThemeData theme, PeerListing listing) {
-    // API hotels store dates in checkInTime/checkOutTime,
-    // community hotels store actual times (e.g. "15:00").
     final isTimeFormat =
         listing.checkInTime != null && !listing.checkInTime!.contains('-');
 
@@ -1645,7 +2298,6 @@ class _PeerListingDetailScreenState
             children: [
               _sectionLabel(theme, 'Hotel Details'),
               const SizedBox(height: 12),
-              // Star rating row
               if (listing.starRating != null && listing.starRating! > 0)
                 _hotelInfoRow(
                   theme,
@@ -1666,8 +2318,6 @@ class _PeerListingDetailScreenState
                     ),
                   ),
                 ),
-              // Category — skip for API hotels since chain name
-              // already appears in the "Managed by" host section.
               if (listing.hotelCategory != null && !_isApiHotel)
                 _hotelInfoRowText(
                   theme,
@@ -1689,7 +2339,6 @@ class _PeerListingDetailScreenState
                   'Max Guests',
                   '${listing.maxGuests}',
                 ),
-              // Check-in/out — times for community, dates for API
               if (listing.checkInTime != null && isTimeFormat)
                 _hotelInfoRowText(
                   theme,

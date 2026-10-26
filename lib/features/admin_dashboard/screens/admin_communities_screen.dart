@@ -141,7 +141,6 @@ class _CommunityCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,9 +281,7 @@ class _ActionButton extends StatelessWidget {
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: primary
-              ? BorderSide.none
-              : BorderSide(color: Colors.grey.shade300),
+          side: primary ? BorderSide.none : BorderSide.none,
         ),
       ),
     );

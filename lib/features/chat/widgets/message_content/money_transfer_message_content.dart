@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:diaspora_nearby/features/chat/models/message.dart';
+import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 
@@ -40,11 +41,6 @@ class MoneyTransferMessageContent extends StatelessWidget {
             ? colorScheme.primaryContainer.withValues(alpha: 0.9)
             : colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOwn
-              ? accentColor.withValues(alpha: 0.4)
-              : colorScheme.outline.withValues(alpha: 0.1),
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -109,9 +105,7 @@ class MoneyTransferMessageContent extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                amount.toStringAsFixed(
-                  amount.truncateToDouble() == amount ? 0 : 2,
-                ),
+                CurrencyHelper.formatFiatAmount(amount),
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
@@ -149,7 +143,7 @@ class MoneyTransferMessageContent extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '≈ ${convertedAmount.toStringAsFixed(convertedAmount.truncateToDouble() == convertedAmount ? 0 : 2)} $convertedCurrency',
+                    '≈ ${CurrencyHelper.formatFiatAmount(convertedAmount)} $convertedCurrency',
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
@@ -315,7 +309,7 @@ class MoneyTransferMessageContent extends StatelessWidget {
                       _buildReceiptRow(
                         theme,
                         'Transfer Amount',
-                        '${amount.toStringAsFixed(2)} $currency',
+                        '${CurrencyHelper.formatFiatAmount(amount, forceDecimals: true)} $currency',
                         isBold: true,
                       ),
                       const SizedBox(height: 10),
@@ -324,14 +318,14 @@ class MoneyTransferMessageContent extends StatelessWidget {
                         _buildReceiptRow(
                           theme,
                           'Settlement Amount',
-                          '${convertedAmount.toStringAsFixed(2)} $convertedCurrency',
+                          '${CurrencyHelper.formatFiatAmount(convertedAmount, forceDecimals: true)} $convertedCurrency',
                           isBold: true,
                         ),
                         const SizedBox(height: 10),
                         _buildReceiptRow(
                           theme,
                           'Exchange Rate',
-                          '1 $currency = ${exchangeRate.toStringAsFixed(2)} $convertedCurrency',
+                          '1 $currency = ${CurrencyHelper.formatFiatAmount(exchangeRate, forceDecimals: true)} $convertedCurrency',
                         ),
                         const SizedBox(height: 10),
                       ],

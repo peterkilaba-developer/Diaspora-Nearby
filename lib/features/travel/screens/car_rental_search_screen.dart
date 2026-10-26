@@ -498,11 +498,6 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   t,
@@ -547,11 +542,6 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   f,
@@ -649,11 +639,6 @@ class _CarRentalSearchScreenState extends ConsumerState<CarRentalSearchScreen> {
                       ? AppTheme.accent.withValues(alpha: isDark ? 0.2 : 0.1)
                       : AppTheme.elevationColor(context, 2),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: sel
-                        ? AppTheme.accent.withValues(alpha: 0.4)
-                        : Colors.transparent,
-                  ),
                 ),
                 child: Text(
                   f,

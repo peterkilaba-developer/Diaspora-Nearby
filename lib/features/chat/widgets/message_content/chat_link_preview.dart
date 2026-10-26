@@ -173,10 +173,8 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
                         width: double.infinity,
                         height: 150,
                         fit: BoxFit.cover,
-                        placeholder: (context, _) => Container(
-                          height: 150,
-                          color: cardBgColor,
-                        ),
+                        placeholder: (context, _) =>
+                            Container(height: 150, color: cardBgColor),
                         errorWidget: (context, url, error) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && !_imageLoadFailed) {
@@ -256,11 +254,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
             ],
           ),
         ),
-        child: const Icon(
-          LucideIcons.instagram,
-          color: Colors.white,
-          size: 22,
-        ),
+        child: const Icon(LucideIcons.instagram, color: Colors.white, size: 22),
       );
     }
 
@@ -272,11 +266,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
           color: const Color(0xFF111111),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Icon(
-          LucideIcons.video,
-          color: Colors.white,
-          size: 20,
-        ),
+        child: const Icon(LucideIcons.video, color: Colors.white, size: 20),
       );
     }
 
@@ -290,11 +280,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
           color: const Color(0xFF1877F2),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Icon(
-          LucideIcons.facebook,
-          color: Colors.white,
-          size: 22,
-        ),
+        child: const Icon(LucideIcons.facebook, color: Colors.white, size: 22),
       );
     }
 
@@ -308,11 +294,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
           color: const Color(0xFFFF0000),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Icon(
-          LucideIcons.youtube,
-          color: Colors.white,
-          size: 22,
-        ),
+        child: const Icon(LucideIcons.youtube, color: Colors.white, size: 22),
       );
     }
 
@@ -323,11 +305,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
         color: Colors.black.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Icon(
-        LucideIcons.globe,
-        color: Colors.white,
-        size: 20,
-      ),
+      child: const Icon(LucideIcons.globe, color: Colors.white, size: 20),
     );
   }
 }

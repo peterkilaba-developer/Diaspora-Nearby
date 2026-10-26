@@ -644,263 +644,277 @@ class _ProfileQRCodeDialogState extends ConsumerState<ProfileQRCodeDialog> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (!_isScanning) ...[
-                const Text(
-                  'Show this code to a peer to verify your human identity in person.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: _handshakeToken != null
-                      ? QrImageView(
-                          data: _generateQRData(),
-                          version: QrVersions.auto,
-                          size: 200.0,
-                          eyeStyle: const QrEyeStyle(
-                            eyeShape: QrEyeShape.square,
-                            color: AppTheme.accent,
+                        const Text(
+                          'Show this code to a peer to verify your human identity in person.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
-                          dataModuleStyle: const QrDataModuleStyle(
-                            dataModuleShape: QrDataModuleShape.square,
-                            color: AppTheme.accent,
-                          ),
-                        )
-                      : SizedBox(
-                          width: 200,
-                          height: 200,
-                          child: Center(
-                            child: _handshakeError == null
-                                ? const CircularProgressIndicator()
-                                : TextButton(
-                                    onPressed: _refreshHandshake,
-                                    child: Text(_handshakeError!),
+                          child: _handshakeToken != null
+                              ? QrImageView(
+                                  data: _generateQRData(),
+                                  version: QrVersions.auto,
+                                  size: 200.0,
+                                  eyeStyle: const QrEyeStyle(
+                                    eyeShape: QrEyeShape.square,
+                                    color: AppTheme.accent,
                                   ),
+                                  dataModuleStyle: const QrDataModuleStyle(
+                                    dataModuleShape: QrDataModuleShape.square,
+                                    color: AppTheme.accent,
+                                  ),
+                                )
+                              : SizedBox(
+                                  width: 200,
+                                  height: 200,
+                                  child: Center(
+                                    child: _handshakeError == null
+                                        ? const CircularProgressIndicator()
+                                        : TextButton(
+                                            onPressed: _refreshHandshake,
+                                            child: Text(_handshakeError!),
+                                          ),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          _currentProfile.fullName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  _currentProfile.fullName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(LucideIcons.qrCode, size: 14, color: AppTheme.accent),
-                    SizedBox(width: 6),
-                    Text(
-                      'In-person handshake • Counts toward 10 QR milestone',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.accent,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      setState(() => _isScanning = true);
-                      _scannerController.start();
-                    },
-                    icon: const Icon(LucideIcons.camera),
-                    label: const Text('Scan Peer Code'),
-                  ),
-                ),
-              ] else if (_isScanning && _knownConnectionProfile != null) ...[
-                const SizedBox(height: 12),
-                Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.accent.withValues(alpha: 0.2),
-                          width: 2,
+                        const SizedBox(height: 8),
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              LucideIcons.qrCode,
+                              size: 14,
+                              color: AppTheme.accent,
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'In-person handshake • Counts toward 10 QR milestone',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.accent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey.shade100,
-                        backgroundImage:
-                            _knownConnectionProfile!.profileImage.isNotEmpty
-                            ? CachedNetworkImageProvider(
-                                _knownConnectionProfile!.profileImage,
-                              )
-                            : null,
-                        child: _knownConnectionProfile!.profileImage.isEmpty
-                            ? Icon(
-                                LucideIcons.user,
-                                size: 60,
-                                color: Colors.grey.shade400,
-                              )
-                            : null,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              setState(() => _isScanning = true);
+                              _scannerController.start();
+                            },
+                            icon: const Icon(LucideIcons.camera),
+                            label: const Text('Scan Peer Code'),
+                          ),
+                        ),
+                      ] else if (_isScanning &&
+                          _knownConnectionProfile != null) ...[
+                        const SizedBox(height: 12),
+                        Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Color(0x14888888),
+                                shape: BoxShape.circle,
+                              ),
+                              child: CircleAvatar(
+                                radius: 60,
+                                backgroundColor: Colors.grey.shade100,
+                                backgroundImage:
+                                    _knownConnectionProfile!
+                                        .profileImage
+                                        .isNotEmpty
+                                    ? CachedNetworkImageProvider(
+                                        _knownConnectionProfile!.profileImage,
+                                      )
+                                    : null,
+                                child:
+                                    _knownConnectionProfile!
+                                        .profileImage
+                                        .isEmpty
+                                    ? Icon(
+                                        LucideIcons.user,
+                                        size: 60,
+                                        color: Colors.grey.shade400,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                LucideIcons.shieldCheck,
+                                color: AppTheme.accent,
+                                size: 32,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Identity Verified!',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'You are connected in-person with',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _knownConnectionProfile!.fullName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.accent,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        // Display location if available in their record
+                        if (_knownConnectionProfile!
+                                    .firstQrConnection
+                                    ?.locationAddress !=
+                                null &&
+                            _knownConnectionProfile!
+                                .firstQrConnection!
+                                .locationAddress!
+                                .trim()
+                                .isNotEmpty &&
+                            _knownConnectionProfile!
+                                    .firstQrConnection!
+                                    .locationAddress!
+                                    .trim()
+                                    .toLowerCase() !=
+                                'location unavailable') ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                LucideIcons.mapPin,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  _knownConnectionProfile!
+                                      .firstQrConnection!
+                                      .locationAddress!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                      child: const Icon(
-                        LucideIcons.shieldCheck,
-                        color: AppTheme.accent,
-                        size: 32,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Identity Verified!',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'You are connected in-person with',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _knownConnectionProfile!.fullName,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.accent,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
 
-                // Display location if available in their record
-                if (_knownConnectionProfile!
-                            .firstQrConnection
-                            ?.locationAddress !=
-                        null &&
-                    _knownConnectionProfile!.firstQrConnection!.locationAddress!
-                        .trim()
-                        .isNotEmpty &&
-                    _knownConnectionProfile!.firstQrConnection!.locationAddress!
-                            .trim()
-                            .toLowerCase() !=
-                        'location unavailable') ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        LucideIcons.mapPin,
-                        size: 14,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          _knownConnectionProfile!
-                              .firstQrConnection!
-                              .locationAddress!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            onPressed: () {
+                              context.push(
+                                '/profile/${_knownConnectionProfile!.uid}?src=qr',
+                              );
+                              Navigator.pop(context);
+                            },
+                            child: const Text('View Profile'),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    onPressed: () {
-                      context.push(
-                        '/profile/${_knownConnectionProfile!.uid}?src=qr',
-                      );
-                      Navigator.pop(context);
-                    },
-                    child: const Text('View Profile'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _knownConnectionProfile = null;
-                      _isProcessing = false;
-                    });
-                    _scannerController.start();
-                  },
-                  icon: const Icon(LucideIcons.camera, size: 18),
-                  label: const Text('Scan Another Peer'),
-                ),
-              ] else ...[
-                const Text(
-                  'Scan your peer\'s Identity QR Code',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 16),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox(
-                    height: 300,
-                    width: double.infinity,
-                    child: MobileScanner(
-                      controller: _scannerController,
-                      onDetect: _handleScan,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                TextButton(
-                  onPressed: () {
-                    _scannerController.stop();
-                    setState(() => _isScanning = false);
-                  },
-                  child: const Text('Back to My Code'),
-                ),
-              ],
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _knownConnectionProfile = null;
+                              _isProcessing = false;
+                            });
+                            _scannerController.start();
+                          },
+                          icon: const Icon(LucideIcons.camera, size: 18),
+                          label: const Text('Scan Another Peer'),
+                        ),
+                      ] else ...[
+                        const Text(
+                          'Scan your peer\'s Identity QR Code',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: SizedBox(
+                            height: 300,
+                            width: double.infinity,
+                            child: MobileScanner(
+                              controller: _scannerController,
+                              onDetect: _handleScan,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        TextButton(
+                          onPressed: () {
+                            _scannerController.stop();
+                            setState(() => _isScanning = false);
+                          },
+                          child: const Text('Back to My Code'),
+                        ),
+                      ],
                     ],
                   ),
                 ),

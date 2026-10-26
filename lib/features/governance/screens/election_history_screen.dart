@@ -179,7 +179,6 @@ class _ElectionHistoryScreenState extends ConsumerState<ElectionHistoryScreen> {
       decoration: BoxDecoration(
         color: AppTheme.accent.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

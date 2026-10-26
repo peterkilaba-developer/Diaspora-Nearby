@@ -686,11 +686,9 @@ class _BusinessRegistrationModalState
                         child: Stack(
                           children: [
                             Container(
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
+                                color: Color(0x14888888),
                                 shape: BoxShape.circle,
-                                border: _logoError
-                                    ? Border.all(color: Colors.red, width: 2)
-                                    : null,
                               ),
                               child: CircleAvatar(
                                 radius: 40,
@@ -780,9 +778,6 @@ class _BusinessRegistrationModalState
                             constraints: const BoxConstraints(maxHeight: 150),
                             decoration: BoxDecoration(
                               color: Theme.of(context).cardColor,
-                              border: Border.all(
-                                color: Theme.of(context).dividerColor,
-                              ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: ListView.builder(
@@ -889,9 +884,6 @@ class _BusinessRegistrationModalState
                             constraints: const BoxConstraints(maxHeight: 150),
                             decoration: BoxDecoration(
                               color: Theme.of(context).cardColor,
-                              border: Border.all(
-                                color: Theme.of(context).dividerColor,
-                              ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: ListView.builder(
@@ -1025,11 +1017,6 @@ class _BusinessRegistrationModalState
                             context,
                           ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.3),
-                          ),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

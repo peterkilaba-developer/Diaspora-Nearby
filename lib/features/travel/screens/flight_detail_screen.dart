@@ -60,9 +60,18 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
     'WB': 'RwandAir',
     'HF': 'Air Côte d\'Ivoire',
     'P4': 'Air Peace',
+    'TC': 'Air Tanzania',
+    'PW': 'Precision Air',
+    'UR': 'Uganda Airlines',
+    'FZ': 'flydubai',
+    'SN': 'Brussels Airlines',
+    'WY': 'Oman Air',
   };
 
-  String _airlineName(String code) => _airlineNames[code] ?? code;
+  String _airlineName(String code, [String? explicitName]) =>
+      (explicitName != null && explicitName.isNotEmpty)
+      ? explicitName
+      : (_airlineNames[code] ?? code);
   String _airlineLogoUrl(String code) =>
       'https://pics.avs.io/100/100/$code.png';
 
@@ -225,7 +234,10 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _airlineName(airlineCode),
+                          _airlineName(
+                            airlineCode,
+                            offer.validatingAirlineName,
+                          ),
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
@@ -622,9 +634,9 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
                   Container(
                     width: 10,
                     height: 10,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
+                      color: Color(0x14888888),
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.accent, width: 2),
                     ),
                   ),
                   Container(
@@ -695,7 +707,7 @@ class _FlightDetailScreenState extends State<FlightDetailScreen> {
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            '${_airlineName(segment.carrierCode)} ${segment.carrierCode}${segment.flightNumber}',
+                            '${_airlineName(segment.carrierCode, segment.carrierName)} ${segment.carrierCode}${segment.flightNumber}${segment.aircraft != null && segment.aircraft!.isNotEmpty ? ' • ${segment.aircraft}' : ''}',
                             style: TextStyle(
                               fontSize: 11,
                               color: theme.colorScheme.onSurface.withValues(

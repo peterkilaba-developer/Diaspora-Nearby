@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:diaspora_nearby/features/dsp/repository/points_repository.dart';
+import 'package:diaspora_nearby/features/dsp/services/epoch_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/valuation_service.dart';
 
 /// Provides a real-time [DspValuation] by combining existing Firestore streams.
@@ -9,11 +10,9 @@ import 'package:diaspora_nearby/features/dsp/services/valuation_service.dart';
 /// - System treasury data (burned points from `system_stats/treasury`)
 /// - Global member count (from `communities/global_community`)
 /// - Fiat GDP in USD (from `system_stats/treasury`)
-///
-/// Uses Epoch 1 as the current epoch (hardcoded until epoch progression logic
-/// is implemented).
 final dspValuationProvider = Provider<DspValuation>((ref) {
   final valuationService = ref.read(valuationServiceProvider);
+  final epochService = ref.read(epochServiceProvider);
 
   // --- Pull latest values from existing streams ---
   final totalMinted = ref.watch(globalSupplyProvider).value ?? 0;
@@ -27,9 +26,10 @@ final dspValuationProvider = Provider<DspValuation>((ref) {
       ((treasuryData['burnedPoints'] as num?)?.toInt() ?? 0) +
       ((treasuryData['totalBurnedTde'] as num?)?.toInt() ?? 0);
 
-  // Current epoch — hardcoded to 1 for now.
-  // When epoch progression is automated, this will come from a Firestore field.
-  const int currentEpoch = 1;
+  // Derive current epoch from canonical EpochService using global supply and member count
+  final int currentEpoch = epochService
+      .getCurrentCommunityEpoch(totalMinted, totalUsers)
+      .level;
 
   return valuationService.calculateImpliedValue(
     totalUsers: totalUsers,

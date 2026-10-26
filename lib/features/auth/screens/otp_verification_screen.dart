@@ -634,10 +634,7 @@ class _OTPVerificationScreenState extends ConsumerState<OTPVerificationScreen>
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                            color: Colors.green,
-                            width: 1.2,
-                          ),
+                          side: BorderSide.none,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),

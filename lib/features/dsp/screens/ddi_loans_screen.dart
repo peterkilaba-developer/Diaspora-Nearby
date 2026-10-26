@@ -585,11 +585,6 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
                     ? Colors.red.withValues(alpha: 0.1)
                     : AppTheme.accent.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: (requestedVal > 0 && !hasSufficientCollateral)
-                      ? Colors.red.withValues(alpha: 0.4)
-                      : AppTheme.accent.withValues(alpha: 0.3),
-                ),
               ),
               child: Row(
                 children: [
@@ -820,7 +815,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppTheme.error),
+        borderSide: BorderSide.none,
       ),
     );
   }
@@ -1085,7 +1080,7 @@ class _DdiLoansScreenState extends ConsumerState<DdiLoansScreen> {
       onPressed: busy ? null : () => _castVote(applicationId, verdict),
       style: OutlinedButton.styleFrom(
         foregroundColor: color,
-        side: BorderSide(color: color.withValues(alpha: 0.5)),
+        side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
       ),
       child: Text(label),

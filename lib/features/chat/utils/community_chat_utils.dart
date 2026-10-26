@@ -5,8 +5,8 @@ import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/core/data/countries.dart';
 
 /// Community Chat Utilities
-/// Handles dynamic naming and avatar rendering for community chats
-/// to ensure parity with React application logic.
+/// Handles dynamic naming and avatar rendering for community chats and treasuries
+/// as the single canonical source of truth across the application.
 class CommunityChatUtils {
   /// Continent names mapping
   static const Map<String, String> _continentNames = {
@@ -19,6 +19,102 @@ class CommunityChatUtils {
     'antarctica': 'Antarctica',
     'caribbean': 'Caribbean',
   };
+
+  static const Map<String, String> _adjectiveMap = {
+    'africa': 'African',
+    'asia': 'Asian',
+    'europe': 'European',
+    'north america': 'North American',
+    'south america': 'South American',
+    'oceania': 'Oceanian',
+    'antarctica': 'Antarctic',
+    'caribbean': 'Caribbean',
+  };
+
+  static const Map<String, String> _reverseAdjectiveMap = {
+    'african': 'Africa',
+    'asian': 'Asia',
+    'european': 'Europe',
+    'north american': 'North America',
+    'south american': 'South America',
+    'oceanian': 'Oceania',
+    'antarctic': 'Antarctica',
+    'caribbean': 'Caribbean',
+  };
+
+  /// Strips trailing community/treasury suffixes (e.g. "Community", "Sovereign Bond Treasury",
+  /// "Continental Treasury", "Reserve Treasury", "DDI Treasury", "Treasury") so the raw
+  /// geographic name is always clean regardless of which collection it came from.
+  static String cleanBasePlaceName(String rawName) {
+    var cleaned = rawName.trim();
+    final suffixPattern = RegExp(
+      r'\s+(?:Sovereign\s+Bond\s+Treasury|Continental\s+Treasury|Reserve\s+Treasury|DDI\s+Treasury|Sovereign\s+Bond|Continental|Reserve|DDI|Treasury|Community)$',
+      caseSensitive: false,
+    );
+    while (suffixPattern.hasMatch(cleaned)) {
+      cleaned = cleaned.replaceAll(suffixPattern, '').trim();
+    }
+    return cleaned;
+  }
+
+  /// Normalizes a continent string (including community or treasury suffixes, or adjective forms)
+  /// to its lowercase canonical noun form (e.g. "African Sovereign Bond Treasury" -> "africa").
+  static String normalizeContinentName(String name) {
+    final cleaned = cleanBasePlaceName(name).toLowerCase();
+    return (_reverseAdjectiveMap[cleaned] ?? cleaned).toLowerCase();
+  }
+
+  /// Canonical governance unit ID derived from a community ID.
+  static String getCanonicalGovernanceUnitId(String communityId) {
+    if (communityId == 'global_community' ||
+        communityId == 'founders' ||
+        communityId == 'liquidity' ||
+        communityId == 'burn') {
+      return communityId;
+    }
+    return communityId.contains('_')
+        ? communityId.substring(communityId.indexOf('_') + 1)
+        : communityId;
+  }
+
+  /// Infers canonical community/treasury type from explicit [type], [id], or [unitId].
+  static String inferCommunityType({String? type, String? id, String? unitId}) {
+    final rawType = type?.trim().toLowerCase() ?? '';
+    if (rawType.isNotEmpty && rawType != 'unknown' && rawType != 'community') {
+      if (rawType == 'province') return 'state';
+      if (rawType == 'town') return 'city';
+      return rawType;
+    }
+    final effectiveId = (id != null && id.isNotEmpty) ? id : (unitId ?? '');
+    if (effectiveId == 'founders' ||
+        effectiveId == 'liquidity' ||
+        effectiveId == 'burn') {
+      return effectiveId;
+    }
+    final parts = effectiveId.toLowerCase().split('_');
+    if (parts.contains('global')) return 'global';
+    if (parts.contains('continent')) return 'continent';
+    if (parts.contains('country')) return 'country';
+    if (parts.contains('city') || parts.contains('town')) return 'city';
+    if (parts.contains('state') || parts.contains('province')) return 'state';
+    return 'unknown';
+  }
+
+  /// Infers locationType ('home' | 'host' | 'past' | 'global' | 'bilateral') from [locationType] or [id].
+  static String inferLocationType({String? locationType, String? id}) {
+    final rawLoc = locationType?.trim().toLowerCase() ?? '';
+    if (rawLoc.isNotEmpty) return rawLoc;
+    final effectiveId = (id ?? '').toLowerCase();
+    if (isBilateral(id: effectiveId)) return 'bilateral';
+    if (effectiveId.contains('host_') || effectiveId.startsWith('host')) {
+      return 'host';
+    }
+    if (effectiveId.contains('past_') || effectiveId.startsWith('past')) {
+      return 'past';
+    }
+    if (effectiveId.contains('global')) return 'global';
+    return 'home';
+  }
 
   /// Canonical bilateral community ID (alphabetically sorted country codes)
   static String getBilateralCommunityId(String codeA, String codeB) {
@@ -105,15 +201,7 @@ class CommunityChatUtils {
     // [FIX] Derive locationType from ID if not present on object
     String type = chat.locationType ?? '';
     if (type.isEmpty) {
-      if (isBilateral(chat: chat)) {
-        type = 'bilateral';
-      } else if (chat.id.contains('_host_')) {
-        type = 'host';
-      } else if (chat.id.contains('_past_')) {
-        type = 'past';
-      } else {
-        type = 'home';
-      }
+      type = inferLocationType(id: chat.id);
     }
 
     return generateCommunityNameFromParts(
@@ -148,17 +236,13 @@ class CommunityChatUtils {
       }
     }
     final rawName = name;
-    // [FIX] Strip existing "Community" suffix (case-insensitive) to avoid duplications
-    // e.g. "Africa Community" -> "Africa"
-    final cleanName = rawName
-        .replaceAll(RegExp(r'\s+Community$', caseSensitive: false), '')
-        .trim();
-
-    // Safety check for empty or unknown names
-    if (cleanName.isEmpty || cleanName == 'Unknown') return 'Community';
+    // [FIX] Strip existing "Community" or treasury suffixes (case-insensitive) to avoid duplications
+    // e.g. "Africa Community" -> "Africa", "African Sovereign Bond Treasury" -> "African"
+    final cleanName = cleanBasePlaceName(rawName);
 
     // 1. Global Community
     if (locationType == 'global' ||
+        id == 'global_community' ||
         cleanName.toLowerCase().contains('global')) {
       return 'Global Community';
     }
@@ -166,9 +250,9 @@ class CommunityChatUtils {
     // 2. Continent Communities
     // Check if it's a continent community (usually name is just the continent)
     final lowerName = cleanName.toLowerCase();
-    final isContinent = _continentNames.values.any(
-      (c) => c.toLowerCase() == lowerName,
-    );
+    final isContinent =
+        _continentNames.values.any((c) => c.toLowerCase() == lowerName) ||
+        _reverseAdjectiveMap.containsKey(lowerName);
 
     // Also check if ID suggests it is a continent chat (e.g. chat_host_continent_africa)
     final isContinentById = id.contains('continent');
@@ -197,53 +281,210 @@ class CommunityChatUtils {
         }
       }
 
+      if (continent.isEmpty || continent == 'Unknown') {
+        return 'Community';
+      }
+
       // Apply Home vs Host Logic
       // Host: noun form (e.g., "Africa Community")
       // Home: adjective form (e.g., "African Community")
       if (locationType == 'host' || locationType == 'past') {
-        const Map<String, String> reverseAdjectiveMap = {
-          'african': 'Africa',
-          'asian': 'Asia',
-          'european': 'Europe',
-          'north american': 'North America',
-          'south american': 'South America',
-          'oceanian': 'Oceania',
-          'antarctic': 'Antarctica',
-          'caribbean': 'Caribbean',
-        };
-        final noun = reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
+        final noun = _reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
         return '$noun Community';
       } else {
-        const Map<String, String> adjectiveMap = {
-          'africa': 'African',
-          'asia': 'Asian',
-          'europe': 'European',
-          'north america': 'North American',
-          'south america': 'South American',
-          'oceania': 'Oceanian',
-          'antarctica': 'Antarctic',
-          'caribbean': 'Caribbean',
-        };
-        const Map<String, String> reverseAdjectiveMap = {
-          'african': 'Africa',
-          'asian': 'Asia',
-          'european': 'Europe',
-          'north american': 'North America',
-          'south american': 'South America',
-          'oceanian': 'Oceania',
-          'antarctic': 'Antarctica',
-          'caribbean': 'Caribbean',
-        };
         final canonicalNoun =
-            reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
+            _reverseAdjectiveMap[continent.toLowerCase()] ?? continent;
 
-        final adj = adjectiveMap[canonicalNoun.toLowerCase()] ?? canonicalNoun;
+        final adj = _adjectiveMap[canonicalNoun.toLowerCase()] ?? canonicalNoun;
         return '$adj Community';
       }
     }
 
+    // Safety check for empty or unknown names
+    if (cleanName.isEmpty || cleanName == 'Unknown') return 'Community';
+
     // 3. Country/State/City Communities
     return '$cleanName Community';
+  }
+
+  /// Returns the canonical base location name without trailing "Community" or treasury suffixes
+  /// (e.g. "African" for home_continent_africa, "North America" for host_continent_north-america_tz,
+  /// "Tanzania" for home_country_tz, "Iowa" for host_state_us_iowa_tz).
+  static String getBaseLocationName({
+    required String name,
+    String? locationType,
+    String id = '',
+    String? homeCountryCode,
+    String? hostCountryCode,
+    String? viewerHomeCountryCode,
+  }) {
+    final effectiveLocType = inferLocationType(
+      locationType: locationType,
+      id: id,
+    );
+    final communityName = generateCommunityNameFromParts(
+      name: name,
+      locationType: effectiveLocType,
+      id: id,
+      homeCountryCode: homeCountryCode,
+      hostCountryCode: hostCountryCode,
+      viewerHomeCountryCode: viewerHomeCountryCode,
+    );
+    return communityName
+        .replaceAll(RegExp(r'\s+Community$', caseSensitive: false), '')
+        .trim();
+  }
+
+  /// Generates the canonical category title for a treasury tier (without geographic prefix).
+  static String generateTreasuryCategoryTitle({
+    String? type,
+    String? id,
+    String? unitId,
+  }) {
+    final effectiveType = inferCommunityType(
+      type: type,
+      id: id,
+      unitId: unitId,
+    );
+    switch (effectiveType) {
+      case 'founders':
+        return 'Founders & Core Team';
+      case 'liquidity':
+        return 'Liquidity Treasury';
+      case 'burn':
+        return 'Natural Burn Pool';
+      case 'global':
+        return 'Global Reserve';
+      case 'continent':
+        return 'Sovereign Bond Treasury';
+      case 'state':
+        return 'Reserve Treasury';
+      case 'country':
+      case 'city':
+        return 'DDI Treasury';
+      default:
+        return 'Reserve Treasury';
+    }
+  }
+
+  /// Single canonical source of truth for treasury titles across all screens
+  /// (PointsSystemScreen, DiasporaCryptoScreen, DdiTreasuryDetailScreen, etc.).
+  static String generateTreasuryTitle({
+    String? name,
+    String? type,
+    String? locationType,
+    String? id,
+    String? unitId,
+    String? homeCountryCode,
+    String? hostCountryCode,
+    String? viewerHomeCountryCode,
+  }) {
+    final effectiveId = (id != null && id.isNotEmpty) ? id : (unitId ?? '');
+    final effectiveType = inferCommunityType(
+      type: type,
+      id: id,
+      unitId: unitId,
+    );
+
+    if (effectiveType == 'founders' ||
+        effectiveType == 'liquidity' ||
+        effectiveType == 'burn' ||
+        effectiveType == 'global') {
+      return generateTreasuryCategoryTitle(
+        type: effectiveType,
+        id: id,
+        unitId: unitId,
+      );
+    }
+
+    final baseName = getBaseLocationName(
+      name: name ?? '',
+      locationType: locationType,
+      id: effectiveId,
+      homeCountryCode: homeCountryCode,
+      hostCountryCode: hostCountryCode,
+      viewerHomeCountryCode: viewerHomeCountryCode,
+    );
+
+    final categorySuffix = generateTreasuryCategoryTitle(
+      type: effectiveType,
+      id: id,
+      unitId: unitId,
+    );
+
+    if (baseName.isEmpty ||
+        baseName.toLowerCase() == 'community' ||
+        baseName.toLowerCase() == 'unknown') {
+      return categorySuffix;
+    }
+
+    return '$baseName $categorySuffix';
+  }
+
+  /// Single canonical source of truth for treasury role descriptions (without match suffix).
+  static String generateTreasuryRoleLabel({
+    String? type,
+    String? id,
+    String? unitId,
+  }) {
+    final effectiveType = inferCommunityType(
+      type: type,
+      id: id,
+      unitId: unitId,
+    );
+    switch (effectiveType) {
+      case 'global':
+        return 'Zero-fee transfers & remittances, chamber leadership, charities & protocol upkeep';
+      case 'continent':
+        return 'Funding Sovereign Bond Engine';
+      case 'state':
+        return 'State liquidity reserve & loan backstop';
+      case 'country':
+        return 'Large-scale sovereign investments (\$1M+)';
+      case 'city':
+        return 'Local community business loans (up to \$1M)';
+      case 'founders':
+        return 'Core Maintenance & Protocol Development';
+      case 'liquidity':
+        return 'DEX Liquidity & Market Access';
+      case 'burn':
+        return 'Fixed 10% Infrastructure Burn';
+      default:
+        return 'Diaspora Direct Investments & community wealth';
+    }
+  }
+
+  /// Single canonical source of truth for treasury subtitles across all screens.
+  static String generateTreasurySubtitle({
+    String? type,
+    String? id,
+    String? unitId,
+  }) {
+    final effectiveType = inferCommunityType(
+      type: type,
+      id: id,
+      unitId: unitId,
+    );
+    switch (effectiveType) {
+      case 'global':
+        return 'Zero-fee transfers & remittances, chamber leadership, charities & protocol upkeep · 10% Ubuntu community match';
+      case 'continent':
+        return 'Funding Sovereign Bond Engine · 10% Ubuntu community match';
+      case 'state':
+        return 'State liquidity reserve & loan backstop · 10% Ubuntu community match';
+      case 'country':
+        return 'Large-scale sovereign investments (\$1M+) · 10% Ubuntu community match';
+      case 'city':
+        return 'Local community business loans (up to \$1M) · 10% Ubuntu community match';
+      case 'founders':
+        return 'Core Maintenance (10%)';
+      case 'liquidity':
+        return 'DEX Liquidity & Market Access';
+      case 'burn':
+        return 'Protocol Deflationary Sink';
+      default:
+        return 'Diaspora Direct Investments & community wealth · 10% Ubuntu community match';
+    }
   }
 
   /// Get appropriate avatar widget for community
@@ -353,24 +594,7 @@ class CommunityChatUtils {
       }
     }
 
-    var effectiveType = type;
-    if (effectiveType == null) {
-      final parts = effectiveId.split('_');
-      if (parts.contains('global')) {
-        effectiveType = 'global';
-      } else if (parts.contains('continent')) {
-        effectiveType = 'continent';
-      } else if (parts.contains('country')) {
-        effectiveType = 'country';
-      } else if (parts.contains('city')) {
-        // Prioritize city check (most specific)
-        effectiveType = 'city';
-      } else if (parts.contains('state')) {
-        effectiveType = 'state';
-      } else {
-        effectiveType = 'unknown';
-      }
-    }
+    final effectiveType = inferCommunityType(type: type, id: effectiveId);
 
     // 2. Derive combined type
     final combinedType = effectiveType == 'global'

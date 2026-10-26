@@ -482,9 +482,7 @@ class EventCard extends ConsumerWidget {
                           child: OutlinedButton.icon(
                             onPressed: onEditTap,
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: theme.colorScheme.primary,
-                              ),
+                              side: BorderSide.none,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -518,14 +516,7 @@ class EventCard extends ConsumerWidget {
                                             alpha: 0.1,
                                           )
                                         : null),
-                              side: BorderSide(
-                                color: isAttending
-                                    ? Colors.green
-                                    : (isInterested
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.outline
-                                                .withValues(alpha: 0.3)),
-                              ),
+                              side: BorderSide.none,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),

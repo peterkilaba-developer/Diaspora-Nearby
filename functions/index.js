@@ -211,12 +211,16 @@ exports.requestWhatsAppOtp = auth.requestWhatsAppOtp;
 exports.verifyWhatsAppOtp = auth.verifyWhatsAppOtp;
 exports.whatsappWebhook = auth.whatsappWebhook;
 
-// Social Media Automation & Founder Authority (4)
+// Social Media Automation & Founder Authority (7)
 const socialMedia = require("./lib/social_media");
+const outreachBot = require("./lib/outreach_bot");
 exports.xMarketingPublish = socialMedia.xMarketingPublish;
 exports.postToLinkedIn = socialMedia.postToLinkedInFunc;
 exports.diasporaSocialCron = socialMedia.diasporaSocialCron;
 exports.forceDiasporaSocialCron = socialMedia.forceDiasporaSocialCron;
+exports.outreachFollowUpCron = outreachBot.outreachFollowUpCron;
+exports.metaOutreachWebhook = outreachBot.metaOutreachWebhook;
+exports.dispatchGroupOutreachBatch = outreachBot.dispatchGroupOutreachBatch;
 
 // YouTube Automation (1)
 const youtube = require("./lib/youtube_automation");

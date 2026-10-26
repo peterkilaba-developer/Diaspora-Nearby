@@ -137,18 +137,14 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
     super.dispose();
   }
 
-  static const _testFlightWebUrl =
-      'https://testflight.apple.com/join/vB3XzPKg';
+  static const _testFlightWebUrl = 'https://testflight.apple.com/join/vB3XzPKg';
   static const _playStoreUrl =
       'https://play.google.com/store/apps/details?id=com.diasporanearby.diasporanearby';
 
   Future<void> _openDirectStoreLink() async {
     final url = _detectedPlatform == 'ios' ? _testFlightWebUrl : _playStoreUrl;
     try {
-      await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       if (mounted) Navigator.of(context).pop();
     } catch (_) {}
   }
@@ -225,9 +221,6 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: theme.colorScheme.outline.withValues(alpha: 0.15),
-          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.4),
@@ -372,26 +365,15 @@ class _NativeAppDialogState extends State<_NativeAppDialog> {
                         fillColor: theme.colorScheme.surface,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.outline.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
+                          borderSide: BorderSide.none,
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.outline.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
+                          borderSide: BorderSide.none,
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.primary,
-                            width: 2,
-                          ),
+                          borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,

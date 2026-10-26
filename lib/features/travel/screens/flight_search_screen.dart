@@ -644,11 +644,6 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                           ? theme.colorScheme.primary
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _isRoundTrip
-                            ? theme.colorScheme.primary
-                            : theme.dividerColor,
-                      ),
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -679,11 +674,6 @@ class _FlightSearchScreenState extends ConsumerState<FlightSearchScreen> {
                           ? theme.colorScheme.primary
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: !_isRoundTrip
-                            ? theme.colorScheme.primary
-                            : theme.dividerColor,
-                      ),
                     ),
                     alignment: Alignment.center,
                     child: Text(

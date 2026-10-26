@@ -211,11 +211,6 @@ class _RelationshipSelectionModalState
                   alpha: 0.03,
                 ),
           borderRadius: BorderRadius.circular(12),
-          border: isSpecial
-              ? Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                )
-              : null,
         ),
         child: ListTile(
           title: Text(

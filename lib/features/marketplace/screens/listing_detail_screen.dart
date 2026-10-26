@@ -14,8 +14,12 @@ import 'package:diaspora_nearby/features/marketplace/widgets/marketplace_card_he
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
+import 'package:diaspora_nearby/features/chat/models/chat.dart';
 import 'package:diaspora_nearby/features/chat/repository/chat_repository.dart';
-import 'package:diaspora_nearby/features/shared/utils/whatsapp_utils.dart';
+import 'package:diaspora_nearby/features/dsp/providers/dsp_valuation_provider.dart';
+import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
+import 'package:diaspora_nearby/features/dsp/services/smart_wallet_service.dart';
+import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 
 class ListingDetailScreen extends ConsumerStatefulWidget {
   final String listingId;
@@ -29,6 +33,9 @@ class ListingDetailScreen extends ConsumerStatefulWidget {
 
 class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   MarketplaceListing? _listing;
+  Chat? _listingChat;
+  Future<Chat?>? _listingChatFuture;
+  bool _isOpeningChat = false;
   bool _isLoading = true;
   bool _isSaved = false;
   int _currentImageIndex = 0;
@@ -62,9 +69,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         // Increment view
         repo.incrementViewCount(widget.listingId);
 
-        // Check saved state
+        // Pre-warm listing chat in background for 0ms tap latency
         final user = ref.read(authRepositoryProvider).currentUser;
         if (user != null) {
+          _listingChat = ref
+              .read(chatRepositoryProvider)
+              .getCachedListingChat(listing.id);
+          _listingChatFuture = _ensureListingChat(listing);
           final saved = await repo.isListingSaved(widget.listingId, user.uid);
           if (mounted) setState(() => _isSaved = saved);
         }
@@ -234,13 +245,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                             duration: const Duration(milliseconds: 200),
                             width: 64,
                             decoration: BoxDecoration(
+                              color: _currentImageIndex == i
+                                  ? AppTheme.accent.withValues(alpha: 0.25)
+                                  : const Color(0x14888888),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _currentImageIndex == i
-                                    ? AppTheme.accent
-                                    : Colors.transparent,
-                                width: 2,
-                              ),
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(6),
@@ -391,10 +399,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                           decoration: BoxDecoration(
                             color: Colors.orange.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.orange.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
@@ -570,12 +574,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         color: isDark
             ? Colors.white.withValues(alpha: 0.02)
             : Colors.black.withValues(alpha: 0.01),
-        border: Border(
-          top: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.3),
-            width: 0.5,
-          ),
-        ),
       ),
       child: SafeArea(
         child: Row(
@@ -583,12 +581,27 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
             // Primary action: Open Shop Chat
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () {
-                  final sellerRole = _getSellerRole(listing.category);
-                  final listingType = _getListingType(listing.category);
-                  _navigateToListingChat(listing, sellerRole, listingType);
-                },
-                icon: const Icon(LucideIcons.shoppingCart, size: 18),
+                onPressed: _isOpeningChat
+                    ? null
+                    : () {
+                        final sellerRole = _getSellerRole(listing.category);
+                        final listingType = _getListingType(listing.category);
+                        _navigateToListingChat(
+                          listing,
+                          sellerRole,
+                          listingType,
+                        );
+                      },
+                icon: _isOpeningChat
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(LucideIcons.shoppingCart, size: 18),
                 label: const Text(
                   'Open Shop Chat',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
@@ -685,11 +698,11 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     } else if (isService) {
       primaryLabel = 'Hire';
       primaryIcon = LucideIcons.briefcase;
-      primaryAction = () => _contactSeller(listing);
+      primaryAction = () => _showCheckoutModal(listing);
     } else {
       primaryLabel = 'Buy';
       primaryIcon = LucideIcons.shoppingBag;
-      primaryAction = () => _contactSeller(listing);
+      primaryAction = () => _showCheckoutModal(listing);
     }
 
     return Container(
@@ -698,12 +711,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         color: isDark
             ? Colors.white.withValues(alpha: 0.02)
             : Colors.black.withValues(alpha: 0.01),
-        border: Border(
-          top: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.3),
-            width: 0.5,
-          ),
-        ),
       ),
       child: SafeArea(
         child: Row(
@@ -731,11 +738,13 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            // Secondary: Contact seller
+            // Secondary: Open listing chat
             SizedBox(
               width: 56,
               child: ElevatedButton(
-                onPressed: () => _contactSeller(listing),
+                onPressed: _isOpeningChat
+                    ? null
+                    : () => _openListingChat(listing),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: theme.colorScheme.surfaceContainerHighest,
                   foregroundColor: sageGreen,
@@ -744,7 +753,16 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Icon(_contactIcon(listing.contactMethod), size: 20),
+                child: _isOpeningChat
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: sageGreen,
+                        ),
+                      )
+                    : const Icon(LucideIcons.messageCircle, size: 20),
               ),
             ),
             // External link for jobs with applicationUrl
@@ -774,15 +792,11 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     );
   }
 
-  /// Pick a document (CV/Resume) and navigate to DM with the seller to send it
+  /// Pick a document (CV/Resume) and navigate to the listing chat to send it
   Future<void> _applyWithResume(MarketplaceListing listing) async {
     if (!mounted) return;
 
-    // Navigate to chat with the employer — the user can use the
-    // existing document attachment feature in the chat input to
-    // send their CV/resume directly.
-    if (!mounted) return;
-    context.push('/chat/direct/${listing.sellerId}');
+    await _openListingChat(listing);
 
     if (mounted) {
       // Brief guidance toast
@@ -917,11 +931,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                   ? Colors.white.withValues(alpha: 0.04)
                   : Colors.black.withValues(alpha: 0.02),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.06)
-                    : Colors.black.withValues(alpha: 0.06),
-              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -951,11 +960,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                   ? Colors.white.withValues(alpha: 0.04)
                   : Colors.black.withValues(alpha: 0.02),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.06)
-                    : Colors.black.withValues(alpha: 0.06),
-              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1253,7 +1257,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                 : listing.sellerName);
         final photoUrl = profile?.profileImage ?? listing.sellerPhoto;
         final city = profile?.hostLocation.city ?? listing.sellerCity;
-        final phone = profile?.phone;
 
         return InkWell(
           onTap: () => context.push('/profile/${listing.sellerId}'),
@@ -1342,33 +1345,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                     ],
                   ),
                 ),
-                // Quick action buttons (only for non-owners)
-                if (!isOwner) ...[
-                  // WhatsApp button (if phone available)
-                  if (phone != null && phone.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(
-                        LucideIcons.phone,
-                        size: 18,
-                        color: Colors.green,
-                      ),
-                      tooltip: 'WhatsApp Call',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => _launchWhatsApp(phone),
-                    ),
-                  // In-app chat button
+                // Quick action button (only for non-owners): In-app listing chat
+                if (!isOwner)
                   IconButton(
-                    icon: Icon(
-                      LucideIcons.messageCircle,
-                      size: 18,
-                      color: theme.colorScheme.primary,
-                    ),
-                    tooltip: 'Send Message',
+                    icon: _isOpeningChat
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: theme.colorScheme.primary,
+                            ),
+                          )
+                        : Icon(
+                            LucideIcons.messageCircle,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                    tooltip: 'Listing Chat',
                     visualDensity: VisualDensity.compact,
-                    onPressed: () =>
-                        context.push('/chat/direct/${listing.sellerId}'),
+                    onPressed: _isOpeningChat
+                        ? null
+                        : () => _openListingChat(listing),
                   ),
-                ],
                 if (isOwner)
                   Icon(
                     LucideIcons.chevronRight,
@@ -1523,21 +1522,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
-  IconData _contactIcon(String method) {
-    switch (method) {
-      case ContactMethod.chat:
-        return LucideIcons.messageCircle;
-      case ContactMethod.phone:
-        return LucideIcons.phone;
-      case ContactMethod.whatsapp:
-        return LucideIcons.messageSquare;
-      case ContactMethod.email:
-        return LucideIcons.mail;
-      default:
-        return LucideIcons.messageCircle;
-    }
-  }
-
   void _openFullScreenViewer(List<String> images, int index) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -1590,56 +1574,206 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
   }
 
-  Future<void> _contactSeller(MarketplaceListing listing) async {
-    final user = ref.read(authRepositoryProvider).currentUser;
-    if (user == null) return;
-
-    if (!mounted) return;
-
-    // Create or get listing-specific chat
+  /// Ensure the listing chat exists and is cached in memory
+  Future<Chat?> _ensureListingChat(MarketplaceListing listing) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final cached = _listingChat ?? chatRepo.getCachedListingChat(listing.id);
+    if (cached != null) {
+      _listingChat = cached;
+      return cached;
+    }
     final sellerRole = _getSellerRole(listing.category);
     final listingType = _getListingType(listing.category);
+    final chat = await chatRepo.createListingChat(
+      otherUserId: listing.sellerId,
+      listingId: listing.id,
+      listingTitle: listing.title,
+      listingType: listingType,
+      sellerRole: sellerRole,
+      listingImageUrl: listing.images.isNotEmpty ? listing.images.first : null,
+    );
+    if (chat != null) {
+      _listingChat = chat;
+    }
+    return chat;
+  }
 
-    // Route based on contact method
-    switch (listing.contactMethod) {
-      case ContactMethod.whatsapp:
-        final profileAsync = ref.read(
-          userProfileByIdProvider(listing.sellerId),
-        );
-        final phone = profileAsync.value?.phone;
-        if (phone != null && phone.isNotEmpty) {
-          _launchWhatsApp(phone);
-        } else {
-          await _navigateToListingChat(listing, sellerRole, listingType);
-        }
-        break;
-      case ContactMethod.chat:
-        await _navigateToListingChat(listing, sellerRole, listingType);
-        break;
-      case ContactMethod.phone:
-        final profileAsync = ref.read(
-          userProfileByIdProvider(listing.sellerId),
-        );
-        final phone = profileAsync.value?.phone;
-        if (phone != null && phone.isNotEmpty) {
-          final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
-          launchUrl(Uri.parse('tel:$cleanPhone'));
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Phone number not available')),
+  /// Open the listing-specific in-app chat
+  Future<void> _openListingChat(MarketplaceListing listing) async {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null || !mounted) return;
+
+    final sellerRole = _getSellerRole(listing.category);
+    final listingType = _getListingType(listing.category);
+    await _navigateToListingChat(listing, sellerRole, listingType);
+  }
+
+  /// Show the modified Value Transfer modal for Marketplace Checkout
+  void _showCheckoutModal(MarketplaceListing listing) {
+    final user = ref.read(authRepositoryProvider).currentUser;
+    if (user == null || !mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalCtx) => _MarketplaceCheckoutModal(
+        listing: listing,
+        onPayToken: (int tokenAmount) async {
+          Navigator.pop(modalCtx);
+          await _executeTokenCheckout(listing, tokenAmount);
+        },
+        onPayFiat:
+            (
+              double amount,
+              String currency,
+              double convertedAmount,
+              String receiverCurrency,
+              double exchangeRate,
+            ) async {
+              Navigator.pop(modalCtx);
+              await _executeFiatCheckout(
+                listing,
+                amount,
+                currency,
+                convertedAmount,
+                receiverCurrency,
+                exchangeRate,
+              );
+            },
+      ),
+    );
+  }
+
+  /// Execute $DIASPORA Smart Wallet checkout and post receipt into the listing chat
+  Future<void> _executeTokenCheckout(
+    MarketplaceListing listing,
+    int amount,
+  ) async {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUserId == null || !mounted) return;
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      await ref
+          .read(pointsServiceProvider)
+          .transferAsset(
+            fromUserId: currentUserId,
+            toUserId: listing.sellerId,
+            amount: amount,
+            assetType: 'token',
           );
-        }
-        break;
-      case ContactMethod.email:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Contacting ${listing.sellerName} via email...'),
-            backgroundColor: AppTheme.accent,
-          ),
+
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      final chatRepo = ref.read(chatRepositoryProvider);
+      final chat = await (_listingChatFuture ?? _ensureListingChat(listing));
+
+      if (chat != null) {
+        await chatRepo.sendTextMessage(
+          chat.id,
+          'Paid $amount \$DIASPORA for ${listing.title}',
+          type: 'dsp_transfer',
+          metadata: {
+            'amount': amount,
+            'currency': 'DIASPORA',
+            'assetType': 'token',
+            'listingId': listing.id,
+            'listingTitle': listing.title,
+          },
+          participants: chat.participants,
         );
-        break;
-      default:
-        await _navigateToListingChat(listing, sellerRole, listingType);
+        if (mounted) {
+          context.push('/chats/${chat.id}');
+        }
+      }
+    } catch (e) {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      debugPrint('CHECKOUT_TOKEN_ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Checkout failed: $e')));
+      }
+    }
+  }
+
+  /// Execute Fiat checkout and post remittance receipt into the listing chat
+  Future<void> _executeFiatCheckout(
+    MarketplaceListing listing,
+    double amount,
+    String currency,
+    double convertedAmount,
+    String receiverCurrency,
+    double exchangeRate,
+  ) async {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.uid;
+    if (currentUserId == null || !mounted) return;
+
+    try {
+      final chatRepo = ref.read(chatRepositoryProvider);
+      final chat = await (_listingChatFuture ?? _ensureListingChat(listing));
+
+      if (chat != null) {
+        final formattedAmount = CurrencyHelper.formatFiatAmount(amount);
+        final formattedConverted = CurrencyHelper.formatFiatAmount(
+          convertedAmount,
+        );
+        final caption = currency != receiverCurrency && convertedAmount > 0
+            ? 'Paid $formattedAmount $currency (≈ $formattedConverted $receiverCurrency) for ${listing.title}'
+            : 'Paid $formattedAmount $currency for ${listing.title}';
+
+        await chatRepo.sendTextMessage(
+          chat.id,
+          caption,
+          type: 'money-transfer',
+          metadata: {
+            'amount': amount,
+            'currency': currency,
+            'convertedAmount': convertedAmount,
+            'convertedCurrency': receiverCurrency,
+            'exchangeRate': exchangeRate,
+            'deliveryMethod': 'Mobile Money / Bank Settlement',
+            'fee': 0.0,
+            'status': 'Completed',
+            'assetType': 'fiat',
+            'recipientId': listing.sellerId,
+            'listingId': listing.id,
+            'listingTitle': listing.title,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          },
+          participants: chat.participants,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Payment of $formattedAmount $currency sent for ${listing.title}!',
+              ),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          context.push('/chats/${chat.id}');
+        }
+      }
+    } catch (e) {
+      debugPrint('CHECKOUT_FIAT_ERROR: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Checkout failed: $e')));
+      }
     }
   }
 
@@ -1649,20 +1783,23 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     String sellerRole,
     String listingType,
   ) async {
+    // 1. Instant 0ms synchronous navigation if already pre-warmed / cached
+    final chatRepo = ref.read(chatRepositoryProvider);
+    final fastChat = _listingChat ?? chatRepo.getCachedListingChat(listing.id);
+    if (fastChat != null) {
+      _listingChat = fastChat;
+      context.push('/chats/${fastChat.id}');
+      return;
+    }
+
+    if (_isOpeningChat) return;
+    setState(() => _isOpeningChat = true);
+
     try {
-      final chatRepo = ref.read(chatRepositoryProvider);
-      final chat = await chatRepo.createListingChat(
-        otherUserId: listing.sellerId,
-        listingId: listing.id,
-        listingTitle: listing.title,
-        listingType: listingType,
-        sellerRole: sellerRole,
-        listingImageUrl: listing.images.isNotEmpty
-            ? listing.images.first
-            : null,
-      );
+      final chat = await (_listingChatFuture ?? _ensureListingChat(listing));
 
       if (!mounted) return;
+      setState(() => _isOpeningChat = false);
 
       if (chat != null) {
         debugPrint('✅ [Marketplace] Navigating to listing chat: ${chat.id}');
@@ -1678,17 +1815,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         '❌ [Marketplace] Chat creation error: $e — falling back to direct DM',
       );
       if (!mounted) return;
+      setState(() => _isOpeningChat = false);
       context.push('/chat/direct/${listing.sellerId}');
-    }
-  }
-
-  /// Launch WhatsApp with the given phone number
-  Future<void> _launchWhatsApp(String phone) async {
-    final success = await WhatsAppUtils.launchWhatsApp(phone);
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not launch WhatsApp')),
-      );
     }
   }
 
@@ -1941,6 +2069,822 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Marketplace Value Transfer Checkout Modal ────────────────────────────
+class _MarketplaceCheckoutModal extends ConsumerStatefulWidget {
+  final MarketplaceListing listing;
+  final ValueChanged<int> onPayToken;
+  final void Function(
+    double amount,
+    String currency,
+    double convertedAmount,
+    String receiverCurrency,
+    double exchangeRate,
+  )
+  onPayFiat;
+
+  const _MarketplaceCheckoutModal({
+    required this.listing,
+    required this.onPayToken,
+    required this.onPayFiat,
+  });
+
+  @override
+  ConsumerState<_MarketplaceCheckoutModal> createState() =>
+      _MarketplaceCheckoutModalState();
+}
+
+class _MarketplaceCheckoutModalState
+    extends ConsumerState<_MarketplaceCheckoutModal> {
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _fiatAmountController = TextEditingController();
+
+  String _selectedAssetType = 'token'; // 'token' or 'fiat'
+  int _inputAmount = 0;
+  double _fiatInputAmount = 0;
+  bool _initializedDefaults = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(() {
+      final val = int.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
+      if (mounted) setState(() => _inputAmount = val);
+    });
+    _fiatAmountController.addListener(() {
+      final val =
+          double.tryParse(_fiatAmountController.text.replaceAll(',', '')) ?? 0;
+      if (mounted) setState(() => _fiatInputAmount = val);
+    });
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _fiatAmountController.dispose();
+    super.dispose();
+  }
+
+  void _initializeDefaultAmounts({
+    required double dspPriceFloorUsd,
+    required String buyerCountryCode,
+    required String sellerCountryCode,
+  }) {
+    if (_initializedDefaults) return;
+    _initializedDefaults = true;
+
+    final price = widget.listing.priceAmount;
+    if (price <= 0) return;
+
+    final rawTokens = CurrencyHelper.localToDiasporaToken(
+      price,
+      sellerCountryCode,
+      dspPriceFloorUsd: dspPriceFloorUsd,
+    ).round();
+    final defaultTokens = rawTokens > 0 ? rawTokens : 1;
+    _amountController.text = defaultTokens.toString();
+    _inputAmount = defaultTokens;
+
+    final defaultFiat =
+        CurrencyHelper.isSameCurrency(sellerCountryCode, buyerCountryCode)
+        ? price
+        : CurrencyHelper.convertCurrency(
+            price,
+            sellerCountryCode,
+            buyerCountryCode,
+          );
+    _fiatAmountController.text = defaultFiat.toStringAsFixed(
+      defaultFiat.truncateToDouble() == defaultFiat ? 0 : 2,
+    );
+    _fiatInputAmount =
+        double.tryParse(_fiatAmountController.text) ?? defaultFiat;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isFiat = _selectedAssetType == 'fiat';
+    final isToken = _selectedAssetType == 'token';
+    final activeColor = isFiat ? AppTheme.fiatColor : AppTheme.tokenColor;
+
+    // Fetch live $DIASPORA valuation & user's Smart Wallet balance
+    final valuation = ref.watch(dspValuationProvider);
+    final tokenBalanceAsync = ref.watch(tokenBalanceProvider);
+    final currentBalance =
+        (double.tryParse(tokenBalanceAsync.asData?.value ?? '0') ?? 0.0)
+            .toInt();
+    final isLoadingBalance = tokenBalanceAsync.isLoading;
+
+    // Buyer (sender) currency
+    final buyerProfile = ref.watch(userProfileProvider).asData?.value;
+    final buyerCountryCode = buyerProfile?.hostCountryCode ?? 'US';
+    final currencyCode = CurrencyHelper.currencyCode(buyerCountryCode);
+    final currencySymbol = CurrencyHelper.currencySymbol(buyerCountryCode);
+
+    // Seller (recipient) profile & currency
+    final sellerProfileAsync = ref.watch(
+      userProfileByIdProvider(widget.listing.sellerId),
+    );
+    final sellerProfile = sellerProfileAsync.asData?.value;
+    final sellerCountryCode =
+        widget.listing.sellerCountryCode ??
+        sellerProfile?.currentLocation?.countryCode ??
+        sellerProfile?.hostCountryCode ??
+        sellerProfile?.homeCountryCode ??
+        'TZ';
+    final receiverCurrencyCode = CurrencyHelper.currencyCode(sellerCountryCode);
+
+    final rawSellerFirstName = sellerProfile?.firstName.trim() ?? '';
+    final fallbackFirstName = widget.listing.sellerName.trim().split(' ').first;
+    final sellerFirstName = rawSellerFirstName.isNotEmpty
+        ? rawSellerFirstName
+        : (fallbackFirstName.isNotEmpty ? fallbackFirstName : 'Seller');
+    final sellerDisplayName =
+        widget.listing.orgName ??
+        (sellerProfile != null
+            ? '${sellerProfile.firstName} ${sellerProfile.lastName}'.trim()
+            : widget.listing.sellerName);
+
+    _initializeDefaultAmounts(
+      dspPriceFloorUsd: valuation.impliedValueUsd,
+      buyerCountryCode: buyerCountryCode,
+      sellerCountryCode: sellerCountryCode,
+    );
+
+    final remaining = currentBalance - _inputAmount;
+    final isError = _inputAmount > currentBalance;
+    final isZero = _inputAmount <= 0;
+
+    final convertedAmount = CurrencyHelper.convertCurrency(
+      _fiatInputAmount,
+      buyerCountryCode,
+      sellerCountryCode,
+    );
+    final exchangeRate = CurrencyHelper.convertCurrency(
+      1.0,
+      buyerCountryCode,
+      sellerCountryCode,
+    );
+    final isFiatZero = _fiatInputAmount <= 0;
+
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(12, 16, 12, 20 + bottomInset),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.25,
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // ─── LISTING CHECKOUT SUMMARY CARD ───
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.25,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: widget.listing.images.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: widget.listing.images.first,
+                              width: 52,
+                              height: 52,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              width: 52,
+                              height: 52,
+                              color: marketplaceSageGreen.withValues(
+                                alpha: 0.12,
+                              ),
+                              child: Icon(
+                                categoryIcon(widget.listing.category),
+                                color: marketplaceSageGreen,
+                                size: 24,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.listing.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          CurrencyPriceDisplay(
+                            amount: widget.listing.priceAmount,
+                            sellerCountryCode: sellerCountryCode,
+                            viewerCountryCode: buyerCountryCode,
+                            showToggle: false,
+                            compact: true,
+                            primaryColor: marketplaceSageGreen,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // ─── TWO-WAY TOGGLE ($DIASPORA and Fiat) ───
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.35,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.all(5),
+                child: Row(
+                  children: [
+                    _buildToggleTab(
+                      theme,
+                      label: r'Pay $DIASPORA',
+                      icon: Image.asset(
+                        'assets/icons/logo-orange-transparent-24.png',
+                        width: 17,
+                        height: 17,
+                      ),
+                      isSelected: isToken,
+                      brandColor: AppTheme.tokenColor,
+                      onTap: () => setState(() => _selectedAssetType = 'token'),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildToggleTab(
+                      theme,
+                      label: 'Pay $currencyCode',
+                      icon: Icon(
+                        LucideIcons.banknote,
+                        size: 17,
+                        color: isFiat
+                            ? AppTheme.fiatColor
+                            : AppTheme.fiatColor.withValues(alpha: 0.6),
+                      ),
+                      isSelected: isFiat,
+                      brandColor: AppTheme.fiatColor,
+                      onTap: () => setState(() => _selectedAssetType = 'fiat'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // ─── SELLER RECIPIENT ROW ───
+              if (isToken)
+                _buildTokenRecipientRow(
+                  theme,
+                  sellerDisplayName,
+                  sellerProfile?.walletAddress,
+                  sellerProfileAsync.isLoading,
+                )
+              else
+                _buildFiatRecipientRow(theme, sellerDisplayName, currencyCode),
+
+              const SizedBox(height: 12),
+
+              // ─── TOKEN CHECKOUT UI ───
+              if (isToken)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.3,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // LEFT: Available Balance
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Available',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isLoadingBalance ? '...' : '$remaining',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: isError
+                                          ? theme.colorScheme.error
+                                          : theme.colorScheme.onSurface,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    r'$DIASPORA',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontSize: 8,
+                                      color: activeColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // CENTER: Token amount input
+                            Expanded(
+                              flex: 3,
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: TextField(
+                                  controller: _amountController,
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: activeColor,
+                                      ),
+                                  decoration: InputDecoration(
+                                    hintText: '0',
+                                    hintStyle: TextStyle(
+                                      color: theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.3),
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // RIGHT: Checkout / Send button
+                            Expanded(
+                              flex: 2,
+                              child: Center(
+                                child: Material(
+                                  color: (isZero || isError || isLoadingBalance)
+                                      ? theme.disabledColor
+                                      : activeColor,
+                                  shape: const CircleBorder(),
+                                  child: InkWell(
+                                    onTap:
+                                        (isZero || isError || isLoadingBalance)
+                                        ? null
+                                        : () => widget.onPayToken(_inputAmount),
+                                    customBorder: const CircleBorder(),
+                                    child: Container(
+                                      width: 48,
+                                      height: 48,
+                                      alignment: Alignment.center,
+                                      child: const Icon(
+                                        LucideIcons.arrowRight,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.shieldCheck,
+                            size: 12,
+                            color: activeColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Base Smart Wallet • Gasless Zero-Fee Checkout',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                              color: activeColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+              // ─── FIAT CHECKOUT UI ───
+              if (isFiat)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.3,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      // Live Real-Time Conversion Card (above amount input)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: activeColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Exchange Rate: 1 $currencyCode = ${CurrencyHelper.formatFiatAmount(exchangeRate, forceDecimals: true)} $receiverCurrencyCode',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 10,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                Text(
+                                  'Instant Settlement',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 10,
+                                    color: Colors.green.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  LucideIcons.repeat,
+                                  size: 13,
+                                  color: activeColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '$sellerFirstName gets: ≈ ${CurrencyHelper.formatFiatAmount(convertedAmount)} $receiverCurrencyCode',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: activeColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // LEFT: Currency info
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Currency',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    currencySymbol,
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: activeColor,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    currencyCode,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontSize: 8,
+                                      color: activeColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // CENTER: Fiat amount input
+                            Expanded(
+                              flex: 3,
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: TextField(
+                                  controller: _fiatAmountController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: activeColor,
+                                      ),
+                                  decoration: InputDecoration(
+                                    hintText: '0.00',
+                                    hintStyle: TextStyle(
+                                      color: theme.colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.3),
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // RIGHT: Checkout / Send button
+                            Expanded(
+                              flex: 2,
+                              child: Center(
+                                child: Material(
+                                  color: isFiatZero
+                                      ? theme.disabledColor
+                                      : activeColor,
+                                  shape: const CircleBorder(),
+                                  child: InkWell(
+                                    onTap: isFiatZero
+                                        ? null
+                                        : () => widget.onPayFiat(
+                                            _fiatInputAmount,
+                                            currencyCode,
+                                            convertedAmount,
+                                            receiverCurrencyCode,
+                                            exchangeRate,
+                                          ),
+                                    customBorder: const CircleBorder(),
+                                    child: Container(
+                                      width: 48,
+                                      height: 48,
+                                      alignment: Alignment.center,
+                                      child: const Icon(
+                                        LucideIcons.arrowRight,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Diaspora Zero-Fee Marketplace Checkout',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 10,
+                          color: activeColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleTab(
+    ThemeData theme, {
+    required String label,
+    Widget? icon,
+    required bool isSelected,
+    required Color brandColor,
+    required VoidCallback onTap,
+  }) {
+    final bgColor = isSelected ? theme.colorScheme.surface : Colors.transparent;
+    final shadow = isSelected
+        ? [
+            BoxShadow(
+              color: brandColor.withValues(alpha: 0.25),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ]
+        : null;
+    final textColor = isSelected
+        ? brandColor
+        : brandColor.withValues(alpha: 0.65);
+    final fontWeight = isSelected ? FontWeight.bold : FontWeight.w600;
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: shadow,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[icon, const SizedBox(width: 6)],
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: fontWeight,
+                      fontSize: 12.5,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTokenRecipientRow(
+    ThemeData theme,
+    String sellerDisplayName,
+    String? walletAddress,
+    bool isLoading,
+  ) {
+    final displayAddress = (walletAddress != null && walletAddress.length >= 10)
+        ? '${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}'
+        : (isLoading ? 'Loading...' : 'Smart Wallet linked');
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              LucideIcons.wallet,
+              color: Colors.orange,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'To: $sellerDisplayName',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  displayAddress,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFiatRecipientRow(
+    ThemeData theme,
+    String sellerDisplayName,
+    String currencyCode,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              LucideIcons.banknote,
+              color: Colors.green,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'To: $sellerDisplayName',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Fiat checkout via $currencyCode',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.green.shade700,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

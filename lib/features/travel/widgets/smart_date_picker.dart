@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
@@ -47,12 +48,15 @@ class SmartDatePicker {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _SmartDatePickerSheet(
-        title: title,
-        initialDate: clamped,
-        firstDate: first,
-        lastDate: last,
-        shortcuts: effectiveShortcuts,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: _SmartDatePickerSheet(
+          title: title,
+          initialDate: clamped,
+          firstDate: first,
+          lastDate: last,
+          shortcuts: effectiveShortcuts,
+        ),
       ),
     );
   }
@@ -315,11 +319,6 @@ class _SmartDatePickerSheetState extends State<_SmartDatePickerSheet> {
                             ? AppTheme.accent.withValues(alpha: 0.15)
                             : AppTheme.elevationColor(context, 2),
                         borderRadius: BorderRadius.circular(20),
-                        border: isSelected
-                            ? Border.all(
-                                color: AppTheme.accent.withValues(alpha: 0.4),
-                              )
-                            : null,
                       ),
                       child: Center(
                         child: Text(

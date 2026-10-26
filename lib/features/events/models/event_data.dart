@@ -156,10 +156,7 @@ class Event {
 
     List<String>? toStringList(dynamic value) {
       if (value is List) {
-        return value
-            .where((e) => e != null)
-            .map((e) => e.toString())
-            .toList();
+        return value.where((e) => e != null).map((e) => e.toString()).toList();
       }
       return null;
     }
@@ -178,8 +175,9 @@ class Event {
     normalized['createdAt'] = toIsoString(normalized['createdAt']);
     normalized['status'] = (normalized['status'] ?? 'published').toString();
     normalized['attendees'] = toStringList(normalized['attendees']);
-    normalized['confirmedAttendees'] =
-        toStringList(normalized['confirmedAttendees']);
+    normalized['confirmedAttendees'] = toStringList(
+      normalized['confirmedAttendees'],
+    );
     normalized['interested'] = toStringList(normalized['interested']);
     normalized['invitedUserIds'] = toStringList(normalized['invitedUserIds']);
 

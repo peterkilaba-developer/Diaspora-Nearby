@@ -510,11 +510,7 @@ class _CreateHotelListingScreenState
                             : FontWeight.w500,
                         fontSize: 13,
                       ),
-                      side: BorderSide(
-                        color: selected
-                            ? AppTheme.accent.withValues(alpha: 0.4)
-                            : Colors.transparent,
-                      ),
+                      side: BorderSide.none,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -772,11 +768,7 @@ class _CreateHotelListingScreenState
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      side: BorderSide(
-                        color: selected
-                            ? AppTheme.accent.withValues(alpha: 0.3)
-                            : Colors.transparent,
-                      ),
+                      side: BorderSide.none,
                     );
                   }).toList(),
                 ),
@@ -810,13 +802,6 @@ class _CreateHotelListingScreenState
                             decoration: BoxDecoration(
                               color: AppTheme.elevationColor(context, 2),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: _selectedImages.length < 10
-                                    ? AppTheme.accent.withValues(alpha: 0.4)
-                                    : Colors.transparent,
-                                width: 1.5,
-                                style: BorderStyle.solid,
-                              ),
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -1046,7 +1031,6 @@ class _CreateHotelListingScreenState
               ],
             ),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.accent.withValues(alpha: 0.15)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1142,9 +1126,6 @@ class _CreateHotelListingScreenState
             decoration: BoxDecoration(
               color: theme.cardColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.dividerColor.withValues(alpha: 0.3),
-              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),

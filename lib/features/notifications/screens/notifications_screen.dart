@@ -512,7 +512,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       case NotificationType.trustPeerVerified:
       case NotificationType.trustPeerVouched:
       case NotificationType.trustFullTrustReceived:
-        final fromUserId = item.payload['fromUserId'] as String?;
+      case NotificationType.trustNoTrustReceived:
+      case NotificationType.trustStakeConsensusAgree:
+      case NotificationType.trustStakeConsensusDisagree:
+        final fromUserId =
+            (item.payload['fromUserId'] ?? item.payload['userId']) as String?;
         if (fromUserId != null && fromUserId.isNotEmpty) {
           route = '/profile/$fromUserId';
         }
@@ -1105,7 +1109,13 @@ class _NotificationCard extends StatelessWidget {
       case NotificationType.trustPeerVouched:
         return const _IconConfig(LucideIcons.heartHandshake, AppTheme.accent);
       case NotificationType.trustFullTrustReceived:
-        return const _IconConfig(LucideIcons.star, AppTheme.accent);
+        return const _IconConfig(LucideIcons.shieldCheck, AppTheme.accent);
+      case NotificationType.trustNoTrustReceived:
+        return const _IconConfig(LucideIcons.shieldAlert, AppTheme.error);
+      case NotificationType.trustStakeConsensusAgree:
+        return const _IconConfig(LucideIcons.coins, AppTheme.success);
+      case NotificationType.trustStakeConsensusDisagree:
+        return const _IconConfig(LucideIcons.shieldAlert, AppTheme.warning);
       case NotificationType.trustMilestone:
         return const _IconConfig(LucideIcons.award, AppTheme.warning);
 

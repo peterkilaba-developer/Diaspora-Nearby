@@ -387,7 +387,8 @@ class PointsService {
     // [UPDATED v9] Legacy fallback/manual trigger
     // Ensure 10,000 DSP is awarded if the milestone hasn't been hit yet
     final points = await _repository.getUserPoints(userId);
-    final alreadyEarned = (points?.lifetimeEarnings['profile_completion'] ?? 0) >= 10000;
+    final alreadyEarned =
+        (points?.lifetimeEarnings['profile_completion'] ?? 0) >= 10000;
     if (points != null &&
         !alreadyEarned &&
         !points.completedExplorationActions.contains(

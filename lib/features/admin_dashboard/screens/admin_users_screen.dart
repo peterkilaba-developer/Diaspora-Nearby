@@ -138,7 +138,6 @@ class _UserTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1), // Level 1 card
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
@@ -305,7 +304,6 @@ class _FilterButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.elevationColor(context, 1), // Level 1 button
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
         ),
         child: Row(
           children: [

@@ -76,7 +76,9 @@ class CommunityService {
 
     final userId = profile.uid!;
     final homeCountryCode = profile.homeCountryCode!.trim().toUpperCase();
-    final hostCountryCode = (profile.hostCountryCode ?? 'XX').trim().toUpperCase();
+    final hostCountryCode = (profile.hostCountryCode ?? 'XX')
+        .trim()
+        .toUpperCase();
     // [NEW] Extract User Name for Notifications
     final userName = profile.fullName;
 

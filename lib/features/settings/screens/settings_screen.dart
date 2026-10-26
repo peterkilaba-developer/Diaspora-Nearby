@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
 import 'package:diaspora_nearby/core/utils/pwa_utils.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/more/widgets/account_section.dart';
@@ -31,7 +32,7 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(AppLocalizations.tr(ref, 'Settings'))),
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
           top: 16,
@@ -91,7 +92,7 @@ class SettingsScreen extends ConsumerWidget {
             // Quick Actions
             _buildSectionHeader(
               context,
-              'QUICK ACTIONS',
+              AppLocalizations.tr(ref, 'QUICK ACTIONS'),
               icon: LucideIcons.zap,
             ),
             _buildSectionContainer(
@@ -103,8 +104,14 @@ class SettingsScreen extends ConsumerWidget {
                     ref: ref,
                     icon: LucideIcons.share2,
                     iconColor: const Color(0xFF25D366),
-                    title: 'Invite family and friends',
-                    subtitle: 'Share the app with others',
+                    title: AppLocalizations.tr(
+                      ref,
+                      'Invite family and friends',
+                    ),
+                    subtitle: AppLocalizations.tr(
+                      ref,
+                      'Share the app with others',
+                    ),
                     explorationAction: ExplorationAction.profileInvite,
                     onTap: () async {
                       if (currentUserId.isNotEmpty) {
@@ -147,8 +154,11 @@ class SettingsScreen extends ConsumerWidget {
                     ref: ref,
                     icon: LucideIcons.messageSquare,
                     iconColor: Colors.indigo,
-                    title: 'Send Feedback',
-                    subtitle: 'Help us improve the app',
+                    title: AppLocalizations.tr(ref, 'Send Feedback'),
+                    subtitle: AppLocalizations.tr(
+                      ref,
+                      'Help us improve the app',
+                    ),
                     explorationAction: ExplorationAction.profileFeedback,
                     onTap: () {
                       Navigator.of(context).push(
@@ -164,7 +174,11 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 16),
 
             // Support
-            _buildSectionHeader(context, 'SUPPORT', icon: LucideIcons.lifeBuoy),
+            _buildSectionHeader(
+              context,
+              AppLocalizations.tr(ref, 'SUPPORT'),
+              icon: LucideIcons.lifeBuoy,
+            ),
             _buildSectionContainer(
               context,
               child: Column(
@@ -174,8 +188,8 @@ class SettingsScreen extends ConsumerWidget {
                     ref: ref,
                     icon: LucideIcons.star,
                     iconColor: Colors.orange,
-                    title: 'Rate App',
-                    subtitle: 'Share your experience',
+                    title: AppLocalizations.tr(ref, 'Rate App'),
+                    subtitle: AppLocalizations.tr(ref, 'Share your experience'),
                     explorationAction: ExplorationAction.profileRateApp,
                     onTap: () {
                       Navigator.of(context).push(
@@ -195,8 +209,8 @@ class SettingsScreen extends ConsumerWidget {
                     ref: ref,
                     icon: LucideIcons.helpCircle,
                     iconColor: Colors.cyan,
-                    title: 'Help Center',
-                    subtitle: 'Get answers',
+                    title: AppLocalizations.tr(ref, 'Help Center'),
+                    subtitle: AppLocalizations.tr(ref, 'Get answers'),
                     explorationAction: ExplorationAction.profileHelpCenter,
                     onTap: () {
                       Navigator.of(context).push(
@@ -219,7 +233,7 @@ class SettingsScreen extends ConsumerWidget {
             // Account Settings
             _buildSectionHeader(
               context,
-              'ACCOUNT SETTINGS',
+              AppLocalizations.tr(ref, 'ACCOUNT SETTINGS'),
               icon: LucideIcons.settings,
             ),
             AccountSection(userProfile: profile),
@@ -672,12 +686,6 @@ class SettingsScreen extends ConsumerWidget {
                 ? Colors.deepPurple.withValues(alpha: 0.12)
                 : AppTheme.elevationColor(context, 2),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected
-                  ? Colors.deepPurple.withValues(alpha: 0.5)
-                  : Colors.transparent,
-              width: 1.5,
-            ),
           ),
           child: Column(
             children: [

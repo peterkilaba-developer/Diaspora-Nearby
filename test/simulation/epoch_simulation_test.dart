@@ -363,5 +363,74 @@ void main() {
         expect(data['burnedPoints'], greaterThan(0));
       },
     );
+
+    test(
+      'Rolling Carry-Over (TDE 1-9) & Great Reset (TDE 10): 50k @ 50 PCT -> 25k carried over + 35k = 60k @ 70 PCT -> resets at TDE 10',
+      () {
+        final epochService = EpochService();
+
+        // TDE 1: 50,000 DSP @ 50 PCT -> 25,000 $DIASPORA converted, 25,000 DSP carried over, 0 burned
+        final tde1Converted = epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: 50000,
+          trustScore: 50,
+        );
+        final tde1CarryOver = epochService.calculateCarriedOverDsp(
+          tdeNumber: 1,
+          currentDspBalance: 50000,
+          trustScore: 50,
+        );
+        final tde1Burn = epochService.calculateGreatResetBurn(
+          tdeNumber: 1,
+          currentDspBalance: 50000,
+          trustScore: 50,
+        );
+        expect(tde1Converted, 25000.0);
+        expect(tde1CarryOver, 25000.0);
+        expect(tde1Burn, 0.0);
+
+        // TDE 2: 25,000 carried over + 35,000 new = 60,000 DSP @ 70 PCT -> 42,000 converted, 18,000 carried over, 0 burned
+        final tde2Balance = tde1CarryOver + 35000;
+        expect(tde2Balance, 60000.0);
+        final tde2Converted = epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: tde2Balance,
+          trustScore: 70,
+        );
+        final tde2CarryOver = epochService.calculateCarriedOverDsp(
+          tdeNumber: 2,
+          currentDspBalance: tde2Balance,
+          trustScore: 70,
+        );
+        final tde2Burn = epochService.calculateGreatResetBurn(
+          tdeNumber: 2,
+          currentDspBalance: tde2Balance,
+          trustScore: 70,
+        );
+        expect(tde2Converted, 42000.0);
+        expect(tde2CarryOver, 18000.0);
+        expect(tde2Burn, 0.0);
+
+        // TDE 10 (The Great Reset): remaining unconverted DSP is reset to 0 and burned
+        final tde10Converted = epochService.calculateTGESwap(
+          epochNumber: 1,
+          currentDspBalance: 50000,
+          trustScore: 70,
+        );
+        final tde10CarryOver = epochService.calculateCarriedOverDsp(
+          tdeNumber: 10,
+          currentDspBalance: 50000,
+          trustScore: 70,
+        );
+        final tde10Burn = epochService.calculateGreatResetBurn(
+          tdeNumber: 10,
+          currentDspBalance: 50000,
+          trustScore: 70,
+        );
+        expect(tde10Converted, 35000.0);
+        expect(tde10CarryOver, 0.0);
+        expect(tde10Burn, 15000.0);
+      },
+    );
   });
 }

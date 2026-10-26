@@ -98,10 +98,6 @@ class _HostingArrangementMessageContentState
             AppTheme.accent.withValues(alpha: 0.15),
           ],
         ),
-        border: Border.all(
-          color: AppTheme.accent.withValues(alpha: 0.3),
-          width: 1,
-        ),
         boxShadow: [
           BoxShadow(
             color: AppTheme.accent.withValues(alpha: 0.08),
@@ -232,7 +228,6 @@ class _HostingArrangementMessageContentState
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -518,9 +513,6 @@ class _HostingArrangementMessageContentState
                 decoration: BoxDecoration(
                   color: AppTheme.accent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: AppTheme.accent.withValues(alpha: 0.2),
-                  ),
                 ),
                 child: Center(
                   child: Text(

@@ -101,7 +101,9 @@ class ChatMoreMenuSheet extends ConsumerWidget {
   /// Also checks pending requests and live providers for family types
   bool _isExistingFamily(WidgetRef ref, String currentUserId) {
     if (existingRelationship != null &&
-        TrustSliderWidget.isFamilyRelationshipType(existingRelationship!.type)) {
+        TrustSliderWidget.isFamilyRelationshipType(
+          existingRelationship!.type,
+        )) {
       return true;
     }
     if (pendingSentRequest != null &&
@@ -356,7 +358,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                               iconColor: theme.colorScheme.primary,
                               iconBgColor: theme.colorScheme.primaryContainer,
                               title: 'Manage event',
-                              subtitle: 'Edit event details, schedule, or delete',
+                              subtitle:
+                                  'Edit event details, schedule, or delete',
                               onTap: () {
                                 Navigator.pop(context);
                                 context.push(
@@ -439,7 +442,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                     subtitle: 'Create a group with $nameToUse',
                     onTap: onStartGroupChat,
                   ),
-                  if (hasAnyProfileField && !_isExistingFamily(ref, currentUserId))
+                  if (hasAnyProfileField &&
+                      !_isExistingFamily(ref, currentUserId))
                     hasVerifiedTarget
                         ? AppBottomSheetItem(
                             icon: LucideIcons.shieldCheck,
@@ -614,7 +618,8 @@ class ChatMoreMenuSheet extends ConsumerWidget {
                       iconColor: theme.colorScheme.primary,
                       iconBgColor: theme.colorScheme.primaryContainer,
                       title: 'Manage organization',
-                      subtitle: 'Edit organization profile, admins, and products',
+                      subtitle:
+                          'Edit organization profile, admins, and products',
                       onTap: () {
                         Navigator.pop(context);
                         final orgId = chat.id.replaceFirst('org_', '');

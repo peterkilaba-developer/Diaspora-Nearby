@@ -95,7 +95,7 @@ Track all the countries, states, and cities you've called home throughout your l
 1. **Hometown & Host City Search**:
    * Search your **Hometown** (Google Places autocomplete automatically resolves town, state, and home country in one tap).
    * Search your **Host City/Town**.
-   * Enter name, add a photo, and immediately claim your **10,000 DSP Welcome Allocation**.
+   * Complete all 10 profile fields to earn **10,000 DSP & 10 PCT** and enable live location transparency to earn **10,000 DSP & 10 PCT**.
 2. **Nearby Discovery & Global Cross-Nation Search**:
    * Open the Nearby Screen to see people from your home country nearby.
    * Search and connect with users from *any country in the world*.
@@ -113,16 +113,16 @@ Track all the countries, states, and cities you've called home throughout your l
 
 Proof of Community Trust (PCT) is a multi-dimensional identity system where real humans validate each other across four core pillars of Proof of Humanity (PoH) and ongoing community participation.
 
-### **The 4 Pillars of Proof of Humanity (PoH) — 70,000 DSP & 70 PCT Base**:
+### **The 4 Pillars of Proof of Humanity (PoH) — 6 Base Milestones (60,000 DSP & 60 PCT) + Deferred Milestone 7 (70,000 DSP & 70 PCT Total)**:
 1. **Location Transparency**: Keep live location visible (10,000 DSP & 10 PCT).
 2. **Profile Completion**: Complete all 10 profile fields (10,000 DSP & 10 PCT).
 3. **10 QR Identity Exchanges**: 10 unique in-person QR scans (10,000 DSP & 10 PCT; 1,000 DSP per scan beyond 10).
 4. **10 Family Connections**: Verified family links with bilateral chat history (10,000 DSP & 10 PCT).
 5. **10 Friend Connections**: Verified friend links with bilateral chat history (10,000 DSP & 10 PCT).
 6. **10 Peer Verifications**: 10 unique peer profile field verifications (10,000 DSP & 10 PCT).
-7. **Ubuntu Emergency Fund Contribution**: Active mutual protection contribution (10,000 DSP & 10 PCT).
+7. **Ubuntu Emergency Fund Contribution (Deferred Post-Genesis)**: Active mutual protection contribution (10,000 DSP & 10 PCT; deferred post-genesis so new members can unlock their Genesis distribution upfront; required before requesting emergency aid).
 
-🌟 **Genesis On-Chain Token Mint**: Completing all 7 milestones automatically converts 7,000 DSP into **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (the only pre-TDE on-chain distribution).
+🌟 **Genesis On-Chain Token Mint**: Completing the **6 base milestones** automatically converts 7,000 DSP into **7,000 real on-chain $DIASPORA tokens on Ethereum Base Blockchain by Coinbase** (the only pre-TDE on-chain distribution).
 
 ### **The Trust Slider — Character Prediction Market**:
 * Long-press any message to rate a member from 1 to 100.
@@ -168,7 +168,7 @@ A member-funded collective safety net ensuring no diaspora member ever faces a c
 3. **Flights & Hotels**: Book flights and hotels worldwide via Amadeus integration. Every completed booking earns 1,000 DSP.
 4. **Peer Car Rentals**: Rent vehicles directly from verified community members wherever you travel, with zero rental agency markups.
 5. **Real Estate Marketplace**: Buy, sell, rent, and lease residential and commercial land and properties — with built-in GPS plot survey tools.
-6. **Zero-Fee Value Transfer**: Send $DIASPORA tokens or local fiat remittances to family and friends with zero intermediary fees absorbed by the Global Reserve (DSP points remain strictly non-transferable earned social equity to preserve Proof of Community Trust conversion integrity).
+6. **Zero-Fee Value Transfer**: Transfer value in **DSP**, **$DIASPORA**, or **Fiat** (M-Pesa, Flutterwave, Stripe, SEPA) across P2P Remittances, B2C/C2B Payments, and B2B Commercial Settlement with zero intermediary fees subsidized by the Global Reserve.
 
 ### **Payment Infrastructure**:
 * **Smart Wallet Gasless Checkout**: Self-custodial smart wallet created from your phone number with gasless transactions on Base.

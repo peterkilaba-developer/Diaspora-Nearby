@@ -177,7 +177,6 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     // Theme colors
-    final primaryColor = Theme.of(context).primaryColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -225,9 +224,6 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                     decoration: BoxDecoration(
                       color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.red.withValues(alpha: 0.3),
-                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -255,9 +251,6 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                     decoration: BoxDecoration(
                       color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.green.withValues(alpha: 0.3),
-                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -300,12 +293,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                     // Scanner Overlay (Frame)
                                     Container(
                                       decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.5,
-                                          ),
-                                          width: 2,
-                                        ),
+                                        color: const Color(0x14888888),
                                         borderRadius: BorderRadius.circular(24),
                                       ),
                                     ),
@@ -314,10 +302,7 @@ class _QRAttendanceScreenState extends ConsumerState<QRAttendanceScreen> {
                                         width: 200,
                                         height: 200,
                                         decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: primaryColor,
-                                            width: 2,
-                                          ),
+                                          color: const Color(0x14888888),
                                           borderRadius: BorderRadius.circular(
                                             12,
                                           ),

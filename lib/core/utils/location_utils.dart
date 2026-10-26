@@ -384,17 +384,15 @@ final liveUserPositionProvider = StreamProvider<Position?>((ref) {
         }
       } catch (_) {}
 
-      sub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          distanceFilter: 100,
-        ),
-      ).listen(
-        (pos) {
-          if (!controller.isClosed) controller.add(pos);
-        },
-        onError: (_) {},
-      );
+      sub =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              distanceFilter: 100,
+            ),
+          ).listen((pos) {
+            if (!controller.isClosed) controller.add(pos);
+          }, onError: (_) {});
     } catch (_) {
       if (!controller.isClosed) controller.add(null);
     }

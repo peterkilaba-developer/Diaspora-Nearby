@@ -341,7 +341,6 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                     // Phone input container
                     Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outline),
                         borderRadius: BorderRadius.circular(12),
                         color: theme.cardColor,
                       ),

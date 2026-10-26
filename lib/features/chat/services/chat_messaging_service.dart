@@ -806,22 +806,17 @@ class ChatMessagingService {
 
       final batch = _firestore.batch();
       batch.set(newMsgRef, messageData);
-      batch.set(
-        _chatsCol.doc(chatId),
-        {'lastMessage': lastMessageData, 'updatedAt': now},
-        SetOptions(merge: true),
-      );
+      batch.set(_chatsCol.doc(chatId), {
+        'lastMessage': lastMessageData,
+        'updatedAt': now,
+      }, SetOptions(merge: true));
       if (currentUserId != null) {
-        batch.set(
-          _userChatsCol(currentUserId!).doc(chatId),
-          {
-            'chatId': chatId,
-            'lastMessage': lastMessageData,
-            'updatedAt': now,
-            'isDeleted': false,
-          },
-          SetOptions(merge: true),
-        );
+        batch.set(_userChatsCol(currentUserId!).doc(chatId), {
+          'chatId': chatId,
+          'lastMessage': lastMessageData,
+          'updatedAt': now,
+          'isDeleted': false,
+        }, SetOptions(merge: true));
       }
       await batch.commit();
 
@@ -1006,22 +1001,17 @@ class ChatMessagingService {
 
       final batch = _firestore.batch();
       batch.set(newMsgRef, messageData);
-      batch.set(
-        _chatsCol.doc(chatId),
-        {'lastMessage': lastMessageData, 'updatedAt': now},
-        SetOptions(merge: true),
-      );
+      batch.set(_chatsCol.doc(chatId), {
+        'lastMessage': lastMessageData,
+        'updatedAt': now,
+      }, SetOptions(merge: true));
       if (currentUserId != null) {
-        batch.set(
-          _userChatsCol(currentUserId!).doc(chatId),
-          {
-            'chatId': chatId,
-            'lastMessage': lastMessageData,
-            'updatedAt': now,
-            'isDeleted': false,
-          },
-          SetOptions(merge: true),
-        );
+        batch.set(_userChatsCol(currentUserId!).doc(chatId), {
+          'chatId': chatId,
+          'lastMessage': lastMessageData,
+          'updatedAt': now,
+          'isDeleted': false,
+        }, SetOptions(merge: true));
       }
       await batch.commit();
 

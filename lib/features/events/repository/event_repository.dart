@@ -238,9 +238,7 @@ class EventRepository {
       if (event.attendees?.contains(currentUserId) ?? false) return true;
 
       // 2. Country Filter (If not global view)
-      if (!isGlobal &&
-          homeCountryCode != null &&
-          homeCountryCode.isNotEmpty) {
+      if (!isGlobal && homeCountryCode != null && homeCountryCode.isNotEmpty) {
         final eventHomeCode = event.homeCountryCode?.toUpperCase();
         final targetHomeCode = homeCountryCode.toUpperCase();
         if (eventHomeCode != null &&
@@ -692,9 +690,7 @@ class EventRepository {
     // Optimistically update in-memory cache immediately
     final cached = _eventsByIdCache[eventId];
     if (cached != null && cached.attendees != null) {
-      cached.attendees = cached.attendees!
-          .where((id) => id != userId)
-          .toList();
+      cached.attendees = cached.attendees!.where((id) => id != userId).toList();
       cached.attendeeCount = cached.attendees!.length;
     }
 
@@ -921,29 +917,30 @@ class EventRepository {
           .limit(200)
           .get();
 
-      final events = snapshot.docs
-          .map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            try {
-              return Event.fromJson(data);
-            } catch (e) {
-              return null;
-            }
-          })
-          .whereType<Event>()
-          .where((event) {
-            if (isEventExpired(event, today)) return false;
-            if (event.status != 'published') return false;
-            if (query.isEmpty) return true;
-            return event.title.toLowerCase().contains(queryLower);
-          })
-          .toList()
-        ..sort((a, b) {
-          final dateCmp = a.startDate.compareTo(b.startDate);
-          if (dateCmp != 0) return dateCmp;
-          return a.startTime.compareTo(b.startTime);
-        });
+      final events =
+          snapshot.docs
+              .map((doc) {
+                final data = doc.data();
+                data['id'] = doc.id;
+                try {
+                  return Event.fromJson(data);
+                } catch (e) {
+                  return null;
+                }
+              })
+              .whereType<Event>()
+              .where((event) {
+                if (isEventExpired(event, today)) return false;
+                if (event.status != 'published') return false;
+                if (query.isEmpty) return true;
+                return event.title.toLowerCase().contains(queryLower);
+              })
+              .toList()
+            ..sort((a, b) {
+              final dateCmp = a.startDate.compareTo(b.startDate);
+              if (dateCmp != 0) return dateCmp;
+              return a.startTime.compareTo(b.startTime);
+            });
 
       return await _enrichEvents(events);
     } catch (e) {

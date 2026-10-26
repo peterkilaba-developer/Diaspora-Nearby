@@ -339,7 +339,32 @@ describe("DiasporaTGEControllerV2", function () {
       const deadBalAfter = await token.balanceOf(BURN);
 
       expect(u2BalAfter - u2BalBefore).to.equal(1000n * ONE); // 50% of 2000
-      expect(deadBalAfter - deadBalBefore).to.equal(1000n * ONE); // 50% burned to 0x...dEaD
+      expect(deadBalAfter - deadBalBefore).to.equal(0n); // TDE 1-9 carries over unconverted balance (0 burned until TDE 10 Great Reset)
+
+      // At TDE 10 (tgeEvent = 9, The Great Reset), unconverted balance is burned to 0x...dEaD
+      const resetEvent = 9;
+      const leafReset = makeLeaf(user2.address, epoch, resetEvent, earnedUser2, efficiencyUser2);
+      const treeReset = new MerkleTree([leafReset], ethers.keccak256, { sortPairs: true });
+      const rootReset = treeReset.getHexRoot();
+      const proofReset = treeReset.getHexProof(leafReset);
+      await tge.connect(oracle).publishTdeRoot(epoch, resetEvent, rootReset, earnedUser2);
+      await tge.connect(user2).claimTdeTokens(user2.address, epoch, resetEvent, earnedUser2, efficiencyUser2, proofReset);
+      const deadBalAfterReset = await token.balanceOf(BURN);
+      expect(deadBalAfterReset - deadBalAfter).to.equal(1000n * ONE);
+
+      // Verify executeTGE carry-over (TDE 1-9) + Great Reset burn (TDE 10)
+      await tge.connect(oracle).mintEpochSupply(1_000_000n * ONE);
+      // TDE 1 (event 0): 50,000 DSP @ 50% PCT -> 25,000 liquid, 0 burned (25,000 carried over)
+      const u1Start = await token.balanceOf(user1.address);
+      const burnStart = await token.balanceOf(BURN);
+      await tge.connect(oracle).executeTGE([user1.address], [50_000n * ONE], [50], ROOT_A);
+      expect((await token.balanceOf(user1.address)) - u1Start).to.equal(25_000n * ONE);
+      expect((await token.balanceOf(BURN)) - burnStart).to.equal(0n);
+
+      // TDE 2 (event 1): 25,000 carried over + 35,000 new = 60,000 DSP @ 70% PCT -> 42,000 liquid, 0 burned (18,000 carried over)
+      await tge.connect(oracle).executeTGE([user1.address], [60_000n * ONE], [70], ROOT_A);
+      expect((await token.balanceOf(user1.address)) - u1Start).to.equal(67_000n * ONE);
+      expect((await token.balanceOf(BURN)) - burnStart).to.equal(0n);
     });
 
     it("prevents double-claiming TDE tokens", async function () {
@@ -355,6 +380,29 @@ describe("DiasporaTGEControllerV2", function () {
 
       await tge.connect(oracle).publishTdeRoot(epoch, tgeEvent, root, earned);
       await tge.claimTdeTokens(user1.address, epoch, tgeEvent, earned, efficiency, proof);
+
+      await expect(
+        tge.claimTdeTokens(user1.address, epoch, tgeEvent, earned, efficiency, proof)
+      ).to.be.revertedWith("TGE: already claimed");
+    });
+
+    it("prevents pull-claiming after executeTGE has already pushed distribution", async function () {
+      const epoch = 1;
+      const tgeEvent = 0;
+      const earned = 500n * ONE;
+      const efficiency = 80;
+
+      const leaf = makeLeaf(user1.address, epoch, tgeEvent, earned, efficiency);
+      const tree = new MerkleTree([leaf], ethers.keccak256, { sortPairs: true });
+      const root = tree.getHexRoot();
+      const proof = tree.getHexProof(leaf);
+
+      await tge.connect(oracle).executeTGE(
+        [user1.address],
+        [earned],
+        [efficiency],
+        root
+      );
 
       await expect(
         tge.claimTdeTokens(user1.address, epoch, tgeEvent, earned, efficiency, proof)

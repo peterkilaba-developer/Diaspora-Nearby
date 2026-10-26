@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:diaspora_nearby/config/app_environment.dart';
 import 'package:diaspora_nearby/config/environment_firebase_options.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
+import 'package:diaspora_nearby/core/providers/locale_provider.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
 import 'package:diaspora_nearby/router.dart';
@@ -114,8 +115,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
         final chatId = data['chatId']?.toString();
         final senderId = data['senderId']?.toString();
-        final containerKey =
-            (chatId != null && chatId.trim().isNotEmpty)
+        final containerKey = (chatId != null && chatId.trim().isNotEmpty)
             ? chatId.trim()
             : ((senderId != null && senderId.trim().isNotEmpty)
                   ? senderId.trim()
@@ -150,7 +150,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
                       : null,
                   groupConversation: false,
                   messages: lines
-                      .map((line) => Message(line, DateTime.now(), senderPerson))
+                      .map(
+                        (line) => Message(line, DateTime.now(), senderPerson),
+                      )
                       .toList(),
                 );
               }
@@ -386,6 +388,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
+    final currentLang = ref.watch(currentWorldLanguageProvider);
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
@@ -396,9 +399,14 @@ class _MyAppState extends ConsumerState<MyApp> {
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        final app = ConfettiOverlay(
-          key: confettiOverlayKey,
-          child: child ?? const SizedBox(),
+        final app = Directionality(
+          textDirection: currentLang.isRtl
+              ? TextDirection.rtl
+              : TextDirection.ltr,
+          child: ConfettiOverlay(
+            key: confettiOverlayKey,
+            child: child ?? const SizedBox(),
+          ),
         );
         if (AppEnvironmentConfig.isProduction) {
           return app;

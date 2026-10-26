@@ -134,11 +134,6 @@ class MyListingsScreen extends ConsumerWidget {
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

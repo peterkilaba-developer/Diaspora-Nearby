@@ -109,7 +109,6 @@ void showExplorationRewardToast(
                   0xFFFFD700,
                 ).withValues(alpha: 0.2), // Gold with opacity
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFFFD700), width: 1),
               ),
               child: const Icon(
                 LucideIcons.coins,
@@ -146,7 +145,7 @@ void showExplorationRewardToast(
         backgroundColor: const Color(0xFF2C2C2C), // Slightly lighter dark grey
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Color(0xFF3C3C3C), width: 1),
+          side: BorderSide.none,
         ),
         margin: const EdgeInsets.all(16),
         elevation: 10,

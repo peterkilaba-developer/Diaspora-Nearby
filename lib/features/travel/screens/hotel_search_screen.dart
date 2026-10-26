@@ -16,7 +16,6 @@ import 'package:diaspora_nearby/features/travel/models/travel_search_result.dart
 import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
 
 import 'package:diaspora_nearby/features/travel/widgets/smart_date_picker.dart';
-import 'package:diaspora_nearby/features/travel/utils/geo_utils.dart';
 import 'package:diaspora_nearby/features/travel/widgets/travel_skeleton_loader.dart';
 import 'package:diaspora_nearby/features/travel/models/peer_listing.dart';
 import 'package:diaspora_nearby/features/travel/services/peer_listing_repository.dart';
@@ -60,6 +59,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   String? _homeCountry;
   String? _searchCity;
   String? _searchCountry;
+  String? _searchCountryCode;
 
   @override
   void initState() {
@@ -126,6 +126,8 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
       locationLabel = [?homeCity, ?homeCountry].join(', ');
       _searchCity = homeCity;
       _searchCountry = homeCountry;
+      _searchCountryCode =
+          profileData.homeCountryCode ?? profileData.homeLocation.countryCode;
     }
 
     if (homeLat == null || homeLng == null || !mounted) {
@@ -157,6 +159,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
           adults: guests,
           radius: 50, // wider radius for browse mode
           maxResults: 30,
+          query: locationLabel,
         ),
         peerRepo.searchListings(
           type: 'hotel',
@@ -168,17 +171,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
 
       final offers = results[0] as List<HotelOfferResult>;
       final peerHotels = results[1] as List<PeerListing>;
-
-      // Sort API results by distance from home town
-      offers.sort((a, b) {
-        final da = (a.latitude != null && a.longitude != null)
-            ? GeoUtils.haversine(homeLat!, homeLng!, a.latitude!, a.longitude!)
-            : double.infinity;
-        final db = (b.latitude != null && b.longitude != null)
-            ? GeoUtils.haversine(homeLat!, homeLng!, b.latitude!, b.longitude!)
-            : double.infinity;
-        return da.compareTo(db);
-      });
 
       setState(() {
         _hotelOffers = offers;
@@ -230,26 +222,62 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   }
 
   Future<void> _selectPlace(AutocompletePrediction prediction) async {
+    final secondaryParts = prediction.secondaryText
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final extractedCountry = secondaryParts.isNotEmpty
+        ? secondaryParts.last
+        : prediction.secondaryText;
+
     setState(() {
       _destController.text = prediction.fullText.isNotEmpty
           ? prediction.fullText
           : '${prediction.primaryText}, ${prediction.secondaryText}';
       _selectedPlaceDescription = _destController.text;
+      _selectedLat = null;
+      _selectedLng = null;
       _placeSuggestions = [];
       _showPlaceSuggestions = false;
       _searchCity = prediction.primaryText;
-      _searchCountry = prediction.secondaryText;
+      _searchCountry = extractedCountry;
+      _searchCountryCode = null;
     });
 
-    // Fetch place details to get lat/lng
+    // Fetch place details to get lat/lng and ISO countryCode
     try {
       final service = ref.read(googlePlacesServiceProvider);
       final response = await service.getPlaceDetails(prediction.placeId);
 
-      if (response?.place.latLng != null && mounted) {
+      if (response?.place != null && mounted) {
+        String? detectedCountryCode;
+        String? detectedCountryName;
+        final components = response!.place.addressComponents;
+        if (components != null) {
+          for (final comp in components) {
+            if (comp.types.contains('country')) {
+              if (comp.shortName.isNotEmpty) {
+                detectedCountryCode = comp.shortName.toUpperCase();
+              }
+              if (comp.name.isNotEmpty) {
+                detectedCountryName = comp.name;
+              }
+              break;
+            }
+          }
+        }
         setState(() {
-          _selectedLat = response!.place.latLng!.lat;
-          _selectedLng = response.place.latLng!.lng;
+          if (response.place.latLng != null) {
+            _selectedLat = response.place.latLng!.lat;
+            _selectedLng = response.place.latLng!.lng;
+          }
+          if (detectedCountryCode != null) {
+            _searchCountryCode = detectedCountryCode;
+          }
+          if (detectedCountryName != null) {
+            _searchCountry = detectedCountryName;
+          }
         });
       }
     } catch (e) {
@@ -294,7 +322,9 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
           checkInDate: _checkInDateApi,
           checkOutDate: _checkOutDateApi,
           adults: guests,
-          maxResults: 15,
+          radius: 35,
+          maxResults: 20,
+          query: _selectedPlaceDescription,
         ),
         peerRepo.searchListings(type: 'hotel', city: _selectedPlaceDescription),
       ]);
@@ -303,19 +333,6 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
 
       final offers = results[0] as List<HotelOfferResult>;
       final peerHotels = results[1] as List<PeerListing>;
-
-      // Sort by distance from searched location
-      final sLat = _selectedLat!;
-      final sLng = _selectedLng!;
-      offers.sort((a, b) {
-        final da = (a.latitude != null && a.longitude != null)
-            ? GeoUtils.haversine(sLat, sLng, a.latitude!, a.longitude!)
-            : double.infinity;
-        final db = (b.latitude != null && b.longitude != null)
-            ? GeoUtils.haversine(sLat, sLng, b.latitude!, b.longitude!)
-            : double.infinity;
-        return da.compareTo(db);
-      });
 
       setState(() {
         _isSearching = false;
@@ -690,6 +707,10 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool showAppBarSearch = !_showSearchForm;
+    final viewerCountryCode = ref
+        .watch(userProfileProvider)
+        .value
+        ?.hostCountryCode;
 
     // Total results = peer hotels + optional header + API hotels + optional header
     final hasPeer = _peerHotels.isNotEmpty;
@@ -769,6 +790,7 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                       final listing = _peerHotels[index - cursor];
                       return PeerListingCard(
                         listing: listing,
+                        viewerCountryCode: viewerCountryCode,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -799,9 +821,11 @@ class _HotelSearchScreenState extends ConsumerState<HotelSearchScreen> {
                         hotel,
                         city: _searchCity,
                         country: _searchCountry,
+                        countryCode: _searchCountryCode,
                       );
                       return PeerListingCard(
                         listing: listing,
+                        viewerCountryCode: viewerCountryCode,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(

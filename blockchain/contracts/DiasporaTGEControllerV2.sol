@@ -183,8 +183,9 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
         require(token.balanceOf(address(this)) >= batchTotal, "TGE: insufficient locked supply");
 
         for (uint256 i = 0; i < recipients.length; i++) {
+            tdeClaimed[keccak256(abi.encode(recipients[i], currentEpoch, currentTgeEvent))] = true;
             uint256 liquid = (amounts[i] * efficiencies[i]) / 100;
-            uint256 burned = amounts[i] - liquid;
+            uint256 burned = (currentTgeEvent >= 9) ? (amounts[i] - liquid) : 0;
             if (liquid > 0) {
                 token.transfer(recipients[i], liquid);
                 batchDistributed += liquid;
@@ -398,7 +399,7 @@ contract DiasporaTGEControllerV2 is Initializable, AccessControlUpgradeable, UUP
         tdeClaimed[claimKey] = true;
 
         uint256 liquid = (earnedAmount * efficiency) / 100;
-        uint256 burned = earnedAmount - liquid;
+        uint256 burned = (tgeEvent >= 9) ? (earnedAmount - liquid) : 0;
 
         require(token.balanceOf(address(this)) >= (liquid + burned), "TGE: insufficient supply");
 

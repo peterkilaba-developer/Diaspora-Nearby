@@ -6,12 +6,15 @@ import 'package:diaspora_nearby/features/profile/models/profile_data.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
 import 'package:diaspora_nearby/features/shared/ui/glass_container.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
+import 'package:diaspora_nearby/core/providers/locale_provider.dart';
 import 'package:diaspora_nearby/core/providers/theme_provider.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/core/services/pwa_install_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:diaspora_nearby/features/settings/screens/privacy_settings_screen.dart';
+import 'package:diaspora_nearby/features/settings/widgets/language_selector_sheet.dart';
 
 class AccountSection extends ConsumerWidget {
   final ProfileData? userProfile;
@@ -20,6 +23,8 @@ class AccountSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final currentLang = ref.watch(currentWorldLanguageProvider);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -27,13 +32,27 @@ class AccountSection extends ConsumerWidget {
         GlassContainer(
           child: Column(
             children: [
+              // 0. App Language (All Main Official Languages of Every Country)
+              _buildMenuItem(
+                context,
+                icon: LucideIcons.languages,
+                iconColor: AppTheme.accent,
+                title: AppLocalizations.tr(ref, 'App Language'),
+                subtitle:
+                    '${currentLang.primaryFlag}  ${currentLang.displayLabel}',
+                onTap: () => showLanguageSelectorSheet(context, ref),
+                ref: ref,
+              ),
               // 1. Notifications
               _buildMenuItem(
                 context,
                 icon: LucideIcons.bell,
                 iconColor: Colors.purple,
-                title: 'Push Notifications',
-                subtitle: 'Manage notification preferences',
+                title: AppLocalizations.tr(ref, 'Push Notifications'),
+                subtitle: AppLocalizations.tr(
+                  ref,
+                  'Manage notification preferences',
+                ),
                 onTap: () {
                   if (userProfile != null && userProfile!.uid != null) {
                     _showNotificationDialog(context, ref, userProfile!);
@@ -47,8 +66,11 @@ class AccountSection extends ConsumerWidget {
                 context,
                 icon: LucideIcons.shield,
                 iconColor: Colors.blue.shade600,
-                title: 'Privacy & Safety',
-                subtitle: 'Control your privacy settings',
+                title: AppLocalizations.tr(ref, 'Privacy & Safety'),
+                subtitle: AppLocalizations.tr(
+                  ref,
+                  'Control your privacy settings',
+                ),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -64,8 +86,11 @@ class AccountSection extends ConsumerWidget {
                 context,
                 icon: LucideIcons.shieldCheck,
                 iconColor: Colors.green,
-                title: 'Trust & Verification',
-                subtitle: 'View your Community Trust breakdown',
+                title: AppLocalizations.tr(ref, 'Trust & Verification'),
+                subtitle: AppLocalizations.tr(
+                  ref,
+                  'View your Community Trust breakdown',
+                ),
                 onTap: () {
                   context.push('/profile');
                 },
@@ -77,7 +102,7 @@ class AccountSection extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         // --- App Info & Theme ---
-        _buildSectionHeader('APP INFO'),
+        _buildSectionHeader(AppLocalizations.tr(ref, 'APP INFO')),
         // [NEW] PWA Install Button
         Consumer(
           builder: (context, ref, _) {
@@ -113,9 +138,9 @@ class AccountSection extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Theme Mode',
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                  Text(
+                    AppLocalizations.tr(ref, 'Theme Mode'),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   Container(
                     decoration: BoxDecoration(
@@ -179,8 +204,8 @@ class AccountSection extends ConsumerWidget {
             context,
             icon: LucideIcons.logOut,
             iconColor: theme.disabledColor,
-            title: 'Log Out',
-            subtitle: 'Sign out of your account',
+            title: AppLocalizations.tr(ref, 'Log Out'),
+            subtitle: AppLocalizations.tr(ref, 'Sign out of your account'),
             onTap: () => _showLogoutConfirm(context, ref),
             ref: ref,
           ),
@@ -192,9 +217,12 @@ class AccountSection extends ConsumerWidget {
             context,
             icon: LucideIcons.trash2,
             iconColor: const Color(0xFFEF4444),
-            title: 'Delete My Account',
+            title: AppLocalizations.tr(ref, 'Delete My Account'),
             titleColor: const Color(0xFFEF4444),
-            subtitle: 'Permanently delete your account and data',
+            subtitle: AppLocalizations.tr(
+              ref,
+              'Permanently delete your account and data',
+            ),
             onTap: () => _showDeleteAccountConfirm(context, ref),
             ref: ref,
           ),
@@ -349,6 +377,10 @@ class AccountSection extends ConsumerWidget {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 24,
+              ),
               title: const Row(
                 children: [
                   Icon(LucideIcons.bell),
@@ -405,6 +437,7 @@ class AccountSection extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
         title: const Row(
           children: [
             Icon(LucideIcons.alertTriangle, color: Colors.red),
@@ -461,6 +494,7 @@ class AccountSection extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
         title: const Text('Log Out'),
         content: const Text('Are you sure you want to log out?'),
         actions: [

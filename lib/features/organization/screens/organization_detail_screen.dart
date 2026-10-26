@@ -1419,7 +1419,6 @@ class _OrganizationDetailScreenState
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1471,7 +1470,6 @@ class _OrganizationDetailScreenState
             decoration: BoxDecoration(
               color: Colors.amber.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.amber.shade700),
             ),
             child: Row(
               children: [
@@ -1664,11 +1662,6 @@ class _ChamberSeatRow extends ConsumerWidget {
             ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)
             : AppTheme.accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: !hasHolder
-              ? theme.dividerColor.withValues(alpha: 0.4)
-              : AppTheme.accent.withValues(alpha: 0.3),
-        ),
       ),
       child: Row(
         children: [
@@ -1866,9 +1859,6 @@ class _AffiliatedChamberTile extends ConsumerWidget {
                 alpha: 0.3,
               ),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: theme.dividerColor.withValues(alpha: 0.4),
-              ),
             ),
             child: Row(
               children: [
@@ -1937,9 +1927,6 @@ class _LinkedBusinessTile extends ConsumerWidget {
                 alpha: 0.3,
               ),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: theme.dividerColor.withValues(alpha: 0.4),
-              ),
             ),
             child: Row(
               children: [

@@ -56,9 +56,7 @@ class WhatsAppZeroTapSession {
         return null;
       }
       debugPrint('WhatsApp Zero-Tap: listening for incoming OTP...');
-      return await zeroTap.listenForOTP(
-        timeout: const Duration(minutes: 2),
-      );
+      return await zeroTap.listenForOTP(timeout: const Duration(minutes: 2));
     } catch (e) {
       debugPrint('WhatsApp Zero-Tap listener completed or skipped: $e');
       return null;

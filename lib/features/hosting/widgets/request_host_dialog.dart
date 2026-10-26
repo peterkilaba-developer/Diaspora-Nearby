@@ -385,15 +385,11 @@ class _RequestHostDialogState extends ConsumerState<RequestHostDialog> {
                         hintStyle: TextStyle(color: theme.hintColor),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: isDark ? Colors.white24 : Colors.black12,
-                          ),
+                          borderSide: BorderSide.none,
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: isDark ? Colors.white24 : Colors.black12,
-                          ),
+                          borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,

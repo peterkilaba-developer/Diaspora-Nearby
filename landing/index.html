@@ -93,7 +93,7 @@
     </script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="styles.css?v=20261012d">
+    <link rel="stylesheet" href="styles.css?v=20261026a">
 
     <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
@@ -167,11 +167,15 @@
     <!-- ═══ NAVIGATION ═══ -->
     <nav class="nav" id="nav">
         <div class="container nav-inner">
-            <a href="/" class="nav-logo">
+            <a href="/" class="nav-logo" translate="no">
                 <img src="icons/logo-transparent.png" alt="Diaspora Nearby" width="32" height="32">
                 Diaspora Nearby
             </a>
             <div class="nav-actions">
+                <button class="lang-toggle notranslate" id="lang-toggle" translate="no" aria-label="Select language" title="Choose Language (All Countries)">
+                    <span class="lang-toggle-flag" id="lang-toggle-flag">🌐</span>
+                    <span class="lang-toggle-code" id="lang-toggle-code">EN</span>
+                </button>
                 <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme mode" title="Theme: System (Auto)">
                     <i data-lucide="sun" class="theme-icon-light"></i>
                     <i data-lucide="moon" class="theme-icon-dark"></i>
@@ -2165,7 +2169,7 @@
         });
     </script>
 
-    <script src="script.js?v=20261020a"></script>
+    <script src="script.js?v=20261026a"></script>
 </body>
 
 </html>

@@ -812,11 +812,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
         decoration: BoxDecoration(
           color: AppTheme.elevationColor(context, 1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1431,19 +1426,11 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                   : Colors.black.withValues(alpha: 0.03),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06),
-                ),
+                borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06),
-                ),
+                borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
@@ -1764,19 +1751,26 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
                               },
                               icon: LucideIcons.package,
                             ),
-                            _sheetChip('Jobs', 'job', tempType, isDark, (v) {
-                              setSheetState(() {
-                                tempType = v;
-                                tempCategory = null;
-                                tempMake = null;
-                                tempModel = null;
-                                tempYear = null;
-                                tempCondition = null;
-                                tempBedrooms = null;
-                                tempListingPurpose = null;
-                                tempBrand = null;
-                              });
-                            }, icon: LucideIcons.briefcase),
+                            _sheetChip(
+                              'Jobs',
+                              'job',
+                              tempType,
+                              isDark,
+                              (v) {
+                                setSheetState(() {
+                                  tempType = v;
+                                  tempCategory = null;
+                                  tempMake = null;
+                                  tempModel = null;
+                                  tempYear = null;
+                                  tempCondition = null;
+                                  tempBedrooms = null;
+                                  tempListingPurpose = null;
+                                  tempBrand = null;
+                                });
+                              },
+                              icon: LucideIcons.briefcase,
+                            ),
                             _sheetChip(
                               'Services',
                               'service',
@@ -2322,13 +2316,6 @@ class _MarketplaceScreenState extends ConsumerState<MarketplaceScreen> {
               ? Colors.white.withValues(alpha: 0.04)
               : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected
-                ? AppTheme.accent.withValues(alpha: 0.5)
-                : isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

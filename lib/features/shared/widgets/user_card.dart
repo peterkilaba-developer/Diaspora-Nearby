@@ -263,7 +263,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
         ? (ref.watch(userProfileByIdProvider(widget.user.uid!)).value ??
               widget.user)
         : widget.user;
-    final effectiveUser = liveTarget.currentLocation == null &&
+    final effectiveUser =
+        liveTarget.currentLocation == null &&
             widget.user.currentLocation != null
         ? liveTarget.copyWith(
             currentLocation: widget.user.currentLocation,
@@ -383,16 +384,8 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                             children: [
                               Container(
                                 decoration: BoxDecoration(
+                                  color: const Color(0x14888888),
                                   borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      widget.flaggedFields.contains(
-                                        'Profile Photo',
-                                      )
-                                      ? Border.all(
-                                          color: AppTheme.error,
-                                          width: 2,
-                                        )
-                                      : null,
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
@@ -458,13 +451,9 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                   right: -6,
                                   child: Container(
                                     padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
+                                    decoration: const BoxDecoration(
                                       color: AppTheme.error,
                                       shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 1.5,
-                                      ),
                                     ),
                                     child: const Icon(
                                       LucideIcons.alertTriangle,
@@ -605,10 +594,6 @@ class _UserCardViewState extends ConsumerState<UserCardView> {
                                           decoration: BoxDecoration(
                                             color: theme.colorScheme.primary,
                                             shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: theme.colorScheme.surface,
-                                              width: 1,
-                                            ),
                                           ),
                                         ),
                                       ),

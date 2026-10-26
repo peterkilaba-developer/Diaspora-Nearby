@@ -664,8 +664,10 @@ exports.resolveDdiLoanVoting = functions.https.onCall(async (data, context) => {
  *  1. Local Town DDI Treasury
  *  2. State Reserve Treasury (backstop to Town)
  *  3. Country DDI Treasury (sovereign DDI pool)
- *  4. Continent Reserve Treasury (regional backstop)
- *  5. Global Reserve (final global backstop)
+ *  4. Global Reserve (final global backstop)
+ *
+ * Note: Continental Sovereign Bond Treasuries are 100% dedicated to
+ * Funding the Sovereign Bond Engine and do not participate in DDI loan cascades.
  */
 async function calculateHierarchicalCascade(communityId, requestedAmount) {
   const cascadeTiers = [];
@@ -685,7 +687,6 @@ async function calculateHierarchicalCascade(communityId, requestedAmount) {
     const city = commData.city || commData.name;
     const state = commData.state || commData.stateProvince;
     const country = commData.country || commData.homeCountryCode || commData.countryCode;
-    const continent = commData.continent;
 
     // Tier 1: Town DDI
     if (commData.type === "city" || commData.type === "town") {
@@ -716,17 +717,6 @@ async function calculateHierarchicalCascade(communityId, requestedAmount) {
         name: `${country} DDI Treasury`,
         communityId: countryId,
         type: "country",
-      });
-    }
-
-    // Tier 4: Continent Reserve (Final loan cascade tier)
-    if (continent) {
-      const contId = `${locType}_continent_${continent.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
-      tierPlan.push({
-        tier: "continent_reserve",
-        name: `${continent} Reserve Treasury`,
-        communityId: contId,
-        type: "continent_reserve",
       });
     }
   }

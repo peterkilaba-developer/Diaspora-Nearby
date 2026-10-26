@@ -391,6 +391,19 @@ class CurrencyHelper {
     return price.toStringAsFixed(price == price.roundToDouble() ? 0 : 2);
   }
 
+  /// Formats a fiat amount with thousand separators (commas) and up to 2 decimal places.
+  /// e.g. 264050.48 → "264,050.48", 100.0 → "100" (or "100.00" when [forceDecimals] is true).
+  static String formatFiatAmount(double amount, {bool forceDecimals = false}) {
+    final hasFraction = forceDecimals || amount.truncateToDouble() != amount;
+    final fixed = amount.toStringAsFixed(hasFraction ? 2 : 0);
+    final parts = fixed.split('.');
+    final intPart = parts[0].replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
+    return parts.length > 1 ? '$intPart.${parts[1]}' : intPart;
+  }
+
   /// Converts a local-currency amount to its `$DIASPORA` token equivalent
   /// using the dynamic price floor ([dspPriceFloorUsd], fallback [_baseDspToUsd]).
   static double localToDiasporaToken(

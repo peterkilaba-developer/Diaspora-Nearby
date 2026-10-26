@@ -39,6 +39,8 @@ class ChatRepository {
 
   final _chatsController = StreamController<List<Chat>>.broadcast();
   final List<Chat> _chatsCache = [];
+  final Map<String, Chat> _listingChatsCache = {};
+  final Map<String, Future<Chat?>> _inFlightListingChats = {};
   final Map<String, List<Message>> _messagesCache = {};
   final Map<String, StreamController<List<Message>>> _messageStreamControllers =
       {};
@@ -56,6 +58,27 @@ class ChatRepository {
       if (chat.participants.isNotEmpty || !chat.isDirect) {
         return chat;
       }
+    } catch (_) {}
+    return null;
+  }
+
+  /// [PERF] Synchronously look up a listing chat in memory by listingId
+  Chat? getCachedListingChat(String listingId) {
+    final uid = currentUserId;
+    final directHit = _listingChatsCache[listingId];
+    if (directHit != null &&
+        (uid == null || directHit.participants.contains(uid))) {
+      return directHit;
+    }
+    try {
+      final chat = _chatsCache.firstWhere(
+        (c) =>
+            c.metadata?['isListingChat'] == true &&
+            c.metadata?['listingId'] == listingId &&
+            (uid == null || c.participants.contains(uid)),
+      );
+      _listingChatsCache[listingId] = chat;
+      return chat;
     } catch (_) {}
     return null;
   }
@@ -107,7 +130,9 @@ class ChatRepository {
     final aHasMsg = (a.lastMessage?.timestamp ?? 0) > 0;
     final bHasMsg = (b.lastMessage?.timestamp ?? 0) > 0;
     if (aHasMsg != bHasMsg) return aHasMsg ? -1 : 1;
-    final cmp = _effectiveSortTimestamp(b).compareTo(_effectiveSortTimestamp(a));
+    final cmp = _effectiveSortTimestamp(
+      b,
+    ).compareTo(_effectiveSortTimestamp(a));
     if (cmp != 0) return cmp;
     return b.updatedAt.compareTo(a.updatedAt);
   }
@@ -562,9 +587,7 @@ class ChatRepository {
     final activeDocs = userChatsSnap.docs
         .where((doc) => doc.data()['isDeleted'] != true)
         .toList();
-    final fetched = await Future.wait(
-      activeDocs.map((doc) => getChat(doc.id)),
-    );
+    final fetched = await Future.wait(activeDocs.map((doc) => getChat(doc.id)));
     final List<Chat> chats = fetched.whereType<Chat>().toList();
 
     chats.sort(compareChatsByLatest);
@@ -1094,14 +1117,12 @@ class ChatRepository {
       final chatId = await getExistingDirectChat(otherUid);
       if (chatId == null) return false;
       final results = await Future.wait([
-        _messagesCol(chatId)
-            .where('senderId', isEqualTo: firstUserId)
-            .limit(20)
-            .get(),
-        _messagesCol(chatId)
-            .where('senderId', isEqualTo: secondUserId)
-            .limit(20)
-            .get(),
+        _messagesCol(
+          chatId,
+        ).where('senderId', isEqualTo: firstUserId).limit(20).get(),
+        _messagesCol(
+          chatId,
+        ).where('senderId', isEqualTo: secondUserId).limit(20).get(),
       ]);
       bool hasActiveMsg(QuerySnapshot<Map<String, dynamic>> snap) {
         return snap.docs.any((doc) {
@@ -1109,6 +1130,7 @@ class ChatRepository {
           return d['deletedForEveryone'] != true && d['isDeleted'] != true;
         });
       }
+
       return hasActiveMsg(results[0]) && hasActiveMsg(results[1]);
     } catch (e) {
       debugPrint('hasBilateralDialogue error: $e');
@@ -1201,7 +1223,57 @@ class ChatRepository {
     String? sellerRole,
     String? listingImageUrl,
   }) async {
-    if (currentUserId == null) return null;
+    final uid = currentUserId;
+    if (uid == null) return null;
+
+    // 1. Instant 0ms synchronous cache hit
+    final cached = getCachedListingChat(listingId);
+    if (cached != null) return cached;
+
+    // 2. Deduplicate concurrent calls (e.g. background prewarm + user tap)
+    final existingFuture = _inFlightListingChats[listingId];
+    if (existingFuture != null) return existingFuture;
+
+    final future = _resolveOrCreateListingChat(
+      uid: uid,
+      listingId: listingId,
+      sellerRole: sellerRole,
+    );
+    _inFlightListingChats[listingId] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlightListingChats.remove(listingId);
+    }
+  }
+
+  Future<Chat?> _resolveOrCreateListingChat({
+    required String uid,
+    required String listingId,
+    String? sellerRole,
+  }) async {
+    // Fast-path: check discoverableChats index first; if the user is already
+    // a participant in the existing listing chat, skip the Cloud Function call.
+    try {
+      final discoverSnap = await _firestore
+          .collection('discoverableChats')
+          .where('listingId', isEqualTo: listingId)
+          .limit(1)
+          .get();
+      if (discoverSnap.docs.isNotEmpty) {
+        final existingChatId = discoverSnap.docs.first.id;
+        final existingDoc = await _chatsCol.doc(existingChatId).get();
+        if (existingDoc.exists) {
+          final existingChat = Chat.fromFirestore(existingDoc);
+          if (existingChat.participants.contains(uid)) {
+            _listingChatsCache[listingId] = existingChat;
+            await updateChatLocally(existingChat);
+            return existingChat;
+          }
+        }
+      }
+    } catch (_) {}
+
     final result = await FirebaseFunctions.instance
         .httpsCallable('createChat')
         .call<Map<String, dynamic>>({
@@ -1211,12 +1283,19 @@ class ChatRepository {
         });
     final chatId = result.data['chatId'] as String?;
     if (chatId == null) return null;
-    return Chat.fromFirestore(await _chatsCol.doc(chatId).get());
+    final chatDoc = await _chatsCol.doc(chatId).get();
+    if (!chatDoc.exists) return null;
+    final chat = Chat.fromFirestore(chatDoc);
+    _listingChatsCache[listingId] = chat;
+    await updateChatLocally(chat);
+    return chat;
   }
 
   /// Find an existing listing group chat by listing ID.
   Future<String?> getExistingListingChat(String listingId) async {
     if (currentUserId == null) return null;
+    final cached = getCachedListingChat(listingId);
+    if (cached != null) return cached.id;
 
     // Use the server-maintained discovery index first (one bounded lookup).
     final discoverSnap = await _firestore
@@ -1656,10 +1735,9 @@ class ChatRepository {
         _chatsController.add(_sortedChatsList());
       }
     }
-    await _userChatsCol(currentUserId!).doc(chatId).update({
-      'pinned': pin,
-      if (pin) 'pinnedBottom': false,
-    });
+    await _userChatsCol(
+      currentUserId!,
+    ).doc(chatId).update({'pinned': pin, if (pin) 'pinnedBottom': false});
   }
 
   Future<void> togglePinBottom(String chatId, bool pin) async {
@@ -1674,10 +1752,9 @@ class ChatRepository {
         _chatsController.add(_sortedChatsList());
       }
     }
-    await _userChatsCol(currentUserId!).doc(chatId).update({
-      'pinnedBottom': pin,
-      if (pin) 'pinned': false,
-    });
+    await _userChatsCol(
+      currentUserId!,
+    ).doc(chatId).update({'pinnedBottom': pin, if (pin) 'pinned': false});
   }
 
   Future<void> deleteChat(String chatId) async {
@@ -1731,7 +1808,10 @@ class ChatRepository {
       final updated = cachedMsgs.map((m) {
         if (m.id != messageId) return m;
         if (!deleteForEveryone) {
-          final nextDeletedFor = <String>{...?m.deletedFor, currentUserId!}.toList();
+          final nextDeletedFor = <String>{
+            ...?m.deletedFor,
+            currentUserId!,
+          }.toList();
           return m.copyWith(deletedFor: nextDeletedFor);
         }
         return m.copyWith(

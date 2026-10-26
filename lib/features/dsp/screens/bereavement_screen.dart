@@ -574,7 +574,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
               decoration: BoxDecoration(
                 color: Colors.amber.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -741,11 +740,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
             ? Colors.green.withValues(alpha: 0.05)
             : Colors.red.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isMet
-              ? Colors.green.withValues(alpha: 0.3)
-              : Colors.red.withValues(alpha: 0.3),
-        ),
       ),
       child: Row(
         children: [
@@ -814,7 +808,6 @@ class _MembershipTabState extends ConsumerState<_MembershipTab> {
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusColor.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [

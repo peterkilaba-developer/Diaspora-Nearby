@@ -346,9 +346,7 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
                     onPressed: () => _updateStatus(booking, 'cancelled'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red.shade400,
-                      side: BorderSide(
-                        color: Colors.red.shade400.withValues(alpha: 0.3),
-                      ),
+                      side: BorderSide.none,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -392,9 +390,7 @@ class _HostBookingsScreenState extends ConsumerState<HostBookingsScreen>
                 onPressed: () => _updateStatus(booking, 'completed'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.accent,
-                  side: BorderSide(
-                    color: AppTheme.accent.withValues(alpha: 0.3),
-                  ),
+                  side: BorderSide.none,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

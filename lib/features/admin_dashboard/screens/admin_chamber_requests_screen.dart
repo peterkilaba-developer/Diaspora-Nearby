@@ -237,7 +237,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.4)),
+        side: BorderSide.none,
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -384,7 +384,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                   label: const Text('Reject'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.error,
-                    side: const BorderSide(color: AppTheme.error),
+                    side: BorderSide.none,
                   ),
                 ),
                 const SizedBox(width: 8),

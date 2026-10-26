@@ -41,7 +41,7 @@ void main() {
       expect(find.text('Sent Remittance'), findsOneWidget);
       expect(find.text('100'), findsOneWidget);
       expect(find.text('USD'), findsWidgets);
-      expect(find.text('≈ 270000 TZS'), findsOneWidget);
+      expect(find.text('≈ 270,000 TZS'), findsOneWidget);
       expect(find.text('0% Fee'), findsOneWidget);
       expect(find.text('Details'), findsOneWidget);
 
@@ -53,7 +53,7 @@ void main() {
       expect(find.text('Remittance Receipt'), findsOneWidget);
       expect(find.text('Mobile Money / Bank Settlement'), findsOneWidget);
       expect(find.text('Instant Settlement (Completed)'), findsOneWidget);
-      expect(find.text('1 USD = 2700.00 TZS'), findsOneWidget);
+      expect(find.text('1 USD = 2,700.00 TZS'), findsOneWidget);
       expect(find.text('Free (\$0.00 Covered)'), findsOneWidget);
     },
   );

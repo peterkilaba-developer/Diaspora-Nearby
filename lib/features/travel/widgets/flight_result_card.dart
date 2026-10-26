@@ -54,13 +54,23 @@ class FlightResultCard extends StatelessWidget {
     'WB': 'RwandAir',
     'HF': 'Air Côte d\'Ivoire',
     'P4': 'Air Peace',
+    'TC': 'Air Tanzania',
+    'PW': 'Precision Air',
+    'UR': 'Uganda Airlines',
+    'FZ': 'flydubai',
+    'SN': 'Brussels Airlines',
+    'WY': 'Oman Air',
   };
 
   static String _airlineLogoUrl(String iataCode) {
     return 'https://pics.avs.io/80/80/$iataCode.png';
   }
 
-  String _getAirlineName(String code) => _airlineNames[code] ?? code;
+  String _getAirlineName(String code) =>
+      (offer.validatingAirlineName != null &&
+          offer.validatingAirlineName!.isNotEmpty)
+      ? offer.validatingAirlineName!
+      : (_airlineNames[code] ?? code);
 
   /// Format ISO datetime "2024-03-15T14:30:00" → "2:30 PM"
   String _formatTime(String isoDateTime) {
@@ -377,10 +387,6 @@ class FlightResultCard extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: stopsColor,
                                     shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: theme.scaffoldBackgroundColor,
-                                      width: 1,
-                                    ),
                                   ),
                                 ),
                               ),

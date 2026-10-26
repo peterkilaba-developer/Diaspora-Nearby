@@ -45,9 +45,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     // or ProfileRepository cache before hitting Firestore.
     try {
       final cachedProfile =
-          ref.watch(
-            userProfileProvider.select((p) => p.value),
-          ) ??
+          ref.watch(userProfileProvider.select((p) => p.value)) ??
           ref.read(profileRepositoryProvider).getCachedProfile(user.uid);
       String? userHomeCountryCode = cachedProfile?.homeCountryCode;
 
@@ -504,10 +502,7 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
     final processedHomeCountryIds = <String>{};
 
     for (var continent in homeContinents) {
-      final continentDisplayName = continent.name
-          .toLowerCase()
-          .replaceAll(' community', '')
-          .trim();
+      final continentDisplayName = _normalizeContinentName(continent.name);
 
       // Find which home countries belong to this home continent
       final continentCountries = <HierarchyItem>[];
@@ -516,7 +511,8 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
         if (cCode != null) {
           final cont = country_data.getContinentByCountryCode(cCode);
           if (cont != null &&
-              cont.displayName.toLowerCase() == continentDisplayName) {
+              _normalizeContinentName(cont.displayName) ==
+                  continentDisplayName) {
             continentCountries.add(countryItem);
             processedHomeCountryIds.add(countryItem.id);
           }
@@ -1402,24 +1398,9 @@ class CommunityHierarchyViewModel extends AsyncNotifier<List<HierarchyItem>> {
   }
 
   /// Normalizes continent names for comparison, handling both noun and
-  /// adjective forms (e.g. "African Community" → "africa", "Africa" → "africa").
+  /// adjective forms and any community/treasury suffixes via [CommunityChatUtils].
   String _normalizeContinentName(String name) {
-    // Strip "community" suffix and trim
-    var normalized = name.toLowerCase().replaceAll('community', '').trim();
-
-    // Map adjective forms to base continent names
-    const adjectiveToNoun = {
-      'african': 'africa',
-      'asian': 'asia',
-      'european': 'europe',
-      'north american': 'north america',
-      'south american': 'south america',
-      'oceanian': 'oceania',
-      'antarctic': 'antarctica',
-      // 'caribbean' maps to itself (same noun/adjective)
-    };
-
-    return adjectiveToNoun[normalized] ?? normalized;
+    return CommunityChatUtils.normalizeContinentName(name);
   }
 
   Community? _safeParseCommunity(

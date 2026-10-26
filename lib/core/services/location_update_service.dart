@@ -109,7 +109,9 @@ class LocationUpdateService {
       );
 
       final tsMs = DateTime.now().millisecondsSinceEpoch;
-      final isoNow = DateTime.fromMillisecondsSinceEpoch(tsMs).toIso8601String();
+      final isoNow = DateTime.fromMillisecondsSinceEpoch(
+        tsMs,
+      ).toIso8601String();
 
       // Create currentLocation data matching React structure
       final currentLocationData = {
@@ -150,10 +152,11 @@ class LocationUpdateService {
       if (showCity) {
         final safeLat = (position.latitude * 100).round() / 100;
         final safeLng = (position.longitude * 100).round() / 100;
-        final summaryParts = [city, state, country]
-            .whereType<String>()
-            .where((p) => p.trim().isNotEmpty)
-            .join(', ');
+        final summaryParts = [
+          city,
+          state,
+          country,
+        ].whereType<String>().where((p) => p.trim().isNotEmpty).join(', ');
         final publicCurrentLocation = {
           'formatted_address': summaryParts,
           'place_id': '',

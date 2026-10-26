@@ -131,9 +131,6 @@ class BookingConfirmationScreen extends StatelessWidget {
                   ],
                 ),
                 borderRadius: BorderRadius.circular(_radius),
-                border: Border.all(
-                  color: AppTheme.accent.withValues(alpha: 0.2),
-                ),
               ),
               child: Column(
                 children: [

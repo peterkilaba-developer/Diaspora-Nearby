@@ -420,10 +420,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
               // Scanner overlay frame
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    width: 2,
-                  ),
+                  color: const Color(0x14888888),
                   borderRadius: BorderRadius.circular(24),
                 ),
               ),
@@ -432,7 +429,7 @@ class _HostingQRScreenState extends ConsumerState<HostingQRScreen> {
                   width: 200,
                   height: 200,
                   decoration: BoxDecoration(
-                    border: Border.all(color: AppTheme.accent, width: 2.5),
+                    color: const Color(0x14888888),
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),

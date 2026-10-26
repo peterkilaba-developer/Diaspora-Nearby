@@ -209,13 +209,13 @@ class _GooglePlacesAutocompleteFieldState
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: widget.isHighlighted
-                ? const BorderSide(color: Colors.red, width: 1.5)
+                ? BorderSide.none
                 : BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: widget.isHighlighted
-                ? const BorderSide(color: Colors.red, width: 1.5)
+                ? BorderSide.none
                 : BorderSide.none,
           ),
           suffixIcon: _isLoading

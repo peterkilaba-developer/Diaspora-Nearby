@@ -233,14 +233,14 @@ class _ShareChatSelectionScreenState
             data: (chats) {
               final filteredChats =
                   (_searchQuery.isEmpty
-                          ? List.of(chats)
-                          : chats
-                                .where(
-                                  (chat) => chat.name.toLowerCase().contains(
-                                    _searchQuery.toLowerCase(),
-                                  ),
-                                )
-                                .toList())
+                        ? List.of(chats)
+                        : chats
+                              .where(
+                                (chat) => chat.name.toLowerCase().contains(
+                                  _searchQuery.toLowerCase(),
+                                ),
+                              )
+                              .toList())
                     ..sort(ChatRepository.compareChatsByLatest);
 
               if (filteredChats.isEmpty) {
@@ -299,7 +299,6 @@ class _ShareChatSelectionScreenState
                               decoration: BoxDecoration(
                                 color: greenColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: greenColor, width: 2),
                               ),
                             ),
                           ),
@@ -317,14 +316,6 @@ class _ShareChatSelectionScreenState
                                 color: isSelected
                                     ? greenColor
                                     : Colors.transparent,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? greenColor
-                                      : theme.colorScheme.outline.withValues(
-                                          alpha: 0.5,
-                                        ),
-                                  width: 2,
-                                ),
                               ),
                               child: isSelected
                                   ? const Icon(

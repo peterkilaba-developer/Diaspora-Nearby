@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:diaspora_nearby/theme/app_theme.dart';
+import 'package:diaspora_nearby/core/localization/app_localizations.dart';
+import 'package:diaspora_nearby/core/providers/locale_provider.dart';
 import 'package:diaspora_nearby/features/auth/repository/auth_repository.dart';
 import 'package:diaspora_nearby/features/profile/repository/profile_repository.dart';
 import 'package:diaspora_nearby/features/notifications/services/push_notification_service.dart';
@@ -12,6 +14,7 @@ import 'package:diaspora_nearby/features/dsp/services/points_service.dart';
 import 'package:diaspora_nearby/features/dsp/services/exploration_registry.dart';
 import 'package:diaspora_nearby/features/dsp/widgets/exploration_tracker.dart';
 import 'package:diaspora_nearby/core/widgets/app_install_card.dart';
+import 'package:diaspora_nearby/features/settings/widgets/language_selector_sheet.dart';
 
 class EconomyHubScreen extends ConsumerStatefulWidget {
   const EconomyHubScreen({super.key});
@@ -92,6 +95,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
     final isAdmin = profileAsync.value?.isAdmin == true;
     final homeCountry = profileAsync.value?.homeCountry;
     final profile = profileAsync.value;
+    final currentLang = ref.watch(currentWorldLanguageProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -362,7 +366,11 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
             // ============================================
             // SECTION 6: QUICK SETTINGS
             // ============================================
-            _buildSectionHeader(context, 'QUICK SETTINGS', LucideIcons.zap),
+            _buildSectionHeader(
+              context,
+              AppLocalizations.tr(ref, 'QUICK SETTINGS'),
+              LucideIcons.zap,
+            ),
             _buildSectionContainer(
               context,
               child: Column(
@@ -373,7 +381,7 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     ref: ref,
                     icon: LucideIcons.bell,
                     iconColor: Colors.purple,
-                    title: 'Push Notifications',
+                    title: AppLocalizations.tr(ref, 'Push Notifications'),
                     subtitle: 'Receive updates & alerts',
                     value: profile?.notificationsEnabled ?? false,
                     onChanged: (val) async {
@@ -411,14 +419,28 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                         }
                       },
                     ),
+                  // App Language
+                  _buildRow(
+                    context,
+                    ref: ref,
+                    icon: LucideIcons.languages,
+                    iconColor: AppTheme.accent,
+                    title: AppLocalizations.tr(ref, 'App Language'),
+                    subtitle:
+                        '${currentLang.primaryFlag}  ${currentLang.displayLabel}',
+                    onTap: () => showLanguageSelectorSheet(context, ref),
+                  ),
                   // My Profile
                   _buildRow(
                     context,
                     ref: ref,
                     icon: LucideIcons.user,
                     iconColor: AppTheme.accent,
-                    title: 'My Profile',
-                    subtitle: 'View & edit your profile',
+                    title: AppLocalizations.tr(ref, 'My Profile'),
+                    subtitle: AppLocalizations.tr(
+                      ref,
+                      'View & edit your profile',
+                    ),
                     explorationAction: ExplorationAction.profileEdit,
                     onTap: () => context.push('/profile'),
                   ),
@@ -428,8 +450,11 @@ class _EconomyHubScreenState extends ConsumerState<EconomyHubScreen>
                     ref: ref,
                     icon: LucideIcons.settings,
                     iconColor: Colors.grey,
-                    title: 'Settings',
-                    subtitle: 'Account, privacy & theme',
+                    title: AppLocalizations.tr(ref, 'Settings'),
+                    subtitle: AppLocalizations.tr(
+                      ref,
+                      'Account, language, privacy & theme',
+                    ),
                     explorationAction: ExplorationAction.moreScreenSettings,
                     onTap: () => context.push('/settings'),
                   ),

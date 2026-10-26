@@ -31,8 +31,7 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
   bool _showEmailError = false;
 
   static const _testerSignedUpKey = 'tester_signed_up';
-  static const _testFlightWebUrl =
-      'https://testflight.apple.com/join/vB3XzPKg';
+  static const _testFlightWebUrl = 'https://testflight.apple.com/join/vB3XzPKg';
 
   Future<void> _openTestFlight() async {
     try {
@@ -339,7 +338,6 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
             decoration: BoxDecoration(
               color: AppTheme.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
             ),
             child: const Row(
               children: [
@@ -378,15 +376,11 @@ class _AppInstallCardState extends ConsumerState<AppInstallCard> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: _showEmailError
-                    ? const BorderSide(color: Colors.red, width: 1.5)
-                    : BorderSide.none,
+                borderSide: _showEmailError ? BorderSide.none : BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: _showEmailError
-                    ? const BorderSide(color: Colors.red, width: 1.5)
-                    : const BorderSide(color: AppTheme.accent, width: 1.5),
+                borderSide: _showEmailError ? BorderSide.none : BorderSide.none,
               ),
               errorText: _showEmailError ? 'Please enter a valid email' : null,
               errorStyle: const TextStyle(fontSize: 11),

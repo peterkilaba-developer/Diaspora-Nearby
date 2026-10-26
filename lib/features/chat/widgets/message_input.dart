@@ -323,7 +323,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       constraints: const BoxConstraints(maxHeight: 200),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        border: Border(top: BorderSide(color: theme.dividerColor)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
@@ -868,12 +867,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
 
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            border: Border(
-              top: BorderSide(color: theme.dividerColor, width: 0.5),
-            ),
-          ),
+          decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
           child: SafeArea(
             child: Row(
               children: [
@@ -896,9 +890,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
                             borderRadius:
                                 widget.inputBorderRadius ??
                                 BorderRadius.circular(24),
-                            border:
-                                widget.inputBorder ??
-                                Border.all(color: theme.dividerColor),
                           ),
                     child: TextField(
                       controller: _controller,
@@ -998,7 +989,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
                 decoration: BoxDecoration(
                   color: theme.cardColor,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
                 ),
                 child: Row(
                   children: [
@@ -1049,7 +1039,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: theme.cardColor, // [FIX] Use card color as requested
-        border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1131,7 +1120,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       decoration: BoxDecoration(
         color: AppTheme.tokenColor.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.tokenColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -1184,8 +1172,8 @@ class _MessageInputState extends ConsumerState<MessageInput>
   Widget _buildInlineFiatPreview(ThemeData theme) {
     if (_pendingFiatAmount == null) return const SizedBox.shrink();
 
-    final formattedAmount = _pendingFiatAmount!.toStringAsFixed(
-      _pendingFiatAmount!.truncateToDouble() == _pendingFiatAmount ? 0 : 2,
+    final formattedAmount = CurrencyHelper.formatFiatAmount(
+      _pendingFiatAmount!,
     );
     final currency = _pendingFiatCurrency ?? 'USD';
     final hasConversion =
@@ -1198,7 +1186,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       decoration: BoxDecoration(
         color: AppTheme.fiatColor.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.fiatColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -1228,7 +1215,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
                     if (hasConversion) ...[
                       const SizedBox(width: 4),
                       Text(
-                        '(≈ ${_pendingFiatConvertedAmount!.toStringAsFixed(_pendingFiatConvertedAmount!.truncateToDouble() == _pendingFiatConvertedAmount ? 0 : 2)} ${_pendingFiatReceiverCurrency!})',
+                        '(≈ ${CurrencyHelper.formatFiatAmount(_pendingFiatConvertedAmount!)} ${_pendingFiatReceiverCurrency!})',
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme.onSurfaceVariant,
@@ -1364,7 +1351,6 @@ class _MessageInputState extends ConsumerState<MessageInput>
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
@@ -1439,10 +1425,7 @@ class _MessageInputState extends ConsumerState<MessageInput>
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-      decoration: BoxDecoration(
-        color: theme.cardColor.withValues(alpha: 0.8),
-        border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
-      ),
+      decoration: BoxDecoration(color: theme.cardColor.withValues(alpha: 0.8)),
       child: IntrinsicHeight(
         child: Row(
           children: [
@@ -1577,7 +1560,6 @@ class _AttachmentPickerModalState
   String? _selectedAssetType; // 'token' or 'fiat'
   int _inputAmount = 0;
   double _fiatInputAmount = 0;
-  bool _fiatRemittanceExpanded = true;
 
   @override
   void initState() {
@@ -1685,6 +1667,10 @@ class _AttachmentPickerModalState
     final receiverCurrencySymbol = CurrencyHelper.currencySymbol(
       receiverCurrentCountryCode,
     );
+    final rawFirstName = recipientProfile?.firstName.trim() ?? '';
+    final recipientFirstName = rawFirstName.isNotEmpty
+        ? rawFirstName
+        : 'Recipient';
 
     // Handle keyboard
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -1970,11 +1956,7 @@ class _AttachmentPickerModalState
                                       backgroundColor: activeColor.withValues(
                                         alpha: 0.1,
                                       ),
-                                      side: BorderSide(
-                                        color: activeColor.withValues(
-                                          alpha: 0.2,
-                                        ),
-                                      ),
+                                      side: BorderSide.none,
                                       onPressed: () {
                                         _amountController.text = chip
                                             .toString();
@@ -1992,9 +1974,7 @@ class _AttachmentPickerModalState
                                     backgroundColor: activeColor.withValues(
                                       alpha: 0.15,
                                     ),
-                                    side: BorderSide(
-                                      color: activeColor.withValues(alpha: 0.3),
-                                    ),
+                                    side: BorderSide.none,
                                     onPressed: () {
                                       _amountController.text = currentBalance
                                           .toString();
@@ -2031,15 +2011,6 @@ class _AttachmentPickerModalState
                   // ─── FIAT UI ───
                   if (isFiat) ...[
                     const SizedBox(height: 12),
-                    // Remittance details card at TOP
-                    _buildFiatRemittanceDetails(
-                      theme,
-                      currencyCode,
-                      currencySymbol,
-                      receiverCurrencyCode,
-                      receiverCurrencySymbol,
-                    ),
-                    const SizedBox(height: 12),
                     // Transaction history (or card input placeholder)
                     _buildFiatTransactionHistory(
                       theme,
@@ -2056,6 +2027,7 @@ class _AttachmentPickerModalState
                       receiverCurrencySymbol,
                       hostCountryCode,
                       receiverCurrentCountryCode,
+                      recipientFirstName,
                       activeColor,
                     ),
                   ],
@@ -2079,7 +2051,6 @@ class _AttachmentPickerModalState
     required VoidCallback onTap,
   }) {
     final Color bgColor;
-    final Border? border;
     final List<BoxShadow>? shadow;
     final Color textColor;
     final FontWeight fontWeight;
@@ -2087,7 +2058,6 @@ class _AttachmentPickerModalState
     if (isSelected) {
       // 1. Actively selected tab
       bgColor = theme.colorScheme.surface;
-      border = Border.all(color: brandColor, width: 1.5);
       shadow = [
         BoxShadow(
           color: brandColor.withValues(alpha: 0.25),
@@ -2100,10 +2070,6 @@ class _AttachmentPickerModalState
     } else if (!hasAnySelection) {
       // 2. Initial state when clicking plus icon (clickable brand-colored pill buttons)
       bgColor = brandColor.withValues(alpha: 0.1);
-      border = Border.all(
-        color: brandColor.withValues(alpha: 0.45),
-        width: 1.2,
-      );
       shadow = [
         BoxShadow(
           color: brandColor.withValues(alpha: 0.08),
@@ -2116,7 +2082,6 @@ class _AttachmentPickerModalState
     } else {
       // 3. Inactive tab when the other tab is selected
       bgColor = Colors.transparent;
-      border = Border.all(color: brandColor.withValues(alpha: 0.2), width: 1);
       shadow = null;
       textColor = brandColor.withValues(alpha: 0.65);
       fontWeight = FontWeight.w600;
@@ -2134,7 +2099,6 @@ class _AttachmentPickerModalState
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(10),
-              border: border,
               boxShadow: shadow,
             ),
             child: Row(
@@ -2182,7 +2146,6 @@ class _AttachmentPickerModalState
           decoration: BoxDecoration(
             color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
@@ -2300,6 +2263,7 @@ class _AttachmentPickerModalState
     String receiverCurrencySymbol,
     String? hostCountryCode,
     String? receiverCountryCode,
+    String recipientFirstName,
     Color activeColor,
   ) {
     final isFiatZero = _fiatInputAmount <= 0;
@@ -2325,6 +2289,57 @@ class _AttachmentPickerModalState
       ),
       child: Column(
         children: [
+          // Live Real-Time Conversion Card (above amount input)
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: activeColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Exchange Rate: 1 $currencyCode = ${CurrencyHelper.formatFiatAmount(exchangeRate, forceDecimals: true)} $receiverCurrencyCode',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 10,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      'Instant Settlement',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 10,
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(LucideIcons.repeat, size: 13, color: activeColor),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '$recipientFirstName gets: ≈ ${CurrencyHelper.formatFiatAmount(convertedAmount)} $receiverCurrencyCode',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: activeColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2447,9 +2462,7 @@ class _AttachmentPickerModalState
                         fontWeight: FontWeight.w600,
                       ),
                       backgroundColor: activeColor.withValues(alpha: 0.1),
-                      side: BorderSide(
-                        color: activeColor.withValues(alpha: 0.2),
-                      ),
+                      side: BorderSide.none,
                       onPressed: () {
                         _fiatAmountController.text = chip.toString();
                       },
@@ -2458,74 +2471,6 @@ class _AttachmentPickerModalState
               ],
             ),
           ),
-          // Live Real-Time Conversion Card
-          if (_fiatInputAmount > 0) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: activeColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: activeColor.withValues(alpha: 0.25)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            LucideIcons.repeat,
-                            size: 13,
-                            color: activeColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Recipient gets: ≈ $receiverCurrencySymbol${convertedAmount.toStringAsFixed(convertedAmount.truncateToDouble() == convertedAmount ? 0 : 2)} $receiverCurrencyCode',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: activeColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        '0% Fee',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: activeColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Exchange Rate: 1 $currencyCode = ${exchangeRate.toStringAsFixed(2)} $receiverCurrencyCode',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: 10,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      Text(
-                        'Instant Settlement',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: 10,
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: 8),
           Text(
             'Enter Amount in $currencyCode to Send',
@@ -2534,142 +2479,6 @@ class _AttachmentPickerModalState
               color: activeColor,
             ),
             textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Expandable fiat remittance details ───
-  Widget _buildFiatRemittanceDetails(
-    ThemeData theme,
-    String sendingCurrencyCode,
-    String sendingCurrencySymbol,
-    String receiverCurrencyCode,
-    String receiverCurrencySymbol,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () => setState(
-              () => _fiatRemittanceExpanded = !_fiatRemittanceExpanded,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(
-                    LucideIcons.info,
-                    size: 16,
-                    color: Colors.green.shade600,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Remittance Details',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    _fiatRemittanceExpanded
-                        ? LucideIcons.chevronUp
-                        : LucideIcons.chevronDown,
-                    size: 16,
-                    color: Colors.green.shade600,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_fiatRemittanceExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Column(
-                children: [
-                  Divider(
-                    color: Colors.green.withValues(alpha: 0.2),
-                    height: 1,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildRemittanceInfoRow(
-                    theme,
-                    'Transfer Fee',
-                    'Zero Fee (Diaspora covers it)',
-                    LucideIcons.zap,
-                  ),
-                  _buildRemittanceInfoRow(
-                    theme,
-                    'Exchange Rate',
-                    'Market rate at time of transfer',
-                    LucideIcons.trendingUp,
-                  ),
-                  _buildRemittanceInfoRow(
-                    theme,
-                    'Delivery',
-                    'Cash / Mobile / Bank',
-                    LucideIcons.smartphone,
-                  ),
-                  _buildRemittanceInfoRow(
-                    theme,
-                    'Settlement',
-                    '\$DIASPORA / $receiverCurrencyCode ($receiverCurrencySymbol)',
-                    LucideIcons.shield,
-                  ),
-                  _buildRemittanceInfoRow(
-                    theme,
-                    'Currency',
-                    '$sendingCurrencyCode ($sendingCurrencySymbol)',
-                    LucideIcons.banknote,
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRemittanceInfoRow(
-    ThemeData theme,
-    String label,
-    String value,
-    IconData icon,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: Colors.green.shade400),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontSize: 11,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w500,
-                fontSize: 11,
-              ),
-              textAlign: TextAlign.right,
-            ),
           ),
         ],
       ),

@@ -37,10 +37,6 @@ class ChatScrollToBottomFAB extends StatelessWidget {
                 offset: const Offset(0, 2),
               ),
             ],
-            border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: 0.1),
-              width: 0.5,
-            ),
           ),
           child: Icon(
             LucideIcons.chevronsDown,

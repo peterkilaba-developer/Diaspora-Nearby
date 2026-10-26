@@ -453,11 +453,6 @@ class PoctBreakdownModal extends ConsumerWidget {
               ? AppTheme.accent.withValues(alpha: 0.08)
               : theme.colorScheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: achieved
-                ? AppTheme.accent.withValues(alpha: 0.3)
-                : theme.dividerColor.withValues(alpha: 0.3),
-          ),
         ),
         child: Row(
           children: [
@@ -582,7 +577,6 @@ class PoctBreakdownModal extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -711,7 +705,6 @@ class PoctBreakdownModal extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -790,11 +783,6 @@ class PoctBreakdownModal extends ConsumerWidget {
             ? AppTheme.error.withValues(alpha: 0.05)
             : theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: totalPenaltyPoCT > 0
-              ? AppTheme.error.withValues(alpha: 0.2)
-              : theme.dividerColor.withValues(alpha: 0.3),
-        ),
       ),
       child: Column(
         children: [
@@ -886,11 +874,6 @@ class PoctBreakdownModal extends ConsumerWidget {
               ? AppTheme.accent.withValues(alpha: 0.08)
               : theme.colorScheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: achieved
-                ? AppTheme.accent.withValues(alpha: 0.3)
-                : theme.dividerColor.withValues(alpha: 0.3),
-          ),
         ),
         child: Row(
           children: [
@@ -935,7 +918,6 @@ class PoctBreakdownModal extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

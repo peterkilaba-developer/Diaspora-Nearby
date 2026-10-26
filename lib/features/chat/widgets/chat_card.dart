@@ -123,7 +123,8 @@ class ChatCard extends ConsumerWidget {
     // 1. Check for typing status (Direct chats only in list to avoid opening
     // 50+ subcollection listeners across community/event/org chats).
     final typingUsers = chat.isDirect
-        ? (ref.watch(typingIndicatorsProvider(chat.id)).value ?? const <String>[])
+        ? (ref.watch(typingIndicatorsProvider(chat.id)).value ??
+              const <String>[])
         : const <String>[];
 
     if (typingUsers.isNotEmpty) {

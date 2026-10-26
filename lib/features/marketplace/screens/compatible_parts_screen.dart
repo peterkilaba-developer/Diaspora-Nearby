@@ -247,11 +247,6 @@ class _CompatiblePartsScreenState extends ConsumerState<CompatiblePartsScreen> {
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.06),
-          ),
           boxShadow: isDark
               ? null
               : [

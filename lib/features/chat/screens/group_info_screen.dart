@@ -596,10 +596,6 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.primary,
                                         shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: theme.scaffoldBackgroundColor,
-                                          width: 2,
-                                        ),
                                       ),
                                       child: const Icon(
                                         LucideIcons.camera,
@@ -771,9 +767,6 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: theme.scaffoldBackgroundColor,
-                  border: Border(
-                    top: BorderSide(color: theme.dividerColor, width: 0.5),
-                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.05),
@@ -811,9 +804,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                                   onPressed: _rejectInvitation,
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: theme.colorScheme.error,
-                                    side: BorderSide(
-                                      color: theme.colorScheme.error,
-                                    ),
+                                    side: BorderSide.none,
                                   ),
                                   child: const Text('Reject'),
                                 ),
@@ -868,7 +859,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: theme.colorScheme.error,
-                          side: BorderSide(color: theme.colorScheme.error),
+                          side: BorderSide.none,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -892,10 +883,6 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.5),
-          width: 0.5,
-        ),
       ),
       child: Text(
         'Admin',
@@ -962,10 +949,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                   },
                   child: Container(
                     decoration: BoxDecoration(
-                      border:
-                          (_isEditing && _membersToRemove.contains(member.uid))
-                          ? Border.all(color: theme.colorScheme.error, width: 2)
-                          : null,
+                      color: const Color(0x14888888),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.all(4), // Add padding for border
@@ -1083,18 +1067,7 @@ class _GroupInfoScreenState extends ConsumerState<GroupInfoScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      border:
-                          ((_isEditing &&
-                                  _membersToAdd.contains(contact.uid)) ||
-                              (_isSelectingContacts &&
-                                  _selectedContactIds.contains(contact.uid)))
-                          ? Border.all(
-                              color: theme
-                                  .colorScheme
-                                  .primary, // [FIX] Use theme primary
-                              width: 2,
-                            )
-                          : null,
+                      color: const Color(0x14888888),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Builder(

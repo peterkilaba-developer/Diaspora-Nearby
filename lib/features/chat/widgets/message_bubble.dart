@@ -185,12 +185,6 @@ class MessageBubble extends ConsumerWidget {
                                           isOwn ? 4 : 16,
                                         ),
                                       ),
-                                      border: isHighlighted
-                                          ? Border.all(
-                                              color: theme.colorScheme.primary,
-                                              width: 1,
-                                            )
-                                          : null,
                                     ),
                                     child: Column(
                                       crossAxisAlignment:
@@ -609,12 +603,6 @@ class MessageBubble extends ConsumerWidget {
                     sellerRole!,
                   ).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: _getRoleBadgeColor(
-                      sellerRole!,
-                    ).withValues(alpha: 0.4),
-                    width: 0.5,
-                  ),
                 ),
                 child: Text(
                   sellerRole!,
@@ -669,12 +657,9 @@ class MessageBubble extends ConsumerWidget {
               bottom: -2,
               right: -2,
               child: Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
+                  color: Color(0x14888888),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: theme.colorScheme.surface,
-                    width: 1.5,
-                  ),
                 ),
                 child: CircleAvatar(
                   radius: 8,
@@ -756,9 +741,6 @@ class MessageBubble extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -825,7 +807,6 @@ class MessageBubble extends ConsumerWidget {
             decoration: BoxDecoration(
               color: Colors.red.shade50,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.red.shade200),
             ),
             child: Icon(
               LucideIcons.refreshCw,

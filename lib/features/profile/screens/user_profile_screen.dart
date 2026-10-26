@@ -790,7 +790,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                           .watch(userProfileProvider)
                           .value;
                       final liveTargetProfile =
-                          ref.watch(userProfileByIdProvider(widget.userId)).value ??
+                          ref
+                              .watch(userProfileByIdProvider(widget.userId))
+                              .value ??
                           _profile;
                       return calculateProfileDistanceKm(
                         currentUserProfile,

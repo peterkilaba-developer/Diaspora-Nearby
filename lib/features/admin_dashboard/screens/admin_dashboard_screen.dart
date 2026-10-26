@@ -147,9 +147,6 @@ class _SidebarItem extends StatelessWidget {
           color: isActive
               ? Colors.blue.withValues(alpha: 0.1)
               : Colors.transparent,
-          border: isActive
-              ? const Border(left: BorderSide(color: Colors.blue, width: 4))
-              : null,
         ),
         child: Row(
           children: [

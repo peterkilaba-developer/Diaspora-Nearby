@@ -265,8 +265,8 @@ class ProfileRepository {
       if (currentUid != uid) return publicData;
       final privateDoc = forceServer
           ? await _privateRef(uid)
-              .get(const cf.GetOptions(source: cf.Source.server))
-              .timeout(const Duration(seconds: 5))
+                .get(const cf.GetOptions(source: cf.Source.server))
+                .timeout(const Duration(seconds: 5))
           : await _privateRef(uid).get();
       if (privateDoc.exists) return {...publicData, ...?privateDoc.data()};
     } catch (_) {

@@ -2,7 +2,7 @@
  * DSP Points & Treasury module.
  * TGE Oracle, epoch management, awards, deductions, treasury sync.
  */
-const { functions, admin, db } = require("./shared");
+const { functions, admin, db, sendPushToUser } = require("./shared");
 const { ethers } = require("ethers");
 
 // ── Configuration (from environment) ──
@@ -249,6 +249,7 @@ async function performTGE(triggerSource) {
       trustScore,
       efficiency,
       pohQualified: true,
+      alreadyHadFirstTge: Boolean(d.firstTgeReceivedAt),
     });
   }
 
@@ -298,20 +299,11 @@ async function performTGE(triggerSource) {
     const SYSTEM_DOC_IDS = new Set(["founders", "liquidity", "investors", "burn"]);
     if (SYSTEM_DOC_IDS.has(doc.id)) continue;
 
-    const isGlobalCommunity = doc.id === "global_community";
-    let treasuryEfficiency = 100;
-    const avgTrustScore = d.averagePoCT != null ? d.averagePoCT : (d.averagePct != null ? d.averagePct : 100);
-
-    if (!isGlobalCommunity) {
-      if (d.averagePoCT === undefined && d.averagePct === undefined) {
-        treasuryConfigErrors.push(
-          `governance/${doc.id} (treasuryBalance=${treasuryDsp}, wallet=${walletAddress}) ` +
-          `is missing averagePoCT / averagePct — would silently burn 100% of tribute`
-        );
-        continue;
-      }
-      treasuryEfficiency = calculateEfficiency(avgTrustScore);
-    }
+    // Community, State Reserve, and Sovereign Bond Treasuries are public multi-sig
+    // reserves governed by elected Full-Trust leaders (91+ PCT) and convert at 100%
+    // efficiency so rapid new-member growth never dilutes or burns community capital.
+    const treasuryEfficiency = 100;
+    const avgTrustScore = 100;
 
     recipients.push(walletAddress);
     amounts.push(ethers.parseUnits(Math.floor(treasuryDsp).toString(), 18));
@@ -321,6 +313,7 @@ async function performTGE(triggerSource) {
 
     snapshotDetails.push({
       unitId: doc.id,
+      communityId: d.communityId || (doc.id === "global_community" ? "global_community" : null),
       unitName: d.name || doc.id,
       wallet: walletAddress,
       dsp: Math.floor(treasuryDsp),
@@ -483,6 +476,16 @@ async function performTGE(triggerSource) {
   const tx = await tgeController.executeTGE(recipients, amounts, efficiencies, merkleRoot);
   const receipt = await tx.wait();
 
+  for (const uid of Object.keys(recipientsMap)) {
+    recipientsMap[uid].claimed = true;
+    recipientsMap[uid].txHash = receipt.hash;
+  }
+  await db.collection("tde_snapshots").doc(`epoch_${epochBefore}_tde_${eventBefore}`).set({
+    distributedViaExecuteTge: true,
+    txHash: receipt.hash,
+    recipients: recipientsMap,
+  }, { merge: true });
+
   const statsAfter = await tgeController.getStats();
   const epochAfter = Number(statsAfter[0]);
   const eventAfter = Number(statsAfter[1]);
@@ -491,22 +494,43 @@ async function performTGE(triggerSource) {
   console.log(`[TGE Oracle] Epoch ${epochBefore}→${epochAfter}, Event ${eventBefore}→${eventAfter}`);
 
   // ── Step 4: Record TGE event in Firestore (deterministic doc ID by epoch/event) ──
+  // TDE 1-9 (eventBefore 0-8): Only converted DSP is deducted; unconverted DSP carries over
+  // into the next TDE milestone so members can increase their PCT and convert more later.
+  // TDE 10 (eventBefore >= 9, The Great Reset): Converted DSP is paid out and any remaining
+  // unconverted DSP is burned and reset to 0 for the start of the next 10x Epoch.
+  const isGreatReset = eventBefore >= 9;
   let tdePenaltyBurn = 0;
+  let totalConvertedDsp = 0;
+  let totalCarriedOverDsp = 0;
+
   for (const snap of snapshotDetails) {
-    if (!snap.systemSlot) {
-      const eff = Number(snap.efficiency || 0);
-      const burned = Math.floor(snap.dsp * ((100 - eff) / 100));
-      if (burned > 0) tdePenaltyBurn += burned;
-    }
+    const eff = Number(snap.efficiency || 0);
+    const convertedDsp = Math.floor((snap.dsp * eff) / 100);
+    const unconvertedDsp = snap.dsp - convertedDsp;
+    const burnedDsp = (!snap.systemSlot && isGreatReset) ? unconvertedDsp : 0;
+    const carriedOverDsp = (!snap.systemSlot && !isGreatReset) ? unconvertedDsp : 0;
+    const deductedDsp = isGreatReset ? snap.dsp : convertedDsp;
+
+    snap.convertedDsp = convertedDsp;
+    snap.carriedOverDsp = carriedOverDsp;
+    snap.burnedDsp = burnedDsp;
+    snap.deductedDsp = deductedDsp;
+
+    totalConvertedDsp += convertedDsp;
+    totalCarriedOverDsp += carriedOverDsp;
+    if (burnedDsp > 0) tdePenaltyBurn += burnedDsp;
   }
 
   const tgeEventDocId = `epoch${epochBefore}_event${eventBefore}`;
   const tgeRecord = {
     epoch: epochBefore,
     tgeEvent: eventBefore,
+    isGreatReset,
     txHash: receipt.hash,
     merkleRoot,
     totalDsp,
+    totalConvertedDsp,
+    totalCarriedOverDsp,
     tdePenaltyBurn,
     totalRecipients: recipients.length,
     usersIncluded,
@@ -519,7 +543,7 @@ async function performTGE(triggerSource) {
   };
   await db.collection("tge_events").doc(tgeEventDocId).set(tgeRecord);
 
-  // ── Step 5: Deduct DSP from snapshotted participants & record TDE penalty burn ──
+  // ── Step 5: Deduct converted DSP (TDE 1-9) or full DSP at Great Reset (TDE 10) ──
   const operations = [];
   if (tdePenaltyBurn > 0) {
     operations.push({
@@ -540,18 +564,27 @@ async function performTGE(triggerSource) {
   for (const snap of snapshotDetails) {
     if (snap.userId) {
       const userRef = db.collection("user_points").doc(snap.userId);
-      const userPatch = {
-        availablePoints: 0,
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        tgeHistory: admin.firestore.FieldValue.arrayUnion({
-          epoch: epochBefore,
-          tgeNumber: eventBefore,
-          amount: snap.dsp * (snap.efficiency / 100),
-          efficiency: snap.efficiency / 100,
-          date: admin.firestore.Timestamp.now(),
-          txHash: receipt.hash,
-        }),
+      const historyEntry = {
+        epoch: epochBefore,
+        tdeNumber: eventBefore + 1,
+        tgeNumber: eventBefore,
+        amount: snap.convertedDsp,
+        carriedOverDsp: snap.carriedOverDsp,
+        burnedDsp: snap.burnedDsp,
+        isGreatReset,
+        efficiency: snap.efficiency / 100,
+        claimed: true,
+        date: admin.firestore.Timestamp.now(),
+        txHash: receipt.hash,
       };
+      const userPatch = {
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        tdeHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
+        tgeHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
+      };
+      if (snap.deductedDsp > 0) {
+        userPatch.availablePoints = admin.firestore.FieldValue.increment(-snap.deductedDsp);
+      }
       if (!snap.alreadyHadFirstTge) {
         userPatch.firstTgeReceivedAt = admin.firestore.FieldValue.serverTimestamp();
         userPatch.firstTgeEventId = tgeEventDocId;
@@ -559,13 +592,51 @@ async function performTGE(triggerSource) {
       operations.push({ ref: userRef, patch: userPatch });
     } else if (snap.unitId) {
       const govRef = db.collection("governance").doc(snap.unitId);
+      const govPatch = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (snap.deductedDsp > 0) {
+        govPatch.treasuryBalance = admin.firestore.FieldValue.increment(-snap.deductedDsp);
+      }
       operations.push({
         ref: govRef,
-        patch: {
-          treasuryBalance: 0,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
+        patch: govPatch,
       });
+
+      if (snap.deductedDsp > 0) {
+        if (snap.systemSlot) {
+          const sysField = snap.unitId === "founders"
+            ? "foundersPoints"
+            : (snap.unitId === "liquidity" ? "liquidityPoints" : (snap.unitId === "burn" ? "burnedPoints" : null));
+          if (sysField) {
+            operations.push({
+              ref: db.collection("system_stats").doc("treasury"),
+              patch: {
+                [sysField]: admin.firestore.FieldValue.increment(-snap.deductedDsp),
+                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+              },
+            });
+          }
+        } else {
+          const commId = snap.communityId || (snap.unitId === "global_community" ? "global_community" : null);
+          if (commId) {
+            operations.push({
+              ref: db.collection("communities").doc(commId),
+              patch: {
+                points: admin.firestore.FieldValue.increment(-snap.deductedDsp),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+            });
+            operations.push({
+              ref: db.collection("communities").doc(commId).collection("treasury").doc("current"),
+              patch: {
+                points: admin.firestore.FieldValue.increment(-snap.deductedDsp),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+            });
+          }
+        }
+      }
     }
   }
 
@@ -945,13 +1016,13 @@ exports.awardPoints = functions
         name: "Founders & Core Team",
         type: "system",
         treasuryBalance: admin.firestore.FieldValue.increment(unit),
-        title: "Founders Treasury",
+        title: "Founders & Core Team",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
       batch.set(db.collection("governance").doc("liquidity"), {
         id: "liquidity",
-        name: "Liquidity (DEX)",
+        name: "Liquidity Treasury", title: "Liquidity Treasury",
         type: "system",
         treasuryBalance: admin.firestore.FieldValue.increment(unit),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -959,12 +1030,12 @@ exports.awardPoints = functions
 
       batch.set(db.collection("governance").doc("burn"), {
         id: "burn",
-        name: "Deflationary Burn",
+        name: "Natural Burn Pool",
         type: "system",
         walletAddress: "0x000000000000000000000000000000000000dEaD",
         walletType: "burn",
         treasuryBalance: admin.firestore.FieldValue.increment(unit),
-        title: "Burn Treasury",
+        title: "Natural Burn Pool",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
@@ -1211,13 +1282,13 @@ async function distributeUbuntuMatchingSupply(batch, userId, userPointsAmount, n
     name: "Founders & Core Team",
     type: "system",
     treasuryBalance: admin.firestore.FieldValue.increment(unit),
-    title: "Founders Treasury",
+    title: "Founders & Core Team",
     updatedAt: now,
   }, { merge: true });
 
   batch.set(db.collection("governance").doc("liquidity"), {
     id: "liquidity",
-    name: "Liquidity (DEX)",
+    name: "Liquidity Treasury", title: "Liquidity Treasury",
     type: "system",
     treasuryBalance: admin.firestore.FieldValue.increment(unit),
     updatedAt: now,
@@ -1357,6 +1428,7 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         familyConnectionCount: 0,
         qrConnectionCount: 0,
         trustScore: 0,
+        tdeHistory: [],
         tgeHistory: [],
         lifetimeEarnings: { welcome_bonus: WELCOME_BONUS },
         ...(countryCode ? { homeCountryCode: countryCode } : {}),
@@ -1376,7 +1448,8 @@ exports.initializeUserPoints = functions.https.onCall(async (data, context) => {
         dailyCommunitiesMessaged: docData.dailyCommunitiesMessaged || [],
         completedExplorationActions: docData.completedExplorationActions || [],
         trustScore: docData.trustScore || 0,
-        tgeHistory: docData.tgeHistory || [],
+        tdeHistory: docData.tdeHistory || docData.tgeHistory || [],
+        tgeHistory: docData.tgeHistory || docData.tdeHistory || [],
         verifiedCount: docData.verifiedCount || 0,
         familyConnectionCount: docData.familyConnectionCount || 0,
         qrConnectionCount: docData.qrConnectionCount || 0,
@@ -1701,12 +1774,12 @@ exports.awardMessagePoints = functions.https.onCall(async (data, context) => {
         transaction.set(db.collection("governance").doc("founders"), {
           id: "founders", name: "Founders & Core Team", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
-          title: "Founders Treasury",
+          title: "Founders & Core Team",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
         transaction.set(db.collection("governance").doc("liquidity"), {
-          id: "liquidity", name: "Liquidity (DEX)", type: "system",
+          id: "liquidity", name: "Liquidity Treasury", title: "Liquidity Treasury", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1855,12 +1928,12 @@ exports.awardExplorationPoints = functions.https.onCall(async (data, context) =>
         transaction.set(db.collection("governance").doc("founders"), {
           id: "founders", name: "Founders & Core Team", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
-          title: "Founders Treasury",
+          title: "Founders & Core Team",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
         transaction.set(db.collection("governance").doc("liquidity"), {
-          id: "liquidity", name: "Liquidity (DEX)", type: "system",
+          id: "liquidity", name: "Liquidity Treasury", title: "Liquidity Treasury", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -2015,12 +2088,12 @@ exports.awardSharePoints = functions.https.onCall(async (data, context) => {
         transaction.set(db.collection("governance").doc("founders"), {
           id: "founders", name: "Founders & Core Team", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
-          title: "Founders Treasury",
+          title: "Founders & Core Team",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
         transaction.set(db.collection("governance").doc("liquidity"), {
-          id: "liquidity", name: "Liquidity (DEX)", type: "system",
+          id: "liquidity", name: "Liquidity Treasury", title: "Liquidity Treasury", type: "system",
           treasuryBalance: admin.firestore.FieldValue.increment(unit),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -2171,6 +2244,7 @@ exports.syncTreasuryBalances = functions
     try {
       const userPointsSnap = await db.collection("user_points").get();
       const usersSnap = await db.collection("users").get();
+      const govSnap = await db.collection("governance").get();
 
       const userProfiles = {};
       usersSnap.forEach((doc) => {
@@ -2178,14 +2252,13 @@ exports.syncTreasuryBalances = functions
       });
 
       const communityPointsMap = {};
+      const communityAwardedMap = {};
       const communityBasisMap = {};
       const communityMemberPointsMap = {};
       const communityPCTs = {};
 
       let totalUserPoints = 0;
-      let totalFoundersPoints = 0;
-      let totalLiquidityPoints = 0;
-      let totalBurnedPoints = 0;
+      let totalSystemSlotAwarded = 0;
 
       userPointsSnap.forEach((doc) => {
         const userId = doc.id;
@@ -2196,10 +2269,8 @@ exports.syncTreasuryBalances = functions
         if (userPoints <= 0) return;
 
         totalUserPoints += userPoints;
-        const unit = Math.floor(userPoints * 0.10);
-
-        totalFoundersPoints += unit;
-        totalLiquidityPoints += unit;
+        const unit = Math.floor(userPoints * 0.10); // 10% of the 1:1 Ubuntu matching pool per slot (10 slots = 100% match)
+        totalSystemSlotAwarded += unit;
 
         // Community hierarchy distribution
         const userMemberships = (userProfiles[userId] || {}).communityMemberships || [];
@@ -2248,19 +2319,55 @@ exports.syncTreasuryBalances = functions
         }
         addSlot(hostCity, 1.0);
 
-        totalBurnedPoints += unit; // Fixed burn
-
         for (const [cid, fraction] of Object.entries(slotFractions)) {
           const slotUnit = Math.round(unit * fraction);
           const slotBasis = Math.round(userPoints * fraction);
 
-          communityPointsMap[cid] = (communityPointsMap[cid] || 0) + slotUnit;
+          communityAwardedMap[cid] = (communityAwardedMap[cid] || 0) + slotUnit;
           communityBasisMap[cid] = (communityBasisMap[cid] || 0) + slotBasis + slotUnit;
           communityMemberPointsMap[cid] = (communityMemberPointsMap[cid] || 0) + slotBasis;
           if (!communityPCTs[cid]) communityPCTs[cid] = [];
           communityPCTs[cid].push(trustScore);
         }
       });
+
+      // Reconcile active unconverted DSP against on-chain $DIASPORA balances
+      const onChainBalances = {};
+      try {
+        const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "https://mainnet.base.org");
+        const tokenAddress = process.env.DIASPORA_TOKEN_ADDRESS || "0x55d7e7d006938A15082752225ED44Fd130B87735";
+        const tokenContract = new ethers.Contract(
+          tokenAddress,
+          ["function balanceOf(address account) external view returns (uint256)"],
+          provider
+        );
+        for (const gDoc of govSnap.docs) {
+          const gData = gDoc.data();
+          const w = gData.walletAddress;
+          if (w && w.startsWith("0x") && w.length === 42 && gDoc.id !== "burn") {
+            const balWei = await tokenContract.balanceOf(w);
+            onChainBalances[gDoc.id] = Math.floor(Number(ethers.formatUnits(balWei, 18)));
+          }
+        }
+      } catch (rpcErr) {
+        console.warn("[syncTreasuryBalances] On-chain balance lookup warning:", rpcErr.message);
+      }
+
+      const foundersConverted = onChainBalances["founders"] || 0;
+      const liquidityConverted = onChainBalances["liquidity"] || 0;
+      const burnConverted = Math.max(foundersConverted, liquidityConverted);
+
+      const totalFoundersPoints = Math.max(0, totalSystemSlotAwarded - foundersConverted);
+      const totalLiquidityPoints = Math.max(0, totalSystemSlotAwarded - liquidityConverted);
+      const totalBurnedPoints = Math.max(0, totalSystemSlotAwarded - burnConverted);
+
+      for (const commId of Object.keys(communityAwardedMap)) {
+        const govId = commId === "global_community"
+          ? "global_community"
+          : (commId.includes("_") ? commId.substring(commId.indexOf("_") + 1) : commId);
+        const onChain = onChainBalances[govId] || 0;
+        communityPointsMap[commId] = Math.max(0, (communityAwardedMap[commId] || 0) - onChain);
+      }
 
       // Write results in batches (max 500 ops per batch)
       let batch = db.batch();
@@ -2299,12 +2406,12 @@ exports.syncTreasuryBalances = functions
 
       batch.set(db.collection("governance").doc("burn"), {
         id: "burn",
-        name: "Deflationary Burn",
+        name: "Natural Burn Pool",
         type: "system",
         walletAddress: "0x000000000000000000000000000000000000dEaD",
         walletType: "burn",
         treasuryBalance: totalBurnedPoints,
-        title: "Burn Treasury",
+        title: "Natural Burn Pool",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       opCount++;
@@ -2314,14 +2421,14 @@ exports.syncTreasuryBalances = functions
         await commitIfNeeded();
 
         const pcts = communityPCTs[commId] || [];
-        const avgPct = pcts.length > 0 ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0;
+        const avgPct = 100;
 
         const treasuryRef = db.collection("communities").doc(commId).collection("treasury").doc("current");
         batch.set(treasuryRef, {
           points: communityPointsMap[commId],
           cumulativeEarnings: communityBasisMap[commId],
           memberPoints: communityMemberPointsMap[commId],
-          awardedBalance: communityPointsMap[commId],
+          awardedBalance: communityAwardedMap[commId] || 0,
           averagePct: avgPct,
           averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2349,7 +2456,7 @@ exports.syncTreasuryBalances = functions
           points: communityPointsMap[commId],
           cumulativeEarnings: communityBasisMap[commId],
           memberPoints: communityMemberPointsMap[commId],
-          awardedBalance: communityPointsMap[commId] || 0,
+          awardedBalance: communityAwardedMap[commId] || 0,
           averagePct: avgPct,
           averagePoCT: avgPct,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2634,12 +2741,17 @@ exports.retryPendingTGEDeductions = functions
         }
 
         const operations = [];
+        const isGreatReset = Number(ev.tgeEvent) >= 9;
         for (const s of ev.snapshot) {
+          const deducted = s.deductedDsp !== undefined
+            ? s.deductedDsp
+            : (isGreatReset ? s.dsp : Math.floor((s.dsp * Number(s.efficiency || 0)) / 100));
+          if (deducted <= 0) continue;
           if (s.userId) {
             operations.push({
               ref: db.collection("user_points").doc(s.userId),
               data: {
-                availablePoints: admin.firestore.FieldValue.increment(-s.dsp),
+                availablePoints: admin.firestore.FieldValue.increment(-deducted),
                 lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
               },
             });
@@ -2647,10 +2759,42 @@ exports.retryPendingTGEDeductions = functions
             operations.push({
               ref: db.collection("governance").doc(s.unitId),
               data: {
-                treasuryBalance: admin.firestore.FieldValue.increment(-s.dsp),
+                treasuryBalance: admin.firestore.FieldValue.increment(-deducted),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
               },
             });
+            if (s.systemSlot) {
+              const sysField = s.unitId === "founders"
+                ? "foundersPoints"
+                : (s.unitId === "liquidity" ? "liquidityPoints" : (s.unitId === "burn" ? "burnedPoints" : null));
+              if (sysField) {
+                operations.push({
+                  ref: db.collection("system_stats").doc("treasury"),
+                  data: {
+                    [sysField]: admin.firestore.FieldValue.increment(-deducted),
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+                  },
+                });
+              }
+            } else {
+              const commId = s.communityId || (s.unitId === "global_community" ? "global_community" : null);
+              if (commId) {
+                operations.push({
+                  ref: db.collection("communities").doc(commId),
+                  data: {
+                    points: admin.firestore.FieldValue.increment(-deducted),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  },
+                });
+                operations.push({
+                  ref: db.collection("communities").doc(commId).collection("treasury").doc("current"),
+                  data: {
+                    points: admin.firestore.FieldValue.increment(-deducted),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  },
+                });
+              }
+            }
           }
         }
 
@@ -2681,6 +2825,18 @@ exports.retryPendingTGEDeductions = functions
     return results;
   });
 
+
+function resolveUserDisplayName(profileData, fallback = "A member") {
+  if (!profileData) return fallback;
+  const fullName = String(profileData.fullName || "").trim();
+  if (fullName) return fullName.slice(0, 120);
+  const composed = [profileData.firstName, profileData.lastName]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 120);
+  return composed || fallback;
+}
 
 // V4 trust mechanics: trust rating staking trigger.
 exports.onVouchWrite = functions.firestore
@@ -2732,6 +2888,10 @@ exports.onVouchWrite = functions.firestore
     const wasNoTrust = beforeData ? (beforeData.score >= 1 && beforeData.score <= 10) : false;
     const wasFullTrust = beforeData ? (beforeData.score > 90) : false;
     const wasStaked = wasNoTrust || wasFullTrust;
+    const stakeTierEnteredOrFlipped =
+      coreRatingChanged &&
+      isNowStaked &&
+      (!wasStaked || isNowFullTrust !== wasFullTrust || isNowNoTrust !== wasNoTrust);
 
     const batch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
@@ -2832,17 +2992,19 @@ exports.onVouchWrite = functions.firestore
         updateVouch = true;
     }
 
-    // 3. Stake Combat
-    // Only actual rating changes should run combat. The metadata update below
+    // 3. Stake Combat & Staker Recipient Collection
+    // Only actual staked rating entries/flips should run combat. The metadata update below
     // writes back into this document and must not replay rewards or penalties.
-    if (coreRatingChanged && isNowStaked && remainingStake > 0) {
+    const combatParticipantAlerts = [];
+    if (stakeTierEnteredOrFlipped && remainingStake > 0) {
         const otherVouchesSnap = await db.collection("trust_ratings")
             .where("toUserId", "==", toUserId)
             .get();
 
+        const seenOtherStakers = new Set();
         for (const doc of otherVouchesSnap.docs) {
             const vouch = doc.data();
-            if (vouch.fromUserId === fromUserId) continue;
+            if (!vouch.fromUserId || vouch.fromUserId === fromUserId) continue;
 
             const otherIsNoTrust = vouch.score >= 1 && vouch.score <= 10;
             const otherIsFullTrust = vouch.score > 90;
@@ -2870,9 +3032,20 @@ exports.onVouchWrite = functions.firestore
                     timestamp: now,
                     metadata: { toUserId, agreedWith: fromUserId, score }
                 });
+
+                if (vouch.fromUserId !== toUserId && !seenOtherStakers.has(vouch.fromUserId)) {
+                    seenOtherStakers.add(vouch.fromUserId);
+                    combatParticipantAlerts.push({
+                        recipientUserId: vouch.fromUserId,
+                        agreed: true,
+                        otherIsFullTrust,
+                        remainingAfterSlash: vouch.remainingStake,
+                    });
+                }
             } else {
                 // Deduct 100 DSP from the other staker's locked stake
                 const otherRemaining = vouch.remainingStake - 100;
+                const remainingAfterSlash = Math.max(0, otherRemaining);
                 let newScore = vouch.score;
                 let otherIsNowFullTrust = otherIsFullTrust;
 
@@ -2882,7 +3055,7 @@ exports.onVouchWrite = functions.firestore
                 }
 
                 batch.update(doc.ref, {
-                    remainingStake: Math.max(0, otherRemaining),
+                    remainingStake: remainingAfterSlash,
                     score: newScore,
                     isFullTrust: otherIsNowFullTrust
                 });
@@ -2894,8 +3067,18 @@ exports.onVouchWrite = functions.firestore
                     action: "vouch_consensus_disagree",
                     type: "penalty",
                     timestamp: now,
-                    metadata: { toUserId, disagreedWith: fromUserId, score, remainingStake: Math.max(0, otherRemaining) }
+                    metadata: { toUserId, disagreedWith: fromUserId, score, remainingStake: remainingAfterSlash }
                 });
+
+                if (vouch.fromUserId !== toUserId && !seenOtherStakers.has(vouch.fromUserId)) {
+                    seenOtherStakers.add(vouch.fromUserId);
+                    combatParticipantAlerts.push({
+                        recipientUserId: vouch.fromUserId,
+                        agreed: false,
+                        otherIsFullTrust,
+                        remainingAfterSlash,
+                    });
+                }
             }
         }
     }
@@ -2909,6 +3092,115 @@ exports.onVouchWrite = functions.firestore
     }
 
     await batch.commit();
+
+    // 4. Push & In-App Notifications for Staked Member + All Other Stakers on Either Trust End
+    if (stakeTierEnteredOrFlipped && remainingStake > 0 && fromUserId && toUserId) {
+      try {
+        const [fromUserSnap, toUserSnap] = await Promise.all([
+          db.collection("users").doc(fromUserId).get(),
+          db.collection("users").doc(toUserId).get(),
+        ]);
+        const stakerName = resolveUserDisplayName(
+          fromUserSnap.exists ? fromUserSnap.data() : null,
+          afterData.fromUserName || "A member"
+        );
+        const targetName = resolveUserDisplayName(
+          toUserSnap.exists ? toUserSnap.data() : null,
+          "this member"
+        );
+
+        const stakeLabel = isNowFullTrust ? "Full Trust" : "No Trust";
+        const stakeSide = isNowFullTrust ? "full_trust" : "no_trust";
+        const eventStamp = Date.now();
+        const notificationsToDeliver = [];
+
+        // (a) Notify the staked member (toUserId)
+        if (toUserId !== fromUserId) {
+          notificationsToDeliver.push({
+            recipientUserId: toUserId,
+            title: isNowFullTrust ? "Full Trust Staked on You" : "No Trust Staked on You",
+            body: `${stakerName} staked 1,000 DSP on ${stakeLabel} for you. Tap to view their profile.`,
+            pushType: isNowFullTrust ? "trust_full_trust_received" : "trust_no_trust_received",
+            inAppType: isNowFullTrust ? "trustFullTrustReceived" : "trustNoTrustReceived",
+            dedupKey: `trust_stake_${stakeSide}_${fromUserId}_${toUserId}_${eventStamp}`,
+          });
+        }
+
+        // (b) Notify everyone else who staked on either side of the trust end on toUserId
+        for (const alert of combatParticipantAlerts) {
+          if (alert.agreed) {
+            notificationsToDeliver.push({
+              recipientUserId: alert.recipientUserId,
+              title: `${stakeLabel} Consensus (+100 DSP)`,
+              body: `${stakerName} also staked ${stakeLabel} on ${targetName}. You earned +100 DSP consensus reward!`,
+              pushType: "trust_stake_consensus_agree",
+              inAppType: "trustStakeConsensusAgree",
+              dedupKey: `trust_consensus_agree_${fromUserId}_${toUserId}_${alert.recipientUserId}_${eventStamp}`,
+            });
+          } else {
+            const otherStakeLabel = alert.otherIsFullTrust ? "Full Trust" : "No Trust";
+            const body = alert.remainingAfterSlash > 0
+              ? `${stakerName} staked ${stakeLabel} on ${targetName} against your ${otherStakeLabel} stake (-100 DSP; ${alert.remainingAfterSlash} DSP remaining).`
+              : `${stakerName} staked ${stakeLabel} on ${targetName} against your ${otherStakeLabel} stake. Your stake reached 0 DSP and reset to Standard Trust.`;
+            notificationsToDeliver.push({
+              recipientUserId: alert.recipientUserId,
+              title: `Opposing ${stakeLabel} Stake (-100 DSP)`,
+              body,
+              pushType: "trust_stake_consensus_disagree",
+              inAppType: "trustStakeConsensusDisagree",
+              dedupKey: `trust_consensus_disagree_${fromUserId}_${toUserId}_${alert.recipientUserId}_${eventStamp}`,
+            });
+          }
+        }
+
+        await Promise.all(
+          notificationsToDeliver.map(async (n) => {
+            try {
+              await db
+                .collection("users")
+                .doc(n.recipientUserId)
+                .collection("notifications")
+                .add({
+                  type: n.inAppType,
+                  title: n.title,
+                  body: n.body,
+                  payload: {
+                    fromUserId: String(fromUserId),
+                    toUserId: String(toUserId),
+                    score: Number(score),
+                    stakeSide,
+                    dedupKey: n.dedupKey,
+                  },
+                  isRead: false,
+                  actionRequired: false,
+                  actionCompleted: false,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            } catch (persistErr) {
+              console.warn(
+                `[onVouchWrite] Failed to persist in-app notification for ${n.recipientUserId}: ${persistErr.message}`
+              );
+            }
+
+            await sendPushToUser(n.recipientUserId, {
+              title: n.title,
+              body: n.body,
+              type: n.pushType,
+              targetUserId: String(fromUserId),
+              additionalData: {
+                id: n.dedupKey,
+                fromUserId: String(fromUserId),
+                toUserId: String(toUserId),
+                score: String(score),
+                stakeSide,
+              },
+            });
+          })
+        );
+      } catch (notifErr) {
+        console.warn(`[onVouchWrite] Stake notification warning: ${notifErr.message}`);
+      }
+    }
 
     if (toUserId) {
       try {
@@ -3120,6 +3412,14 @@ exports.claimTdeTokens = functions
       throw new functions.https.HttpsError("not-found", "User has no allocation for this TDE.");
     }
 
+    if (snapshot.distributedViaExecuteTge === true || userEntry.claimed === true) {
+      return {
+        alreadyClaimed: true,
+        txHash: userEntry.txHash || snapshot.txHash || null,
+        message: "Tokens for this TDE have already been claimed.",
+      };
+    }
+
     const userDoc = await db.collection("users").doc(userId).get();
     const walletAddress = userDoc.data()?.walletAddress;
     if (!walletAddress) {
@@ -3161,8 +3461,10 @@ exports.claimTdeTokens = functions
 
     const earnedBn = BigInt(userEntry.earnedAmount);
     const eff = Number(userEntry.efficiency);
+    const isGreatReset = tdeEvent >= 9;
     const liquidBn = (earnedBn * BigInt(eff)) / 100n;
-    const burnedBn = earnedBn - liquidBn;
+    const burnedBn = isGreatReset ? (earnedBn - liquidBn) : 0n;
+    const carriedOverBn = isGreatReset ? 0n : (earnedBn - liquidBn);
 
     const claimKey = ethers.keccak256(
       ethers.AbiCoder.defaultAbiCoder().encode(
@@ -3188,24 +3490,40 @@ exports.claimTdeTokens = functions
     );
     const receipt = await tx.wait();
 
-    // Mark claimed in user_points
+    // Mark claimed in tde_snapshots and user_points
+    await tdeDoc.ref.set({
+      recipients: {
+        [userId]: {
+          ...userEntry,
+          claimed: true,
+          claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+          txHash: receipt.hash,
+        },
+      },
+    }, { merge: true });
+
     const userRef = db.collection("user_points").doc(userId);
     const userSnap = await userRef.get();
     if (userSnap.exists) {
       const pointsData = userSnap.data();
-      const tgeHistory = (pointsData.tgeHistory || []).map((entry) => {
+      const markEntryClaimed = (entry) => {
         if (entry.epoch === epoch && (entry.tdeNumber === tdeEvent + 1 || entry.tgeNumber === tdeEvent)) {
           return {
             ...entry,
+            tdeNumber: entry.tdeNumber || (tdeEvent + 1),
+            tgeNumber: entry.tgeNumber !== undefined ? entry.tgeNumber : tdeEvent,
             claimed: true,
             claimedAt: admin.firestore.Timestamp.now(),
             txHash: receipt.hash,
           };
         }
         return entry;
-      });
+      };
+      const rawHistory = pointsData.tdeHistory || pointsData.tgeHistory || [];
+      const updatedHistory = rawHistory.map(markEntryClaimed);
       await userRef.update({
-        tgeHistory,
+        tdeHistory: updatedHistory,
+        tgeHistory: updatedHistory,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -3214,7 +3532,9 @@ exports.claimTdeTokens = functions
       success: true,
       txHash: receipt.hash,
       liquid: ethers.formatUnits(liquidBn, 18),
+      carriedOver: ethers.formatUnits(carriedOverBn, 18),
       burned: ethers.formatUnits(burnedBn, 18),
+      isGreatReset,
       efficiency: eff,
     };
   });
@@ -3781,23 +4101,23 @@ async function syncProfileMilestoneAndTrust(userId) {
   }
 
   // ── Milestone 7: Ubuntu Emergency Fund Contribution (10,000 DSP + 10 PCT) ──
+  const stakerData = stakerDoc.exists ? (stakerDoc.data() || {}) : {};
   const membershipData = membershipDoc.exists ? (membershipDoc.data() || {}) : {};
   const hasEmergencyFund =
-    stakerDoc.exists ||
-    membershipData.status === "active" ||
-    trustData.emergencyFundContributor === true ||
-    milestones.has("EmergencyFund") ||
-    milestones.has("UbuntuEmergencyFund");
+    (membershipData.status === "active" &&
+      Boolean(membershipData.paymentTxHash || membershipData.paymentId)) ||
+    (stakerData.status === "contributed" &&
+      Boolean(stakerData.paymentTxHash || stakerData.paymentId));
   const emergencyFundAwarded =
     Number(ledger.EmergencyFund_dsp_awarded || 0) === 1 ||
     Number(lifetimeEarnings.emergency_fund_contribution || 0) >= 10000 ||
-    completedExplorationActions.has("economy_emergency_fund");
+    completedExplorationActions.has("milestone_emergency_fund");
 
   let emergencyFundPoCT = 0;
   if (hasEmergencyFund) {
     emergencyFundPoCT = 10;
     milestones.add("EmergencyFund");
-    newExplorationActions.push("economy_emergency_fund");
+    newExplorationActions.push("milestone_emergency_fund");
     if (!emergencyFundAwarded) {
       ledger.EmergencyFund_dsp_awarded = 1;
       await awardMilestoneDsp(
@@ -3808,6 +4128,10 @@ async function syncProfileMilestoneAndTrust(userId) {
     } else {
       ledger.EmergencyFund_dsp_awarded = 1;
     }
+  } else {
+    milestones.delete("EmergencyFund");
+    milestones.delete("UbuntuEmergencyFund");
+    delete ledger.EmergencyFund_dsp_awarded;
   }
 
   if (newExplorationActions.length > 0) {
@@ -3965,8 +4289,8 @@ async function syncProfileMilestoneAndTrust(userId) {
           id: govId,
           communityId: commId,
           type: "community",
-          averagePoCT: finalTrustScore,
-          averagePct: finalTrustScore,
+          averagePoCT: 100,
+          averagePct: 100,
           updatedAt: now,
         },
         { merge: true }

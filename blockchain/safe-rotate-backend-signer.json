@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "chainId": "8453",
+  "createdAt": 1792885500000,
+  "meta": {
+    "name": "Rotate Backend Signer to 0x0b3Fa2C16585C6394A60224Ca9B2765c8Cb1FA7E",
+    "description": "1. Grant TGE_ORACLE_ROLE to new Secret Manager signer 0x0b3Fa2C16585C6394A60224Ca9B2765c8Cb1FA7E\n2. Update DiasporaWalletFactory backendSigner to 0x0b3Fa2C16585C6394A60224Ca9B2765c8Cb1FA7E",
+    "txBuilderVersion": "1.16.5",
+    "createdFromSafeAddress": "0xE06F8690e96a8BAAbCBe48664Ff1238F69082244"
+  },
+  "transactions": [
+    {
+      "to": "0xb6C049D47A2FaE5413c331760C22E715D0bF4d45",
+      "value": "0",
+      "data": "0x2f2ff15d76f6a2a8078ee7b77c2ffc0574b842eb636c62eb5f6384b2400628c9dc3d35550000000000000000000000000b3fa2c16585c6394a60224ca9b2765c8cb1fa7e",
+      "contractMethod": {
+        "inputs": [
+          { "internalType": "bytes32", "name": "role", "type": "bytes32" },
+          { "internalType": "address", "name": "account", "type": "address" }
+        ],
+        "name": "grantRole",
+        "payable": false
+      },
+      "contractInputsValues": {
+        "role": "0x76f6a2a8078ee7b77c2ffc0574b842eb636c62eb5f6384b2400628c9dc3d3555",
+        "account": "0x0b3Fa2C16585C6394A60224Ca9B2765c8Cb1FA7E"
+      }
+    },
+    {
+      "to": "0x9cF797cf332595c00410fc4ee9FdEe5C59501945",
+      "value": "0",
+      "data": "0x898cdb860000000000000000000000000b3fa2c16585c6394a60224ca9b2765c8cb1fa7e",
+      "contractMethod": {
+        "inputs": [
+          { "internalType": "address", "name": "newSigner", "type": "address" }
+        ],
+        "name": "updateBackendSigner",
+        "payable": false
+      },
+      "contractInputsValues": {
+        "newSigner": "0x0b3Fa2C16585C6394A60224Ca9B2765c8Cb1FA7E"
+      }
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:diaspora_nearby/core/data/countries.dart' as country_data;
 import 'package:diaspora_nearby/features/marketplace/utils/currency_helper.dart';
 import 'package:diaspora_nearby/features/travel/services/amadeus_service.dart';
 
@@ -222,7 +223,7 @@ class PeerListing {
     );
   }
 
-  /// Convert an Amadeus API hotel result into a [PeerListing] so the
+  /// Convert an API hotel result into a [PeerListing] so the
   /// unified card & detail screen can render it.
   factory PeerListing.fromHotelOffer(
     HotelOfferResult hotel, {
@@ -272,6 +273,8 @@ class PeerListing {
       'DI': 'Days Inn',
       'SB': 'Novotel',
       'PH': 'Park Hyatt',
+      'RD': 'Radisson',
+      'SE': 'Serena Hotels',
     };
 
     final chainName = hotel.chainCode != null
@@ -291,6 +294,9 @@ class PeerListing {
 
     // Build amenities from offer info
     final amenities = <String>[];
+    if (hotel.rating != null) {
+      amenities.add('${hotel.rating!.toStringAsFixed(1)}★ Guest Rating');
+    }
     if (cheapest != null) {
       amenities.add(cheapest.boardTypeDisplay);
       if (cheapest.cancellationDeadline != null) {
@@ -300,9 +306,50 @@ class PeerListing {
         amenities.add('Pay at Hotel');
       }
     }
+    amenities.add('Wi-Fi');
     if (hotel.offers.length > 1) {
       amenities.add('${hotel.offers.length} Room Options');
     }
+
+    String? resolvedCountryCode =
+        (countryCode != null && countryCode.trim().isNotEmpty)
+        ? countryCode.trim().toUpperCase()
+        : (hotel.countryCode != null && hotel.countryCode!.trim().isNotEmpty)
+        ? hotel.countryCode!.trim().toUpperCase()
+        : null;
+
+    if (resolvedCountryCode == null && country != null && country.isNotEmpty) {
+      final lowerCountry = country.trim().toLowerCase();
+      for (final c in country_data.countries) {
+        if (c.name.toLowerCase() == lowerCountry ||
+            lowerCountry.contains(c.name.toLowerCase())) {
+          resolvedCountryCode = c.code.toUpperCase();
+          break;
+        }
+      }
+    }
+
+    if (resolvedCountryCode == null &&
+        hotel.address != null &&
+        hotel.address!.isNotEmpty) {
+      final lowerAddr = hotel.address!.toLowerCase();
+      for (final c in country_data.countries) {
+        if (lowerAddr.endsWith(c.name.toLowerCase())) {
+          resolvedCountryCode = c.code.toUpperCase();
+          break;
+        }
+      }
+    }
+
+    final usdNightlyRate = cheapest?.pricePerNight ?? hotel.cheapestPrice;
+    final localNightlyRate =
+        (resolvedCountryCode != null && hotel.currency.toUpperCase() == 'USD')
+        ? CurrencyHelper.convertCurrency(
+            usdNightlyRate,
+            'US',
+            resolvedCountryCode,
+          )
+        : usdNightlyRate;
 
     return PeerListing(
       id: 'api_${hotel.hotelId}',
@@ -313,18 +360,24 @@ class PeerListing {
       ownerPhoto: '',
       title: formatName(hotel.hotelName),
       description: descParts.where((s) => s.isNotEmpty).join(' • '),
-      photos: const [
-        'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=400&fit=crop',
-        'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop',
-      ],
-      pricePerUnit: cheapest?.pricePerNight ?? hotel.cheapestPrice,
-      currency: hotel.currency,
+      photos: hotel.photos.isNotEmpty
+          ? hotel.photos
+          : const [
+              'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=400&fit=crop',
+              'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop',
+            ],
+      pricePerUnit: localNightlyRate,
+      currency: resolvedCountryCode != null
+          ? CurrencyHelper.currencyCode(resolvedCountryCode)
+          : hotel.currency,
       lat: hotel.latitude,
       lng: hotel.longitude,
+      address: hotel.address,
       city: city,
       country: country,
-      countryCode: countryCode,
+      countryCode: resolvedCountryCode,
       // Hotel-specific: ensure all fields the card needs are populated
+      starRating: hotel.starRating,
       hotelCategory: chainName ?? 'Hotel',
       beds: cheapest?.beds ?? 1,
       maxGuests: (cheapest?.beds ?? 1) * 2,

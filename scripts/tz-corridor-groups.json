@@ -1,0 +1,321 @@
+{
+  "version": "1.0.0",
+  "description": "Tanzania Dual-Corridor Facebook & WhatsApp Group Outreach Directory (Admins First + Active Members)",
+  "inviteBaseUrl": "https://diasporanearby.com/invite",
+  "whatsappBotNumber": "16413020012",
+  "corridors": {
+    "tz_abroad": {
+      "label": "Tanzanians Living Outside Tanzania (Mostly Kiswahili)",
+      "defaultLang": "sw",
+      "groups": [
+        {
+          "id": "tz_usa_dicota",
+          "name": "Watanzania Waishio Marekani / DICOTA (Tanzanians in USA)",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in USA Watanzania Marekani DICOTA",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/tanzaniansinusa/",
+            "https://www.facebook.com/groups/542386389271031/",
+            "https://www.facebook.com/groups/855410851712249/",
+            "https://www.facebook.com/groups/133858998653/",
+            "https://www.facebook.com/groups/963510197456249/",
+            "https://www.facebook.com/groups/798498687355449/"
+          ],
+          "hostRegion": "USA (Houston, DC/DMV, Dallas, Columbus, NY)",
+          "lang": "sw",
+          "adminCode": "ADMTZUSA"
+        },
+        {
+          "id": "tz_uk_tauk",
+          "name": "Tanzanians in the UK (TAUK) / Watanzania UK",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in the UK Watanzania Uingereza TAUK",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/262508401691770/",
+            "https://www.facebook.com/groups/824368764407663/",
+            "https://www.facebook.com/groups/127592837253218/",
+            "https://www.facebook.com/groups/1078028610039530/"
+          ],
+          "hostRegion": "UK (London, Reading, Birmingham, Manchester)",
+          "lang": "sw",
+          "adminCode": "ADMTZUK"
+        },
+        {
+          "id": "tz_uae_dubai",
+          "name": "Watanzania Dubai, Abu Dhabi & UAE / Oman",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in Dubai UAE Watanzania Dubai Oman",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/199308489020384/",
+            "https://www.facebook.com/groups/253314849779853/",
+            "https://www.facebook.com/groups/343415919099230/",
+            "https://www.facebook.com/groups/295528681217507/",
+            "https://www.facebook.com/groups/566726826780659/"
+          ],
+          "hostRegion": "UAE & Oman (Dubai, Abu Dhabi, Sharjah, Muscat)",
+          "lang": "sw",
+          "adminCode": "ADMTZUAE"
+        },
+        {
+          "id": "tz_south_africa",
+          "name": "Tanzanians in South Africa / Watanzania Afrika Kusini",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in South Africa Watanzania Johannesburg",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/160134919663013/",
+            "https://www.facebook.com/groups/1505697993054127/"
+          ],
+          "hostRegion": "South Africa (Johannesburg, Pretoria, Cape Town, Durban)",
+          "lang": "sw",
+          "adminCode": "ADMTZSA"
+        },
+        {
+          "id": "tz_kenya",
+          "name": "Tanzanians in Kenya / Watanzania Nairobi & Mombasa",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in Kenya Watanzania Nairobi",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/433875092211676/"
+          ],
+          "hostRegion": "Kenya (Nairobi, Mombasa)",
+          "lang": "sw",
+          "adminCode": "ADMTZKE"
+        },
+        {
+          "id": "tz_canada",
+          "name": "Tanzanians in Canada / Watanzania Canada",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in Canada Watanzania Toronto Ottawa",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/500209979992109/",
+            "https://www.facebook.com/groups/192847060245289/",
+            "https://www.facebook.com/groups/375249466201881/",
+            "https://www.facebook.com/groups/716415115094340/"
+          ],
+          "hostRegion": "Canada (Toronto, Ottawa, Montreal, Calgary)",
+          "lang": "sw",
+          "adminCode": "ADMTZCA"
+        },
+        {
+          "id": "tz_europe_germany",
+          "name": "Watanzania Ulaya (Germany, Belgium, Italy & Global Diaspora)",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in Germany Europe Watanzania Ujerumani",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/506844229342409/",
+            "https://www.facebook.com/groups/648278168604949/",
+            "https://www.facebook.com/groups/878838011010906/",
+            "https://www.facebook.com/groups/809908008691814/",
+            "https://www.facebook.com/groups/146049448858493/",
+            "https://www.facebook.com/groups/345829934081834/",
+            "https://www.facebook.com/groups/488182022724216/"
+          ],
+          "hostRegion": "Europe (Berlin, Frankfurt, Stockholm, Istanbul)",
+          "lang": "sw",
+          "adminCode": "ADMTZEU"
+        },
+        {
+          "id": "tz_china_india",
+          "name": "Tanzanian Students & Business Community in China & India",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Tanzanians in China India Students Guangzhou",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/search/groups/?q=Tanzanians%20in%20China",
+            "https://www.facebook.com/groups/search/groups/?q=Tanzanians%20in%20India"
+          ],
+          "hostRegion": "Asia (Guangzhou, Beijing, Wuhan, Bangalore, Delhi)",
+          "lang": "sw",
+          "adminCode": "ADMTZASIA"
+        }
+      ],
+      "templates": {
+        "sw": {
+          "adminPitch": "🇹🇿 Habari {{NAME}} (Admin wa {{GROUP_NAME}})! Hongera sana kwa kazi kubwa ya kuwaunganisha Watanzania wenzetu wa {{HOST_REGION}}.\n\nMimi ni Peter Swai, Mwanzilishi wa *Diaspora Nearby* — programu mpya inayowaunganisha Watanzania waishio nje ya nchi (ugunduzi wa Watanzania walio karibu nawe mji uliopo, ujenzi wa chemba rasmi za miji na mikoa ya nyumbani Tanzania, na mfuko wa dharura wa Ubuntu).\n\nKila mwanachama anayejiunga kwenye Epoch 1 anapata tokeni za *$DIASPORA* kwenye *Base Blockchain*, na kila tokeni anayopata mwanachama inazalisha *1:1 Ubuntu Match* moja kwa moja kwenye hazina ya chemba ya mji wenu ({{HOST_REGION}}) na mkoa wa nyumbani Tanzania!\n\nNingependa kukualika uwe *Kiongozi Mwanzilishi (Founding Chamber Partner)* wa jumuiya hii. Hii hapa ni link na kodi yako maalum ya Admin ambayo inakupa zawadi za DSP kwa kila mwanachama wa grupu lako anayejiunga:\n👉 https://diasporanearby.com/invite?code={{CODE}}\n\nUkiona inafaa, unaweza pia ku-pin ujumbe huu mfupi kwenye grupu letu la {{GROUP_NAME}} ili Watanzania wenzetu wajiunge na chemba ya mji wetu. Ahsante sana na karibu kundini! 🙏🇹🇿",
+          "adminPinPost": "🇹🇿 *Tangazo kwa Watanzania wa {{GROUP_NAME}} ({{HOST_REGION}})!* 🌍\n\nTumeanza kuunda Chemba rasmi ya Watanzania wa {{HOST_REGION}} kwenye programu ya *Diaspora Nearby* — ili kila Mtanzania aliye karibu na mwenzake aweze kufahamiana kwa urahisi, kusaidiana kwenye dharura (Ubuntu Fund), na kujenga hazina ya pamoja kati ya hapa ughaibuni na mikoa yetu ya nyumbani Tanzania kupitia *$DIASPORA* kwenye *Base Blockchain* (1:1 Ubuntu Match).\n\nPakua app na ujiunge na chemba yetu hapa (tumia kodi *{{CODE}}* kupata zawadi ya waanzilishi ya Epoch 1):\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🇹🇿 Habari {{NAME}}! Nimekuona kwenye grupu letu la Watanzania la *{{GROUP_NAME}}*.\n\nTunawaunganisha Watanzania wanaoishi *{{HOST_REGION}}* kwenye programu ya *Diaspora Nearby* ili uweze kuwafahamu Watanzania wenzako walio karibu nawe mji uliopo, kujiunga na chemba ya mji wako pamoja na mkoa uliotoka nyumbani Tanzania, na kupata tokeni za waanzilishi za *$DIASPORA* kwenye *Base Blockchain* (zenye 1:1 Ubuntu Match kwa hazina ya jumuiya yetu).\n\nKaribu ujiunge nasi hapa na upate zawadi yako ya Epoch 1:\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        }
+      }
+    },
+    "expat_in_tz": {
+      "label": "Non-Tanzanians / Expats Living Inside Tanzania (English + Native Languages)",
+      "defaultLang": "en",
+      "groups": [
+        {
+          "id": "expats_dar_main",
+          "name": "Expats in Dar es Salaam / Living in Dar es Salaam",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Expats in Dar es Salaam Living in Dar es Salaam",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/1834490110124266/",
+            "https://www.facebook.com/groups/205515898012597/",
+            "https://www.facebook.com/groups/399494415125234/",
+            "https://www.facebook.com/groups/1315757342297857/",
+            "https://www.facebook.com/groups/177007432707726/",
+            "https://www.facebook.com/groups/1464172970531388/"
+          ],
+          "hostRegion": "Dar es Salaam (Masaki, Oysterbay, Mikocheni, Upanga)",
+          "lang": "en",
+          "adminCode": "ADMDAREX"
+        },
+        {
+          "id": "expats_arusha_un",
+          "name": "Arusha Expats, UN, Diplomatic & Conservation Community",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Arusha Expats Living in Arusha Tanzania",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/1506070349661852/",
+            "https://www.facebook.com/groups/576866351284893/",
+            "https://www.facebook.com/groups/510585385747506/",
+            "https://www.facebook.com/groups/517340630233543/",
+            "https://www.facebook.com/groups/1605841799647614/",
+            "https://www.facebook.com/groups/258639473025504/",
+            "https://www.facebook.com/groups/1171985791223833/",
+            "https://www.facebook.com/groups/251079546535739/",
+            "https://www.facebook.com/groups/224580392525312/",
+            "https://www.facebook.com/groups/747875043514174/"
+          ],
+          "hostRegion": "Arusha & Moshi (Njiro, Usa River, Diplomatic Hub)",
+          "lang": "en",
+          "adminCode": "ADMARUEX"
+        },
+        {
+          "id": "expats_zanzibar_nomads",
+          "name": "Zanzibar Expats, Digital Nomads & Long-Stayers (Stone Town / Paje / Nungwi)",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Zanzibar Expats Digital Nomads Living in Zanzibar",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/zanzibar.locals/",
+            "https://www.facebook.com/groups/1071626066828272/",
+            "https://www.facebook.com/groups/coworkingzanzibar/"
+          ],
+          "hostRegion": "Zanzibar (Stone Town, Paje, Nungwi, Jambiani)",
+          "lang": "en",
+          "adminCode": "ADMZNZEX"
+        },
+        {
+          "id": "kenyans_in_tz",
+          "name": "Kenyans in Tanzania (KIT) & East Africans in Dar/Arusha",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Kenyans in Tanzania KIT Dar es Salaam Arusha",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/584166682742732/",
+            "https://www.facebook.com/groups/181676968901974/"
+          ],
+          "hostRegion": "Dar es Salaam & Arusha",
+          "lang": "en",
+          "adminCode": "ADMKENYATZ"
+        },
+        {
+          "id": "south_africans_in_tz",
+          "name": "South Africans in Tanzania",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "South Africans in Tanzania Dar es Salaam",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/search/groups/?q=South%20Africans%20in%20Tanzania"
+          ],
+          "hostRegion": "Dar es Salaam, Arusha & Mwanza",
+          "lang": "en",
+          "adminCode": "ADMSATZ"
+        },
+        {
+          "id": "francophones_in_tz",
+          "name": "Francophones, Congolese, French & Belgian Expats in Tanzania",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Francophones en Tanzanie Français Dar es Salaam Congolais Tanzanie",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/search/groups/?q=Francophones%20Tanzanie",
+            "https://www.facebook.com/groups/search/groups/?q=Fran%C3%A7ais%20en%20Tanzanie"
+          ],
+          "hostRegion": "Dar es Salaam, Arusha & Kigoma",
+          "lang": "fr",
+          "adminCode": "ADMFRTZ"
+        },
+        {
+          "id": "indians_in_tz",
+          "name": "Indians in Tanzania (NRIs in Dar es Salaam, Arusha & Zanzibar)",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Indians in Tanzania Dar es Salaam NRI Tanzania",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/372801372782913/",
+            "https://www.facebook.com/groups/gfkenya/",
+            "https://www.facebook.com/groups/252616684772463/",
+            "https://www.facebook.com/groups/961593008617615/",
+            "https://www.facebook.com/groups/388010671396550/"
+          ],
+          "hostRegion": "Dar es Salaam (Upanga, Masaki), Arusha & Zanzibar",
+          "lang": "hi",
+          "adminCode": "ADMINDTZ"
+        },
+        {
+          "id": "chinese_in_tz",
+          "name": "Chinese Expat & Business Community in Tanzania (坦桑尼亚华人)",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Chinese in Tanzania 坦桑尼亚华人 Dar es Salaam",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/1498640771354816/"
+          ],
+          "hostRegion": "Dar es Salaam, Arusha & Zanzibar",
+          "lang": "zh",
+          "adminCode": "ADMZHTZ"
+        },
+        {
+          "id": "arab_community_in_tz",
+          "name": "Arab, Omani, UAE & Egyptian Expats in Zanzibar & Dar es Salaam",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Arabs in Tanzania Zanzibar Omani Dar es Salaam",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/search/groups/?q=Zanzibar%20Community"
+          ],
+          "hostRegion": "Zanzibar & Dar es Salaam",
+          "lang": "ar",
+          "adminCode": "ADMARTZ"
+        },
+        {
+          "id": "german_dach_in_tz",
+          "name": "Deutsche & DACH Expats in Tansania (Dar es Salaam, Arusha, Sansibar)",
+          "platform": "facebook_and_whatsapp",
+          "fbSearchQuery": "Deutsche in Tansania Germans in Tanzania Arusha Zanzibar",
+          "fbGroupUrls": [
+            "https://www.facebook.com/groups/search/groups/?q=Deutsche%20in%20Tansania",
+            "https://www.facebook.com/groups/search/groups/?q=Germans%20in%20Tanzania"
+          ],
+          "hostRegion": "Arusha, Dar es Salaam & Zanzibar",
+          "lang": "de",
+          "adminCode": "ADMDETZ"
+        }
+      ],
+      "templates": {
+        "en": {
+          "adminPitch": "🌍 Hi {{NAME}} (Admin of {{GROUP_NAME}})! Thank you for building such a valuable community for expats and international residents in {{HOST_REGION}}.\n\nI’m Peter Swai, Founder of *Diaspora Nearby* — a platform built for everyone living between a Home Country and a Host Country (like international expats, regional diaspora, diplomats, and professionals living in Tanzania).\n\nOn Diaspora Nearby, members can discover compatriots from their home country nearby in {{HOST_REGION}}, build verified peer trust, and organize official Nationality & City Chambers in Tanzania. Every member who joins in Epoch 1 earns *$DIASPORA* on *Base Blockchain*, with a *1:1 Ubuntu Community Match* that mints equal treasury reserves directly into their local Tanzania chamber and their home country treasury.\n\nI’d love to invite you as a *Founding Chamber Partner* for {{GROUP_NAME}}. Here is your dedicated Admin invite link (which credits you with DSP referral rewards for every group member who joins):\n👉 https://diasporanearby.com/invite?code={{CODE}}\n\nWould you be open to pinning a short welcome post in {{GROUP_NAME}} so members can join their nationality & city hubs in Tanzania? Happy to share a ready-to-post snippet!",
+          "adminPinPost": "🌍 *Announcement for {{GROUP_NAME}} ({{HOST_REGION}})!* 🇹🇿\n\nWe are organizing verified Nationality & City Chambers in {{HOST_REGION}} on *Diaspora Nearby* — allowing expats and international residents in Tanzania to discover compatriots from their home country nearby, connect through a high-trust network, and earn Epoch 1 *$DIASPORA* tokens on *Base Blockchain* (with a 1:1 Ubuntu Community Match for our local community treasury).\n\nDownload the app & claim your Founding Member welcome bonus with code *{{CODE}}*:\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🌍 Hi {{NAME}}! I saw we’re both in the *{{GROUP_NAME}}* group in Tanzania.\n\nWe are connecting expats and international residents across *{{HOST_REGION}}* on *Diaspora Nearby* so you can easily discover compatriots from your home country living nearby in Tanzania, join your nationality's local chamber, and claim your Epoch 1 *$DIASPORA* welcome allocation on *Base Blockchain* (with a 1:1 Ubuntu Community Match).\n\nHere is a Founding Member invite link if you'd like to join us:\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        },
+        "fr": {
+          "adminPitch": "🇫🇷🌍 Bonjour {{NAME}} (Admin de {{GROUP_NAME}}) ! Félicitations pour l'animation de cette belle communauté francophone et internationale à {{HOST_REGION}}.\n\nJe suis Peter Swai, fondateur de *Diaspora Nearby* — une application conçue pour les expatriés et la diaspora vivant en Tanzanie afin de retrouver leurs compatriotes à proximité, organiser leur chambre communautaire locale et gagner des jetons *$DIASPORA* sur *Base Blockchain* (avec un abondement 1:1 Ubuntu Match pour la trésorerie de votre communauté).\n\nJe souhaite vous inviter comme *Partenaire Fondateur (Founding Chamber Partner)* avec votre lien Admin dédié :\n👉 https://diasporanearby.com/invite?code={{CODE}}\n\nSeriez-vous d'accord pour partager ou épingler cette invitation avec les membres de {{GROUP_NAME}} ?",
+          "adminPinPost": "🇫🇷🌍 *Annonce pour {{GROUP_NAME}} ({{HOST_REGION}}) !* 🇹🇿\n\nRejoignez notre chambre communautaire sur *Diaspora Nearby* pour découvrir vos compatriotes à proximité en Tanzanie et recevoir votre allocation Genesis *$DIASPORA* sur *Base Blockchain* (code *{{CODE}}*) :\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🇫🇷🌍 Bonjour {{NAME}} ! J'ai vu que nous sommes tous les deux dans le groupe *{{GROUP_NAME}}* en Tanzanie.\n\nNous rassemblons la communauté francophone et les expatriés à *{{HOST_REGION}}* sur *Diaspora Nearby* pour retrouver nos compatriotes à proximité en Tanzanie, organiser notre chambre locale et recevoir des jetons Genesis *$DIASPORA* sur *Base Blockchain* (1:1 Ubuntu Match).\n\nVoici votre lien d'invitation :\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        },
+        "zh": {
+          "adminPitch": "🇨🇳🌍 您好 {{NAME}}（{{GROUP_NAME}} 群主/管理员）！非常敬佩您在坦桑尼亚（{{HOST_REGION}}）团结华人与侨胞所做的贡献。\n\n我是 *Diaspora Nearby* 创始人 Peter Swai。Diaspora Nearby 专为在坦桑尼亚生活和经商的侨胞打造，帮助大家实时发现身边的同胞、组建本地商会，并在 Epoch 1 赚取 *Base Blockchain* 上的 *$DIASPORA* 创世代币（享受 1:1 Ubuntu 社区金库配捐）。\n\n诚邀您成为坦桑尼亚创世商会合作伙伴（Founding Chamber Partner），这是您的专属管理员邀请链接（群成员加入即可为您累积 DSP 奖励）：\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "adminPinPost": "🇨🇳🌍 *{{GROUP_NAME}}（{{HOST_REGION}}）群公告* 🇹🇿\n\n我们正在 *Diaspora Nearby* 组建坦桑尼亚同胞商会！实时发现身边的同胞、建立高信任互助网络，并领取 *Base Blockchain* 上的 *$DIASPORA* 创世奖励（邀请码 *{{CODE}}*）：\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🇨🇳🌍 您好 {{NAME}}！在 *{{GROUP_NAME}}* 看到您也在坦桑尼亚（{{HOST_REGION}}）。\n\n我们正在 *Diaspora Nearby* 上汇聚坦桑尼亚的同胞，方便大家实时发现附近的同胞、加入本地商会，并免费领取 Epoch 1 *Base Blockchain* 上的 *$DIASPORA* 创世代币（1:1 Ubuntu 社区配捐）。\n\n诚邀您点击加入：\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        },
+        "hi": {
+          "adminPitch": "🇮🇳🌍 नमस्ते {{NAME}} ({{GROUP_NAME}} के एडमिन)! तंजानिया ({{HOST_REGION}}) में भारतीय और प्रवासी समुदाय को जोड़ने के लिए आपका बहुत-बहुत अभिनंदन।\n\nमैं Peter Swai हूँ, *Diaspora Nearby* का संस्थापक। हमारे ऐप के माध्यम से तंजानिया में रहने वाले प्रवासी अपने आस-पास के देशवासियों को खोज सकते हैं, अपना स्थानीय चैंबर बना सकते हैं और *Base Blockchain* पर *$DIASPORA* टोकन कमा सकते हैं (1:1 Ubuntu Community Match के साथ)।\n\nमैं आपको *Founding Chamber Partner* के रूप में आमंत्रित करता हूँ। यह आपका विशेष एडमिन आमंत्रण लिंक है:\n👉 https://diasporanearby.com/invite?code={{CODE}}\n\nकृपया इसे {{GROUP_NAME}} के सदस्यों के साथ साझा करें!",
+          "adminPinPost": "🇮🇳🌍 *{{GROUP_NAME}} ({{HOST_REGION}}) के सदस्यों के लिए विशेष आमंत्रण!* 🇹🇿\n\nतंजानिया में अपने आस-पास के देशवासियों से जुड़ने और *Base Blockchain* पर *$DIASPORA* टोकन कमाने के लिए *Diaspora Nearby* से जुड़ें (कोड: *{{CODE}}*):\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🇮🇳🌍 नमस्ते {{NAME}}! मैंने आपको तंजानिया के *{{GROUP_NAME}}* ग्रुप में देखा।\n\nहम *{{HOST_REGION}}* में रहने वाले भारतीय और प्रवासी समुदाय को *Diaspora Nearby* पर जोड़ रहे हैं ताकि आप अपने आस-पास के देशवासियों से मिल सकें और *Base Blockchain* पर Epoch 1 *$DIASPORA* बोनस प्राप्त कर सकें।\n\nयहाँ से जुड़ें:\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        },
+        "ar": {
+          "adminPitch": "🇦🇪🌍 مرحباً {{NAME}} (مشرف مجموعة {{GROUP_NAME}})! شكراً لجهودك الرائعة في جمع الجالية في تنزانيا ({{HOST_REGION}}).\n\nأنا بيتر سواي، مؤسس تطبيق *Diaspora Nearby* — المنصة التي تمكّن المغتربين وأبناء الجالية في تنزانيا من اكتشاف أبناء بلدهم بالقرب منهم، وتنظيم غرف الجالية المحلية، وكسب عملات *$DIASPORA* على *Base Blockchain* (مع مضاعفة 1:1 لخزينة المجتمع).\n\nيسعدني دعوتك لتكون *شريكاً مؤسساً (Founding Chamber Partner)* عبر رابط المشرف الخاص بك:\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "adminPinPost": "🇦🇪🌍 *إعلان لأعضاء {{GROUP_NAME}} ({{HOST_REGION}})!* 🇹🇿\n\nانضموا إلى غرفة الجالية في تنزانيا عبر تطبيق *Diaspora Nearby* للتواصل مع أبناء الجالية بالقرب منكم والحصول على مكافأة التأسيس من عملة *$DIASPORA* على *Base Blockchain* (الرمز: *{{CODE}}*):\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🇦🇪🌍 مرحباً {{NAME}}! رأيت أننا معاً في مجموعة *{{GROUP_NAME}}* في تنزانيا.\n\nنحن نجمع أبناء الجالية والمغتربين في *{{HOST_REGION}}* على تطبيق *Diaspora Nearby* لاكتشاف أبناء بلدك بالقرب منك وكسب مكافأة Epoch 1 من عملة *$DIASPORA* على *Base Blockchain*.\n\nرابط الدعوة الخاص بك:\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        },
+        "de": {
+          "adminPitch": "🇩🇪🌍 Hallo {{NAME}} (Admin von {{GROUP_NAME}})! Vielen Dank für den Aufbau dieser tollen Community in Tansania ({{HOST_REGION}}).\n\nIch bin Peter Swai, Gründer von *Diaspora Nearby*. Unsere App verbindet Expats in Tansania mit Landsleuten in der Nähe, organisiert lokale Community-Chambers und belohnt jedes Mitglied in Epoch 1 mit *$DIASPORA* auf der *Base Blockchain* (inklusive 1:1 Ubuntu Community Match).\n\nIch lade Sie herzlich als *Founding Chamber Partner* ein — hier ist Ihr persönlicher Admin-Einladungslink:\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "adminPinPost": "🇩🇪🌍 *Einladung für {{GROUP_NAME}} ({{HOST_REGION}})!* 🇹🇿\n\nVernetzt euch mit Landsleuten in der Nähe in Tansania auf *Diaspora Nearby* und sichert euch euren Epoch 1 *$DIASPORA* Bonus auf der *Base Blockchain* (Code: *{{CODE}}*):\n👉 https://diasporanearby.com/invite?code={{CODE}}",
+          "memberDm": "🇩🇪🌍 Hallo {{NAME}}! Ich habe gesehen, dass wir beide in der Gruppe *{{GROUP_NAME}}* in Tansania sind.\n\nÜber *Diaspora Nearby* vernetzen wir Expats und Landsleute in *{{HOST_REGION}}*, damit man sofort Landsleute in der Nähe entdeckt und in Epoch 1 *$DIASPORA* auf der *Base Blockchain* verdient.\n\nHier ist dein Einladungslink:\n👉 https://diasporanearby.com/invite?code={{CODE}}"
+        }
+      }
+    }
+  }
+}

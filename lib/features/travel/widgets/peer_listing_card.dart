@@ -110,6 +110,8 @@ class PeerListingCard extends StatelessWidget {
                         priceSuffix: _isCar ? '/day' : '/night',
                         compact: true,
                         showToggle: false,
+                        preferViewerPrimary: true,
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         primaryStyle: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,

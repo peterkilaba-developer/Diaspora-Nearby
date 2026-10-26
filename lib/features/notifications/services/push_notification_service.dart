@@ -169,8 +169,6 @@ class PushNotificationService {
   _trustVerificationSubscription; // Listener for trust verifications
   StreamSubscription<QuerySnapshot>?
   _trustVouchSubscription; // Listener for trust vouches
-  StreamSubscription<QuerySnapshot>?
-  _fullTrustSubscription; // Listener for full trust stakes
 
   // Track processed messages for client-side listener too
   final Set<String> _processedMessageIds = {};
@@ -250,8 +248,7 @@ class PushNotificationService {
     try {
       final ref = _ref;
       if (ref != null && ActiveChatTracker.instance.isAppInForeground) {
-        final uri =
-            ref.read(routerProvider).routeInformationProvider.value.uri;
+        final uri = ref.read(routerProvider).routeInformationProvider.value.uri;
         final path = uri.path;
         if (chatId != null &&
             chatId.trim().isNotEmpty &&
@@ -289,7 +286,8 @@ class PushNotificationService {
   /// Read-only view of buffered notification lines for [chatKey] (useful for testing).
   List<ChatNotificationLine> getBufferedChatMessages(String chatKey) {
     return List<ChatNotificationLine>.unmodifiable(
-      _chatNotificationMessages[chatKey.trim()] ?? const <ChatNotificationLine>[],
+      _chatNotificationMessages[chatKey.trim()] ??
+          const <ChatNotificationLine>[],
     );
   }
 
@@ -453,8 +451,9 @@ class PushNotificationService {
     // 15. Start listening for trust vouches
     _listenForTrustVouches(userId);
 
-    // 16. Start listening for full trust stakes
-    _listenForFullTrustStakes(userId);
+    // Note: Full Trust / No Trust stake notifications (to the staked user and
+    // to all stakers on either side of the trust end) are dispatched by the
+    // backend `onVouchWrite` Cloud Function trigger via FCM + Firestore.
   }
 
   /// Request notification permission
@@ -554,8 +553,6 @@ class PushNotificationService {
     _trustVerificationSubscription = null;
     _trustVouchSubscription?.cancel();
     _trustVouchSubscription = null;
-    _fullTrustSubscription?.cancel();
-    _fullTrustSubscription = null;
   }
 
   /// Setup FCM message handlers
@@ -601,8 +598,7 @@ class PushNotificationService {
     String? currentUserIdOverride,
   }) async {
     // [FIX] Deduplicate using internal ID if available, otherwise FCM ID
-    final internalId =
-        data['id']?.toString() ?? data['messageId']?.toString();
+    final internalId = data['id']?.toString() ?? data['messageId']?.toString();
     final effectiveId = internalId ?? messageId;
 
     if (effectiveId != null) {
@@ -626,7 +622,8 @@ class PushNotificationService {
     final String? rawType = data['type']?.toString();
     final String? messageSubType = data['messageType']?.toString();
     final String? msgType = messageSubType ?? rawType;
-    final String msgContent = (data['content'] ?? data['body'] ?? '').toString();
+    final String msgContent = (data['content'] ?? data['body'] ?? '')
+        .toString();
 
     if (rawType == 'dsp_transfer' ||
         rawType == 'points_update' ||
@@ -683,9 +680,7 @@ class PushNotificationService {
         msgType == 'location' ||
         msgType == 'document' ||
         msgType == 'money-transfer') {
-      if (msgContent.trim().isEmpty &&
-          body != null &&
-          body.trim().isNotEmpty) {
+      if (msgContent.trim().isEmpty && body != null && body.trim().isNotEmpty) {
         singleLineText = body.trim();
       }
     }
@@ -706,15 +701,14 @@ class PushNotificationService {
     if (rawType == 'group_invitation') {
       title = data['senderName']?.toString() ?? 'Someone';
       body =
-          (data['content'] ??
-                  data['body'] ??
-                  'You have a new group invitation')
+          (data['content'] ?? data['body'] ?? 'You have a new group invitation')
               .toString();
     }
 
     final String? chatId = data['chatId']?.toString().trim();
-    final String? senderId =
-        (data['senderId'] ?? data['userId'])?.toString().trim();
+    final String? senderId = (data['senderId'] ?? data['userId'])
+        ?.toString()
+        .trim();
 
     const chatNotificationTypes = <String>{
       'chat_message',
@@ -792,11 +786,7 @@ class PushNotificationService {
         debugPrint(
           '🔔 [PushNotificationService] Web foreground chat message ($notificationTag): $title — $combinedBody',
         );
-        showWebNotification(
-          title,
-          combinedBody,
-          tag: notificationTag,
-        );
+        showWebNotification(title, combinedBody, tag: notificationTag);
       } else {
         await _showGroupedChatNotification(
           id: notificationId,
@@ -823,7 +813,9 @@ class PushNotificationService {
         );
       } else {
         await _showRichNotification(
-          id: notificationTitle?.hashCode ?? DateTime.now().millisecond,
+          id:
+              (effectiveId ?? notificationTitle)?.hashCode ??
+              DateTime.now().millisecond,
           title: title,
           body: body,
           payload: _encodePayload(data),
@@ -899,6 +891,131 @@ class PushNotificationService {
     }
   }
 
+  /// Resolves the target route for a notification payload map.
+  @visibleForTesting
+  static String resolveTargetRouteForData(Map<String, dynamic> data) {
+    final type = data['type'];
+
+    if ((type == 'direct_message' ||
+            type == 'chat_message' ||
+            type == 'group_mention' ||
+            type == 'chat_reaction' ||
+            type == 'dsp_transfer') &&
+        data['chatId'] != null) {
+      return '/chats/${data['chatId']}';
+    } else if (type == 'event_reminder' && data['eventId'] != null) {
+      return '/events/${data['eventId']}';
+    } else if (type == 'money_transfer' ||
+        type == 'money-transfer' ||
+        type == 'points_update') {
+      return '/dsp/points';
+    } else if (type == 'nearby_compatriot' && data['userId'] != null) {
+      return '/profile/${data['userId']}';
+    } else if (type == 'relationship_request' && data['fromUserId'] != null) {
+      return '/profile/${data['fromUserId']}?requestId=${data['requestId'] ?? ''}&action=review';
+    } else if (type == 'relationship_accepted' && data['chatId'] != null) {
+      return '/chats/${data['chatId']}';
+    } else if (type == 'group_invitation' && data['chatId'] != null) {
+      return '/chats/${data['chatId']}/info';
+    } else if (type == 'proxy_request') {
+      return '/dsp/emergency-fund';
+    } else if ((type == 'hosting_interest_chat' ||
+            type == 'hosting_interest') &&
+        data['requestId'] != null) {
+      return '/notifications';
+    } else if (type == 'hosting_session_chat' && data['chatId'] != null) {
+      return '/chats/${data['chatId']}';
+    } else if (type == 'hosting_session') {
+      return '/communities';
+
+      // ── Travel / Peer Bookings ──────────────────────────────────────
+    } else if ((type == 'travel_booking_request' ||
+            type == 'travel_booking_confirmed' ||
+            type == 'travel_booking_declined' ||
+            type == 'travel_booking_cancelled' ||
+            type == 'travel_trip_reminder') &&
+        data['chatId'] != null) {
+      return '/chats/${data['chatId']}';
+    } else if (type == 'travel_booking_request' ||
+        type == 'travel_booking_confirmed' ||
+        type == 'travel_booking_declined' ||
+        type == 'travel_booking_cancelled' ||
+        type == 'travel_trip_reminder') {
+      return '/dsp/travel/stays';
+
+      // ── Events ──────────────────────────────────────────────────────
+    } else if ((type == 'event_new' ||
+            type == 'event_update' ||
+            type == 'event_cancelled' ||
+            type == 'event_new_attendee') &&
+        data['eventId'] != null) {
+      return '/events/${data['eventId']}';
+    } else if (type == 'event_new' ||
+        type == 'event_update' ||
+        type == 'event_cancelled') {
+      return '/events';
+
+      // ── Governance / Elections ──────────────────────────────────────
+    } else if (type == 'election_started' ||
+        type == 'election_ending_soon' ||
+        type == 'election_results') {
+      return '/communities';
+
+      // ── Marketplace ─────────────────────────────────────────────────
+    } else if (type == 'marketplace_inquiry' && data['listingId'] != null) {
+      return '/marketplace/listing/${data['listingId']}';
+    } else if (type == 'marketplace_status_change' ||
+        type == 'marketplace_price_drop') {
+      final listingId = data['listingId'] as String?;
+      if (listingId != null) {
+        return '/marketplace/listing/$listingId';
+      } else {
+        return '/marketplace';
+      }
+
+      // ── Real Estate ─────────────────────────────────────────────────
+    } else if (type == 'real_estate_inquiry' ||
+        type == 'real_estate_match' ||
+        type == 'real_estate_price_change' ||
+        type == 'real_estate_status_change') {
+      return '/dsp/real-estate/buy';
+
+      // ── Trust & Verification ────────────────────────────────────────
+    } else if (type == 'trust_peer_verified' ||
+        type == 'trust_peer_vouched' ||
+        type == 'trust_full_trust_received' ||
+        type == 'trust_no_trust_received' ||
+        type == 'trust_stake_consensus_agree' ||
+        type == 'trust_stake_consensus_disagree' ||
+        type == 'trust_milestone') {
+      final fromUserId = (data['fromUserId'] ?? data['userId'])
+          ?.toString()
+          .trim();
+      if (fromUserId != null && fromUserId.isNotEmpty) {
+        return '/profile/$fromUserId';
+      } else {
+        return '/notifications';
+      }
+
+      // ── Community ───────────────────────────────────────────────────
+    } else if (type == 'community_joined' || type == 'community_new_member') {
+      return '/communities';
+
+      // ── Organization ────────────────────────────────────────────────
+    } else if (type == 'org_invitation' || type == 'org_announcement') {
+      return '/notifications';
+
+      // ── Emergency Fund ────────────────────────────────────────────
+    } else if (type == 'emergency_fund_staked' ||
+        type == 'emergency_fund_payment_success' ||
+        type == 'emergency_fund_membership_active' ||
+        type == 'emergency_fund_dsp_refunded') {
+      return '/dsp/emergency-fund';
+    } else {
+      return '/notifications';
+    }
+  }
+
   /// Handle Notification Payload for Navigation
   void _handleNotificationTap(String? payload) {
     if (payload == null) return;
@@ -919,126 +1036,7 @@ class PushNotificationService {
         unawaited(clearChatNotifications(data['chatId'].toString()));
       }
 
-      String? targetRoute;
-      if ((type == 'direct_message' ||
-              type == 'chat_message' ||
-              type == 'group_mention' ||
-              type == 'chat_reaction' ||
-              type == 'dsp_transfer') &&
-          data['chatId'] != null) {
-        targetRoute = '/chats/${data['chatId']}';
-      } else if (type == 'event_reminder' && data['eventId'] != null) {
-        targetRoute = '/events/${data['eventId']}';
-      } else if (type == 'money_transfer' ||
-          type == 'money-transfer' ||
-          type == 'points_update') {
-        targetRoute = '/dsp/points';
-      } else if (type == 'nearby_compatriot' && data['userId'] != null) {
-        targetRoute = '/profile/${data['userId']}';
-      } else if (type == 'relationship_request' && data['fromUserId'] != null) {
-        targetRoute =
-            '/profile/${data['fromUserId']}?requestId=${data['requestId'] ?? ''}&action=review';
-      } else if (type == 'relationship_accepted' && data['chatId'] != null) {
-        targetRoute = '/chats/${data['chatId']}';
-      } else if (type == 'group_invitation' && data['chatId'] != null) {
-        targetRoute = '/chats/${data['chatId']}/info';
-      } else if (type == 'proxy_request') {
-        targetRoute = '/dsp/emergency-fund';
-      } else if ((type == 'hosting_interest_chat' ||
-              type == 'hosting_interest') &&
-          data['requestId'] != null) {
-        targetRoute = '/notifications';
-      } else if (type == 'hosting_session_chat' && data['chatId'] != null) {
-        targetRoute = '/chats/${data['chatId']}';
-      } else if (type == 'hosting_session') {
-        targetRoute = '/communities';
-
-        // ── Travel / Peer Bookings ──────────────────────────────────────
-      } else if ((type == 'travel_booking_request' ||
-              type == 'travel_booking_confirmed' ||
-              type == 'travel_booking_declined' ||
-              type == 'travel_booking_cancelled' ||
-              type == 'travel_trip_reminder') &&
-          data['chatId'] != null) {
-        targetRoute = '/chats/${data['chatId']}';
-      } else if (type == 'travel_booking_request' ||
-          type == 'travel_booking_confirmed' ||
-          type == 'travel_booking_declined' ||
-          type == 'travel_booking_cancelled' ||
-          type == 'travel_trip_reminder') {
-        targetRoute = '/dsp/travel/stays';
-
-        // ── Events ──────────────────────────────────────────────────────
-      } else if ((type == 'event_new' ||
-              type == 'event_update' ||
-              type == 'event_cancelled' ||
-              type == 'event_new_attendee') &&
-          data['eventId'] != null) {
-        targetRoute = '/events/${data['eventId']}';
-      } else if (type == 'event_new' ||
-          type == 'event_update' ||
-          type == 'event_cancelled') {
-        targetRoute = '/events';
-
-        // ── Governance / Elections ──────────────────────────────────────
-      } else if (type == 'election_started' ||
-          type == 'election_ending_soon' ||
-          type == 'election_results') {
-        final communityId = data['communityId'] as String?;
-        if (communityId != null) {
-          targetRoute = '/communities';
-        } else {
-          targetRoute = '/communities';
-        }
-
-        // ── Marketplace ─────────────────────────────────────────────────
-      } else if (type == 'marketplace_inquiry' && data['listingId'] != null) {
-        targetRoute = '/marketplace/listing/${data['listingId']}';
-      } else if (type == 'marketplace_status_change' ||
-          type == 'marketplace_price_drop') {
-        final listingId = data['listingId'] as String?;
-        if (listingId != null) {
-          targetRoute = '/marketplace/listing/$listingId';
-        } else {
-          targetRoute = '/marketplace';
-        }
-
-        // ── Real Estate ─────────────────────────────────────────────────
-      } else if (type == 'real_estate_inquiry' ||
-          type == 'real_estate_match' ||
-          type == 'real_estate_price_change' ||
-          type == 'real_estate_status_change') {
-        targetRoute = '/dsp/real-estate/buy';
-
-        // ── Trust & Verification ────────────────────────────────────────
-      } else if (type == 'trust_peer_verified' ||
-          type == 'trust_peer_vouched' ||
-          type == 'trust_full_trust_received' ||
-          type == 'trust_milestone') {
-        final fromUserId = data['fromUserId'] as String?;
-        if (fromUserId != null) {
-          targetRoute = '/profile/$fromUserId';
-        } else {
-          targetRoute = '/notifications';
-        }
-
-        // ── Community ───────────────────────────────────────────────────
-      } else if (type == 'community_joined' || type == 'community_new_member') {
-        targetRoute = '/communities';
-
-        // ── Organization ────────────────────────────────────────────────
-      } else if (type == 'org_invitation' || type == 'org_announcement') {
-        targetRoute = '/notifications';
-
-        // ── Emergency Fund ────────────────────────────────────────────
-      } else if (type == 'emergency_fund_staked' ||
-          type == 'emergency_fund_payment_success' ||
-          type == 'emergency_fund_membership_active' ||
-          type == 'emergency_fund_dsp_refunded') {
-        targetRoute = '/dsp/emergency-fund';
-      } else {
-        targetRoute = '/notifications';
-      }
+      final targetRoute = resolveTargetRouteForData(data);
 
       debugPrint('🔔 [TAP] Target route: $targetRoute');
 
@@ -2513,81 +2511,6 @@ class PushNotificationService {
           onError: (e) {
             debugPrint(
               '❌ [PushNotificationService] Error in trust vouch listener: $e',
-            );
-          },
-        );
-  }
-
-  /// Listen for when other users give this user full trust (staked 100 DSP)
-  void _listenForFullTrustStakes(String userId) {
-    debugPrint(
-      '🔔 [PushNotificationService] Starting full trust stake listener for user: $userId',
-    );
-    _fullTrustSubscription?.cancel();
-
-    final Set<String> knownFullTrustIds = {};
-    bool isFirstLoad = true;
-
-    _fullTrustSubscription = _firestore
-        .collection('trust_ratings')
-        .where('toUserId', isEqualTo: userId)
-        .where('isFullTrust', isEqualTo: true)
-        .limit(100)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (isFirstLoad) {
-              for (final doc in snapshot.docs) {
-                knownFullTrustIds.add(doc.id);
-              }
-              isFirstLoad = false;
-              return;
-            }
-
-            for (final change in snapshot.docChanges) {
-              if (change.type == DocumentChangeType.added ||
-                  change.type == DocumentChangeType.modified) {
-                final docId = change.doc.id;
-                if (knownFullTrustIds.contains(docId) &&
-                    change.type == DocumentChangeType.added) {
-                  continue;
-                }
-                knownFullTrustIds.add(docId);
-
-                final data = change.doc.data();
-                if (data == null) continue;
-
-                // Only notify for full trust entries
-                if (data['isFullTrust'] != true) continue;
-
-                final stakerName = data['fromUserName'] as String? ?? 'A peer';
-                final stakerId = data['fromUserId'] as String?;
-
-                _showRichNotification(
-                  id: 'full_trust_$docId'.hashCode,
-                  title: 'Full Trust Received!',
-                  body:
-                      '$stakerName gave you full trust and staked 100 DSP on your trust!',
-                  payload: jsonEncode({
-                    'type': 'trust_full_trust_received',
-                    'fromUserId': stakerId,
-                  }),
-                );
-
-                _persistNotification(
-                  type: NotificationType.trustFullTrustReceived,
-                  title: 'Full Trust Received!',
-                  body:
-                      '$stakerName gave you full trust and staked 100 DSP on your trust!',
-                  payload: {'fromUserId': stakerId ?? ''},
-                  dedupKey: 'full_trust_$docId',
-                );
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint(
-              '❌ [PushNotificationService] Error in full trust stake listener: $e',
             );
           },
         );

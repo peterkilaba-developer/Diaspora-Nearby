@@ -510,9 +510,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
                   decoration: BoxDecoration(
                     color: AppTheme.elevationColor(context, 1),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: AppTheme.accent.withValues(alpha: 0.3),
-                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -574,7 +571,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
       decoration: BoxDecoration(
         color: AppTheme.accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1174,7 +1170,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
       decoration: BoxDecoration(
         color: Colors.green.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1260,12 +1255,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
               ? AppTheme.accent.withValues(alpha: 0.15)
               : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : theme.colorScheme.onSurface.withValues(alpha: 0.15),
-            width: selected ? 1.5 : 1,
-          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1300,7 +1289,6 @@ class _LandSurveyScreenState extends State<LandSurveyScreen>
       decoration: BoxDecoration(
         color: AppTheme.elevationColor(context, 1),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -46,10 +46,6 @@ final userProfileStreamProvider = StreamProvider.family
       return ref.read(profileRepositoryProvider).watchProfile(userId);
     });
 
-final globalSupplyProvider = StreamProvider<int>((ref) {
-  return ref.watch(pointsRepositoryProvider).streamGlobalSupply();
-});
-
 // [FIX] Provider for transactions to prevent stream recreation/flickering on rebuilds
 final recentTransactionsProvider = StreamProvider.family
     .autoDispose<List<PointsTransaction>, String>((ref, userId) {
@@ -301,11 +297,17 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   Builder(
                     builder: (context) {
                       final trustData = trustDataAsync.value;
+                      final effectiveTrustScore =
+                          trustData?.trustScore ??
+                          (userPoints.trustScore?.toDouble() ?? 0.0);
+                      final effectiveQrCount =
+                          trustData?.uniqueQrCount ??
+                          userPoints.qrConnectionCount;
                       return _buildBalanceSummary(
                         context,
                         userPoints,
-                        trustData?.trustScore ?? 0.0,
-                        trustData?.uniqueQrCount ?? 0,
+                        effectiveTrustScore,
+                        effectiveQrCount,
                       );
                     },
                   ),
@@ -327,8 +329,19 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   // Current Epoch Details
                   Builder(
                     builder: (context) {
-                      final qr = trustDataAsync.value?.uniqueQrCount ?? 0;
-                      return _buildEpochDetailCard(context, userPoints, qr);
+                      final trustData = trustDataAsync.value;
+                      final effectiveTrustScore =
+                          trustData?.trustScore ??
+                          (userPoints.trustScore?.toDouble() ?? 0.0);
+                      final effectiveQrCount =
+                          trustData?.uniqueQrCount ??
+                          userPoints.qrConnectionCount;
+                      return _buildEpochDetailCard(
+                        context,
+                        userPoints,
+                        effectiveQrCount,
+                        effectiveTrustScore,
+                      );
                     },
                   ),
 
@@ -856,7 +869,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   context,
                   trustData,
                   daysActive,
-                  userPoints.totalPoints,
+                  userPoints.availablePoints,
                 );
               },
             ),
@@ -1057,7 +1070,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     final String efficiencyStatus = '${(efficiency * 100).toInt()}%';
     final Color efficiencyColor = EpochService.getEfficiencyColor(trustScore);
 
-    final int totalPoints = points.totalPoints;
+    final int totalPoints = points.availablePoints;
     // TGE gate is now 10 unique Identity QR exchanges — and only for the
     // user's first TDE. After firstTgeReceivedAt is stamped, every TGE
     // after that is automatic and the gate disappears.
@@ -1223,11 +1236,6 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
       ],
     );
   }
-
-  // [NEW] Provider for global member count
-  final globalMemberCountProvider = StreamProvider<int>((ref) {
-    return ref.watch(pointsRepositoryProvider).streamGlobalMemberCount();
-  });
 
   Widget _buildPlatformStatusCard(BuildContext context) {
     final globalSupplyAsync = ref.watch(globalSupplyProvider);
@@ -1430,6 +1438,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     BuildContext context,
     UserPoints userPoints,
     int uniqueQrCount,
+    double trustScore,
   ) {
     final globalSupplyAsync = ref.watch(globalSupplyProvider);
     final globalMembersAsync = ref.watch(globalMemberCountProvider);
@@ -1459,14 +1468,14 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         (epoch.memberTarget - prevMemberTarget))
                     .clamp(0.0, 1.0);
 
-            // Calculate Total Distributed for this Epoch
-            final epochHistory = userPoints.tdeHistory
-                .where((e) => e.epoch == epoch.level)
-                .toList();
-            final double totalDistributed = epochHistory.fold(
-              0.0,
-              (sum, e) => sum + e.amount,
-            );
+            // Calculate Total DSP Milestone Progress for this Epoch
+            final int dspRange = epoch.dspTarget - prevDspTarget;
+            final int stepSize = (dspRange / 10).round();
+            final int completedSteps = stepSize > 0
+                ? ((supply - prevDspTarget) ~/ stepSize).clamp(0, 10)
+                : 0;
+            final double platformMilestoneDsp = (completedSteps * stepSize)
+                .toDouble();
 
             return Container(
               margin: const EdgeInsets.symmetric(
@@ -1489,7 +1498,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                         'CURRENT EPOCH PROGRESS',
                         'Epoch ${epoch.level}',
                       ),
-                      if (totalDistributed > 0)
+                      if (platformMilestoneDsp > 0)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -1500,10 +1509,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            '${NumberFormat.compact().format(totalDistributed)} \$DIASPORA',
+                            '${NumberFormat.compact().format(platformMilestoneDsp)} DSP',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.warning,
+                              color: AppTheme.accent,
                               fontSize: 11,
                             ),
                           ),
@@ -1614,6 +1623,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     userPoints,
                     epochService,
                     uniqueQrCount,
+                    trustScore,
                   ),
                 ],
               ),
@@ -1636,6 +1646,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     UserPoints userPoints,
     EpochService epochService,
     int uniqueQrCount,
+    double trustScore,
   ) {
     final prevEpoch = epochService.getPreviousCommunityEpoch(epoch.level);
     final int prevDspTarget = prevEpoch?.dspTarget ?? 0;
@@ -1658,18 +1669,6 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         final memberStart = prevMemberTarget + (index * effectiveMemberStep);
         final memberTarget =
             prevMemberTarget + ((index + 1) * effectiveMemberStep);
-
-        // Find specific record for this TGE
-        final record = userPoints.tdeHistory.firstWhere(
-          (e) => e.epoch == epoch.level && e.tdeNumber == tdeNumber,
-          orElse: () => TdeDistributionRecord(
-            epoch: -1,
-            tdeNumber: -1,
-            amount: 0,
-            efficiency: 0,
-            date: DateTime.now(),
-          ),
-        );
 
         final bool isSupplyMet = currentSupply >= stepTarget;
         final bool isCompleted = isSupplyMet;
@@ -1740,39 +1739,20 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                 ),
                               )
                             else if (isCompleted)
-                              Builder(
-                                builder: (context) {
-                                  // double amount; // These variables are not used
-                                  // double efficiency; // These variables are not used
-                                  // Color textColor; // These variables are not used
-
-                                  return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        '${NumberFormat.compact().format(record.amount)} \$DIASPORA',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: AppTheme.warning.withValues(
-                                            alpha: 0.5,
-                                          ),
-                                          fontSize: 11,
-                                        ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${NumberFormat.compact().format(stepTarget)} DSP',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.accent.withValues(
+                                        alpha: 0.6,
                                       ),
-
-                                      if (record.amount > 0)
-                                        Text(
-                                          '${(record.efficiency * 100).toInt()}%',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            color: Colors.grey.withValues(
-                                              alpha: 0.5,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                           ],
                         ),
@@ -1847,7 +1827,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                 Builder(
                                   builder: (context) {
                                     final currentTrust =
-                                        userPoints.trustScore ?? 0;
+                                        (trustScore > 0
+                                                ? trustScore
+                                                : (userPoints.trustScore ?? 0))
+                                            .round();
                                     final trustColor =
                                         EpochService.getEfficiencyColor(
                                           currentTrust,
@@ -1912,15 +1895,15 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                 // Row 3: Efficiency (Replace label and align)
                                 Builder(
                                   builder: (context) {
-                                    // final potential = epochService.calculateTGESwap( // potential is not used
-                                    //    epochNumber: epoch.level,
-                                    //    currentDspBalance: userPoints.availablePoints.toDouble(),
-                                    //    trustScore: userPoints.trustScore ?? 0
-                                    // );
                                     double efficiency = 0.0;
-                                    final trust = userPoints.trustScore ?? 0;
+                                    final trust =
+                                        (trustScore > 0
+                                                ? trustScore
+                                                : (userPoints.trustScore ?? 0))
+                                            .round();
                                     if (trust > 0) {
-                                      efficiency = (trust / 10).ceil() / 10.0;
+                                      efficiency = epochService
+                                          .calculateEfficiency(trust);
                                       if (efficiency > 1.0) efficiency = 1.0;
                                     }
 
@@ -1960,9 +1943,14 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                     final currentBalance =
                                         userPoints.availablePoints;
                                     double efficiency = 0.0;
-                                    final trust = userPoints.trustScore ?? 0;
+                                    final trust =
+                                        (trustScore > 0
+                                                ? trustScore
+                                                : (userPoints.trustScore ?? 0))
+                                            .round();
                                     if (trust > 0) {
-                                      efficiency = (trust / 10).ceil() / 10.0;
+                                      efficiency = epochService
+                                          .calculateEfficiency(trust);
                                       if (efficiency > 1.0) efficiency = 1.0;
                                     }
                                     final double payout =
@@ -1978,7 +1966,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                           MainAxisAlignment.spaceBetween,
                                       children: [
                                         const Text(
-                                          'Estimated Payout',
+                                          'Convertible DSP',
                                           style: TextStyle(fontSize: 10),
                                         ),
                                         if (!qrMet)
@@ -1996,11 +1984,11 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                                               children: [
                                                 TextSpan(
                                                   text:
-                                                      '${NumberFormat('#,###').format(payout.round())} \$DIASPORA ',
+                                                      '${NumberFormat('#,###').format(payout.round())} DSP ',
                                                   style: const TextStyle(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.bold,
-                                                    color: AppTheme.warning,
+                                                    color: AppTheme.accent,
                                                   ),
                                                 ),
                                                 TextSpan(
@@ -2023,7 +2011,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                           ),
                         ] else if (isCompleted) ...[
                           const Text(
-                            'Distributed',
+                            'Milestone Reached',
                             style: TextStyle(fontSize: 10, color: Colors.green),
                           ),
                         ] else
@@ -2577,25 +2565,33 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
         )
         .toList();
 
-    // Sort by type (Continent > Country > City) - Removed State for 7-slot symmetry
-    int getTypeWeight(String? type) {
-      switch (type) {
+    // Sort by canonical community type (Continent > Country > State > City)
+    int getTypeWeight(String? type, String id) {
+      final effectiveType = CommunityChatUtils.inferCommunityType(
+        type: type,
+        id: id,
+      );
+      switch (effectiveType) {
         case 'continent':
           return 0;
         case 'country':
           return 1;
-        case 'city':
+        case 'state':
           return 2;
-        default:
+        case 'city':
           return 3;
+        default:
+          return 4;
       }
     }
 
     homePool.sort(
-      (a, b) => getTypeWeight(a.type).compareTo(getTypeWeight(b.type)),
+      (a, b) =>
+          getTypeWeight(a.type, a.id).compareTo(getTypeWeight(b.type, b.id)),
     );
     hostPool.sort(
-      (a, b) => getTypeWeight(a.type).compareTo(getTypeWeight(b.type)),
+      (a, b) =>
+          getTypeWeight(a.type, a.id).compareTo(getTypeWeight(b.type, b.id)),
     );
 
     final systemTreasury = ref.watch(systemTreasuryProvider).value ?? {};
@@ -2617,15 +2613,16 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     final globalSupply = globalSupplyAsync.value ?? 0;
     final totalCommunityWealth = (globalSupply / 2).round();
 
-    // Global Epoch for labeling
-    final epochService = EpochService();
+    // Global Epoch & TDE Event derived from unified globalSupplyProvider & globalMemberCountProvider
+    final epochService = ref.read(epochServiceProvider);
     final globalCommunity = ref
         .watch(communityProvider('global_community'))
         .value;
-    final int globalMembers = globalCommunity?.memberCount ?? 0;
-    final int globalCumulative = globalCommunity?.cumulativeEarnings ?? 0;
+    final int globalMembers =
+        ref.watch(globalMemberCountProvider).value ??
+        (globalCommunity?.memberCount ?? 0);
     final int globalTgeEvent = epochService.getCurrentTgeEventNumber(
-      globalCumulative,
+      globalSupply,
       globalMembers,
     );
 
@@ -2661,18 +2658,19 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
           // 1.1 Global Reserve (10% Ubuntu Community Match)
           _buildWalletDisplayCard(
-            title: 'Global Reserve',
+            title: CommunityChatUtils.generateTreasuryTitle(
+              unitId: 'global_community',
+            ),
             icon: LucideIcons.globe,
             color: AppTheme.accent,
             percentage: '10%',
             points: globalCommunity?.points ?? 0,
-            efficiency: epochService.calculateEfficiency(
-              globalCommunity?.averagePoCT ?? 0,
-            ),
-            trustScore: (globalCommunity?.averagePoCT ?? 0).toDouble(),
+            efficiency: epochService.calculateEfficiency(100.0),
+            trustScore: 100.0, // Global Reserve converts at 100% efficiency
             tgeEvent: globalTgeEvent,
-            epochLabel:
-                'Zero fee value transfer and remittances subsidies, salaries and benefits for community leaders and chambers of commerce staff, global charitable contributions, and platform upkeep',
+            epochLabel: CommunityChatUtils.generateTreasuryRoleLabel(
+              unitId: 'global_community',
+            ),
             avatarWidget: CommunityChatUtils.getCommunityAvatar(
               context: context,
               type: globalCommunity?.type ?? 'global',
@@ -2693,18 +2691,18 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 8),
             ...homePool.map((community) {
               const percentage = "10%";
-              final isReserve =
-                  community.type == 'state' ||
-                  community.type == 'province' ||
-                  community.type == 'continent';
-              final rawName = CommunityChatUtils.generateCommunityNameFromParts(
+              final cardTitle = CommunityChatUtils.generateTreasuryTitle(
                 name: community.name,
+                type: community.type,
                 locationType: community.locationType ?? 'home',
                 id: community.id,
+                homeCountryCode: community.homeCountryCode,
+                hostCountryCode: community.hostCountryCode,
               );
-              final cardTitle = isReserve
-                  ? '$rawName Reserve Treasury'
-                  : '$rawName DDI Treasury';
+              final roleLabel = CommunityChatUtils.generateTreasuryRoleLabel(
+                type: community.type,
+                id: community.id,
+              );
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -2714,11 +2712,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   color: AppTheme.accent,
                   percentage: percentage,
                   points: community.points,
-                  efficiency: epochService.calculateEfficiency(
-                    community.averagePoCT,
-                  ),
-                  trustScore: community.averagePoCT.toDouble(),
+                  efficiency: epochService.calculateEfficiency(100.0),
+                  trustScore: 100.0, // Community treasuries convert at 100%
                   tgeEvent: globalTgeEvent,
+                  epochLabel: roleLabel,
                   avatarWidget: CommunityChatUtils.getCommunityAvatar(
                     context: context,
                     type: community.type ?? 'country',
@@ -2743,18 +2740,18 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             const SizedBox(height: 8),
             ...hostPool.map((community) {
               const percentage = "10%";
-              final isReserve =
-                  community.type == 'state' ||
-                  community.type == 'province' ||
-                  community.type == 'continent';
-              final rawName = CommunityChatUtils.generateCommunityNameFromParts(
+              final cardTitle = CommunityChatUtils.generateTreasuryTitle(
                 name: community.name,
+                type: community.type,
                 locationType: community.locationType ?? 'host',
                 id: community.id,
+                homeCountryCode: community.homeCountryCode,
+                hostCountryCode: community.hostCountryCode,
               );
-              final cardTitle = isReserve
-                  ? '$rawName Reserve Treasury'
-                  : '$rawName DDI Treasury';
+              final roleLabel = CommunityChatUtils.generateTreasuryRoleLabel(
+                type: community.type,
+                id: community.id,
+              );
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -2764,11 +2761,10 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   color: Colors.orange,
                   percentage: percentage,
                   points: community.points,
-                  efficiency: epochService.calculateEfficiency(
-                    community.averagePoCT,
-                  ),
-                  trustScore: community.averagePoCT.toDouble(),
+                  efficiency: epochService.calculateEfficiency(100.0),
+                  trustScore: 100.0, // Community treasuries convert at 100%
                   tgeEvent: globalTgeEvent,
+                  epochLabel: roleLabel,
                   avatarWidget: CommunityChatUtils.getCommunityAvatar(
                     context: context,
                     type: community.type ?? 'country',
@@ -2789,20 +2785,24 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
           // 6. Liquidity Treasury
           _buildWalletDisplayCard(
-            title: 'Liquidity Treasury',
+            title: CommunityChatUtils.generateTreasuryTitle(
+              unitId: 'liquidity',
+            ),
             icon: LucideIcons.droplets,
             color: Colors.cyan,
             percentage: '10%',
             points: liquidityPoints,
             efficiency: 1.0,
-            epochLabel:
-                'DEX Liquidity & Market Access • TDE $globalTgeEvent/10',
+            tgeEvent: globalTgeEvent,
+            epochLabel: CommunityChatUtils.generateTreasuryRoleLabel(
+              unitId: 'liquidity',
+            ),
           ),
           const SizedBox(height: 12),
 
           // 7. Founders & Core Team
           _buildWalletDisplayCard(
-            title: 'Founders & Core Team',
+            title: CommunityChatUtils.generateTreasuryTitle(unitId: 'founders'),
             icon: LucideIcons.users,
             color: AppTheme.accent,
             percentage: '10%',
@@ -2810,6 +2810,9 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
             efficiency: 1.0,
             trustScore: 100.0, // Guaranteed 100% Efficiency
             tgeEvent: globalTgeEvent,
+            epochLabel: CommunityChatUtils.generateTreasuryRoleLabel(
+              unitId: 'founders',
+            ),
             avatarWidget: Container(
               width: 20,
               height: 20,
@@ -2825,15 +2828,17 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
           ),
           const SizedBox(height: 12),
 
-          // 7. Burned Infrastructure (Unassigned Slots)
+          // 8. Natural Burn Pool (Unassigned Slots & Deflationary Sink)
           _buildWalletDisplayCard(
-            title: 'Burned Infrastructure',
+            title: CommunityChatUtils.generateTreasuryTitle(unitId: 'burn'),
             icon: LucideIcons.flame,
             color: Colors.redAccent,
             percentage: 'BURN',
             points: burnedPoints,
             efficiency: 1.0,
-            epochLabel: 'Fixed 10% Infrastructure Burn',
+            epochLabel: CommunityChatUtils.generateTreasuryRoleLabel(
+              unitId: 'burn',
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -2960,11 +2965,8 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
     final themeTextColor = isDark ? Colors.white : Colors.black87;
     final subTextColor = isDark ? Colors.white54 : Colors.black54;
 
-    // Payout calculation
     final double eff = efficiency ?? 1.0;
-    final payout = points * eff;
-    final payoutStr =
-        '${NumberFormat('#,###').format(payout.round())} \$DIASPORA';
+    final dspStr = _formatPoints(points);
 
     return Container(
       padding: AppTheme.cardPaddingEdgeInsets,
@@ -3010,7 +3012,7 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ESTIMATED \$DIASPORA PAYOUT',
+                  'ACCUMULATED DSP BALANCE',
                   style: TextStyle(
                     fontSize: 8,
                     fontWeight: FontWeight.bold,
@@ -3023,12 +3025,12 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      payoutStr,
+                      dspStr,
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.warning,
+                        color: AppTheme.accent,
                       ),
                     ),
                   ],
@@ -3040,7 +3042,20 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
 
           Row(
             children: [
-              if (trustScore != null || tgeEvent != null)
+              if (epochLabel != null && epochLabel.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    epochLabel,
+                    style: TextStyle(
+                      color: subTextColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              else if (trustScore != null || tgeEvent != null)
                 Expanded(
                   child: RichText(
                     maxLines: 1,
@@ -3071,34 +3086,39 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     ),
                   ),
                 )
-              else if (epochLabel != null)
+              else
                 Expanded(
                   child: Text(
-                    epochLabel,
+                    'Treasury balance',
+                    style: TextStyle(color: subTextColor, fontSize: 11),
+                  ),
+                ),
+              if (epochLabel != null &&
+                  epochLabel.isNotEmpty &&
+                  (trustScore != null || tgeEvent != null)) ...[
+                const SizedBox(width: 8),
+                RichText(
+                  text: TextSpan(
                     style: TextStyle(
                       color: subTextColor,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    children: [
+                      if (trustScore != null)
+                        TextSpan(
+                          text: '${(eff * 100).toInt()}%',
+                          style: TextStyle(
+                            color: EpochService.getEfficiencyColor(trustScore),
+                          ),
+                        ),
+                      if (trustScore != null && tgeEvent != null)
+                        const TextSpan(text: ' • '),
+                      if (tgeEvent != null) TextSpan(text: 'TDE $tgeEvent/10'),
+                    ],
                   ),
-                )
-              else
-                Text(
-                  'Treasury balance',
-                  style: TextStyle(color: subTextColor, fontSize: 11),
                 ),
-              const SizedBox(width: 8),
-              Text(
-                _formatPoints(points),
-                style: const TextStyle(
-                  color: AppTheme.accent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                ),
-              ),
+              ],
             ],
           ),
         ],
@@ -3371,9 +3391,6 @@ class _PointsSystemScreenState extends ConsumerState<PointsSystemScreen>
                     ? Colors.amber.withValues(alpha: 0.2)
                     : const Color(0xFF2D5A47).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isAllComplete ? Colors.amber : const Color(0xFF2D5A47),
-                ),
               ),
               child: Row(
                 children: [
